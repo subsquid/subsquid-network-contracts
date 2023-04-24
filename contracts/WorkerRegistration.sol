@@ -128,12 +128,7 @@ contract WorkerRegistration is ReentrancyGuard {
         return activeWorkers;
     }
 
-    function isWorkerActive(Worker storage worker) internal view returns (bool) {
-        console.log("Worker addy: ", worker.account);
-        console.log("Registered at: ", worker.registeredAt);
-        console.log("Deregistered at: ", worker.deregisteredAt);
-        console.log("Block: ", block.number);
-        
+    function isWorkerActive(Worker storage worker) internal view returns (bool) {        
         return worker.registeredAt <= block.number && (worker.deregisteredAt == 0 || worker.deregisteredAt >= block.number);
     }
 

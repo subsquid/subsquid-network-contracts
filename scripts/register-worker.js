@@ -43,7 +43,7 @@ const registerWorker = async () => {
     console.log("tSQD balance:", ethers.utils.formatUnits(balance, 18));
     // approve
     console.log("Approving SQD spend");
-    const requiredAmount = ethers.utils.parseUnits("100000", 18);; // Replace with the required amount
+    const requiredAmount = ethers.utils.parseUnits("100000", 18); // Replace with the required amount
     const approveTx = await tSQDTokenContract.approve(workerRegistrationContract.address, requiredAmount);
     await approveTx.wait();
     console.log("Approve done");
