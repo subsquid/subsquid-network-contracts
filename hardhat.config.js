@@ -10,10 +10,10 @@ module.exports = {
       chainId: 31337,
       epochLengthBlocks: 1,
       blockTime: 1,
-      mining: {
-        auto: false,
-        interval: 500
-      }
+    //   mining: {
+    //     auto: false,
+    //     interval: 500
+    //   }
     },
     sepolia: {
       chainId: 11155111,

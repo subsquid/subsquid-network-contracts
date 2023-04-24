@@ -67,7 +67,9 @@ contract WorkerRegistration is ReentrancyGuard {
 
         workerIds[msg.sender] = workerId;
         activeWorkerIds.push(workerId);
+        console.log("contract: registered");
         emit WorkerRegistered(workerId, msg.sender, peerId[0], peerId[1], workers[workerId].registeredAt);
+        console.log("contract: emitted");
     }
 
     function deregister() external nonReentrant {
