@@ -20,37 +20,13 @@ module.exports = {
       // sepolia block time is ~ 12 secs. 
       epochLengthBlocks: 10,
       url: `https://eth-sepolia.public.blastapi.io`,
-      accounts: [
-        process.env.DEPLOYER,
-        process.env.WORKER_0,
-        process.env.WORKER_1,
-        process.env.WORKER_2,
-        process.env.WORKER_3,
-        process.env.WORKER_4,
-        process.env.WORKER_5,
-        process.env.WORKER_6,
-        process.env.WORKER_7,
-        process.env.WORKER_8,
-        process.env.WORKER_9
-      ],
+      accounts: [],
       gasPrice: 80000000000, // 80 Gwei
     },
     arbitrumGoerli: {
       url: `https://arbitrum-goerli.public.blastapi.io`,
       chainId: 421613,
-      accounts: [
-        process.env.DEPLOYER,
-        process.env.WORKER_0,
-        process.env.WORKER_1,
-        process.env.WORKER_2,
-        process.env.WORKER_3,
-        process.env.WORKER_4,
-        process.env.WORKER_5,
-        process.env.WORKER_6,
-        process.env.WORKER_7,
-        process.env.WORKER_8,
-        process.env.WORKER_9
-      ],
+      accounts: [],
       gasPrice: 80000000000, // 80 Gwei
     },
   },
