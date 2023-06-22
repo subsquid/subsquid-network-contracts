@@ -28,6 +28,7 @@ module.exports = {
       chainId: 421613,
       accounts: [],
       gasPrice: 80000000000, // 80 Gwei
+      epochLengthBlocks: 100,
     },
   },
   namedAccounts: {
