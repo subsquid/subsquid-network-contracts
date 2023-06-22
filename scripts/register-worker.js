@@ -2,15 +2,27 @@ const { ethers } = require('ethers');
 const bs58 = require('bs58');
 const fs = require("fs");
 
-const wrDeployArtifact = JSON.parse(fs.readFileSync("./deployments/localhost/WorkerRegistration.json", "utf8"));
+const RPC_PROVIDER_URL = process.env.RPC_PROVIDER_URL || 'http://127.0.0.1:8545'
+console.log(`Using RPC: ${RPC_PROVIDER_URL}`)
+
+const NETWORK_NAME=process.env.NETWORK_NAME || 'localhost'
+
+const SUPPORTED_NETWORKS = ['localhost', 'arbitrum-goerli']
+
+if (!SUPPORTED_NETWORKS.includes(NETWORK_NAME)) {
+  console.error(`Unsupported network ${NETWORK_NAME}. Supported networks: ${SUPPORTED_NETWORKS}`);
+  process.exit(1);
+}
+
+console.log(`Using network ${NETWORK_NAME}`)
+
+const wrDeployArtifact = JSON.parse(fs.readFileSync(`./deployments/${NETWORK_NAME}/WorkerRegistration.json`, "utf8"));
 const workerRegistrationAddress = wrDeployArtifact.address;
 const workerRegistrationABI = wrDeployArtifact.abi;
 
-const tSQDArtifact = JSON.parse(fs.readFileSync("./deployments/localhost/tSQD.json", "utf8"));
+const tSQDArtifact = JSON.parse(fs.readFileSync(`./deployments/${NETWORK_NAME}/tSQD.json`, "utf8"));
 const tSQDTokenAddress = tSQDArtifact.address;
 const tSQDTokenABI = tSQDArtifact.abi;
-
-const RPC_PROVIDER_URL = process.env.RPC_PROVIDER_URL || 'http://127.0.0.1:8545'
 
 if (process.argv.length < 4) {
   console.error('Usage: node register-worker.js [base58PeerID] [privateKey]');
