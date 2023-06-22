@@ -9,7 +9,8 @@
   },
   "scripts": {
     "run:dev": "hardhat node --watch",
-    "test": "hardhat test"
+    "test": "hardhat test",
+    "register": "node -r dotenv/config scripts/register-worker.js"
   },
   "devDependencies": {
     "@nomiclabs/hardhat-ethers": "^2.2.3",
