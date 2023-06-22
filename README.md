@@ -58,21 +58,38 @@ Private Key: 0xf214f2b2cd398c806f84e317254e0f0b801d0643303237d97a22a48e01628897
 
 ## Worker registration
 
+Before running the script, consult `.env` and check the variables:
+
+```
+# RPC URL, tries to connect to 127.0.0.1:8545 by default
+RPC_PROVIDER_URL=
+# should match one of the networks in the /deployments folder, localhost by default
+NETWORK_NAME=
+```
+
 Run 
 ```
-node scripts/registrer-worker.js [base58PeerID] [privateKey]
+npm run register-worker [base58PeerID] [privateKey]
 ```
-to register a worker. The address must have 100k tSQD for bonding.
+to register a worker. The provided account must have 100k tSQD for bonding and some gas fee tokens.
 
 Example:
 ```
-node scripts/register-worker.js QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx5N 0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d
+npm run register-worker s QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx5N 0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d
 ```
 
 ## Active Workers 
 
-To list currently active workers, run
+Before running the script, consult `.env` and check the variables:
 
 ```
-node scripts/active-workers.js
+# RPC URL, tries to connect to 127.0.0.1:8545 by default
+RPC_PROVIDER_URL=
+# should match one of the networks in the /deployments folder, localhost by default
+NETWORK_NAME=
+```
+
+To list currently active workers, run
+```
+npm run list-workers
 ```
