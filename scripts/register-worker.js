@@ -10,6 +10,7 @@ const tSQDArtifact = JSON.parse(fs.readFileSync("./deployments/localhost/tSQD.js
 const tSQDTokenAddress = tSQDArtifact.address;
 const tSQDTokenABI = tSQDArtifact.abi;
 
+const RPC_PROVIDER_URL = process.env.RPC_PROVIDER_URL || 'http://127.0.0.1:8545'
 
 if (process.argv.length < 4) {
   console.error('Usage: node register-worker.js [base58PeerID] [privateKey]');
@@ -21,7 +22,7 @@ const privateKey = process.argv[3];
 
 const registerWorker = async () => {
   // Connect to the network using the provided private key
-  const provider = new ethers.providers.JsonRpcProvider('http://127.0.0.1:8545');
+  const provider = new ethers.providers.JsonRpcProvider(RPC_PROVIDER_URL);
   const wallet = new ethers.Wallet(privateKey, provider);
 
   // Decode the base58-encoded PeerID and zero-pad if necessary
