@@ -5,7 +5,6 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/utils/Counters.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/utils/math/SafeMath.sol";
-import "hardhat/console.sol";
 
 
 contract WorkerRegistration is ReentrancyGuard {
@@ -15,7 +14,7 @@ contract WorkerRegistration is ReentrancyGuard {
     uint256 public constant BOND_AMOUNT = 100000 * 10**18;
     // uint256 public constant EPOCH_LENGTH = 20700; // approximately 72 hours in blocks
     // uint256 public constant LOCK_PERIOD = EPOCH_LENGTH;
-    
+
 
     IERC20 public tSQD;
     uint256 public epochLength;
@@ -31,7 +30,7 @@ contract WorkerRegistration is ReentrancyGuard {
         // the worker is registered at the start
         // of the next epoch, after register() is called
         uint256 registeredAt;
-        // the worker is de-registered at the start of 
+        // the worker is de-registered at the start of
         // the next epoch, after deregister() is called
         uint256 deregisteredAt;
     }
@@ -56,7 +55,7 @@ contract WorkerRegistration is ReentrancyGuard {
         tSQD.transferFrom(msg.sender, address(this), BOND_AMOUNT);
         workerIdTracker.increment();
         uint256 workerId = workerIdTracker.current();
-         
+
         workers[workerId] = Worker({
             account: msg.sender,
             peerId: peerId,
@@ -67,9 +66,7 @@ contract WorkerRegistration is ReentrancyGuard {
 
         workerIds[msg.sender] = workerId;
         activeWorkerIds.push(workerId);
-        console.log("contract: registered");
         emit WorkerRegistered(workerId, msg.sender, peerId[0], peerId[1], workers[workerId].registeredAt);
-        console.log("contract: emitted");
     }
 
     function deregister() external nonReentrant {
@@ -130,7 +127,7 @@ contract WorkerRegistration is ReentrancyGuard {
         return activeWorkers;
     }
 
-    function isWorkerActive(Worker storage worker) internal view returns (bool) {        
+    function isWorkerActive(Worker storage worker) internal view returns (bool) {
         return worker.registeredAt <= block.number && (worker.deregisteredAt == 0 || worker.deregisteredAt >= block.number);
     }
 
@@ -153,7 +150,7 @@ contract WorkerRegistration is ReentrancyGuard {
         return worker;
     }
 
-    function getAllWorkersCount() external view returns (uint256) { 
+    function getAllWorkersCount() external view returns (uint256) {
         return activeWorkerIds.length;
     }
 }
