@@ -3,11 +3,10 @@ pragma solidity ^0.8.0;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/utils/Counters.sol";
-import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 
 
-contract WorkerRegistration is ReentrancyGuard {
+contract WorkerRegistration {
     using Counters for Counters.Counter;
     using SafeMath for uint256;
 
@@ -17,9 +16,8 @@ contract WorkerRegistration is ReentrancyGuard {
 
 
     IERC20 public tSQD;
-    uint256 public epochLength;
-    uint256 public lockPeriod;
-    uint256 public bondAmount;
+    uint128 public immutable epochLength;
+    uint128 public immutable lockPeriod;
 
     Counters.Counter private workerIdTracker;
 
@@ -29,10 +27,10 @@ contract WorkerRegistration is ReentrancyGuard {
         uint256 bond;
         // the worker is registered at the start
         // of the next epoch, after register() is called
-        uint256 registeredAt;
+        uint128 registeredAt;
         // the worker is de-registered at the start of
         // the next epoch, after deregister() is called
-        uint256 deregisteredAt;
+        uint128 deregisteredAt;
     }
 
     mapping(uint256 => Worker) public workers;
@@ -43,16 +41,15 @@ contract WorkerRegistration is ReentrancyGuard {
     event WorkerDeregistered(uint256 indexed workerId, address indexed account, uint256 deregistedAt);
     event WorkerWithdrawn(uint256 indexed workerId, address indexed account);
 
-    constructor(IERC20 _tSQT, uint256 _epochLengthBlocks) {
+    constructor(IERC20 _tSQT, uint128 _epochLengthBlocks) {
         tSQD = _tSQT;
         epochLength = _epochLengthBlocks;
-        lockPeriod = epochLength;
+        lockPeriod = _epochLengthBlocks;
     }
 
-    function register(bytes32[2] calldata peerId) external nonReentrant {
+    function register(bytes32[2] calldata peerId) external {
         require(workerIds[msg.sender] == 0, "Worker already registered");
 
-        tSQD.transferFrom(msg.sender, address(this), BOND_AMOUNT);
         workerIdTracker.increment();
         uint256 workerId = workerIdTracker.current();
 
@@ -60,21 +57,23 @@ contract WorkerRegistration is ReentrancyGuard {
             account: msg.sender,
             peerId: peerId,
             bond: BOND_AMOUNT,
-            registeredAt: (block.number / epochLength + 1) * epochLength,
+            registeredAt: nextEpoch(),
             deregisteredAt: 0
         });
 
         workerIds[msg.sender] = workerId;
         activeWorkerIds.push(workerId);
+
+        tSQD.transferFrom(msg.sender, address(this), BOND_AMOUNT);
         emit WorkerRegistered(workerId, msg.sender, peerId[0], peerId[1], workers[workerId].registeredAt);
     }
 
-    function deregister() external nonReentrant {
+    function deregister() external {
         uint256 workerId = workerIds[msg.sender];
         require(workerId != 0, "Worker not registered");
         require(isWorkerActive(workers[workerId]), "Worker not active");
 
-        workers[workerId].deregisteredAt = (block.number / epochLength + 1) * epochLength;
+        workers[workerId].deregisteredAt = nextEpoch();
 
         // Remove the workerId from the activeWorkerIds array
         for (uint256 i = 0; i < activeWorkerIds.length; i++) {
@@ -88,7 +87,7 @@ contract WorkerRegistration is ReentrancyGuard {
         emit WorkerDeregistered(workerId, msg.sender, workers[workerId].deregisteredAt);
     }
 
-    function withdraw() external nonReentrant {
+    function withdraw() external {
         uint256 workerId = workerIds[msg.sender];
         require(workerId != 0, "Worker not registered");
         require(!isWorkerActive(workers[workerId]), "Worker is active");
@@ -101,6 +100,10 @@ contract WorkerRegistration is ReentrancyGuard {
         tSQD.transfer(msg.sender, bond);
 
         emit WorkerWithdrawn(workerId, msg.sender);
+    }
+
+    function nextEpoch() internal view returns (uint128) {
+        return (uint128(block.number) / epochLength + 1) * epochLength;
     }
 
     function getActiveWorkers() external view returns (Worker[] memory) {
