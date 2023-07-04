@@ -37,7 +37,7 @@ contract WorkerRegistration {
     mapping(address => uint256) public workerIds;
     uint256[] public activeWorkerIds;
 
-    event WorkerRegistered(uint256 indexed workerId, address indexed account, bytes32 peerId0, bytes32 peerId1, uint256 registeredAt);
+    event WorkerRegistered(uint256 indexed workerId, address indexed workerAccount, address indexed registrar, bytes32 peerId0, bytes32 peerId1, uint256 registeredAt);
     event WorkerDeregistered(uint256 indexed workerId, address indexed account, uint256 deregistedAt);
     event WorkerWithdrawn(uint256 indexed workerId, address indexed account);
 
@@ -48,24 +48,11 @@ contract WorkerRegistration {
     }
 
     function register(bytes32[2] calldata peerId) external {
-        require(workerIds[msg.sender] == 0, "Worker already registered");
+        _register(msg.sender, peerId);
+    }
 
-        workerIdTracker.increment();
-        uint256 workerId = workerIdTracker.current();
-
-        workers[workerId] = Worker({
-            account: msg.sender,
-            peerId: peerId,
-            bond: BOND_AMOUNT,
-            registeredAt: nextEpoch(),
-            deregisteredAt: 0
-        });
-
-        workerIds[msg.sender] = workerId;
-        activeWorkerIds.push(workerId);
-
-        tSQD.transferFrom(msg.sender, address(this), BOND_AMOUNT);
-        emit WorkerRegistered(workerId, msg.sender, peerId[0], peerId[1], workers[workerId].registeredAt);
+    function registerFrom(address account, bytes32[2] calldata peerId) external {
+        _register(account, peerId);
     }
 
     function deregister() external {
@@ -147,5 +134,26 @@ contract WorkerRegistration {
 
     function getAllWorkersCount() external view returns (uint256) {
         return activeWorkerIds.length;
+    }
+
+    function _register(address workerAccount, bytes32[2] calldata peerId) internal {
+        require(workerIds[workerAccount] == 0, "Worker already registered");
+
+        workerIdTracker.increment();
+        uint256 workerId = workerIdTracker.current();
+
+        workers[workerId] = Worker({
+            account: workerAccount,
+            peerId: peerId,
+            bond: BOND_AMOUNT,
+            registeredAt: nextEpoch(),
+            deregisteredAt: 0
+        });
+
+        workerIds[workerAccount] = workerId;
+        activeWorkerIds.push(workerId);
+
+        tSQD.transferFrom(msg.sender, address(this), BOND_AMOUNT);
+        emit WorkerRegistered(workerId, workerAccount, msg.sender, peerId[0], peerId[1], workers[workerId].registeredAt);
     }
 }

@@ -32,10 +32,10 @@ describe("WorkerRegistration", function () {
     const peerId = [ethers.utils.formatBytes32String("test-peer-id-1"), ethers.utils.formatBytes32String("test-peer-id-2")];
 
     const tx = await workerRegistration.connect(addr1).register(peerId);
-    await tx.wait(); 
+    await tx.wait();
     console.log(`Registered ${addr1.address}`)
     console.log(`Worker ID: ${await workerRegistration.workerIds(addr1.address)}`);
-    
+
     await expect(workerRegistration.connect(addr1).register(peerId)).to.be.revertedWith("Worker already registered")
 
   });
@@ -47,9 +47,20 @@ describe("WorkerRegistration", function () {
     // mined at latestBlock + 1, next epoch will start at lastBlock + 2
     await expect(workerRegistration.connect(addr1).register(peerId))
       .to.emit(workerRegistration, "WorkerRegistered")
-      .withArgs(1, addr1.address, peerId[0], peerId[1], lastBlock.number + 2);
-});
+      .withArgs(1, addr1.address, addr1.address, peerId[0], peerId[1], lastBlock.number + 2);
+  });
+
+  describe("registerFrom", async () => {
+    it("should emit WorkerRegistered event on registration", async function () {
+      const peerId = [ethers.utils.formatBytes32String("test-peer-id-1"), ethers.utils.formatBytes32String("test-peer-id-2")];
+
+      const lastBlock = await hre.ethers.provider.getBlock("latest")
+      // mined at latestBlock + 1, next epoch will start at lastBlock + 2
+      await expect(workerRegistration.connect(addr1).registerFrom(addr2.address, peerId))
+          .to.emit(workerRegistration, "WorkerRegistered")
+          .withArgs(1, addr2.address, addr1.address, peerId[0], peerId[1], lastBlock.number + 2);
+    });
+  })
 
   // Add more tests here
-
 });
