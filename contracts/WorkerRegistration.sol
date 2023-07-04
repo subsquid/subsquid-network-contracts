@@ -90,10 +90,11 @@ contract WorkerRegistration {
     function withdraw() external {
         uint256 workerId = workerIds[msg.sender];
         require(workerId != 0, "Worker not registered");
-        require(!isWorkerActive(workers[workerId]), "Worker is active");
-        require(block.number >= workers[workerId].deregisteredAt + lockPeriod, "Worker is locked");
+        Worker storage worker = workers[workerId];
+        require(!isWorkerActive(worker), "Worker is active");
+        require(block.number >= worker.deregisteredAt + lockPeriod, "Worker is locked");
 
-        uint256 bond = workers[workerId].bond;
+        uint256 bond = worker.bond;
         delete workers[workerId];
         delete workerIds[msg.sender];
 
@@ -107,16 +108,8 @@ contract WorkerRegistration {
     }
 
     function getActiveWorkers() external view returns (Worker[] memory) {
-        uint256 activeCount = 0;
-        for (uint256 i = 0; i < activeWorkerIds.length; i++) {
-            uint256 workerId = activeWorkerIds[i];
-            Worker storage worker = workers[workerId];
-            if (isWorkerActive(worker)) {
-                activeCount++;
-            }
-        }
+        Worker[] memory activeWorkers = new Worker[](getActiveWorkerCount());
 
-        Worker[] memory activeWorkers = new Worker[](activeCount);
         uint256 activeIndex = 0;
         for (uint256 i = 0; i < activeWorkerIds.length; i++) {
             uint256 workerId = activeWorkerIds[i];
@@ -134,7 +127,7 @@ contract WorkerRegistration {
         return worker.registeredAt <= block.number && (worker.deregisteredAt == 0 || worker.deregisteredAt >= block.number);
     }
 
-    function getActiveWorkerCount() external view returns (uint256) {
+    function getActiveWorkerCount() public view returns (uint256) {
         uint256 activeCount = 0;
         for (uint256 i = 0; i < activeWorkerIds.length; i++) {
             uint256 workerId = activeWorkerIds[i];
@@ -149,8 +142,7 @@ contract WorkerRegistration {
     function getWorkerByIndex(uint256 index) external view returns (Worker memory) {
         require(index < activeWorkerIds.length, "Index out of bounds");
         uint256 workerId = activeWorkerIds[index];
-        Worker storage worker = workers[workerId];
-        return worker;
+        return workers[workerId];
     }
 
     function getAllWorkersCount() external view returns (uint256) {
