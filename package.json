@@ -9,7 +9,7 @@
   },
   "scripts": {
     "run:dev": "hardhat node --watch",
-    "test": "hardhat test",
+    "test": "forge test",
     "register-worker": "node -r dotenv/config scripts/register-worker.js",
     "list-workers": "node -r dotenv/config scripts/active-workers.js"
   },
