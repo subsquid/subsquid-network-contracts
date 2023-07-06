@@ -13,7 +13,7 @@ contract WorkerRegistrationRegisterTest is WorkerRegistrationTest {
 
     function testRegisterWorkerEmitsEvent() public {
         vm.expectEmit(address(workerRegistration));
-        emit WorkerRegistered(1, creator, creator, workerId[0], workerId[1], block.number + block.number % 2);
+        emit WorkerRegistered(1, creator, creator, workerId[0], workerId[1], nextEpoch());
         workerRegistration.register(workerId);
     }
 

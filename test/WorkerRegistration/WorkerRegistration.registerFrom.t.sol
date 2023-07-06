@@ -16,7 +16,7 @@ contract WorkerRegistrationRegisterFromTest is WorkerRegistrationTest {
 
     function testRegisterWorkerEmitsEvent() public {
         vm.expectEmit(address(workerRegistration));
-        emit WorkerRegistered(1, worker, creator, workerId[0], workerId[1], block.number + block.number % 2);
+        emit WorkerRegistered(1, worker, creator, workerId[0], workerId[1], nextEpoch());
         workerRegistration.registerFrom(worker, workerId);
     }
 
@@ -42,7 +42,7 @@ contract WorkerRegistrationRegisterFromTest is WorkerRegistrationTest {
         assertEq(workerStruct.peerId[0], workerId[0]);
         assertEq(workerStruct.peerId[1], workerId[1]);
         assertEq(workerStruct.bond, workerRegistration.BOND_AMOUNT());
-        assertEq(workerStruct.registeredAt, block.number + block.number % 2);
+        assertEq(workerStruct.registeredAt, nextEpoch());
         assertEq(workerStruct.deregisteredAt, 0);
     }
 }
