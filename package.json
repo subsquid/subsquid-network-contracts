@@ -9,7 +9,9 @@
   },
   "scripts": {
     "run:dev": "hardhat node --watch",
-    "test": "forge test",
+    "test": "forge test -vv",
+    "lint": "forge fmt --check",
+    "lint:fix": "forge fmt",
     "register-worker": "node -r dotenv/config scripts/register-worker.js",
     "list-workers": "node -r dotenv/config scripts/active-workers.js"
   },

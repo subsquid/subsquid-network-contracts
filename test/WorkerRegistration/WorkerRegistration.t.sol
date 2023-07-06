@@ -15,7 +15,14 @@ contract WorkerRegistrationTest is Test {
     address creator = vm.addr(creatorPrivateKey);
     bytes32[2] public workerId = [bytes32("test-peer-id-1"), "test-peer-id-2"];
 
-    event WorkerRegistered(uint256 indexed workerId, address indexed workerAccount, address indexed registrar, bytes32 peerId0, bytes32 peerId1, uint256 registeredAt);
+    event WorkerRegistered(
+        uint256 indexed workerId,
+        address indexed workerAccount,
+        address indexed registrar,
+        bytes32 peerId0,
+        bytes32 peerId1,
+        uint256 registeredAt
+    );
     event WorkerDeregistered(uint256 indexed workerId, address indexed account, uint256 deregistedAt);
     event WorkerWithdrawn(uint256 indexed workerId, address indexed account);
 
