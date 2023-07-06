@@ -9,15 +9,25 @@ contract WorkerRegistrationDeregisterTest is WorkerRegistrationTest {
         workerRegistration.deregister();
     }
 
-    function testRevertsIfWorkerIsNotActive() public {
+    function testRevertsIfWorkerIsNotYetActive() public {
         workerRegistration.register(workerId);
+        vm.expectRevert("Worker not active");
+        workerRegistration.deregister();
+    }
+
+    function testRevertsIfWorkerDeregisteredTwice() public {
+        workerRegistration.register(workerId);
+        jumpEpoch();
+        workerRegistration.deregister();
+
+        jumpEpoch();
         vm.expectRevert("Worker not active");
         workerRegistration.deregister();
     }
 
     function testSetsDeregisteredBlock() public {
         workerRegistration.register(workerId);
-        vm.roll(block.number + 1);
+        jumpEpoch();
         workerRegistration.deregister();
         (,,,uint128 deregisteredAt) = workerRegistration.workers(1);
         assertEq(deregisteredAt, nextEpoch());
@@ -25,7 +35,7 @@ contract WorkerRegistrationDeregisterTest is WorkerRegistrationTest {
 
     function testRemovesLastWorkerIdFromActiveWorkerIds() public {
         workerRegistration.register(workerId);
-        vm.roll(block.number + 1);
+        jumpEpoch();
         workerRegistration.deregister();
         assertEq(workerRegistration.getAllWorkersCount(), 0);
     }
@@ -44,7 +54,7 @@ contract WorkerRegistrationDeregisterTest is WorkerRegistrationTest {
 
     function testEmitsDeregisteredEvent() public {
         workerRegistration.register(workerId);
-        vm.roll(block.number + 1);
+        jumpEpoch();
         vm.expectEmit(address(workerRegistration));
         emit WorkerDeregistered(1, creator, nextEpoch());
         workerRegistration.deregister();

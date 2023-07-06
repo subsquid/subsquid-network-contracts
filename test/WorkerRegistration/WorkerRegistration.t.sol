@@ -17,9 +17,14 @@ contract WorkerRegistrationTest is Test {
 
     event WorkerRegistered(uint256 indexed workerId, address indexed workerAccount, address indexed registrar, bytes32 peerId0, bytes32 peerId1, uint256 registeredAt);
     event WorkerDeregistered(uint256 indexed workerId, address indexed account, uint256 deregistedAt);
+    event WorkerWithdrawn(uint256 indexed workerId, address indexed account);
 
     function nextEpoch() internal view returns (uint128) {
         return (uint128(block.number) / 2 + 1) * 2;
+    }
+
+    function jumpEpoch() internal {
+        vm.roll(block.number + 3);
     }
 
     function setUp() public {
