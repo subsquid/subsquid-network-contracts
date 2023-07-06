@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.16;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/utils/Counters.sol";
@@ -22,8 +22,8 @@ contract WorkerRegistration {
     Counters.Counter private workerIdTracker;
 
     struct Worker {
-        address account;
-        bytes32[2] peerId;
+        address creator;
+        bytes32[2] peers;
         uint256 bond;
         // the worker is registered at the start
         // of the next epoch, after register() is called
@@ -34,10 +34,10 @@ contract WorkerRegistration {
     }
 
     mapping(uint256 => Worker) public workers;
-    mapping(address => uint256) public workerIds;
+    mapping(address creator => mapping(bytes32 peerId => uint256 id)) public workerIds;
     uint256[] public activeWorkerIds;
 
-    event WorkerRegistered(uint256 indexed workerId, address indexed workerAccount, address indexed registrar, bytes32 peerId0, bytes32 peerId1, uint256 registeredAt);
+    event WorkerRegistered(uint256 indexed workerId, bytes32 indexed peerId, address indexed registrar, bytes32 peer0, bytes32 peer1, uint256 registeredAt);
     event WorkerDeregistered(uint256 indexed workerId, address indexed account, uint256 deregistedAt);
     event WorkerWithdrawn(uint256 indexed workerId, address indexed account);
 
@@ -47,16 +47,30 @@ contract WorkerRegistration {
         lockPeriod = _epochLengthBlocks;
     }
 
-    function register(bytes32[2] calldata peerId) external {
-        _register(msg.sender, peerId);
+    function register(bytes32[2] calldata peers) external {
+        bytes32 peerId = getPeerId(peers);
+        require(workerIds[msg.sender][peerId] == 0, "Worker already registered");
+
+        workerIdTracker.increment();
+        uint256 workerId = workerIdTracker.current();
+
+        workers[workerId] = Worker({
+            creator: msg.sender,
+            peers: peers,
+            bond: BOND_AMOUNT,
+            registeredAt: nextEpoch(),
+            deregisteredAt: 0
+        });
+
+        workerIds[msg.sender][peerId] = workerId;
+        activeWorkerIds.push(workerId);
+
+        tSQD.transferFrom(msg.sender, address(this), BOND_AMOUNT);
+        emit WorkerRegistered(workerId, peerId, msg.sender, peers[0], peers[1], workers[workerId].registeredAt);
     }
 
-    function registerFrom(address account, bytes32[2] calldata peerId) external {
-        _register(account, peerId);
-    }
-
-    function deregister() external {
-        uint256 workerId = workerIds[msg.sender];
+    function deregister(bytes32[2] calldata peers) external {
+        uint256 workerId = workerIds[msg.sender][getPeerId(peers)];
         require(workerId != 0, "Worker not registered");
         require(isWorkerActive(workers[workerId]), "Worker not active");
 
@@ -74,8 +88,9 @@ contract WorkerRegistration {
         emit WorkerDeregistered(workerId, msg.sender, workers[workerId].deregisteredAt);
     }
 
-    function withdraw() external {
-        uint256 workerId = workerIds[msg.sender];
+    function withdraw(bytes32[2] calldata peers) external {
+        bytes32 peerId = getPeerId(peers);
+        uint256 workerId = workerIds[msg.sender][peerId];
         require(workerId != 0, "Worker not registered");
         Worker storage worker = workers[workerId];
         require(!isWorkerActive(worker), "Worker is active");
@@ -83,7 +98,7 @@ contract WorkerRegistration {
 
         uint256 bond = worker.bond;
         delete workers[workerId];
-        delete workerIds[msg.sender];
+        delete workerIds[msg.sender][peerId];
 
         tSQD.transfer(msg.sender, bond);
 
@@ -92,6 +107,10 @@ contract WorkerRegistration {
 
     function nextEpoch() internal view returns (uint128) {
         return (uint128(block.number) / epochLength + 1) * epochLength;
+    }
+
+    function getPeerId(bytes32[2] calldata peerId) public pure returns (bytes32) {
+        return keccak256(abi.encodePacked(peerId[0], peerId[1]));
     }
 
     function getActiveWorkers() external view returns (Worker[] memory) {
@@ -134,26 +153,5 @@ contract WorkerRegistration {
 
     function getAllWorkersCount() external view returns (uint256) {
         return activeWorkerIds.length;
-    }
-
-    function _register(address workerAccount, bytes32[2] calldata peerId) internal {
-        require(workerIds[workerAccount] == 0, "Worker already registered");
-
-        workerIdTracker.increment();
-        uint256 workerId = workerIdTracker.current();
-
-        workers[workerId] = Worker({
-            account: workerAccount,
-            peerId: peerId,
-            bond: BOND_AMOUNT,
-            registeredAt: nextEpoch(),
-            deregisteredAt: 0
-        });
-
-        workerIds[workerAccount] = workerId;
-        activeWorkerIds.push(workerId);
-
-        tSQD.transferFrom(msg.sender, address(this), BOND_AMOUNT);
-        emit WorkerRegistered(workerId, workerAccount, msg.sender, peerId[0], peerId[1], workers[workerId].registeredAt);
     }
 }
