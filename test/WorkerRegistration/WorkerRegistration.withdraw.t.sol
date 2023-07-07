@@ -6,47 +6,47 @@ import "./WorkerRegistration.t.sol";
 contract WorkerRegistrationWithdrawTest is WorkerRegistrationTest {
     function testRevertsIfWorkerIsNotRegistered() public {
         vm.expectRevert("Worker not registered");
-        workerRegistration.withdraw();
+        workerRegistration.withdraw(workerId);
     }
 
     function testRevertsIfWorkerIsNotActive() public {
         workerRegistration.register(workerId);
         vm.expectRevert("Worker is locked");
-        workerRegistration.withdraw();
+        workerRegistration.withdraw(workerId);
     }
 
     function testRevertsIfWorkerIsNotDeregistered() public {
         workerRegistration.register(workerId);
         jumpEpoch();
-        workerRegistration.deregister();
+        workerRegistration.deregister(workerId);
         vm.expectRevert("Worker is active");
-        workerRegistration.withdraw();
+        workerRegistration.withdraw(workerId);
     }
 
     function testRevertsIfWorkerIsDeregisteredButBeforeUnlock() public {
         workerRegistration.register(workerId);
         jumpEpoch();
-        workerRegistration.deregister();
+        workerRegistration.deregister(workerId);
         jumpEpoch();
         vm.expectRevert("Worker is locked");
-        workerRegistration.withdraw();
+        workerRegistration.withdraw(workerId);
     }
 
     function withdraw() internal {
         workerRegistration.register(workerId);
         jumpEpoch();
-        workerRegistration.deregister();
+        workerRegistration.deregister(workerId);
         jumpEpoch();
         jumpEpoch();
-        workerRegistration.withdraw();
+        workerRegistration.withdraw(workerId);
     }
 
     function testDeletesWorker() public {
         withdraw();
-        (address workerAddress,,,) = workerRegistration.workers(0);
+        (address workerAddress,,,,) = workerRegistration.workers(0);
         assertEq(workerAddress, address(0));
         assertEq(workerRegistration.getAllWorkersCount(), 0);
-        assertEq(workerRegistration.workerIds(creator), 0);
+        assertEq(workerRegistration.workerIds(creator, workerId), 0);
     }
 
     function testTransfersBondBack() public {
@@ -57,12 +57,12 @@ contract WorkerRegistrationWithdrawTest is WorkerRegistrationTest {
     function testEmitsWithdrawnEvent() public {
         workerRegistration.register(workerId);
         jumpEpoch();
-        workerRegistration.deregister();
+        workerRegistration.deregister(workerId);
         jumpEpoch();
         jumpEpoch();
 
         vm.expectEmit(address(workerRegistration));
         emit WorkerWithdrawn(1, creator);
-        workerRegistration.withdraw();
+        workerRegistration.withdraw(workerId);
     }
 }

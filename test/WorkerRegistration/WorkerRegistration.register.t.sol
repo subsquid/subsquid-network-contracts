@@ -13,7 +13,7 @@ contract WorkerRegistrationRegisterTest is WorkerRegistrationTest {
 
     function testRegisterWorkerEmitsEvent() public {
         vm.expectEmit(address(workerRegistration));
-        emit WorkerRegistered(1, creator, creator, workerId[0], workerId[1], nextEpoch());
+        emit WorkerRegistered(1, workerId, creator, nextEpoch());
         workerRegistration.register(workerId);
     }
 
@@ -21,5 +21,32 @@ contract WorkerRegistrationRegisterTest is WorkerRegistrationTest {
         workerRegistration.register(workerId);
         vm.expectRevert("Worker already registered");
         workerRegistration.register(workerId);
+    }
+
+    function testRevertsIfPeerIdIsOver64Bytes() public {
+        bytes memory idWith64Bytes = abi.encodePacked(uint256(1), uint256(2));
+        workerRegistration.register(idWith64Bytes);
+        bytes memory idWith65Bytes = abi.encodePacked(uint256(1), uint256(2), true);
+        vm.expectRevert("Peer ID too large");
+        workerRegistration.register(idWith65Bytes);
+    }
+
+    function testIncrementsIdForNextWorker() public {
+        token.approve(address(workerRegistration), workerRegistration.BOND_AMOUNT() * 2);
+
+        workerRegistration.register(workerId);
+        workerRegistration.register(workerId2);
+        assertEq(workerRegistration.workerIds(creator, workerId2), 2);
+    }
+
+    function testCorrectlyCreatesWorkerStruct() public {
+        workerRegistration.register(workerId);
+
+        WorkerRegistration.Worker memory workerStruct = workerRegistration.getWorkerByIndex(0);
+        assertEq(workerStruct.creator, creator);
+        assertEq(workerStruct.peerId, workerId);
+        assertEq(workerStruct.bond, workerRegistration.BOND_AMOUNT());
+        assertEq(workerStruct.registeredAt, nextEpoch());
+        assertEq(workerStruct.deregisteredAt, 0);
     }
 }
