@@ -48,6 +48,7 @@ contract WorkerRegistration {
     }
 
     function register(bytes calldata peerId) external {
+        require(peerId.length <= 64, "Peer ID too large");
         require(workerIds[msg.sender][peerId] == 0, "Worker already registered");
 
         workerIdTracker.increment();

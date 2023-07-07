@@ -23,6 +23,14 @@ contract WorkerRegistrationRegisterTest is WorkerRegistrationTest {
         workerRegistration.register(workerId);
     }
 
+    function testRevertsIfPeerIdIsOver64Bytes() public {
+        bytes memory idWith64Bytes = abi.encodePacked(uint256(1), uint256(2));
+        workerRegistration.register(idWith64Bytes);
+        bytes memory idWith65Bytes = abi.encodePacked(uint256(1), uint256(2), true);
+        vm.expectRevert("Peer ID too large");
+        workerRegistration.register(idWith65Bytes);
+    }
+
     function testIncrementsIdForNextWorker() public {
         token.approve(address(workerRegistration), workerRegistration.BOND_AMOUNT() * 2);
 
