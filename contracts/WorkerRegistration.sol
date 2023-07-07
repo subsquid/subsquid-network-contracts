@@ -41,8 +41,8 @@ contract WorkerRegistration {
     event WorkerDeregistered(uint256 indexed workerId, address indexed account, uint256 deregistedAt);
     event WorkerWithdrawn(uint256 indexed workerId, address indexed account);
 
-    constructor(IERC20 _tSQT, uint128 _epochLengthBlocks) {
-        tSQD = _tSQT;
+    constructor(IERC20 _tSQD, uint128 _epochLengthBlocks) {
+        tSQD = _tSQD;
         epochLength = _epochLengthBlocks;
         lockPeriod = _epochLengthBlocks;
     }
