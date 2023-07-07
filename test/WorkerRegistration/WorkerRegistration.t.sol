@@ -13,12 +13,12 @@ contract WorkerRegistrationTest is Test {
     IERC20 public token;
 
     address creator = vm.addr(creatorPrivateKey);
-    string public workerId = "test-peer-id-1";
-    string public workerId2 = "test-peer-id-2";
+    bytes public workerId = "test-peer-id-1";
+    bytes public workerId2 = "test-peer-id-2";
 
     event WorkerRegistered(
         uint256 indexed workerId,
-        string indexed peerId,
+        bytes indexed peerId,
         address indexed registrar,
         uint256 registeredAt
     );

@@ -23,7 +23,7 @@ contract WorkerRegistration {
 
     struct Worker {
         address creator;
-        string peerId;
+        bytes peerId;
         uint256 bond;
         // the worker is registered at the start
         // of the next epoch, after register() is called
@@ -34,10 +34,10 @@ contract WorkerRegistration {
     }
 
     mapping(uint256 => Worker) public workers;
-    mapping(address creator => mapping(string peerId => uint256 id)) public workerIds;
+    mapping(address creator => mapping(bytes peerId => uint256 id)) public workerIds;
     uint256[] public activeWorkerIds;
 
-    event WorkerRegistered(uint256 indexed workerId, string indexed peerId, address indexed registrar, uint256 registeredAt);
+    event WorkerRegistered(uint256 indexed workerId, bytes indexed peerId, address indexed registrar, uint256 registeredAt);
     event WorkerDeregistered(uint256 indexed workerId, address indexed account, uint256 deregistedAt);
     event WorkerWithdrawn(uint256 indexed workerId, address indexed account);
 
@@ -47,7 +47,7 @@ contract WorkerRegistration {
         lockPeriod = _epochLengthBlocks;
     }
 
-    function register(string calldata peerId) external {
+    function register(bytes calldata peerId) external {
         require(workerIds[msg.sender][peerId] == 0, "Worker already registered");
 
         workerIdTracker.increment();
@@ -68,7 +68,7 @@ contract WorkerRegistration {
         emit WorkerRegistered(workerId, peerId, msg.sender, workers[workerId].registeredAt);
     }
 
-    function deregister(string calldata peerId) external {
+    function deregister(bytes calldata peerId) external {
         uint256 workerId = workerIds[msg.sender][peerId];
         require(workerId != 0, "Worker not registered");
         require(isWorkerActive(workers[workerId]), "Worker not active");
@@ -87,7 +87,7 @@ contract WorkerRegistration {
         emit WorkerDeregistered(workerId, msg.sender, workers[workerId].deregisteredAt);
     }
 
-    function withdraw(string calldata peerId) external {
+    function withdraw(bytes calldata peerId) external {
         uint256 workerId = workerIds[msg.sender][peerId];
         require(workerId != 0, "Worker not registered");
         Worker storage worker = workers[workerId];
