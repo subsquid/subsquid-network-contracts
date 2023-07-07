@@ -23,7 +23,7 @@ contract WorkerRegistration {
 
     struct Worker {
         address creator;
-        bytes32[2] peers;
+        string peerId;
         uint256 bond;
         // the worker is registered at the start
         // of the next epoch, after register() is called
@@ -34,10 +34,10 @@ contract WorkerRegistration {
     }
 
     mapping(uint256 => Worker) public workers;
-    mapping(address creator => mapping(bytes32 peerId => uint256 id)) public workerIds;
+    mapping(address creator => mapping(string peerId => uint256 id)) public workerIds;
     uint256[] public activeWorkerIds;
 
-    event WorkerRegistered(uint256 indexed workerId, bytes32 indexed peerId, address indexed registrar, bytes32 peer0, bytes32 peer1, uint256 registeredAt);
+    event WorkerRegistered(uint256 indexed workerId, string indexed peerId, address indexed registrar, uint256 registeredAt);
     event WorkerDeregistered(uint256 indexed workerId, address indexed account, uint256 deregistedAt);
     event WorkerWithdrawn(uint256 indexed workerId, address indexed account);
 
@@ -47,8 +47,7 @@ contract WorkerRegistration {
         lockPeriod = _epochLengthBlocks;
     }
 
-    function register(bytes32[2] calldata peers) external {
-        bytes32 peerId = getPeerId(peers);
+    function register(string calldata peerId) external {
         require(workerIds[msg.sender][peerId] == 0, "Worker already registered");
 
         workerIdTracker.increment();
@@ -56,7 +55,7 @@ contract WorkerRegistration {
 
         workers[workerId] = Worker({
             creator: msg.sender,
-            peers: peers,
+            peerId: peerId,
             bond: BOND_AMOUNT,
             registeredAt: nextEpoch(),
             deregisteredAt: 0
@@ -66,11 +65,11 @@ contract WorkerRegistration {
         activeWorkerIds.push(workerId);
 
         tSQD.transferFrom(msg.sender, address(this), BOND_AMOUNT);
-        emit WorkerRegistered(workerId, peerId, msg.sender, peers[0], peers[1], workers[workerId].registeredAt);
+        emit WorkerRegistered(workerId, peerId, msg.sender, workers[workerId].registeredAt);
     }
 
-    function deregister(bytes32[2] calldata peers) external {
-        uint256 workerId = workerIds[msg.sender][getPeerId(peers)];
+    function deregister(string calldata peerId) external {
+        uint256 workerId = workerIds[msg.sender][peerId];
         require(workerId != 0, "Worker not registered");
         require(isWorkerActive(workers[workerId]), "Worker not active");
 
@@ -88,8 +87,7 @@ contract WorkerRegistration {
         emit WorkerDeregistered(workerId, msg.sender, workers[workerId].deregisteredAt);
     }
 
-    function withdraw(bytes32[2] calldata peers) external {
-        bytes32 peerId = getPeerId(peers);
+    function withdraw(string calldata peerId) external {
         uint256 workerId = workerIds[msg.sender][peerId];
         require(workerId != 0, "Worker not registered");
         Worker storage worker = workers[workerId];
@@ -107,10 +105,6 @@ contract WorkerRegistration {
 
     function nextEpoch() internal view returns (uint128) {
         return (uint128(block.number) / epochLength + 1) * epochLength;
-    }
-
-    function getPeerId(bytes32[2] calldata peerId) public pure returns (bytes32) {
-        return keccak256(abi.encodePacked(peerId[0], peerId[1]));
     }
 
     function getActiveWorkers() external view returns (Worker[] memory) {
