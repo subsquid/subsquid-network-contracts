@@ -1,3 +1,5 @@
+#!/usr/bin/env node
+
 const { ethers } = require('ethers');
 const bs58 = require('bs58');
 const fs = require("fs");

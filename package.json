@@ -1,5 +1,7 @@
 {
-  "name": "hardhat-project",
+  "name": "subsquid-network",
+  "version": "0.0.3",
+  "bin": "node -r dotenv/config scripts/register-worker.js",
   "dependencies": {
     "@openzeppelin/contracts": "^4.8.3",
     "bs58": "^5.0.0",
