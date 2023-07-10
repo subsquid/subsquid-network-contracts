@@ -23,14 +23,13 @@ const provider = new ethers.providers.JsonRpcProvider(RPC_PROVIDER_URL);
 // Connect to the WorkerRegistration contract
 const workerRegistrationContract = new ethers.Contract(workerRegistrationAddress, workerRegistrationABI, provider);
 
-function toBase58(worker) {
-    const peerIdBytes = utils.concat([worker.peerId[0], worker.peerId[1]]);
-    return bs58.encode(utils.arrayify(peerIdBytes));
-} 
+function toBase58(peerId) {
+    return bs58.encode(utils.arrayify(peerId));
+}
 
 const decodeWorker = (worker) => ({
-    account: worker.account,
-    peerId: toBase58(worker),
+    creator: worker.creator,
+    peerId: toBase58(worker.peerId),
     bond: worker.bond.toString(),
     registeredAt: worker.registeredAt.toString(),
     deregisteredAt: worker.deregisteredAt.toString()
@@ -39,7 +38,7 @@ const decodeWorker = (worker) => ({
 const getActiveWorkers = async () => {
   const allCount = await workerRegistrationContract.getAllWorkersCount();
   console.log("All workers cnt:", allCount);
-  
+
   for (i=0; i < allCount; i++) {
     const w = await workerRegistrationContract.getWorkerByIndex(i);
     console.log(`Worker ${i}`, decodeWorker(w))
@@ -55,7 +54,7 @@ const getActiveWorkers = async () => {
   const processedWorkers = activeWorkers.map(w => decodeWorker(w));
 
   console.log('Active Workers:', processedWorkers);
-  
+
 };
 
 
