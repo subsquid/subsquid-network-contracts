@@ -23,7 +23,7 @@ module.exports = {
       accounts: [],
       gasPrice: 80000000000, // 80 Gwei
     },
-    arbitrumGoerli: {
+    "arbitrum-goerli": {
       url: `https://arbitrum-goerli.public.blastapi.io`,
       chainId: 421613,
       // accounts: [],
