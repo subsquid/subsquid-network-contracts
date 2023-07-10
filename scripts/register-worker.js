@@ -41,12 +41,6 @@ const registerWorker = async () => {
   const decodedPeerID = bs58.decode(base58PeerID);
   const paddedPeerID = ethers.utils.hexZeroPad(ethers.utils.arrayify(decodedPeerID), 64);
 
-  // Split the paddedPeerID into two bytes32 values
-  const peerIdBytes32Array = [
-    ethers.utils.hexDataSlice(paddedPeerID, 0, 32), // First 32 bytes
-    ethers.utils.hexDataSlice(paddedPeerID, 32) // Remaining bytes
-  ];
-
   // Connect to the WorkerRegistration contract
   const workerRegistrationContract = new ethers.Contract(workerRegistrationAddress, workerRegistrationABI, wallet);
   const tSQDTokenContract = new ethers.Contract(tSQDTokenAddress, tSQDTokenABI, wallet);
@@ -62,9 +56,9 @@ const registerWorker = async () => {
     console.log("Approve done");
     // Register the worker
     console.log("Registering");
-    const tx = await workerRegistrationContract.register(peerIdBytes32Array);
+    const tx = await workerRegistrationContract.register(paddedPeerID);
     await tx.wait();
-   
+
     console.log(`Worker with PeerID ${base58PeerID} registered successfully.`);
   } catch (err) {
     console.error('Error registering worker:', err.message);
