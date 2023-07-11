@@ -23,6 +23,9 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Install deps
+        run: npm ci
+
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
         with:
