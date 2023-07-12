@@ -35,11 +35,13 @@ contract WorkerRegistration {
 
     mapping(uint256 => Worker) public workers;
     mapping(address creator => mapping(bytes peerId => uint256 id)) public workerIds;
+    mapping(address staker => mapping(uint256 workerId => uint256 amount)) public stakedAmounts;
     uint256[] public activeWorkerIds;
 
     event WorkerRegistered(uint256 indexed workerId, bytes indexed peerId, address indexed registrar, uint256 registeredAt);
     event WorkerDeregistered(uint256 indexed workerId, address indexed account, uint256 deregistedAt);
     event WorkerWithdrawn(uint256 indexed workerId, address indexed account);
+    event Delegated(uint256 indexed workerId, address indexed staker, uint256 amount);
 
     constructor(IERC20 _tSQD, uint128 _epochLengthBlocks) {
         tSQD = _tSQD;
@@ -102,6 +104,17 @@ contract WorkerRegistration {
         tSQD.transfer(msg.sender, bond);
 
         emit WorkerWithdrawn(workerId, msg.sender);
+    }
+
+    function delegate(address creator, bytes calldata peerId, uint amount) external {
+        uint256 workerId = workerIds[creator][peerId];
+        require(workerId != 0, "Worker not registered");
+        require(isWorkerActive(workers[workerId]), "Worker not active");
+
+        tSQD.transferFrom(msg.sender, address(this), amount);
+        stakedAmounts[msg.sender][workerId] += amount;
+
+        emit Delegated(workerId, msg.sender, amount);
     }
 
     function nextEpoch() internal view returns (uint128) {

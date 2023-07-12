@@ -21,6 +21,7 @@ contract WorkerRegistrationTest is Test {
     );
     event WorkerDeregistered(uint256 indexed workerId, address indexed account, uint256 deregistedAt);
     event WorkerWithdrawn(uint256 indexed workerId, address indexed account);
+    event Delegated(uint256 indexed workerId, address indexed staker, uint256 amount);
 
     function nextEpoch() internal view returns (uint128) {
         return (uint128(block.number) / 2 + 1) * 2;
