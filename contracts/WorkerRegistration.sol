@@ -42,6 +42,7 @@ contract WorkerRegistration {
     event WorkerDeregistered(uint256 indexed workerId, address indexed account, uint256 deregistedAt);
     event WorkerWithdrawn(uint256 indexed workerId, address indexed account);
     event Delegated(uint256 indexed workerId, address indexed staker, uint256 amount);
+    event Unstaked(uint256 indexed workerId, address indexed staker, uint256 amount);
 
     constructor(IERC20 _tSQD, uint128 _epochLengthBlocks) {
         tSQD = _tSQD;
@@ -99,7 +100,6 @@ contract WorkerRegistration {
 
         uint256 bond = worker.bond;
         delete workers[workerId];
-        delete workerIds[msg.sender][peerId];
 
         tSQD.transfer(msg.sender, bond);
 
@@ -115,6 +115,19 @@ contract WorkerRegistration {
         stakedAmounts[msg.sender][workerId] += amount;
 
         emit Delegated(workerId, msg.sender, amount);
+    }
+
+    function unstake(address creator, bytes calldata peerId, uint amount) external {
+        uint256 workerId = workerIds[creator][peerId];
+        require(workerId != 0, "Worker not registered");
+
+        uint256 stakedAmount = stakedAmounts[msg.sender][workerId];
+        require(stakedAmount >= amount, "Insufficient staked amount");
+
+        stakedAmounts[msg.sender][workerId] -= amount;
+        tSQD.transfer(msg.sender, amount);
+
+        emit Unstaked(workerId, msg.sender, amount);
     }
 
     function nextEpoch() internal view returns (uint128) {
