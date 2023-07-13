@@ -18,11 +18,11 @@ if (!SUPPORTED_NETWORKS.includes(NETWORK_NAME)) {
 
 console.log(`Using network ${NETWORK_NAME}`)
 
-const wrDeployArtifact = JSON.parse(fs.readFileSync(`./deployments/${NETWORK_NAME}/WorkerRegistration.json`, "utf8"));
+const wrDeployArtifact = JSON.parse(fs.readFileSync(`${__dirname}/../deployments/${NETWORK_NAME}/WorkerRegistration.json`, "utf8"));
 const workerRegistrationAddress = wrDeployArtifact.address;
 const workerRegistrationABI = wrDeployArtifact.abi;
 
-const tSQDArtifact = JSON.parse(fs.readFileSync(`./deployments/${NETWORK_NAME}/tSQD.json`, "utf8"));
+const tSQDArtifact = JSON.parse(fs.readFileSync(`${__dirname}/../deployments/${NETWORK_NAME}/tSQD.json`, "utf8"));
 const tSQDTokenAddress = tSQDArtifact.address;
 const tSQDTokenABI = tSQDArtifact.abi;
 
