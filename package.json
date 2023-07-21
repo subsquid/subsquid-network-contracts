@@ -1,6 +1,6 @@
 {
   "name": "subsquid-network",
-  "version": "0.0.3a",
+  "version": "0.0.3",
   "bin": {
     "subsquid-network-register": "./scripts/register-worker.js"
   },
@@ -8,6 +8,7 @@
     "@openzeppelin/contracts": "^4.8.3",
     "bs58": "^5.0.0",
     "dotenv": "^16.0.3",
+    "ethers": "^5.7.2",
     "hardhat": "^2.14.0",
     "peer-id": "^0.16.0"
   },
@@ -27,7 +28,6 @@
     "@types/node": "^18.15.11",
     "chai": "^4.3.4",
     "ethereum-waffle": "^3.4.4",
-    "ethers": "^5.7.2",
     "hardhat-deploy": "^0.11.26",
     "sinon": "^15",
     "ts-node": "^10.9.1",
