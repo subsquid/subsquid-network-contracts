@@ -16,6 +16,8 @@ contract WorkerRegistration {
 
 
     IERC20 public tSQD;
+    uint256 public storagePerWorkerInGb = 1000;
+
     uint128 public immutable epochLength;
     uint128 public immutable lockPeriod;
 
@@ -37,6 +39,7 @@ contract WorkerRegistration {
     mapping(address creator => mapping(bytes peerId => uint256 id)) public workerIds;
     mapping(address staker => mapping(uint256 workerId => uint256 amount)) public stakedAmounts;
     uint256[] public activeWorkerIds;
+    uint256 public totalStaked;
 
     event WorkerRegistered(uint256 indexed workerId, bytes indexed peerId, address indexed registrar, uint256 registeredAt);
     event WorkerDeregistered(uint256 indexed workerId, address indexed account, uint256 deregistedAt);
@@ -113,6 +116,7 @@ contract WorkerRegistration {
 
         tSQD.transferFrom(msg.sender, address(this), amount);
         stakedAmounts[msg.sender][workerId] += amount;
+        totalStaked += amount;
 
         emit Delegated(workerId, msg.sender, amount);
     }
@@ -125,12 +129,13 @@ contract WorkerRegistration {
         require(stakedAmount >= amount, "Insufficient staked amount");
 
         stakedAmounts[msg.sender][workerId] -= amount;
+        totalStaked -= amount;
         tSQD.transfer(msg.sender, amount);
 
         emit Unstaked(workerId, msg.sender, amount);
     }
 
-    function nextEpoch() internal view returns (uint128) {
+    function nextEpoch() public view returns (uint128) {
         return (uint128(block.number) / epochLength + 1) * epochLength;
     }
 
@@ -174,5 +179,9 @@ contract WorkerRegistration {
 
     function getAllWorkersCount() external view returns (uint256) {
         return activeWorkerIds.length;
+    }
+
+    function effectiveTVL() external view returns (uint256) {
+        return activeWorkerIds.length * BOND_AMOUNT + totalStaked;
     }
 }

@@ -8,7 +8,7 @@ module.exports = {
   networks: {
     hardhat: {
       chainId: 31337,
-      epochLengthBlocks: 1,
+      epochLengthBlocks: 10,
       blockTime: 1,
     //   mining: {
     //     auto: false,

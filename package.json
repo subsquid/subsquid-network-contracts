@@ -10,7 +10,8 @@
     "dotenv": "^16.0.3",
     "ethers": "^5.7.2",
     "hardhat": "^2.14.0",
-    "peer-id": "^0.16.0"
+    "peer-id": "^0.16.0",
+    "viem": "^1.4.2"
   },
   "scripts": {
     "run:dev": "hardhat node --watch",
@@ -18,7 +19,9 @@
     "lint": "forge fmt --check",
     "lint:fix": "forge fmt",
     "register-worker": "node -r dotenv/config scripts/register-worker.js",
-    "list-workers": "node -r dotenv/config scripts/active-workers.js"
+    "list-workers": "node -r dotenv/config scripts/active-workers.js",
+    "build": "forge build && npm run build:types",
+    "build:types": "find artifacts -name \"*.json\" -exec bash -c \"echo export default \\<const\\> > {}.ts && cat {} >> {}.ts\" \\; && find artifacts -name \"*.json.ts\" -exec bash -c 'mv $0 ${0%???????}ts' {} \\;\n"
   },
   "devDependencies": {
     "@nomiclabs/hardhat-ethers": "^2.2.3",
