@@ -1,5 +1,5 @@
 [profile.default]
-src = "src"
+src = "contracts"
 out = "artifacts"
 libs = ["node_modules", "lib"]
 remappings = [
@@ -9,4 +9,7 @@ remappings = [
     "hardhat/=node_modules/hardhat/",
 ]
 
+[fmt]
+int_types = "long"
+tab_width = 2
 # See more config options https://github.com/foundry-rs/foundry/tree/master/config
