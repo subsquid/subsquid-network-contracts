@@ -22,7 +22,7 @@ contract RewardsDistributionTest is Test {
         token = new tSQD(holders, shares);
         rewardsDistribution = new RewardsDistribution(address(this), token);
         rewardsDistribution.grantRole(rewardsDistribution.REWARDS_DISTRIBUTOR_ROLE(), address(this));
-        token.approve(address(rewardsDistribution), epochRewardAmount);
+        token.transfer(address(rewardsDistribution), epochRewardAmount * 10);
     }
 
     function prepareRewards(uint256 n) internal view returns (address[] memory recipients, uint256[] memory amounts) {

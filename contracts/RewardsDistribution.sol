@@ -27,8 +27,6 @@ contract RewardsDistribution is AccessControl {
         }
         require(totalDistributedAmount == totalEpochReward, "Total distributed != epoch reward");
 
-        rewardToken.transferFrom(msg.sender, address(this), totalEpochReward);
-
         emit NewReward(msg.sender, totalEpochReward);
     }
 

@@ -2,7 +2,6 @@
 pragma solidity ^0.8.18;
 
 import "./WorkerRegistration.sol";
-import "hardhat/console.sol";
 
 contract RewardCalculation {
     WorkerRegistration public workerRegistration;
@@ -12,8 +11,6 @@ contract RewardCalculation {
     }
 
     function apy(int256 target, int256 actual) public view returns (int256) {
-        console.logInt(target);
-        console.logInt(actual);
         int256 def = (target - actual) * 10000 / target;
         if (def >= 9000) {
             return 7000;
