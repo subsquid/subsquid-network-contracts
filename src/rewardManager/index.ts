@@ -18,7 +18,6 @@ async function distribute(reward: bigint) {
     return workerReward
   })
   const t = await contracts.rewardsDistribution.write.distribute([workerAddresses, amounts, reward], {})
-  console.log(t)
 }
 
 async function run() {

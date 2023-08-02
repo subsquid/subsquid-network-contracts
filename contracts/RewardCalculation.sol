@@ -31,7 +31,7 @@ contract RewardCalculation {
   }
 
   function epochReward(uint256 targetGb) public view returns (uint256) {
-    return (10000 + currentApy(targetGb)) * workerRegistration.effectiveTVL() * workerRegistration.epochLength() / year
+    return currentApy(targetGb) * workerRegistration.effectiveTVL() * workerRegistration.epochLength() / year
       / 10000;
   }
 }
