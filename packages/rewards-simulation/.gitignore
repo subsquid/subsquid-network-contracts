@@ -1,0 +1,7 @@
+.env
+cache
+node_modules
+.idea
+pings.csv
+queries.csv
+stakes.csv

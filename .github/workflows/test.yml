@@ -16,15 +16,20 @@ jobs:
     strategy:
       fail-fast: true
 
-    name: Foundry project
+    name: CI
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
         with:
           submodules: recursive
 
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2.0.1
+        with:
+          version: 7.5.0
+
       - name: Install deps
-        run: npm ci
+        run: pnpm i
 
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
@@ -33,16 +38,15 @@ jobs:
 
       - name: Run Forge build
         run: |
-          forge --version
-          forge build --sizes
+          pnpm build
         id: build
 
       - name: Run Lint
         run: |
-          npm run lint
+          pnpm lint
         id: lint
 
       - name: Run Forge tests
         run: |
-          forge test -vvv
+          pnpm test
         id: test

@@ -1,0 +1,17 @@
+[profile.default]
+src = "src"
+out = "artifacts"
+libs = ["node_modules", "lib"]
+allow_paths = ["../../node_modules"]
+remappings = [
+    "@ensdomains/=node_modules/@ensdomains/",
+    "@openzeppelin/=node_modules/@openzeppelin/",
+    "hardhat-deploy/=node_modules/hardhat-deploy/",
+    "hardhat/=node_modules/hardhat/",
+]
+viaIr = true
+
+[fmt]
+int_types = "long"
+tab_width = 2
+# See more config options https://github.com/foundry-rs/foundry/tree/master/config

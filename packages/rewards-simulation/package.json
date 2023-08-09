@@ -1,0 +1,17 @@
+{
+  "name": "@subsquid-network/rewards-simulation",
+  "version": "0.0.1",
+  "dependencies": {
+    "clickhouse": "^2.6.0",
+    "dayjs": "^1.11.9",
+    "viem": "^1.4.2"
+  },
+  "scripts": {
+    "reward-simulation": "ts-node src/generate-logs.ts && ts-node src/index.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^20.4.9",
+    "ts-node": "^10.9.1",
+    "typescript": "^5.0.4"
+  }
+}
