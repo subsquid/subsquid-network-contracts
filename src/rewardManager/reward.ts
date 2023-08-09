@@ -1,6 +1,9 @@
 import {bytesSent, livenessFactor, NetworkStats, Workers} from "./logs";
 import {bond, epochLength} from "./chain";
-import {formatEther} from "viem";
+import {formatEther, parseEther} from "viem";
+
+const FIXED_R_APR = 0.8
+const YEAR = 365 * 24 * 60 * 60
 
 function normalize(workers: Workers): Workers {
   const totalBytesSent = Object.values(workers).reduce((acc, {bytesSent}) => acc + bytesSent, 0);
@@ -42,9 +45,12 @@ async function dLiveness(networkStats: NetworkStats) {
 }
 
 async function rMax() {
-  const rApr = 0.8
-  const YEAR = 365 * 24 * 60 * 60
-  return rApr * await epochLength() / YEAR
+  return FIXED_R_APR * await epochLength() / YEAR
+}
+
+async function rUnlocked(workersCount: number) {
+  const totalStaked = await bond() * BigInt(workersCount)
+  return BigInt(FIXED_R_APR * 10) * totalStaked * BigInt(await epochLength()) / BigInt(YEAR) / 10n
 }
 
 function keysToFixed(object: Object) {
@@ -74,4 +80,9 @@ export async function epochStats(from: Date, to: Date) {
   }
   if (Object.keys(stats).length === 0) return
   console.table(stats)
+  const totalUnlocked = await rUnlocked(Object.keys(stats).length)
+  const totalReward: bigint = Object.values(stats).reduce<bigint>((acc, {reward}) => acc + parseEther(reward), 0n)
+  console.log('Total unlocked:', formatEther(totalUnlocked))
+  console.log('Total reward:', formatEther(totalReward))
+  console.log('Percentage unlocked', Number(totalReward * 10000n / totalUnlocked) / 100, '%')
 }
