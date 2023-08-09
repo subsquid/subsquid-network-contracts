@@ -1,9 +1,4 @@
-.env
-artifacts
-cache
 node_modules
 .idea
-deployments/localhost
-pings.csv
-queries.csv
-stakes.csv.csv
+.env
+.turbo
