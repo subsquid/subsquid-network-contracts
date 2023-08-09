@@ -1,5 +1,6 @@
 import {bytesSent, livenessFactor, NetworkStats, Workers} from "./logs";
 import {bond, epochLength} from "./chain";
+import {formatEther} from "viem";
 
 function normalize(workers: Workers): Workers {
   const totalBytesSent = Object.values(workers).reduce((acc, {bytesSent}) => acc + bytesSent, 0);
@@ -46,6 +47,10 @@ async function rMax() {
   return rApr * await epochLength() / YEAR
 }
 
+function keysToFixed(object: Object) {
+  return Object.fromEntries(Object.entries(object).map(([key, value]) => [key, typeof value === 'number' ? value.toFixed(2) : value]))
+}
+
 export async function epochStats(from: Date, to: Date) {
   const workers = await bytesSent(from, to)
   const t = getT(workers)
@@ -55,10 +60,18 @@ export async function epochStats(from: Date, to: Date) {
   const rm = await rMax()
   const _bond = await bond()
   console.log(from, '-', to)
-  console.log('Worker\tt\tdTraffic\tliveness factor\tdLiveness\treward')
+  const stats: any = {}
   for (const workersKey in dL) {
     const r = rm * dL[workersKey] * dT[workersKey] || 0
     const reward = BigInt(Math.floor(r * 100_000_000)) * _bond / 100_000_000n
-    console.log(workersKey, t[workersKey]?.t, dT[workersKey], lf[workersKey].livenessFactor, dL[workersKey], reward)
+    stats[workersKey] = keysToFixed({
+      t: t[workersKey]?.t,
+      dTraffic: dT[workersKey],
+      livenessFactor: lf[workersKey].livenessFactor,
+      dLiveness: dL[workersKey],
+      reward: formatEther(reward)
+    })
   }
+  if (Object.keys(stats).length === 0) return
+  console.table(stats)
 }

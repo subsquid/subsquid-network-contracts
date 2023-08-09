@@ -7,6 +7,7 @@ const epochLength = Number(process.argv[3] ?? 86400)
 const DAY = 24 * 60 * 60 * 1000
 const PING_INTERVAL = 50_000
 const BACK_ONLINE_PROBABILITY = 0.7
+const WORK_START = new Date('2023-07-11')
 
 const randomLetter = () => Math.random().toString(36)[2]
 
@@ -42,7 +43,6 @@ const generateWorkers = () => {
 
 type Workers = ReturnType<typeof generateWorkers>
 
-const workStart = new Date('2023-07-23')
 
 fs.writeFileSync('pings.csv', 'timestamp,workerId\n')
 
@@ -52,7 +52,7 @@ function printPing(worker: string, timestamp: number) {
 
 const generatePings = (workers: Workers) => {
   const isOffline: { [key in string]: boolean } = {}
-  const startTimestamp = workStart.getTime()
+  const startTimestamp = WORK_START.getTime()
   const now = Date.now()
   for (let i = 0; i + startTimestamp < now; i += PING_INTERVAL) {
     for (const worker of workers) {
@@ -72,7 +72,7 @@ const generatePings = (workers: Workers) => {
 
 const generateQueries = (workers: Workers) => {
   const queries = []
-  const startTimestamp = workStart.getTime()
+  const startTimestamp = WORK_START.getTime()
   const now = Date.now()
   for (const worker of workers) {
     let time = worker.workStartDelay
