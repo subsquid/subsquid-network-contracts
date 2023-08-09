@@ -1,13 +1,14 @@
-import {bytesSent, livenessFactor, NetworkStats, Workers} from "./logs";
+import {bytesSent, getStakes, livenessFactor, NetworkStats, Stakes, Workers} from "./logs";
 import {bond, epochLength} from "./chain";
-import {formatEther, parseEther} from "viem";
+import {parseEther} from "viem";
+import {bigSum, formatSqd, keysToFixed, sum} from "./utils";
 
 const FIXED_R_APR = 0.8
 const YEAR = 365 * 24 * 60 * 60
 
 function normalize(workers: Workers): Workers {
-  const totalBytesSent = Object.values(workers).reduce((acc, {bytesSent}) => acc + bytesSent, 0);
-  const totalChunksRead = Object.values(workers).reduce((acc, {chunksRead}) => acc + chunksRead, 0);
+  const totalBytesSent = sum(Object.values(workers).map(({bytesSent}) => bytesSent))
+  const totalChunksRead = sum(Object.values(workers).map(({chunksRead}) => chunksRead))
   return Object.fromEntries(Object.entries(workers).map(([id, {bytesSent, chunksRead}]) => [id, {
     bytesSent: bytesSent / totalBytesSent,
     chunksRead: chunksRead / totalChunksRead,
@@ -25,7 +26,7 @@ function getT(workers: Workers) {
 async function dTraffic(workers: Workers) {
   const ALPHA = 0.1
   const s = 1 / Object.keys(workers).length;
-  const T = Object.values(workers).reduce((acc, {t}) => acc + t, 0);
+  const T = sum(Object.values(workers).map(({t}) => t));
   const dT: { [key in string]: number } = {}
   for (const workersKey in workers) {
     dT[workersKey] = Math.min(1, (workers[workersKey].t / T / s) ** ALPHA);
@@ -48,13 +49,9 @@ async function rMax() {
   return FIXED_R_APR * await epochLength() / YEAR
 }
 
-async function rUnlocked(workersCount: number) {
-  const totalStaked = await bond() * BigInt(workersCount)
+async function rUnlocked(stakes: Stakes) {
+  const totalStaked = await bond() * BigInt(Object.keys(stakes).length) + bigSum(Object.values(stakes))
   return BigInt(FIXED_R_APR * 10) * totalStaked * BigInt(await epochLength()) / BigInt(YEAR) / 10n
-}
-
-function keysToFixed(object: Object) {
-  return Object.fromEntries(Object.entries(object).map(([key, value]) => [key, typeof value === 'number' ? value.toFixed(2) : value]))
 }
 
 export async function epochStats(from: Date, to: Date) {
@@ -65,24 +62,30 @@ export async function epochStats(from: Date, to: Date) {
   const dL = await dLiveness(lf)
   const rm = await rMax()
   const _bond = await bond()
+  const stakes = getStakes()
   console.log(from, '-', to)
   const stats: any = {}
   for (const workersKey in dL) {
     const r = rm * dL[workersKey] * dT[workersKey] || 0
-    const reward = BigInt(Math.floor(r * 100_000_000)) * _bond / 100_000_000n
+    const workerReward = BigInt(Math.floor(r * 100_000_000)) * (_bond + stakes[workersKey] / 2n) / 100_000_000n
+    const stakerReward = BigInt(Math.floor(r * 100_000_000)) * stakes[workersKey] / 2n / 100_000_000n
     stats[workersKey] = keysToFixed({
       t: t[workersKey]?.t,
       dTraffic: dT[workersKey],
       livenessFactor: lf[workersKey].livenessFactor,
       dLiveness: dL[workersKey],
-      reward: formatEther(reward)
+      workerReward: formatSqd(workerReward),
+      stakerReward: formatSqd(stakerReward),
     })
   }
   if (Object.keys(stats).length === 0) return
   console.table(stats)
-  const totalUnlocked = await rUnlocked(Object.keys(stats).length)
-  const totalReward: bigint = Object.values(stats).reduce<bigint>((acc, {reward}) => acc + parseEther(reward), 0n)
-  console.log('Total unlocked:', formatEther(totalUnlocked))
-  console.log('Total reward:', formatEther(totalReward))
+  const totalUnlocked = await rUnlocked(getStakes())
+  const totalReward = bigSum(Object.values(stats).map(({
+                                                         workerReward,
+                                                         stakerReward
+                                                       }) => parseEther(workerReward) + parseEther(stakerReward)))
+  console.log('Total unlocked:', formatSqd(totalUnlocked))
+  console.log('Total reward:', formatSqd(totalReward))
   console.log('Percentage unlocked', Number(totalReward * 10000n / totalUnlocked) / 100, '%')
 }

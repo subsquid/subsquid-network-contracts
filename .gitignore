@@ -6,3 +6,4 @@ node_modules
 deployments/localhost
 pings.csv
 queries.csv
+stakes.csv.csv
