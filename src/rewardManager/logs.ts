@@ -1,0 +1,75 @@
+import {ClickHouse} from 'clickhouse';
+import dayjs, {Dayjs} from "dayjs";
+
+const clickhouse = new ClickHouse({
+  url: 'https://clickhouse.subsquid.io/',
+  basicAuth: {
+    username: 'sqd_read',
+    password: 'sHsys_asdaD-a_123'
+  },
+  format: 'json',
+});
+
+function formatDate(date: Date) {
+  return dayjs(date).format('YYYY-MM-DD HH:mm:ss')
+}
+
+export interface Work {
+  bytesSent: number
+  chunksRead: number
+  t?: number
+}
+
+export type Workers = Awaited<ReturnType<typeof bytesSent>>
+
+export async function bytesSent(from: Date, to: Date) {
+  const query = `select workerId, sum(responseBytes), sum(readChunks) from testnet.queries where timestamp >= '${formatDate(from)}' and timestamp <= '${formatDate(to)}' group by workerId`;
+  const workers: Record<string, Work> = {}
+  for await (const row of clickhouse.query(query).stream()) {
+    workers[row.workerId] = {
+      bytesSent: row['sum(responseBytes)'],
+      chunksRead: row['sum(readChunks)'],
+    }
+  }
+  return workers
+}
+
+function secondDiffs(dates: Dayjs[]) {
+  return dates.map((date, i) => {
+    if (i === 0) return 0
+    return date.diff(dates[i - 1], 'second')
+  }).slice(1)
+}
+
+function totalOfflineSeconds(diffs: number[]) {
+  const THRESHOLD = 65
+  return diffs.filter(diff => diff > THRESHOLD).reduce((acc, diff) => acc + diff, 0)
+}
+
+export async function livenessFactor(from: Date, to: Date) {
+  const query = `select workerId, timestamp from testnet.worker_pings where timestamp >= '${formatDate(from)}' and timestamp <= '${formatDate(to)}' order by timestamp`;
+  const pings: Record<string, Dayjs[]> = {}
+  for await (const row of clickhouse.query(query).stream()) {
+    if (!pings[row.workerId]) pings[row.workerId] = [dayjs(from)]
+    pings[row.workerId].push(dayjs(row.timestamp))
+  }
+  const totalPeriodSeconds = dayjs(to).diff(dayjs(from), 'second')
+  const netwotkStats: Record<string, {
+    totalPings: number,
+    totalTimeOffline: number
+    livenessFactor: number
+  }> = {}
+  for (const workersKey in pings) {
+    pings[workersKey].push(dayjs(to))
+    const diffs = secondDiffs(pings[workersKey])
+    const totalTimeOffline = totalOfflineSeconds(diffs)
+    netwotkStats[workersKey] = {
+      totalPings: diffs.length - 1,
+      totalTimeOffline: totalOfflineSeconds(diffs),
+      livenessFactor: 1 - totalTimeOffline / totalPeriodSeconds,
+    }
+  }
+  return netwotkStats
+}
+
+export type NetworkStats = Awaited<ReturnType<typeof livenessFactor>>

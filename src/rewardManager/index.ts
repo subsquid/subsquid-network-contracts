@@ -1,34 +1,26 @@
-import {publicClient} from "./client";
-import {contracts} from "./config";
+import {epochLength, getBlockNumber, getBlockTimestamp, getRegistrations, Registrations} from "./chain";
+import {epochStats} from "./reward";
 
-let nextEpochBlock = 0n
-
-async function getBlockNumber() {
-  return publicClient.getBlockNumber()
+function getEpochStart(blockNumber: number, epochLength: number) {
+  return blockNumber / epochLength * epochLength
 }
 
-async function distribute(reward: bigint) {
-  let rewardLeft = reward
-  const workers = await contracts.workerRegistration.read.getActiveWorkers();
-  const workerAddresses = workers.map((worker) => worker.creator);
-  const amounts = workerAddresses.map((_, i) => {
-    const left = workerAddresses.length - i
-    const workerReward = reward / BigInt(left)
-    rewardLeft -= workerReward
-    return workerReward
-  })
-  const t = await contracts.rewardsDistribution.write.distribute([workerAddresses, amounts, reward], {})
+async function earliestEpoch(registrations: Registrations) {
+  const length = await epochLength()
+  const firstRegistration = Math.min(...registrations.map(({registeredAt}) => Number(registeredAt)))
+  return getEpochStart(firstRegistration, length)
 }
 
-async function run() {
-  if (await getBlockNumber() > nextEpochBlock) {
-    nextEpochBlock = await contracts.workerRegistration.read.nextEpoch()
-    console.log('APY', await contracts.rewardCalculation.read.currentApy([900n]));
-    console.log('REWARD', await contracts.rewardCalculation.read.epochReward([900n]));
-    console.log('Next epoch block: ', nextEpochBlock)
-    await distribute(await contracts.rewardCalculation.read.epochReward([900n]))
+async function epochRanges() {
+  const length = await epochLength()
+  let currentEpochStart = await earliestEpoch(await getRegistrations())
+  const current = getEpochStart(await getBlockNumber(), length)
+  let i = 0
+  while (currentEpochStart + length < current) {
+    console.log('EPOCH', i++)
+    await epochStats(await getBlockTimestamp(currentEpochStart), await getBlockTimestamp(currentEpochStart + length - 1));
+    currentEpochStart += length
   }
-  setTimeout(run, 1000)
 }
 
-run()
+epochRanges()

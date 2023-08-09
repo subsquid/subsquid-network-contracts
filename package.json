@@ -7,6 +7,8 @@
   "dependencies": {
     "@openzeppelin/contracts": "^4.8.3",
     "bs58": "^5.0.0",
+    "clickhouse": "^2.6.0",
+    "dayjs": "^1.11.9",
     "dotenv": "^16.0.3",
     "ethers": "^5.7.2",
     "hardhat": "^2.14.0",
