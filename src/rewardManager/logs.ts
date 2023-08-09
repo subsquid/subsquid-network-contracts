@@ -1,11 +1,12 @@
 import {ClickHouse} from 'clickhouse';
 import dayjs, {Dayjs} from "dayjs";
+import fs from 'fs';
 
 const clickhouse = new ClickHouse({
   url: 'https://clickhouse.subsquid.io/',
   basicAuth: {
     username: 'sqd_read',
-    password: 'sHsys_asdaD-a_123'
+    password: process.env.CLICKHOUSE_PASSWORD,
   },
   format: 'json',
 });
@@ -22,7 +23,7 @@ export interface Work {
 
 export type Workers = Awaited<ReturnType<typeof bytesSent>>
 
-export async function bytesSent(from: Date, to: Date) {
+export async function clickhouseBytesSent(from: Date, to: Date) {
   const query = `select workerId, sum(responseBytes), sum(readChunks) from testnet.queries where timestamp >= '${formatDate(from)}' and timestamp <= '${formatDate(to)}' group by workerId`;
   const workers: Record<string, Work> = {}
   for await (const row of clickhouse.query(query).stream()) {
@@ -30,6 +31,25 @@ export async function bytesSent(from: Date, to: Date) {
       bytesSent: row['sum(responseBytes)'],
       chunksRead: row['sum(readChunks)'],
     }
+  }
+  return workers
+}
+
+export async function bytesSent(from: Date, to: Date) {
+  const queries = (await fs.promises.readFile('queries.csv')).toString().split('\n').slice(1).map(line => {
+    const [timestamp, workerId, readChunks, responseBytes] = line.split(',')
+    return {
+      timestamp: new Date(timestamp).getTime(),
+      workerId,
+      readChunks: parseInt(readChunks),
+      responseBytes: parseInt(responseBytes),
+    }
+  }).filter(({timestamp}) => timestamp && timestamp >= from.getTime() && timestamp <= to.getTime())
+  const workers: Record<string, Work> = {}
+  for (const query of queries) {
+    if (!workers[query.workerId]) workers[query.workerId] = {bytesSent: 0, chunksRead: 0}
+    workers[query.workerId].bytesSent += query.responseBytes
+    workers[query.workerId].chunksRead += query.readChunks
   }
   return workers
 }
@@ -46,13 +66,31 @@ function totalOfflineSeconds(diffs: number[]) {
   return diffs.filter(diff => diff > THRESHOLD).reduce((acc, diff) => acc + diff, 0)
 }
 
-export async function livenessFactor(from: Date, to: Date) {
+async function clickhouseGetPings(from: Date, to: Date) {
   const query = `select workerId, timestamp from testnet.worker_pings where timestamp >= '${formatDate(from)}' and timestamp <= '${formatDate(to)}' order by timestamp`;
   const pings: Record<string, Dayjs[]> = {}
   for await (const row of clickhouse.query(query).stream()) {
     if (!pings[row.workerId]) pings[row.workerId] = [dayjs(from)]
     pings[row.workerId].push(dayjs(row.timestamp))
   }
+  return pings
+}
+
+async function getPings(from: Date, to: Date) {
+  const pings: Record<string, Dayjs[]> = {};
+
+  (await fs.promises.readFile('pings.csv')).toString().split('\n').slice(1).forEach(line => {
+    const [timestamp, workerId] = line.split(',')
+    const time = new Date(timestamp).getTime()
+    if (!time || time < from.getTime() || time > to.getTime()) return
+    if (!pings[workerId]) pings[workerId] = [dayjs(from)]
+    pings[workerId].push(dayjs(timestamp))
+  })
+  return pings
+}
+
+export async function livenessFactor(from: Date, to: Date) {
+  const pings = await getPings(from, to)
   const totalPeriodSeconds = dayjs(to).diff(dayjs(from), 'second')
   const netwotkStats: Record<string, {
     totalPings: number,
