@@ -46,7 +46,7 @@ contract WorkerRegistrationWithdrawTest is WorkerRegistrationTest {
     (address workerAddress,,,,) = workerRegistration.workers(0);
     assertEq(workerAddress, address(0));
     assertEq(workerRegistration.getAllWorkersCount(), 0);
-    assertEq(workerRegistration.workerIds(creator, workerId), 1);
+    assertEq(workerRegistration.workerIds(workerId), 1);
   }
 
   function testTransfersBondBack() public {

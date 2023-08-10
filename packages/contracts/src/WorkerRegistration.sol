@@ -34,7 +34,7 @@ contract WorkerRegistration {
   }
 
   mapping(uint256 => Worker) public workers;
-  mapping(address creator => mapping(bytes peerId => uint256 id)) public workerIds;
+  mapping(bytes peerId => uint256 id) public workerIds;
   mapping(address staker => mapping(uint256 workerId => uint256 amount)) public stakedAmounts;
   uint256[] public activeWorkerIds;
   uint256 public totalStaked;
@@ -55,7 +55,7 @@ contract WorkerRegistration {
 
   function register(bytes calldata peerId) external {
     require(peerId.length <= 64, "Peer ID too large");
-    require(workerIds[msg.sender][peerId] == 0, "Worker already registered");
+    require(workerIds[peerId] == 0, "Worker already registered");
 
     workerIdTracker.increment();
     uint256 workerId = workerIdTracker.current();
@@ -63,7 +63,7 @@ contract WorkerRegistration {
     workers[workerId] =
       Worker({creator: msg.sender, peerId: peerId, bond: BOND_AMOUNT, registeredAt: nextEpoch(), deregisteredAt: 0});
 
-    workerIds[msg.sender][peerId] = workerId;
+    workerIds[peerId] = workerId;
     activeWorkerIds.push(workerId);
 
     tSQD.transferFrom(msg.sender, address(this), BOND_AMOUNT);
@@ -71,9 +71,10 @@ contract WorkerRegistration {
   }
 
   function deregister(bytes calldata peerId) external {
-    uint256 workerId = workerIds[msg.sender][peerId];
+    uint256 workerId = workerIds[peerId];
     require(workerId != 0, "Worker not registered");
     require(isWorkerActive(workers[workerId]), "Worker not active");
+    require(workers[workerId].creator == msg.sender, "Not worker creator");
 
     workers[workerId].deregisteredAt = nextEpoch();
 
@@ -90,10 +91,11 @@ contract WorkerRegistration {
   }
 
   function withdraw(bytes calldata peerId) external {
-    uint256 workerId = workerIds[msg.sender][peerId];
+    uint256 workerId = workerIds[peerId];
     require(workerId != 0, "Worker not registered");
     Worker storage worker = workers[workerId];
     require(!isWorkerActive(worker), "Worker is active");
+    require(worker.creator == msg.sender, "Not worker creator");
     require(block.number >= worker.deregisteredAt + lockPeriod, "Worker is locked");
 
     uint256 bond = worker.bond;
@@ -105,7 +107,7 @@ contract WorkerRegistration {
   }
 
   function delegate(address creator, bytes calldata peerId, uint256 amount) external {
-    uint256 workerId = workerIds[creator][peerId];
+    uint256 workerId = workerIds[peerId];
     require(workerId != 0, "Worker not registered");
     require(isWorkerActive(workers[workerId]), "Worker not active");
 
@@ -117,7 +119,7 @@ contract WorkerRegistration {
   }
 
   function unstake(address creator, bytes calldata peerId, uint256 amount) external {
-    uint256 workerId = workerIds[creator][peerId];
+    uint256 workerId = workerIds[peerId];
     require(workerId != 0, "Worker not registered");
 
     uint256 stakedAmount = stakedAmounts[msg.sender][workerId];

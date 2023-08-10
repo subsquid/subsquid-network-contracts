@@ -36,7 +36,7 @@ contract WorkerRegistrationRegisterTest is WorkerRegistrationTest {
 
     workerRegistration.register(workerId);
     workerRegistration.register(workerId2);
-    assertEq(workerRegistration.workerIds(creator, workerId2), 2);
+    assertEq(workerRegistration.workerIds(workerId2), 2);
   }
 
   function testCorrectlyCreatesWorkerStruct() public {
