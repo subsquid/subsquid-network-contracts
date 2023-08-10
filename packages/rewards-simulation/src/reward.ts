@@ -5,6 +5,8 @@ import {bigSum, formatSqd, keysToFixed, sum} from "./utils";
 
 const FIXED_R_APR = 0.8
 const YEAR = 365 * 24 * 60 * 60
+const PRECISION = 100_000_000
+const nPRECISION = 100_000_000n
 
 function normalize(workers: Workers): Workers {
   const totalBytesSent = sum(Object.values(workers).map(({bytesSent}) => bytesSent))
@@ -18,17 +20,18 @@ function normalize(workers: Workers): Workers {
 function getT(workers: Workers) {
   const normalized = normalize(workers);
   for (let w in workers) {
-    workers[w].t = 10 * normalized[w].bytesSent + normalized[w].chunksRead;
+    workers[w].t = Math.sqrt(normalized[w].bytesSent * normalized[w].chunksRead);
   }
   return workers
 }
 
-async function dTraffic(workers: Workers) {
+async function dTraffic(workers: Workers, stakes: Stakes, bond: bigint) {
   const ALPHA = 0.1
-  const s = 1 / Object.keys(workers).length;
+  const totalStake = bigSum(Object.values(stakes)) + bond * BigInt(Object.keys(stakes).length)
   const T = sum(Object.values(workers).map(({t}) => t));
   const dT: { [key in string]: number } = {}
   for (const workersKey in workers) {
+    const s = Number((stakes[workersKey] + bond) * nPRECISION / totalStake) / PRECISION;
     dT[workersKey] = Math.min(1, (workers[workersKey].t / T / s) ** ALPHA);
   }
   return dT
@@ -56,19 +59,20 @@ async function rUnlocked(stakes: Stakes) {
 
 export async function epochStats(from: Date, to: Date) {
   const workers = await bytesSent(from, to)
+  const _bond = await bond()
+  const stakes = getStakes()
+
   const t = getT(workers)
-  const dT = await dTraffic(t)
+  const dT = await dTraffic(t, stakes, _bond)
   const lf = await livenessFactor(from, to)
   const dL = await dLiveness(lf)
   const rm = await rMax()
-  const _bond = await bond()
-  const stakes = getStakes()
   console.log(from, '-', to)
   const stats: any = {}
   for (const workersKey in dL) {
     const r = rm * dL[workersKey] * dT[workersKey] || 0
-    const workerReward = BigInt(Math.floor(r * 100_000_000)) * (_bond + stakes[workersKey] / 2n) / 100_000_000n
-    const stakerReward = BigInt(Math.floor(r * 100_000_000)) * stakes[workersKey] / 2n / 100_000_000n
+    const workerReward = BigInt(Math.floor(r * PRECISION)) * (_bond + stakes[workersKey] / 2n) / nPRECISION
+    const stakerReward = BigInt(Math.floor(r * PRECISION)) * stakes[workersKey] / 2n / nPRECISION
     stats[workersKey] = keysToFixed({
       t: t[workersKey]?.t,
       dTraffic: dT[workersKey],
