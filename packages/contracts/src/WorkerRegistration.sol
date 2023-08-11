@@ -139,7 +139,7 @@ contract WorkerRegistration {
     return (uint128(block.number) / epochLength + 1) * epochLength;
   }
 
-  function getActiveWorkers() external view returns (Worker[] memory) {
+  function getActiveWorkers() public view returns (Worker[] memory) {
     Worker[] memory activeWorkers = new Worker[](getActiveWorkerCount());
 
     uint256 activeIndex = 0;
@@ -182,6 +182,19 @@ contract WorkerRegistration {
   }
 
   function effectiveTVL() external view returns (uint256) {
-    return activeWorkerIds.length * BOND_AMOUNT + totalStaked;
+    return activeWorkerIds.length * BOND_AMOUNT + activeStake();
+  }
+
+  function activeStake() public view returns (uint) {
+    uint stake = 0;
+    for (uint256 i = 0; i < activeWorkerIds.length; i++) {
+      uint256 workerId = activeWorkerIds[i];
+      Worker storage worker = workers[workerId];
+      if (isWorkerActive(worker)) {
+        stake += stakedAmountsPerWorker[workerId];
+      }
+    }
+
+    return stake;
   }
 }
