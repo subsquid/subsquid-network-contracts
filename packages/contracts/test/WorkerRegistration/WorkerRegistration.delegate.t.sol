@@ -42,6 +42,18 @@ contract WorkerRegistrationDelegateTest is WorkerRegistrationTest {
     assertEq(workerRegistration.stakedAmounts(delegator, 1), stakeAmount);
   }
 
+  function testIncreasesStakePerWorker() public {
+    workerRegistration.register(workerId);
+    jumpEpoch();
+    token.transfer(delegator, stakeAmount);
+    startHoax(delegator);
+    token.approve(address(workerRegistration), stakeAmount);
+
+    workerRegistration.delegate(workerId, stakeAmount / 2);
+    workerRegistration.delegate(workerId, stakeAmount / 2);
+    assertEq(workerRegistration.stakedAmountsPerWorker(1), stakeAmount);
+  }
+
   function testEmitsDelegatedEvent() public {
     workerRegistration.register(workerId);
     jumpEpoch();

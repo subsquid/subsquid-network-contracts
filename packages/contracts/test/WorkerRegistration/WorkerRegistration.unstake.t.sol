@@ -61,6 +61,18 @@ contract WorkerRegistrationUnstakeTest is WorkerRegistrationTest {
     workerRegistration.unstake(workerId, stakeAmount);
   }
 
+  function testDecreasesStakePerWorker() public {
+    delegate();
+    workerRegistration.unstake(workerId, stakeAmount / 2);
+    assertEq(workerRegistration.stakedAmountsPerWorker(1), stakeAmount / 2);
+  }
+
+  function testDecreasesTotalStakedAmount() public {
+    delegate();
+    workerRegistration.unstake(workerId, stakeAmount / 2);
+    assertEq(workerRegistration.totalStaked(), stakeAmount / 2);
+  }
+
   function testEmitsUnstakedEvent() public {
     delegate();
 

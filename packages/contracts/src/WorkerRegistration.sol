@@ -36,6 +36,7 @@ contract WorkerRegistration {
   mapping(uint256 => Worker) public workers;
   mapping(bytes peerId => uint256 id) public workerIds;
   mapping(address staker => mapping(uint256 workerId => uint256 amount)) public stakedAmounts;
+  mapping(uint256 workerId => uint amount) public stakedAmountsPerWorker;
   uint256[] public activeWorkerIds;
   uint256 public totalStaked;
 
@@ -61,7 +62,7 @@ contract WorkerRegistration {
     uint256 workerId = workerIdTracker.current();
 
     workers[workerId] =
-      Worker({creator: msg.sender, peerId: peerId, bond: BOND_AMOUNT, registeredAt: nextEpoch(), deregisteredAt: 0});
+            Worker({creator: msg.sender, peerId: peerId, bond: BOND_AMOUNT, registeredAt: nextEpoch(), deregisteredAt: 0});
 
     workerIds[peerId] = workerId;
     activeWorkerIds.push(workerId);
@@ -114,6 +115,7 @@ contract WorkerRegistration {
     tSQD.transferFrom(msg.sender, address(this), amount);
     stakedAmounts[msg.sender][workerId] += amount;
     totalStaked += amount;
+    stakedAmountsPerWorker[workerId] += amount;
 
     emit Delegated(workerId, msg.sender, amount);
   }
@@ -127,6 +129,7 @@ contract WorkerRegistration {
 
     stakedAmounts[msg.sender][workerId] -= amount;
     totalStaked -= amount;
+    stakedAmountsPerWorker[workerId] -= amount;
     tSQD.transfer(msg.sender, amount);
 
     emit Unstaked(workerId, msg.sender, amount);
