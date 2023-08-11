@@ -15,6 +15,14 @@ contract WorkerRegistrationDeregisterTest is WorkerRegistrationTest {
     workerRegistration.deregister(workerId);
   }
 
+  function testRevertsIfNotCalledByCreator() public {
+    workerRegistration.register(workerId);
+    jumpEpoch();
+    hoax(address(this));
+    vm.expectRevert("Not worker creator");
+    workerRegistration.deregister(workerId);
+  }
+
   function testRevertsIfWorkerDeregisteredTwice() public {
     workerRegistration.register(workerId);
     jumpEpoch();

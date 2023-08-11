@@ -57,6 +57,7 @@ contract RewardsDistributionDistributeTest is RewardsDistributionTest {
     (address[] memory recipients, uint256[] memory amounts) = prepareRewards(1);
     rewardsDistribution.distribute(recipients, amounts, epochRewardAmount);
     assertEq(rewardsDistribution.claimable(recipients[0]), epochRewardAmount);
+    vm.roll(block.number + 3);
     rewardsDistribution.distribute(recipients, amounts, epochRewardAmount);
     assertEq(rewardsDistribution.claimable(recipients[0]), epochRewardAmount * 2);
   }

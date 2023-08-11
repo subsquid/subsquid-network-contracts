@@ -106,7 +106,7 @@ contract WorkerRegistration {
     emit WorkerWithdrawn(workerId, msg.sender);
   }
 
-  function delegate(address creator, bytes calldata peerId, uint256 amount) external {
+  function delegate(bytes calldata peerId, uint256 amount) external {
     uint256 workerId = workerIds[peerId];
     require(workerId != 0, "Worker not registered");
     require(isWorkerActive(workers[workerId]), "Worker not active");
@@ -118,7 +118,7 @@ contract WorkerRegistration {
     emit Delegated(workerId, msg.sender, amount);
   }
 
-  function unstake(address creator, bytes calldata peerId, uint256 amount) external {
+  function unstake(bytes calldata peerId, uint256 amount) external {
     uint256 workerId = workerIds[peerId];
     require(workerId != 0, "Worker not registered");
 

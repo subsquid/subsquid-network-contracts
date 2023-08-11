@@ -9,7 +9,7 @@ contract WorkerRegistrationUnstakeTest is WorkerRegistrationTest {
 
   function testRevertsForNotRegisteredWorker() public {
     vm.expectRevert("Worker not registered");
-    workerRegistration.unstake(creator, workerId, 2);
+    workerRegistration.unstake(workerId, 2);
   }
 
   function delegate() internal {
@@ -18,7 +18,7 @@ contract WorkerRegistrationUnstakeTest is WorkerRegistrationTest {
     token.transfer(delegator, stakeAmount);
     startHoax(delegator);
     token.approve(address(workerRegistration), stakeAmount);
-    workerRegistration.delegate(creator, workerId, stakeAmount);
+    workerRegistration.delegate(workerId, stakeAmount);
   }
 
   function testWorksForNotActiveWorker() public {
@@ -27,12 +27,12 @@ contract WorkerRegistrationUnstakeTest is WorkerRegistrationTest {
     workerRegistration.deregister(workerId);
     jumpEpoch();
     hoax(delegator);
-    workerRegistration.unstake(creator, workerId, stakeAmount);
+    workerRegistration.unstake(workerId, stakeAmount);
   }
 
   function testTransfersTSqdBack() public {
     delegate();
-    workerRegistration.unstake(creator, workerId, stakeAmount / 2);
+    workerRegistration.unstake(workerId, stakeAmount / 2);
     assertEq(token.balanceOf(address(workerRegistration)), stakeAmount / 2 + workerRegistration.BOND_AMOUNT());
     assertEq(workerRegistration.stakedAmounts(delegator, 1), stakeAmount / 2);
   }
@@ -40,14 +40,14 @@ contract WorkerRegistrationUnstakeTest is WorkerRegistrationTest {
   function testCannotUnstakeMoreThanStaked() public {
     delegate();
     vm.expectRevert("Insufficient staked amount");
-    workerRegistration.unstake(creator, workerId, stakeAmount + 1);
+    workerRegistration.unstake(workerId, stakeAmount + 1);
   }
 
   function testCannotUnstakeSameStakeTwice() public {
     delegate();
-    workerRegistration.unstake(creator, workerId, stakeAmount);
+    workerRegistration.unstake(workerId, stakeAmount);
     vm.expectRevert("Insufficient staked amount");
-    workerRegistration.unstake(creator, workerId, 1);
+    workerRegistration.unstake(workerId, 1);
   }
 
   function testCanUnstakeFromRetiredWorker() public {
@@ -58,7 +58,7 @@ contract WorkerRegistrationUnstakeTest is WorkerRegistrationTest {
     jumpEpoch();
     workerRegistration.withdraw(workerId);
     hoax(delegator);
-    workerRegistration.unstake(creator, workerId, stakeAmount);
+    workerRegistration.unstake(workerId, stakeAmount);
   }
 
   function testEmitsUnstakedEvent() public {
@@ -66,6 +66,6 @@ contract WorkerRegistrationUnstakeTest is WorkerRegistrationTest {
 
     vm.expectEmit(address(workerRegistration));
     emit Unstaked(1, delegator, stakeAmount);
-    workerRegistration.unstake(creator, workerId, stakeAmount);
+    workerRegistration.unstake(workerId, stakeAmount);
   }
 }

@@ -9,13 +9,13 @@ contract WorkerRegistrationDelegateTest is WorkerRegistrationTest {
 
   function testRevertsForNotRegisteredWorker() public {
     vm.expectRevert("Worker not registered");
-    workerRegistration.delegate(creator, workerId, 2);
+    workerRegistration.delegate(workerId, 2);
   }
 
   function testRevertsForNotActiveWorker() public {
     workerRegistration.register(workerId);
     vm.expectRevert("Worker not active");
-    workerRegistration.delegate(creator, workerId, 2);
+    workerRegistration.delegate(workerId, 2);
   }
 
   function testStakesTSqt() public {
@@ -25,7 +25,7 @@ contract WorkerRegistrationDelegateTest is WorkerRegistrationTest {
     startHoax(delegator);
     token.approve(address(workerRegistration), stakeAmount);
 
-    workerRegistration.delegate(creator, workerId, stakeAmount);
+    workerRegistration.delegate(workerId, stakeAmount);
     assertEq(token.balanceOf(address(workerRegistration)), stakeAmount + workerRegistration.BOND_AMOUNT());
     assertEq(workerRegistration.stakedAmounts(delegator, 1), stakeAmount);
   }
@@ -37,8 +37,8 @@ contract WorkerRegistrationDelegateTest is WorkerRegistrationTest {
     startHoax(delegator);
     token.approve(address(workerRegistration), stakeAmount);
 
-    workerRegistration.delegate(creator, workerId, stakeAmount / 2);
-    workerRegistration.delegate(creator, workerId, stakeAmount / 2);
+    workerRegistration.delegate(workerId, stakeAmount / 2);
+    workerRegistration.delegate(workerId, stakeAmount / 2);
     assertEq(workerRegistration.stakedAmounts(delegator, 1), stakeAmount);
   }
 
@@ -52,6 +52,6 @@ contract WorkerRegistrationDelegateTest is WorkerRegistrationTest {
 
     vm.expectEmit(address(workerRegistration));
     emit Delegated(1, delegator, stakeAmount);
-    workerRegistration.delegate(creator, workerId, stakeAmount);
+    workerRegistration.delegate(workerId, stakeAmount);
   }
 }

@@ -32,6 +32,17 @@ contract WorkerRegistrationWithdrawTest is WorkerRegistrationTest {
     workerRegistration.withdraw(workerId);
   }
 
+  function testRevertsIfNotCalledByCreator() public {
+    workerRegistration.register(workerId);
+    jumpEpoch();
+    workerRegistration.deregister(workerId);
+    jumpEpoch();
+    jumpEpoch();
+    hoax(address(this));
+    vm.expectRevert("Not worker creator");
+    workerRegistration.withdraw(workerId);
+  }
+
   function withdraw() internal {
     workerRegistration.register(workerId);
     jumpEpoch();
