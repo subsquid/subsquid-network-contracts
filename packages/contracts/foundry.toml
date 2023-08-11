@@ -9,7 +9,6 @@ remappings = [
     "hardhat-deploy/=node_modules/hardhat-deploy/",
     "hardhat/=node_modules/hardhat/",
 ]
-viaIr = true
 
 [fmt]
 int_types = "long"
