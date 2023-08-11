@@ -22,7 +22,7 @@ contract RewardsDistribution is AccessControl {
     _setupRole(DEFAULT_ADMIN_ROLE, admin);
   }
 
-  function distribute(address[] memory recipients, uint256[] memory amounts, uint256 totalEpochReward)
+  function distribute(address[] memory recipients, uint256[] memory amounts)
     external
     onlyRole(REWARDS_DISTRIBUTOR_ROLE)
   {
@@ -33,10 +33,9 @@ contract RewardsDistribution is AccessControl {
       claimable[recipients[i]] += amounts[i];
       totalDistributedAmount += amounts[i];
     }
-    require(totalDistributedAmount == totalEpochReward, "Total distributed != epoch reward");
     nextEpochStartBlock = workerRegistration.nextEpoch();
 
-    emit NewReward(msg.sender, totalEpochReward);
+    emit NewReward(msg.sender, totalDistributedAmount);
   }
 
   function claim() external {

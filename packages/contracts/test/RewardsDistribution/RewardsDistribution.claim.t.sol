@@ -5,7 +5,7 @@ import "./RewardsDistribution.t.sol";
 contract RewardsDistributionClaimTest is RewardsDistributionTest {
   function testTransfersClaimableRewardsToSender() public {
     (address[] memory recipients, uint256[] memory amounts) = prepareRewards(4);
-    rewardsDistribution.distribute(recipients, amounts, epochRewardAmount);
+    rewardsDistribution.distribute(recipients, amounts);
     uint256 claimable = rewardsDistribution.claimable(recipients[0]);
     hoax(recipients[0]);
     rewardsDistribution.claim();
@@ -15,7 +15,7 @@ contract RewardsDistributionClaimTest is RewardsDistributionTest {
 
   function testCannotClaimSameRewardTwice() public {
     (address[] memory recipients, uint256[] memory amounts) = prepareRewards(4);
-    rewardsDistribution.distribute(recipients, amounts, epochRewardAmount);
+    rewardsDistribution.distribute(recipients, amounts);
     uint256 claimable = rewardsDistribution.claimable(recipients[0]);
     hoax(recipients[0]);
     rewardsDistribution.claim();
@@ -28,7 +28,7 @@ contract RewardsDistributionClaimTest is RewardsDistributionTest {
 
   function testClaimEmitsEvent() public {
     (address[] memory recipients, uint256[] memory amounts) = prepareRewards(4);
-    rewardsDistribution.distribute(recipients, amounts, epochRewardAmount);
+    rewardsDistribution.distribute(recipients, amounts);
     uint256 claimable = rewardsDistribution.claimable(recipients[0]);
     hoax(recipients[0]);
     vm.expectEmit(address(rewardsDistribution));
