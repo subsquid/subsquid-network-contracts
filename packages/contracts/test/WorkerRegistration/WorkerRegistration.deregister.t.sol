@@ -57,7 +57,24 @@ contract WorkerRegistrationDeregisterTest is WorkerRegistrationTest {
     workerRegistration.deregister(workerId);
 
     assertEq(workerRegistration.getAllWorkersCount(), 1);
-    //        assertEq(workerRegistration.getWorkerByIndex(0).account, address(420));
+    assertEq(workerRegistration.getWorkerByIndex(0).peerId, workerId2);
+  }
+
+  function testExcludesInactiveWorkerStakeFromTVL() public {
+    token.approve(address(workerRegistration), workerRegistration.BOND_AMOUNT() * 2 + 300);
+
+    workerRegistration.register(workerId);
+    workerRegistration.register(workerId2);
+    jumpEpoch();
+
+    workerRegistration.delegate(workerId, 100);
+    workerRegistration.delegate(workerId2, 200);
+    assertEq(workerRegistration.effectiveTVL(), workerRegistration.BOND_AMOUNT() * 2 + 300);
+
+    workerRegistration.deregister(workerId);
+    assertEq(workerRegistration.effectiveTVL(), workerRegistration.BOND_AMOUNT() + 200);
+    workerRegistration.deregister(workerId2);
+    assertEq(workerRegistration.effectiveTVL(), 0);
   }
 
   function testEmitsDeregisteredEvent() public {

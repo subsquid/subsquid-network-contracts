@@ -36,7 +36,7 @@ contract WorkerRegistration {
   mapping(uint256 => Worker) public workers;
   mapping(bytes peerId => uint256 id) public workerIds;
   mapping(address staker => mapping(uint256 workerId => uint256 amount)) public stakedAmounts;
-  mapping(uint256 workerId => uint amount) public stakedAmountsPerWorker;
+  mapping(uint256 workerId => uint256 amount) public stakedAmountsPerWorker;
   uint256[] public activeWorkerIds;
   uint256 public totalStaked;
 
@@ -62,7 +62,7 @@ contract WorkerRegistration {
     uint256 workerId = workerIdTracker.current();
 
     workers[workerId] =
-            Worker({creator: msg.sender, peerId: peerId, bond: BOND_AMOUNT, registeredAt: nextEpoch(), deregisteredAt: 0});
+      Worker({creator: msg.sender, peerId: peerId, bond: BOND_AMOUNT, registeredAt: nextEpoch(), deregisteredAt: 0});
 
     workerIds[peerId] = workerId;
     activeWorkerIds.push(workerId);
@@ -185,8 +185,8 @@ contract WorkerRegistration {
     return activeWorkerIds.length * BOND_AMOUNT + activeStake();
   }
 
-  function activeStake() public view returns (uint) {
-    uint stake = 0;
+  function activeStake() public view returns (uint256) {
+    uint256 stake = 0;
     for (uint256 i = 0; i < activeWorkerIds.length; i++) {
       uint256 workerId = activeWorkerIds[i];
       Worker storage worker = workers[workerId];
