@@ -1,0 +1,10 @@
+{
+  "name": "@subsquid-network/lit-test",
+  "version": "0.0.1",
+  "dependencies": {
+    "@lit-protocol/lit-node-client-nodejs": "^2.2.49",
+    "@lit-protocol/pkp-ethers": "^2.2.49",
+    "ethers": "^6.7.1",
+    "siwe": "^2.1.4"
+  }
+}
