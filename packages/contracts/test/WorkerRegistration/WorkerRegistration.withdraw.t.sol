@@ -38,7 +38,7 @@ contract WorkerRegistrationWithdrawTest is WorkerRegistrationTest {
     workerRegistration.deregister(workerId);
     jumpEpoch();
     jumpEpoch();
-    hoax(address(this));
+    startHoax(address(this));
     vm.expectRevert("Not worker creator");
     workerRegistration.withdraw(workerId);
   }

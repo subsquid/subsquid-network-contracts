@@ -8,7 +8,7 @@ contract RewardsDistributionClaimTest is RewardsDistributionTest {
     rewardsDistribution.distribute(recipients, amounts);
     uint256 claimable = rewardsDistribution.claimable(recipients[0]);
     hoax(recipients[0]);
-    rewardsDistribution.claim();
+    treasury.claim(rewardsDistribution);
     assertEq(rewardsDistribution.claimable(recipients[0]), 0);
     assertEq(token.balanceOf(recipients[0]), claimable);
   }
@@ -18,11 +18,11 @@ contract RewardsDistributionClaimTest is RewardsDistributionTest {
     rewardsDistribution.distribute(recipients, amounts);
     uint256 claimable = rewardsDistribution.claimable(recipients[0]);
     hoax(recipients[0]);
-    rewardsDistribution.claim();
+    treasury.claim(rewardsDistribution);
     assertEq(token.balanceOf(recipients[0]), claimable);
 
     hoax(recipients[0]);
-    rewardsDistribution.claim();
+    treasury.claim(rewardsDistribution);
     assertEq(token.balanceOf(recipients[0]), claimable);
   }
 
@@ -33,6 +33,15 @@ contract RewardsDistributionClaimTest is RewardsDistributionTest {
     hoax(recipients[0]);
     vm.expectEmit(address(rewardsDistribution));
     emit Claimed(recipients[0], claimable);
-    rewardsDistribution.claim();
+    treasury.claim(rewardsDistribution);
+  }
+
+  function testDistributorClaimCannotBeCalledByNotTreasury() public {
+    (address[] memory recipients, uint256[] memory amounts) = prepareRewards(1);
+    rewardsDistribution.distribute(recipients, amounts);
+    vm.expectRevert(
+      "AccessControl: account 0x7fa9385be102ac3eac297483dd6233d62b3e1496 is missing role 0x1b79d793df9d39a01a8803af5b473fcb035fc3f70eaeb117debd77529e6aefe8"
+    );
+    rewardsDistribution.claim(recipients[0]);
   }
 }
