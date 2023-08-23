@@ -23,10 +23,10 @@ contract WorkerRegistrationUnstakeTest is WorkerRegistrationTest {
 
   function testWorksForNotActiveWorker() public {
     delegate();
-    hoax(creator);
+    startHoax(creator);
     workerRegistration.deregister(workerId);
     jumpEpoch();
-    hoax(delegator);
+    startHoax(delegator);
     workerRegistration.unstake(workerId, stakeAmount);
   }
 
@@ -57,7 +57,7 @@ contract WorkerRegistrationUnstakeTest is WorkerRegistrationTest {
     jumpEpoch();
     jumpEpoch();
     workerRegistration.withdraw(workerId);
-    hoax(delegator);
+    startHoax(delegator);
     workerRegistration.unstake(workerId, stakeAmount);
   }
 
