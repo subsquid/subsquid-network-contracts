@@ -9,6 +9,7 @@ contract WorkerRegistration {
   using Counters for Counters.Counter;
   using SafeMath for uint256;
 
+  //TODO update bond amount
   uint256 public constant BOND_AMOUNT = 100000 * 10 ** 18;
   // uint256 public constant EPOCH_LENGTH = 20700; // approximately 72 hours in blocks
   // uint256 public constant LOCK_PERIOD = EPOCH_LENGTH;
@@ -182,11 +183,12 @@ contract WorkerRegistration {
   }
 
   function effectiveTVL() external view returns (uint256) {
-    return activeWorkerIds.length * BOND_AMOUNT + activeStake();
+    return getActiveWorkerCount() * BOND_AMOUNT + activeStake();
   }
 
   function activeStake() public view returns (uint256) {
     uint256 stake = 0;
+    // TODO optimize loop
     for (uint256 i = 0; i < activeWorkerIds.length; i++) {
       uint256 workerId = activeWorkerIds[i];
       Worker storage worker = workers[workerId];

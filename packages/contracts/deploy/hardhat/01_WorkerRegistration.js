@@ -32,6 +32,14 @@ const func = async function ({ deployments, getNamedAccounts }) {
     log: true,
     deterministicDeployment: salt,
   });
+  if (networkName === "arbitrum-goerli") {
+    await deploy("WorkerRegistrationFacade", {
+      from: deployer,
+      args: ["0xA7E47a7aE0FB29BeF4485f6CAb2ee1b85c1D38aB"],
+      log: true,
+      deterministicDeployment: salt,
+    });
+  }
 
   console.log("WorkerRegistration deployed at:", workerRegistration.address);
 };
