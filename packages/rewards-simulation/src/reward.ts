@@ -1,4 +1,4 @@
-import {bytesSent, getStakes, livenessFactor, NetworkStats, Stakes, Workers} from "./logs";
+import {clickhouseBytesSent, getStakes, livenessFactor, NetworkStats, Stakes, Workers} from "./logs";
 import {bond, epochLength} from "./chain";
 import {parseEther} from "viem";
 import {bigSum, formatSqd, keysToFixed, sum} from "./utils";
@@ -7,6 +7,10 @@ const FIXED_R_APR = 0.8
 const YEAR = 365 * 24 * 60 * 60
 const PRECISION = 100_000_000
 const nPRECISION = 100_000_000n
+
+function getStake(worker: string) {
+  return 0n
+}
 
 function normalize(workers: Workers): Workers {
   const totalBytesSent = sum(Object.values(workers).map(({bytesSent}) => bytesSent))
@@ -31,7 +35,7 @@ async function dTraffic(workers: Workers, stakes: Stakes, bond: bigint) {
   const T = sum(Object.values(workers).map(({t}) => t));
   const dT: { [key in string]: number } = {}
   for (const workersKey in workers) {
-    const s = Number((stakes[workersKey] + bond) * nPRECISION / totalStake) / PRECISION;
+    const s = Number((getStake(workersKey) + bond) * nPRECISION / totalStake) / PRECISION;
     dT[workersKey] = Math.min(1, (workers[workersKey].t / T / s) ** ALPHA);
   }
   return dT
@@ -58,7 +62,7 @@ async function rUnlocked(stakes: Stakes) {
 }
 
 export async function epochStats(from: Date, to: Date) {
-  const workers = await bytesSent(from, to)
+  const workers = await clickhouseBytesSent(from, to)
   const _bond = await bond()
   const stakes = getStakes()
 
@@ -69,10 +73,11 @@ export async function epochStats(from: Date, to: Date) {
   const rm = await rMax()
   console.log(from, '-', to)
   const stats: any = {}
+  const rewards: { [key in string]: bigint } = {}
   for (const workersKey in dL) {
     const r = rm * dL[workersKey] * dT[workersKey] || 0
-    const workerReward = BigInt(Math.floor(r * PRECISION)) * (_bond + stakes[workersKey] / 2n) / nPRECISION
-    const stakerReward = BigInt(Math.floor(r * PRECISION)) * stakes[workersKey] / 2n / nPRECISION
+    const workerReward = BigInt(Math.floor(r * PRECISION)) * (_bond + getStake(workersKey) / 2n) / nPRECISION
+    const stakerReward = BigInt(Math.floor(r * PRECISION)) * getStake(workersKey) / 2n / nPRECISION
     stats[workersKey] = keysToFixed({
       t: t[workersKey]?.t,
       dTraffic: dT[workersKey],
@@ -81,6 +86,7 @@ export async function epochStats(from: Date, to: Date) {
       workerReward: formatSqd(workerReward),
       stakerReward: formatSqd(stakerReward),
     })
+    rewards[workersKey] = workerReward
   }
   if (Object.keys(stats).length === 0) return
   console.table(stats)
@@ -92,4 +98,5 @@ export async function epochStats(from: Date, to: Date) {
   console.log('Total unlocked:', formatSqd(totalUnlocked))
   console.log('Total reward:', formatSqd(totalReward))
   console.log('Percentage unlocked', Number(totalReward * 10000n / totalUnlocked) / 100, '%')
+  return rewards
 }

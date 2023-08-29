@@ -2,6 +2,7 @@
   "name": "@subsquid-network/rewards-simulation",
   "version": "0.0.1",
   "dependencies": {
+    "bs58": "^5.0.0",
     "clickhouse": "^2.6.0",
     "dayjs": "^1.11.9",
     "viem": "^1.4.2"

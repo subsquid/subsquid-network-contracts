@@ -91,7 +91,7 @@ async function getPings(from: Date, to: Date) {
 }
 
 export async function livenessFactor(from: Date, to: Date) {
-  const pings = await getPings(from, to)
+  const pings = await clickhouseGetPings(from, to)
   const totalPeriodSeconds = dayjs(to).diff(dayjs(from), 'second')
   const netwotkStats: Record<string, {
     totalPings: number,

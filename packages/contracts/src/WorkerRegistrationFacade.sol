@@ -72,7 +72,7 @@ contract WorkerRegistrationFacade {
     return 0;
   }
 
-  function workers(uint i) public view returns (Worker memory) {
+  function workers(uint256 i) public view returns (Worker memory) {
     (address creator, bytes memory peerId, uint256 a, uint128 b, uint128 c) = legacyWorker.workers(i);
     return Worker(creator, peerId, a, b, c);
   }

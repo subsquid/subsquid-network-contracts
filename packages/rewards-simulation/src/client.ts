@@ -15,7 +15,7 @@ export const l1Client = createPublicClient({
 export const walletClient = createWalletClient({
   chain: arbitrumGoerli,
   transport: http(),
-  account: privateKeyToAccount('0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80')
+  account: privateKeyToAccount(process.env.PRIVATE_KEY as any),
 })
 
 // walletClient.request({

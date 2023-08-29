@@ -1,4 +1,12 @@
-import {epochLength, getBlockNumber, getBlockTimestamp, getRegistrations, Registrations} from "./chain";
+import {
+  distributeRewards,
+  epochLength,
+  getBlockNumber,
+  getBlockTimestamp,
+  getRegistrations,
+  nextEpochStart,
+  Registrations
+} from "./chain";
 import {epochStats} from "./reward";
 
 function getEpochStart(blockNumber: number, epochLength: number) {
@@ -8,19 +16,22 @@ function getEpochStart(blockNumber: number, epochLength: number) {
 async function earliestEpoch(registrations: Registrations) {
   const length = await epochLength()
   const firstRegistration = Math.min(...registrations.map(({registeredAt}) => Number(registeredAt)))
-  return getEpochStart(firstRegistration, length)
+  const firsRegistrationEpoch = getEpochStart(firstRegistration, length)
+  const nextEpoch = Number(await nextEpochStart())
+  return Math.max(firsRegistrationEpoch, nextEpoch)
 }
 
 async function epochRanges() {
   const length = await epochLength()
   let currentEpochStart = await earliestEpoch(await getRegistrations())
   const current = getEpochStart(await getBlockNumber(), length)
-  let i = 0
   while (currentEpochStart + length < current) {
-    console.log('EPOCH', i++)
-    await epochStats(await getBlockTimestamp(currentEpochStart), await getBlockTimestamp(currentEpochStart + length - 1));
+    console.log('EPOCH BLOCK', currentEpochStart)
+    const rewards = await epochStats(await getBlockTimestamp(currentEpochStart), await getBlockTimestamp(currentEpochStart + length - 1));
+    await distributeRewards(currentEpochStart + length, rewards)
     currentEpochStart += length
   }
+  setTimeout(epochRanges, 60 * 1000)
 }
 
 epochRanges()
