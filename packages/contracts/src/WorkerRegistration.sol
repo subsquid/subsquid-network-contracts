@@ -3,22 +3,15 @@ pragma solidity ^0.8.18;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/utils/Counters.sol";
-import "@openzeppelin/contracts/utils/math/SafeMath.sol";
+import "@openzeppelin/contracts/access/AccessControl.sol";
 
-contract WorkerRegistration {
+import "./interfaces/INetworkController.sol";
+
+contract WorkerRegistration is AccessControl {
   using Counters for Counters.Counter;
-  using SafeMath for uint256;
-
-  //TODO update bond amount
-  uint256 public constant BOND_AMOUNT = 100000 * 10 ** 18;
-  // uint256 public constant EPOCH_LENGTH = 20700; // approximately 72 hours in blocks
-  // uint256 public constant LOCK_PERIOD = EPOCH_LENGTH;
 
   IERC20 public tSQD;
   uint256 public storagePerWorkerInGb = 1000;
-
-  uint128 public immutable epochLength;
-  uint128 public immutable lockPeriod;
 
   Counters.Counter private workerIdTracker;
 
@@ -34,6 +27,7 @@ contract WorkerRegistration {
     uint128 deregisteredAt;
   }
 
+  INetworkController public networkController;
   mapping(uint256 => Worker) public workers;
   mapping(bytes peerId => uint256 id) public workerIds;
   mapping(address staker => mapping(uint256 workerId => uint256 amount)) public stakedAmounts;
@@ -49,10 +43,10 @@ contract WorkerRegistration {
   event Delegated(uint256 indexed workerId, address indexed staker, uint256 amount);
   event Unstaked(uint256 indexed workerId, address indexed staker, uint256 amount);
 
-  constructor(IERC20 _tSQD, uint128 _epochLengthBlocks) {
+  constructor(IERC20 _tSQD, INetworkController _networkController) {
+    _setupRole(DEFAULT_ADMIN_ROLE, msg.sender);
     tSQD = _tSQD;
-    epochLength = _epochLengthBlocks;
-    lockPeriod = _epochLengthBlocks;
+    networkController = _networkController;
   }
 
   function register(bytes calldata peerId) external {
@@ -63,12 +57,12 @@ contract WorkerRegistration {
     uint256 workerId = workerIdTracker.current();
 
     workers[workerId] =
-      Worker({creator: msg.sender, peerId: peerId, bond: BOND_AMOUNT, registeredAt: nextEpoch(), deregisteredAt: 0});
+      Worker({creator: msg.sender, peerId: peerId, bond: bondAmount(), registeredAt: nextEpoch(), deregisteredAt: 0});
 
     workerIds[peerId] = workerId;
     activeWorkerIds.push(workerId);
 
-    tSQD.transferFrom(msg.sender, address(this), BOND_AMOUNT);
+    tSQD.transferFrom(msg.sender, address(this), bondAmount());
     emit WorkerRegistered(workerId, peerId, msg.sender, workers[workerId].registeredAt);
   }
 
@@ -98,7 +92,7 @@ contract WorkerRegistration {
     Worker storage worker = workers[workerId];
     require(!isWorkerActive(worker), "Worker is active");
     require(worker.creator == msg.sender, "Not worker creator");
-    require(block.number >= worker.deregisteredAt + lockPeriod, "Worker is locked");
+    require(block.number >= worker.deregisteredAt + lockPeriod(), "Worker is locked");
 
     uint256 bond = worker.bond;
     delete workers[workerId];
@@ -106,6 +100,16 @@ contract WorkerRegistration {
     tSQD.transfer(msg.sender, bond);
 
     emit WorkerWithdrawn(workerId, msg.sender);
+  }
+
+  function returnExcessiveBond(bytes calldata peerId) external {
+    uint256 workerId = workerIds[peerId];
+    require(workerId != 0, "Worker not registered");
+
+    uint256 excessiveBond = workers[workerId].bond - bondAmount();
+    workers[workerId].bond = bondAmount();
+
+    tSQD.transfer(msg.sender, excessiveBond);
   }
 
   function delegate(bytes calldata peerId, uint256 amount) external {
@@ -137,7 +141,8 @@ contract WorkerRegistration {
   }
 
   function nextEpoch() public view returns (uint128) {
-    return (uint128(block.number) / epochLength + 1) * epochLength;
+    uint128 _epochLength = epochLength();
+    return (uint128(block.number) / _epochLength + 1) * _epochLength;
   }
 
   function getActiveWorkers() public view returns (Worker[] memory) {
@@ -183,7 +188,7 @@ contract WorkerRegistration {
   }
 
   function effectiveTVL() external view returns (uint256) {
-    return getActiveWorkerCount() * BOND_AMOUNT + activeStake();
+    return getActiveWorkerCount() * bondAmount() + activeStake();
   }
 
   function activeStake() public view returns (uint256) {
@@ -198,5 +203,22 @@ contract WorkerRegistration {
     }
 
     return stake;
+  }
+
+  function bondAmount() public view returns (uint256) {
+    return networkController.bondAmount();
+  }
+
+  // Left for backwards compatibility, to be removed later
+  function BOND_AMOUNT() external view returns (uint256) {
+    return networkController.bondAmount();
+  }
+
+  function epochLength() public view returns (uint128) {
+    return networkController.epochLength();
+  }
+
+  function lockPeriod() public view returns (uint128) {
+    return networkController.epochLength();
   }
 }

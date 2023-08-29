@@ -4,12 +4,14 @@ pragma solidity ^0.8.16;
 import "forge-std/Test.sol";
 import "../../src/WorkerRegistration.sol";
 import "../../src/tSQD.sol";
+import "../../src/NetworkController.sol";
 
 contract WorkerRegistrationTest is Test {
   uint256 constant creatorPrivateKey = 0xabc123;
 
   uint128 constant EPOCH_LENGTH = 2;
   WorkerRegistration public workerRegistration;
+  INetworkController public networkController;
   IERC20 public token;
 
   address creator = vm.addr(creatorPrivateKey);
@@ -34,14 +36,14 @@ contract WorkerRegistrationTest is Test {
 
   function setUp() public {
     startHoax(creator);
-
+    networkController = new NetworkController(EPOCH_LENGTH, 100);
     uint256[] memory shares = new uint256[](1);
     shares[0] = 100;
     address[] memory holders = new address[](1);
     holders[0] = creator;
 
     token = new tSQD(holders, shares);
-    workerRegistration = new WorkerRegistration(token, EPOCH_LENGTH);
+    workerRegistration = new WorkerRegistration(token, networkController);
     token.approve(address(workerRegistration), workerRegistration.BOND_AMOUNT());
   }
 }

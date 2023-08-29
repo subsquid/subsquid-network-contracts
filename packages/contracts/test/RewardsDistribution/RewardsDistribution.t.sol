@@ -5,6 +5,7 @@ import "forge-std/Test.sol";
 import "../../src/RewardsDistribution.sol";
 import "../../src/tSQD.sol";
 import "../../src/RewardTreasury.sol";
+import "../../src/NetworkController.sol";
 
 contract RewardsDistributionTest is Test {
   uint256 epochRewardAmount = 1000;
@@ -22,7 +23,7 @@ contract RewardsDistributionTest is Test {
     holders[0] = address(this);
 
     token = new tSQD(holders, shares);
-    WorkerRegistration workerRegistration = new WorkerRegistration(token, 2);
+    WorkerRegistration workerRegistration = new WorkerRegistration(token, new NetworkController(2, 100));
     rewardsDistribution = new RewardsDistribution(address(this), workerRegistration);
     treasury = new RewardTreasury(address(this), token);
     rewardsDistribution.grantRole(rewardsDistribution.REWARDS_DISTRIBUTOR_ROLE(), address(this));

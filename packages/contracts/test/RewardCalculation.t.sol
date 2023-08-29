@@ -5,6 +5,7 @@ import "forge-std/Test.sol";
 import "../src/RewardCalculation.sol";
 import "../src/WorkerRegistration.sol";
 import "../src/tSQD.sol";
+import "../src/NetworkController.sol";
 
 contract RewardCalculationTest is Test {
   RewardCalculation rewardCalculation;
@@ -16,7 +17,7 @@ contract RewardCalculationTest is Test {
     holders[0] = address(this);
 
     tSQD token = new tSQD(holders, shares);
-    WorkerRegistration workerRegistration = new WorkerRegistration(token, 2);
+    WorkerRegistration workerRegistration = new WorkerRegistration(token, new NetworkController(2, 100));
 
     rewardCalculation = new RewardCalculation(workerRegistration);
   }
