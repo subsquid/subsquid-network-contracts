@@ -66,4 +66,26 @@ contract WorkerRegistrationDelegateTest is WorkerRegistrationTest {
     emit Delegated(1, delegator, stakeAmount);
     workerRegistration.delegate(workerId, stakeAmount);
   }
+
+  function testAddsStakersToTheList() public {
+    address delegator2 = address(1337);
+    workerRegistration.register(workerId);
+    jumpEpoch();
+    token.transfer(delegator, stakeAmount);
+    startHoax(delegator);
+    token.approve(address(workerRegistration), stakeAmount);
+
+    workerRegistration.delegate(workerId, stakeAmount / 2);
+    workerRegistration.delegate(workerId, stakeAmount / 2);
+    startHoax(creator);
+    token.transfer(delegator2, stakeAmount);
+    startHoax(delegator2);
+    token.approve(address(workerRegistration), stakeAmount);
+    workerRegistration.delegate(workerId, stakeAmount);
+
+    address[] memory stakers = workerRegistration.getStakers(workerId);
+    assertEq(stakers.length, 2);
+    assertEq(stakers[0], delegator);
+    assertEq(stakers[1], delegator2);
+  }
 }

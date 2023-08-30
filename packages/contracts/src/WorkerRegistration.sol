@@ -4,11 +4,13 @@ pragma solidity ^0.8.18;
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/utils/Counters.sol";
 import "@openzeppelin/contracts/access/AccessControl.sol";
+import "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 
 import "./interfaces/INetworkController.sol";
 
 contract WorkerRegistration is AccessControl {
   using Counters for Counters.Counter;
+  using EnumerableSet for EnumerableSet.AddressSet;
 
   IERC20 public tSQD;
   uint256 public storagePerWorkerInGb = 1000;
@@ -33,6 +35,7 @@ contract WorkerRegistration is AccessControl {
   mapping(address staker => mapping(uint256 workerId => uint256 amount)) public stakedAmounts;
   mapping(uint256 workerId => uint256 amount) public stakedAmountsPerWorker;
   uint256[] public activeWorkerIds;
+  EnumerableSet.AddressSet[] delegators;
   uint256 public totalStaked;
 
   event WorkerRegistered(
@@ -47,6 +50,7 @@ contract WorkerRegistration is AccessControl {
     _setupRole(DEFAULT_ADMIN_ROLE, msg.sender);
     tSQD = _tSQD;
     networkController = _networkController;
+    delegators.push();
   }
 
   function register(bytes calldata peerId) external {
@@ -55,6 +59,7 @@ contract WorkerRegistration is AccessControl {
 
     workerIdTracker.increment();
     uint256 workerId = workerIdTracker.current();
+    delegators.push();
 
     workers[workerId] =
       Worker({creator: msg.sender, peerId: peerId, bond: bondAmount(), registeredAt: nextEpoch(), deregisteredAt: 0});
@@ -121,6 +126,7 @@ contract WorkerRegistration is AccessControl {
     stakedAmounts[msg.sender][workerId] += amount;
     totalStaked += amount;
     stakedAmountsPerWorker[workerId] += amount;
+    delegators[workerId].add(msg.sender);
 
     emit Delegated(workerId, msg.sender, amount);
   }
@@ -220,5 +226,9 @@ contract WorkerRegistration is AccessControl {
 
   function lockPeriod() public view returns (uint128) {
     return networkController.epochLength();
+  }
+
+  function getStakers(bytes calldata peerId) external view returns (address[] memory) {
+    return delegators[workerIds[peerId]].values();
   }
 }
