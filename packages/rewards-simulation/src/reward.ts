@@ -61,10 +61,15 @@ async function rUnlocked(stakes: Stakes) {
   return BigInt(FIXED_R_APR * 10) * totalStaked * BigInt(await epochLength()) / BigInt(YEAR) / 10n
 }
 
+function printPercentageUnlocked(totalReward: bigint, totalUnlocked: bigint) {
+  if (!totalUnlocked) console.log('Percentage unlocked 0 %')
+  else console.log('Percentage unlocked', Number(totalReward * 10000n / totalUnlocked) / 100, '%')
+}
+
 export async function epochStats(from: Date, to: Date) {
   const workers = await clickhouseBytesSent(from, to)
   const _bond = await bond()
-  const stakes = getStakes()
+  const stakes = getStakes(workers)
 
   const t = getT(workers)
   const dT = await dTraffic(t, stakes, _bond)
@@ -90,13 +95,13 @@ export async function epochStats(from: Date, to: Date) {
   }
   if (Object.keys(stats).length === 0) return
   console.table(stats)
-  const totalUnlocked = await rUnlocked(getStakes())
+  const totalUnlocked = await rUnlocked(getStakes(workers))
   const totalReward = bigSum(Object.values(stats).map(({
                                                          workerReward,
                                                          stakerReward
                                                        }) => parseEther(workerReward) + parseEther(stakerReward)))
   console.log('Total unlocked:', formatSqd(totalUnlocked))
   console.log('Total reward:', formatSqd(totalReward))
-  console.log('Percentage unlocked', Number(totalReward * 10000n / totalUnlocked) / 100, '%')
+  printPercentageUnlocked(totalReward, totalUnlocked);
   return rewards
 }

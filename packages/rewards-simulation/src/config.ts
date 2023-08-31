@@ -7,7 +7,7 @@ import {publicClient, walletClient} from "./client";
 import tsqdDeployment from "../../contracts/deployments/arbitrum-goerli/tSQD.json";
 import workerRegistrationDeployment from "../../contracts/deployments/arbitrum-goerli/WorkerRegistrationFacade.json";
 import rewardCalculationDeployment from "../../contracts/deployments/arbitrum-goerli/RewardCalculation.json";
-import rewardsDistributionDeployment from "../../contracts/deployments/arbitrum-goerli/rewardsDistribution.json";
+import rewardsDistributionDeployment from "../../contracts/deployments/arbitrum-goerli/RewardsDistribution.json";
 
 type ContractName = keyof typeof abis
 

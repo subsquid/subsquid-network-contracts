@@ -1,7 +1,6 @@
 import {ClickHouse} from 'clickhouse';
 import dayjs, {Dayjs} from "dayjs";
 import fs from 'fs';
-import {parseEther} from "viem";
 
 const clickhouse = new ClickHouse({
   url: 'https://clickhouse.subsquid.io/',
@@ -113,10 +112,8 @@ export async function livenessFactor(from: Date, to: Date) {
 
 export type NetworkStats = Awaited<ReturnType<typeof livenessFactor>>
 
-export function getStakes(): {[key: string]: bigint } {
-  return Object.fromEntries(fs.readFileSync('stakes.csv').toString().split('\n').slice(1).map(line => {
-    const [workerId, stake] = line.split(',')
-    return [workerId, parseEther(stake || '0')]
-  }).filter(([workerId]) => workerId))
+export function getStakes(workers: Workers): {[key: string]: bigint } {
+  return Object.fromEntries(Object.keys(workers).map(workerId => [workerId, 0n]))
 }
- export type Stakes = ReturnType<typeof getStakes>
+
+export type Stakes = ReturnType<typeof getStakes>

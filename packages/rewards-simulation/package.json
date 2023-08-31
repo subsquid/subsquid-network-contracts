@@ -8,7 +8,8 @@
     "viem": "^1.4.2"
   },
   "scripts": {
-    "reward-simulation": "ts-node src/generate-logs.ts && ts-node src/index.ts"
+    "reward-simulation": "ts-node src/generate-logs.ts && ts-node src/index.ts",
+    "start": "ts-node src/index.ts"
   },
   "devDependencies": {
     "@types/node": "^20.4.9",
