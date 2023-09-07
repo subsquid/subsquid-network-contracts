@@ -21,6 +21,10 @@ contract RewardTreasury is AccessControl {
     rewardToken.transfer(msg.sender, reward);
   }
 
+  function claimable(IRewardsDistribution rewardDistribution, address worker) external view returns (uint256) {
+    return rewardDistribution.claimable(worker);
+  }
+
   function setWhitelistedDistributor(IRewardsDistribution distributor, bool isWhitelisted)
     external
     onlyRole(DEFAULT_ADMIN_ROLE)
