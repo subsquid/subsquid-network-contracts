@@ -199,8 +199,8 @@ contract WorkerRegistration is AccessControl {
 
   function activeStake() public view returns (uint256) {
     uint256 stake = 0;
-    // TODO optimize loop
-    for (uint256 i = 0; i < activeWorkerIds.length; i++) {
+    uint256 activeWorkersCount = activeWorkerIds.length;
+    for (uint256 i = 0; i < activeWorkersCount; i++) {
       uint256 workerId = activeWorkerIds[i];
       Worker storage worker = workers[workerId];
       if (isWorkerActive(worker)) {
