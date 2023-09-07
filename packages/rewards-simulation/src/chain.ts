@@ -2,6 +2,7 @@ import {contracts} from "./config";
 import {l1Client, publicClient} from "./client";
 import {parseAbiItem} from "viem";
 import {fromBase58} from "./utils";
+import {logger} from "./logger";
 
 export async function getRegistrations() {
   return (await publicClient.getLogs({
@@ -37,7 +38,7 @@ export async function getBlockTimestamp(blockNumber: number) {
 
 export async function distributeRewards(nextEpochStart: number, rewards: {[key: string]: bigint}) {
   if (!rewards) {
-    console.log('No rewards to distribute')
+    logger.log('No rewards to distribute')
     return
   }
   const allWorkers = await contracts.workerRegistration.read.getActiveWorkers()
@@ -45,5 +46,5 @@ export async function distributeRewards(nextEpochStart: number, rewards: {[key: 
   const workerAddresses = workerIds.map(id => allWorkers.find(({peerId}) => peerId === fromBase58(id)).creator)
   const rewardAmounts = workerIds.map(id => rewards[id])
   const tx = await contracts.rewardsDistribution.write.distribute([BigInt(nextEpochStart), workerAddresses, rewardAmounts], {})
-  console.log('Distribute rewards', tx)
+  logger.log('Distribute rewards', tx)
 }

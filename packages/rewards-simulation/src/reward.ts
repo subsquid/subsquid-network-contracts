@@ -2,6 +2,7 @@ import {clickhouseBytesSent, getStakes, livenessFactor, NetworkStats, Stakes, Wo
 import {bond, epochLength} from "./chain";
 import {parseEther} from "viem";
 import {bigSum, formatSqd, keysToFixed, sum} from "./utils";
+import {logger} from "./logger";
 
 const FIXED_R_APR = 0.8
 const YEAR = 365 * 24 * 60 * 60
@@ -62,8 +63,8 @@ async function rUnlocked(stakes: Stakes) {
 }
 
 function printPercentageUnlocked(totalReward: bigint, totalUnlocked: bigint) {
-  if (!totalUnlocked) console.log('Percentage unlocked 0 %')
-  else console.log('Percentage unlocked', Number(totalReward * 10000n / totalUnlocked) / 100, '%')
+  if (!totalUnlocked) logger.log('Percentage unlocked 0 %')
+  else logger.log('Percentage unlocked', Number(totalReward * 10000n / totalUnlocked) / 100, '%')
 }
 
 export async function epochStats(from: Date, to: Date) {
@@ -76,7 +77,7 @@ export async function epochStats(from: Date, to: Date) {
   const lf = await livenessFactor(from, to)
   const dL = await dLiveness(lf)
   const rm = await rMax()
-  console.log(from, '-', to)
+  logger.log(from, '-', to)
   const stats: any = {}
   const rewards: { [key in string]: bigint } = {}
   for (const workersKey in dL) {
@@ -94,14 +95,14 @@ export async function epochStats(from: Date, to: Date) {
     rewards[workersKey] = workerReward
   }
   if (Object.keys(stats).length === 0) return
-  console.table(stats)
+  logger.table(stats)
   const totalUnlocked = await rUnlocked(getStakes(workers))
   const totalReward = bigSum(Object.values(stats).map(({
                                                          workerReward,
                                                          stakerReward
                                                        }) => parseEther(workerReward) + parseEther(stakerReward)))
-  console.log('Total unlocked:', formatSqd(totalUnlocked))
-  console.log('Total reward:', formatSqd(totalReward))
+  logger.log('Total unlocked:', formatSqd(totalUnlocked))
+  logger.log('Total reward:', formatSqd(totalReward))
   printPercentageUnlocked(totalReward, totalUnlocked);
   return rewards
 }

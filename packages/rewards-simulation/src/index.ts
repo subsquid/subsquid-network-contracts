@@ -8,6 +8,7 @@ import {
   Registrations
 } from "./chain";
 import {epochStats} from "./reward";
+import {logger} from "./logger";
 
 function getEpochStart(blockNumber: number, epochLength: number) {
   return blockNumber / epochLength * epochLength
