@@ -15,8 +15,8 @@ contract RewardsImplementation {
     rewards.distribute(amount, latestRewardEpoch);
   }
 
-  function deposit(uint256 amount, uint256 currentEpoch) external {
-    rewards.deposit(amount, currentEpoch, latestRewardEpoch);
+  function deposit(uint256 amount, uint256 currentEpoch) external returns (uint256) {
+    return rewards.deposit(amount, currentEpoch, latestRewardEpoch);
   }
 
   function claimable(address staker) external view returns (uint256) {
@@ -27,7 +27,7 @@ contract RewardsImplementation {
     return claimableReward;
   }
 
-  function claim() external returns (uint) {
+  function claim() external returns (uint256) {
     return rewards.claim(latestRewardEpoch);
   }
 }
@@ -39,7 +39,7 @@ contract StakersRewardDistributionTest is Test {
     rewards = new RewardsImplementation();
   }
 
-  function assertPairClaimable(uint rewardA, uint rewardB) internal {
+  function assertPairClaimable(uint256 rewardA, uint256 rewardB) internal {
     assertEq(rewards.claimable(address(this)), rewardA);
     assertEq(rewards.claimable(address(1)), rewardB);
   }
@@ -47,6 +47,10 @@ contract StakersRewardDistributionTest is Test {
   function test_RevertsWhen_NothingWasStakedInEpoch() public {
     vm.expectRevert("Nothing staked in this epoch");
     rewards.distribute(100);
+  }
+
+  function test_firstDepositReturnsZero() public {
+    assertEq(rewards.deposit(100, 1), 0);
   }
 
   function test_DistributeForOneStakerAndAllPreviousEpochsWereRewarded() public {
@@ -72,35 +76,44 @@ contract StakersRewardDistributionTest is Test {
     hoax(address(1));
     rewards.deposit(200, 1);
     rewards.distribute(100);
-    rewards.deposit(100, 2);
 
-    assertPairClaimable(33, 66);
+    assertEq(rewards.deposit(100, 2), 33);
+    assertPairClaimable(0, 66);
+
     rewards.distribute(100);
-    assertPairClaimable(33 + 50, 66 + 50);
+    assertPairClaimable(50, 66 + 50);
+
     rewards.distribute(100);
-    assertPairClaimable(33 + 100, 66 + 100);
+    assertPairClaimable(100, 66 + 100);
+
     rewards.distribute(100);
-    assertPairClaimable(33 + 150, 66 + 150);
+    assertPairClaimable(150, 66 + 150);
+
     rewards.distribute(100);
-    assertPairClaimable(33 + 200, 66 + 200);
+    assertPairClaimable(200, 66 + 200);
   }
 
   function test_SecondDepositForFutureEpoch() public {
     rewards.deposit(100, 1);
     hoax(address(1));
     rewards.deposit(200, 1);
+
     rewards.distribute(100);
-    rewards.deposit(100, 5);
-    assertPairClaimable(33, 66);
+    assertEq(rewards.deposit(100, 5), 33);
+    assertPairClaimable(0, 66);
+
     rewards.distribute(100);
-    assertPairClaimable(66, 133);
+    assertPairClaimable(33, 133);
+
     rewards.distribute(100);
-    assertPairClaimable(99, 199);
+    assertPairClaimable(66, 199);
+
     rewards.distribute(100);
-    assertPairClaimable(133, 266);
+    assertPairClaimable(99, 266);
+
     // First reward since transition is completed
     rewards.distribute(100);
-    assertPairClaimable(183, 316);
+    assertPairClaimable(149, 316);
   }
 
   function test_RevertsWhen_DepositDuringTransition() public {
@@ -108,7 +121,8 @@ contract StakersRewardDistributionTest is Test {
     hoax(address(1));
     rewards.deposit(200, 1);
     rewards.distribute(100);
-    rewards.deposit(100, 5);
+
+    assertEq(rewards.deposit(100, 5), 33);
     rewards.distribute(100);
     rewards.distribute(100);
 
@@ -121,35 +135,9 @@ contract StakersRewardDistributionTest is Test {
     rewards.deposit(100, 7);
 
     rewards.distribute(100);
-    assertPairClaimable(183, 316);
+    assertPairClaimable(149, 316);
 
     rewards.deposit(100, 7);
-  }
-
-  function test_ClaimsDuringTransition() public {
-    rewards.deposit(100, 1);
-    hoax(address(1));
-    rewards.deposit(200, 1);
-    rewards.distribute(100);
-    rewards.deposit(100, 5);
-    assertEq(rewards.claim(), 33);
-    assertPairClaimable(0, 66);
-    rewards.distribute(100);
-    assertEq(rewards.claim(), 33);
-    assertPairClaimable(0, 133);
-    rewards.distribute(100);
-    assertEq(rewards.claim(), 33);
-    assertPairClaimable(0, 199);
-    rewards.distribute(100);
-    assertEq(rewards.claim(), 33);
-    assertPairClaimable(0, 266);
-    // First reward since transition is completed
-    rewards.distribute(100);
-    assertEq(rewards.claim(), 50);
-    assertPairClaimable(0, 316);
-    rewards.distribute(100);
-    assertEq(rewards.claim(), 50);
-    assertPairClaimable(0, 366);
   }
 
   function test_Claim() public {
@@ -157,11 +145,68 @@ contract StakersRewardDistributionTest is Test {
     hoax(address(1));
     rewards.deposit(200, 1);
     rewards.distribute(100);
+
     rewards.claim();
-    assertEq(rewards.claimable(address(this)), 0);
-    assertEq(rewards.claimable(address(1)), 66);
+    assertPairClaimable(0, 66);
     rewards.distribute(100);
-    assertEq(rewards.claimable(address(this)), 33);
-    assertEq(rewards.claimable(address(1)), 133);
+    assertPairClaimable(33, 133);
+  }
+
+  function test_ClaimsDuringTransition() public {
+    rewards.deposit(100, 1);
+    hoax(address(1));
+    rewards.deposit(200, 1);
+    rewards.distribute(100);
+
+    assertEq(rewards.deposit(100, 5), 33);
+    assertEq(rewards.claim(), 0);
+    assertPairClaimable(0, 66);
+
+    rewards.distribute(100);
+    assertEq(rewards.claim(), 33);
+    assertPairClaimable(0, 133);
+
+    rewards.distribute(100);
+    assertEq(rewards.claim(), 33);
+    assertPairClaimable(0, 199);
+
+    rewards.distribute(100);
+    assertEq(rewards.claim(), 33);
+    assertPairClaimable(0, 266);
+
+    // First reward since transition is completed
+    rewards.distribute(100);
+    assertEq(rewards.claim(), 50);
+    assertPairClaimable(0, 316);
+
+    rewards.distribute(100);
+    assertEq(rewards.claim(), 50);
+    assertPairClaimable(0, 366);
+  }
+
+  function test_MultipleDepositsAndDistributions() public {
+    rewards.deposit(100, 1);
+    hoax(address(1));
+    rewards.deposit(200, 1);
+    rewards.distribute(100);
+
+    assertPairClaimable(33, 66);
+    assertEq(rewards.deposit(300, 2), 33);
+    hoax(address(1));
+    assertEq(rewards.deposit(200, 2), 66);
+    assertPairClaimable(0, 0);
+    rewards.distribute(200);
+    assertPairClaimable(100, 100);
+    assertEq(rewards.deposit(200, 5), 100);
+    hoax(address(1));
+    assertEq(rewards.deposit(200, 4), 100);
+    assertPairClaimable(0, 0);
+
+    rewards.distribute(300);
+    rewards.distribute(300);
+    assertPairClaimable(270, 330);
+
+    rewards.distribute(300);
+    assertPairClaimable(420, 480);
   }
 }

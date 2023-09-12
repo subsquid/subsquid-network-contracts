@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity 0.8.18;
 
-import {console2} from "forge-std/console2.sol";
-
 struct Transition {
   uint256 epoch;
   uint256 amount;
@@ -11,6 +9,7 @@ struct Transition {
 struct StakerRewards {
   mapping(uint256 epoch => uint256 amount) cumulatedRewardsPerShare;
   mapping(uint256 epoch => uint256 amount) totalStakedPerEpoch;
+  mapping(uint256 epoch => int256) delta;
   mapping(address staker => uint256 epoch) depositEpoch;
   mapping(address staker => uint256) depositAmount;
   mapping(address staker => Transition) pendingTransitions;
@@ -24,11 +23,8 @@ library StakersRewardDistributor {
    * @dev Is expected to be called for each epoch when there are any stakers
    */
   function distribute(StakerRewards storage rewards, uint256 amount, uint256 epoch) internal {
-    uint256 totalStaked = rewards.totalStakedPerEpoch[epoch];
-    if (totalStaked == 0 && epoch > 0) {
-      totalStaked = rewards.totalStakedPerEpoch[epoch - 1];
-      rewards.totalStakedPerEpoch[epoch] = totalStaked;
-    }
+    uint256 totalStaked = uint256(int256(rewards.totalStakedPerEpoch[epoch - 1]) + rewards.delta[epoch]);
+    rewards.totalStakedPerEpoch[epoch] = totalStaked;
     require(totalStaked > 0, "Nothing staked in this epoch");
     uint256 lastEpochReward = epoch > 0 ? rewards.cumulatedRewardsPerShare[epoch - 1] : 0;
     rewards.cumulatedRewardsPerShare[epoch] = lastEpochReward + amount * PRECISION / totalStaked;
@@ -46,17 +42,16 @@ library StakersRewardDistributor {
     returns (uint256)
   {
     requireFutureEpoch(epoch, lastRewardEpoch);
+    rewards.delta[epoch] += int256(amount);
     if (rewards.depositEpoch[msg.sender] == 0) {
       firstDeposit(rewards, amount, epoch);
       return 0;
     }
     require(rewards.depositEpoch[msg.sender] <= lastRewardEpoch, "Cannot deposit with pending transition");
-    rewards.pendingTransitions[msg.sender] = Transition({
-      epoch: rewards.depositEpoch[msg.sender],
-      amount: rewards.depositAmount[msg.sender]
-    });
-    uint256 _reward = 0;//claim(rewards, lastRewardEpoch);
+    rewards.pendingTransitions[msg.sender] =
+      Transition({epoch: rewards.depositEpoch[msg.sender], amount: rewards.depositAmount[msg.sender]});
     firstDeposit(rewards, amount, epoch);
+    uint256 _reward = claim(rewards, lastRewardEpoch);
     return _reward;
   }
 
