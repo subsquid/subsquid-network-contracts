@@ -33,6 +33,7 @@ library StakersRewardDistributor {
   function firstDeposit(StakerRewards storage rewards, uint256 amount, uint256 epoch) internal {
     rewards.depositEpoch[msg.sender] = epoch;
     rewards.depositAmount[msg.sender] += amount;
+    rewards.delta[epoch] += int256(amount);
     rewards.totalStaked += amount;
     rewards.totalStakedPerEpoch[epoch] = rewards.totalStaked;
   }
@@ -42,7 +43,6 @@ library StakersRewardDistributor {
     returns (uint256)
   {
     requireFutureEpoch(epoch, lastRewardEpoch);
-    rewards.delta[epoch] += int256(amount);
     if (rewards.depositEpoch[msg.sender] == 0) {
       firstDeposit(rewards, amount, epoch);
       return 0;
@@ -51,8 +51,35 @@ library StakersRewardDistributor {
     rewards.pendingTransitions[msg.sender] =
       Transition({epoch: rewards.depositEpoch[msg.sender], amount: rewards.depositAmount[msg.sender]});
     firstDeposit(rewards, amount, epoch);
-    uint256 _reward = claim(rewards, lastRewardEpoch);
-    return _reward;
+    return claim(rewards, lastRewardEpoch);
+  }
+
+  function withdraw(StakerRewards storage rewards, uint256 amount, uint256 epoch, uint256 lastRewardEpoch)
+    internal
+    returns (uint256)
+  {
+    requireFutureEpoch(epoch, lastRewardEpoch);
+    require(rewards.depositEpoch[msg.sender] <= lastRewardEpoch, "Cannot withdraw with pending transition");
+    rewards.pendingTransitions[msg.sender] =
+      Transition({epoch: rewards.depositEpoch[msg.sender], amount: rewards.depositAmount[msg.sender]});
+    rewards.depositEpoch[msg.sender] = epoch;
+    rewards.depositAmount[msg.sender] -= amount;
+    rewards.delta[epoch] -= int256(amount);
+    rewards.totalStaked -= amount;
+    rewards.totalStakedPerEpoch[epoch] = rewards.totalStaked;
+    return claim(rewards, lastRewardEpoch);
+  }
+
+  function claim(StakerRewards storage rewards, uint256 latestRewardEpoch) internal returns (uint256) {
+    uint256 claimable = reward(rewards, msg.sender, latestRewardEpoch);
+    if (hasPendingTransitionRewards(rewards, msg.sender)) {
+      claimable += transitionReward(rewards, msg.sender, latestRewardEpoch);
+      rewards.pendingTransitions[msg.sender].epoch = latestRewardEpoch + 1;
+    }
+    if (latestRewardEpoch + 1 > rewards.depositEpoch[msg.sender]) {
+      rewards.depositEpoch[msg.sender] = latestRewardEpoch + 1;
+    }
+    return claimable;
   }
 
   function transitionReward(StakerRewards storage rewards, address staker, uint256 latestRewardEpoch)
@@ -86,18 +113,6 @@ library StakersRewardDistributor {
   function hasPendingTransitionRewards(StakerRewards storage rewards, address staker) internal view returns (bool) {
     return rewards.pendingTransitions[staker].epoch > 0
       && rewards.pendingTransitions[staker].epoch <= rewards.depositEpoch[staker];
-  }
-
-  function claim(StakerRewards storage rewards, uint256 latestRewardEpoch) internal returns (uint256) {
-    uint256 claimable = reward(rewards, msg.sender, latestRewardEpoch);
-    if (hasPendingTransitionRewards(rewards, msg.sender)) {
-      claimable += transitionReward(rewards, msg.sender, latestRewardEpoch);
-      rewards.pendingTransitions[msg.sender].epoch = latestRewardEpoch + 1;
-    }
-    if (latestRewardEpoch + 1 > rewards.depositEpoch[msg.sender]) {
-      rewards.depositEpoch[msg.sender] = latestRewardEpoch + 1;
-    }
-    return claimable;
   }
 
   function requireFutureEpoch(uint256 currentEpoch, uint256 latestRewardedEpoch) internal pure {
