@@ -58,7 +58,7 @@ contract StakersRewardDistributionWithdrawTest is StakersRewardDistributionTest 
     rewards.deposit(100, 1);
     rewards.distribute(100);
     assertEq(rewards.withdraw(100, 6), 100);
-    vm.expectRevert("Cannot deposit with pending transition");
+    vm.expectRevert("Current epoch is in the past");
     rewards.deposit(100, 3);
   }
 

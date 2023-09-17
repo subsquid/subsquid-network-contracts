@@ -15,6 +15,11 @@ contract RewardsImplementation {
     rewards.distribute(amount, latestRewardEpoch);
   }
 
+  function distribute(uint256 amount, uint256 epoch) external {
+    latestRewardEpoch = epoch;
+    rewards.distribute(amount, epoch);
+  }
+
   function deposit(uint256 amount, uint256 currentEpoch) external returns (uint256) {
     return rewards.deposit(amount, currentEpoch, latestRewardEpoch);
   }
@@ -33,6 +38,10 @@ contract RewardsImplementation {
 
   function claim() external returns (uint256) {
     return rewards.claim(latestRewardEpoch);
+  }
+
+  function leftmostBitPosition(uint256 n) public pure returns (uint256) {
+    return StakersRewardDistributor._findLeftmostBit(n);
   }
 }
 

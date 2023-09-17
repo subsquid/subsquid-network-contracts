@@ -157,9 +157,9 @@ contract StakersRewardDistributionDepositTest is StakersRewardDistributionTest {
     assertPairClaimable(0, 0);
     rewards.distribute(200);
     assertPairClaimable(100, 100);
-    assertEq(rewards.deposit(200, 5), 100);
     hoax(address(1));
     assertEq(rewards.deposit(200, 4), 100);
+    assertEq(rewards.deposit(200, 5), 100);
     assertPairClaimable(0, 0);
 
     rewards.distribute(300);
@@ -170,5 +170,22 @@ contract StakersRewardDistributionDepositTest is StakersRewardDistributionTest {
 
     rewards.distribute(300);
     assertPairClaimable(420, 480);
+  }
+
+  function test_DepositsOnNotDistributedEpochs() public {
+    rewards.deposit(100, 1);
+    hoax(address(1));
+    rewards.deposit(300, 1);
+    rewards.distribute(100);
+    assertEq(rewards.deposit(300, 3), 25);
+    hoax(address(1));
+    assertEq(rewards.deposit(100, 5), 75);
+    assertPairClaimable(0, 0);
+    rewards.distribute(100, 4);
+    assertPairClaimable(57, 42);
+    rewards.distribute(100, 8);
+    assertPairClaimable(107, 92);
+    rewards.distribute(100);
+    assertPairClaimable(157, 142);
   }
 }
