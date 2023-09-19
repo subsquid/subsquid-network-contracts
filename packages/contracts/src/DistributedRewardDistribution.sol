@@ -7,9 +7,11 @@ import "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 
 import "./WorkerRegistration.sol";
 import "./interfaces/IRewardsDistribution.sol";
+import "./StakersRewardDistributor.sol";
 
 contract DistributedRewardsDistribution is AccessControl, IRewardsDistribution {
   using EnumerableSet for EnumerableSet.AddressSet;
+  using StakersRewardDistributor for StakerRewards;
 
   bytes32 public constant REWARDS_DISTRIBUTOR_ROLE = keccak256("REWARDS_DISTRIBUTOR_ROLE");
   bytes32 public constant REWARDS_TREASURY_ROLE = keccak256("REWARDS_TREASURY_ROLE");
@@ -18,6 +20,7 @@ contract DistributedRewardsDistribution is AccessControl, IRewardsDistribution {
   mapping(address => uint256) public claimable;
   mapping(uint256 epoch => bytes32) public commitments;
   mapping(uint256 epoch => uint8) public approves;
+  mapping(address distributor => StakerRewards) internal stakerRewards;
   uint256 public lastEpochRewarded;
   EnumerableSet.AddressSet private distributors;
 
@@ -47,26 +50,26 @@ contract DistributedRewardsDistribution is AccessControl, IRewardsDistribution {
     uint256 epoch,
     address[] memory recipients,
     uint256[] memory workerRewards,
-    uint256[] memory stakerRewards
+    uint256[] memory _stakerRewards
   ) external {
     require(distributors.at(distributorIndex()) == msg.sender, "Not a distributor");
     commitments[epoch] = keccak256(msg.data[4:]);
     approves[epoch] = 1;
 
-    emit NewCommitment(msg.sender, epoch, recipients, workerRewards, stakerRewards);
+    emit NewCommitment(msg.sender, epoch, recipients, workerRewards, _stakerRewards);
   }
 
   function approve(
     uint256 epoch,
     address[] memory recipients,
     uint256[] memory workerRewards,
-    uint256[] memory stakerRewards
+    uint256[] memory _stakerRewards
   ) external onlyRole(REWARDS_DISTRIBUTOR_ROLE) {
     require(commitments[epoch] != 0, "Commitment does not exist");
     require(commitments[epoch] == keccak256(msg.data[4:]), "Commitment mismatch");
     approves[epoch]++;
     if (approves[epoch] == APPROVES_REQUIRED) {
-      distribute(epoch, recipients, workerRewards, stakerRewards);
+      distribute(epoch, recipients, workerRewards, _stakerRewards);
     }
   }
 
@@ -74,14 +77,14 @@ contract DistributedRewardsDistribution is AccessControl, IRewardsDistribution {
     uint256 epoch,
     address[] memory recipients,
     uint256[] memory workerRewards,
-    uint256[] memory stakerRewards
-  ) internal {
-    require(recipients.length == workerRewards.length, "Recipients and amounts length mismatch");
-    require(epoch == lastEpochRewarded + 1, "Rewards for epoch already distributed");
-    uint256 totalDistributedAmount = 0;
+    uint256[] memory _stakerRewards
+  ) public {
+    require(recipients.length == workerRewards.length, "Recipients and worker amounts length mismatch");
+    require(recipients.length == _stakerRewards.length, "Recipients and staker amounts length mismatch");
+    require(epoch == lastEpochRewarded + 1, "Invalid epoch");
     for (uint256 i = 0; i < recipients.length; i++) {
       claimable[recipients[i]] += workerRewards[i];
-      totalDistributedAmount += workerRewards[i];
+      stakerRewards[recipients[i]].distribute(_stakerRewards[i], epoch);
     }
     lastEpochRewarded++;
   }

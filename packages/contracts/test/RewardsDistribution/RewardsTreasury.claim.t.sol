@@ -4,8 +4,8 @@ import "./RewardsDistribution.t.sol";
 
 contract RewardsDistributionClaimTest is RewardsDistributionTest {
   function testTransfersClaimableRewardsToSender() public {
-    (address[] memory recipients, uint256[] memory amounts) = prepareRewards(4);
-    rewardsDistribution.distribute(recipients, amounts);
+    (address[] memory recipients, uint256[] memory workerAmounts, uint256[] memory stakerAmounts) = prepareRewards(4);
+    rewardsDistribution.distribute(1, recipients, workerAmounts, stakerAmounts);
     uint256 claimable = rewardsDistribution.claimable(recipients[0]);
     hoax(recipients[0]);
     treasury.claim(rewardsDistribution);
@@ -14,8 +14,8 @@ contract RewardsDistributionClaimTest is RewardsDistributionTest {
   }
 
   function testCannotClaimSameRewardTwice() public {
-    (address[] memory recipients, uint256[] memory amounts) = prepareRewards(4);
-    rewardsDistribution.distribute(recipients, amounts);
+    (address[] memory recipients, uint256[] memory workerAmounts, uint256[] memory stakerAmounts) = prepareRewards(4);
+    rewardsDistribution.distribute(1, recipients, workerAmounts, stakerAmounts);
     uint256 claimable = rewardsDistribution.claimable(recipients[0]);
     hoax(recipients[0]);
     treasury.claim(rewardsDistribution);
@@ -27,8 +27,8 @@ contract RewardsDistributionClaimTest is RewardsDistributionTest {
   }
 
   function testClaimEmitsEvent() public {
-    (address[] memory recipients, uint256[] memory amounts) = prepareRewards(4);
-    rewardsDistribution.distribute(recipients, amounts);
+    (address[] memory recipients, uint256[] memory workerAmounts, uint256[] memory stakerAmounts) = prepareRewards(4);
+    rewardsDistribution.distribute(1, recipients, workerAmounts, stakerAmounts);
     uint256 claimable = rewardsDistribution.claimable(recipients[0]);
     hoax(recipients[0]);
     vm.expectEmit(address(rewardsDistribution));
@@ -37,8 +37,8 @@ contract RewardsDistributionClaimTest is RewardsDistributionTest {
   }
 
   function testDistributorClaimCannotBeCalledByNotTreasury() public {
-    (address[] memory recipients, uint256[] memory amounts) = prepareRewards(1);
-    rewardsDistribution.distribute(recipients, amounts);
+    (address[] memory recipients, uint256[] memory workerAmounts, uint256[] memory stakerAmounts) = prepareRewards(1);
+    rewardsDistribution.distribute(1, recipients, workerAmounts, stakerAmounts);
     vm.expectRevert(
       "AccessControl: account 0x7fa9385be102ac3eac297483dd6233d62b3e1496 is missing role 0x1b79d793df9d39a01a8803af5b473fcb035fc3f70eaeb117debd77529e6aefe8"
     );
