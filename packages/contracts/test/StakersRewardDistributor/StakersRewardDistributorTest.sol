@@ -8,40 +8,25 @@ contract RewardsImplementation {
   using StakersRewardDistributor for StakerRewards;
 
   StakerRewards rewards;
-  uint256 latestRewardEpoch;
 
   function distribute(uint256 amount) external {
-    latestRewardEpoch++;
-    rewards.distribute(amount, latestRewardEpoch);
+    rewards.distribute(amount);
   }
 
-  function distribute(uint256 amount, uint256 epoch) external {
-    latestRewardEpoch = epoch;
-    rewards.distribute(amount, epoch);
+  function deposit(uint256 amount) external returns (uint256) {
+    return rewards.deposit(amount);
   }
 
-  function deposit(uint256 amount, uint256 currentEpoch) external returns (uint256) {
-    return rewards.deposit(amount, currentEpoch, latestRewardEpoch);
-  }
-
-  function withdraw(uint256 amount, uint256 currentEpoch) external returns (uint256) {
-    return rewards.withdraw(amount, currentEpoch, latestRewardEpoch);
+  function withdraw(uint256 amount) external returns (uint256) {
+    return rewards.withdraw(amount);
   }
 
   function claimable(address staker) external view returns (uint256) {
-    uint256 claimableReward = rewards.reward(staker, latestRewardEpoch);
-    if (rewards.hasPendingTransitionRewards(staker)) {
-      claimableReward += rewards.transitionReward(staker, latestRewardEpoch);
-    }
-    return claimableReward;
+    return rewards.reward(staker);
   }
 
   function claim() external returns (uint256) {
-    return rewards.claim(latestRewardEpoch);
-  }
-
-  function leftmostBitPosition(uint256 n) public pure returns (uint256) {
-    return StakersRewardDistributor._findLeftmostBit(n);
+    return rewards.claim();
   }
 }
 

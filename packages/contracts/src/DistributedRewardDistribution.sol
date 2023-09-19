@@ -84,7 +84,7 @@ contract DistributedRewardsDistribution is AccessControl, IRewardsDistribution {
     require(epoch == lastEpochRewarded + 1, "Invalid epoch");
     for (uint256 i = 0; i < recipients.length; i++) {
       claimable[recipients[i]] += workerRewards[i];
-      stakerRewards[recipients[i]].distribute(_stakerRewards[i], epoch);
+      stakerRewards[recipients[i]].distribute(_stakerRewards[i]);
     }
     lastEpochRewarded++;
   }

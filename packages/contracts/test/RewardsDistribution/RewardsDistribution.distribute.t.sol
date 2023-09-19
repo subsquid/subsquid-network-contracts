@@ -50,8 +50,8 @@ contract RewardsDistributionDistributeTest is RewardsDistributionTest {
   function testIncreasesClaimableAmount() public {
     (address[] memory recipients, uint256[] memory workerAmounts, uint256[] memory stakerAmounts) = prepareRewards(1);
     rewardsDistribution.distribute(1, recipients, workerAmounts, stakerAmounts);
-//    assertEq(rewardsDistribution.claimable(recipients[0]), epochRewardAmount);
-//    rewardsDistribution.distribute(2, recipients, workerAmounts, stakerAmounts);
-//    assertEq(rewardsDistribution.claimable(recipients[0]), epochRewardAmount * 2);
+    assertEq(rewardsDistribution.claimable(recipients[0]), epochRewardAmount);
+    rewardsDistribution.distribute(2, recipients, workerAmounts, stakerAmounts);
+    assertEq(rewardsDistribution.claimable(recipients[0]), epochRewardAmount * 2);
   }
 }

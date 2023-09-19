@@ -32,7 +32,11 @@ contract RewardsDistributionTest is Test {
     token.transfer(address(treasury), epochRewardAmount * 10);
   }
 
-  function prepareRewards(uint256 n) internal view returns (address[] memory recipients, uint256[] memory workerAmounts, uint256[] memory stakerAmounts) {
+  function prepareRewards(uint256 n)
+    internal
+    view
+    returns (address[] memory recipients, uint256[] memory workerAmounts, uint256[] memory stakerAmounts)
+  {
     workerAmounts = new uint256[](n);
     stakerAmounts = new uint256[](n);
     recipients = new address[](n);
