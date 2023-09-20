@@ -7,11 +7,10 @@ import "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 
 import "./WorkerRegistration.sol";
 import "./interfaces/IRewardsDistribution.sol";
-import "./StakersRewardDistributor.sol";
+import "./interfaces/IStaking.sol";
 
 contract DistributedRewardsDistribution is AccessControl, IRewardsDistribution {
   using EnumerableSet for EnumerableSet.AddressSet;
-  using StakersRewardDistributor for StakerRewards;
 
   bytes32 public constant REWARDS_DISTRIBUTOR_ROLE = keccak256("REWARDS_DISTRIBUTOR_ROLE");
   bytes32 public constant REWARDS_TREASURY_ROLE = keccak256("REWARDS_TREASURY_ROLE");
@@ -20,17 +19,18 @@ contract DistributedRewardsDistribution is AccessControl, IRewardsDistribution {
   mapping(address => uint256) public claimable;
   mapping(uint256 epoch => bytes32) public commitments;
   mapping(uint256 epoch => uint8) public approves;
-  mapping(address distributor => StakerRewards) internal stakerRewards;
   uint256 public lastEpochRewarded;
+  IStaking public staking;
   EnumerableSet.AddressSet private distributors;
 
   event NewCommitment(
     address indexed who, uint256 epoch, address[] recipients, uint256[] workerRewards, uint256[] stakerRewards
   );
-  event Claimed(address indexed who, uint256 amount);
+  event Claimed(address indexed by, uint256 amount);
 
-  constructor(address admin) {
+  constructor(address admin, IStaking _staking) {
     _setupRole(DEFAULT_ADMIN_ROLE, admin);
+    staking = _staking;
   }
 
   function addDistributor(address distributor) external onlyRole(DEFAULT_ADMIN_ROLE) {
@@ -84,16 +84,16 @@ contract DistributedRewardsDistribution is AccessControl, IRewardsDistribution {
     require(epoch == lastEpochRewarded + 1, "Invalid epoch");
     for (uint256 i = 0; i < recipients.length; i++) {
       claimable[recipients[i]] += workerRewards[i];
-      stakerRewards[recipients[i]].distribute(_stakerRewards[i]);
     }
+    staking.distribute(recipients, _stakerRewards);
     lastEpochRewarded++;
   }
 
-  function claim(address worker) external onlyRole(REWARDS_TREASURY_ROLE) returns (uint256) {
-    uint256 reward = claimable[worker];
-    claimable[worker] = 0;
+  function claim(address who) external onlyRole(REWARDS_TREASURY_ROLE) returns (uint256) {
+    uint256 reward = claimable[who] + staking.claim(who);
+    claimable[who] = 0;
 
-    emit Claimed(worker, reward);
+    emit Claimed(who, reward);
     return reward;
   }
 }
