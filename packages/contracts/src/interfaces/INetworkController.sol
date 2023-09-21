@@ -5,4 +5,8 @@ interface INetworkController {
   function epochLength() external view returns (uint128);
 
   function bondAmount() external view returns (uint256);
+
+  function nextEpoch() external view returns (uint128);
+
+  function epochNumber() external view returns (uint128);
 }
