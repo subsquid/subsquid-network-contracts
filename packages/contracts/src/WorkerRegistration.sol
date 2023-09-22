@@ -7,10 +7,12 @@ import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 
 import "./interfaces/INetworkController.sol";
+import "./Staking.sol";
 
 contract WorkerRegistration is AccessControl {
   using Counters for Counters.Counter;
   using EnumerableSet for EnumerableSet.AddressSet;
+  using EnumerableSet for EnumerableSet.UintSet;
 
   IERC20 public tSQD;
   uint256 public storagePerWorkerInGb = 1000;
@@ -30,12 +32,13 @@ contract WorkerRegistration is AccessControl {
   }
 
   INetworkController public networkController;
+  Staking public staking;
   mapping(uint256 => Worker) public workers;
   mapping(bytes peerId => uint256 id) public workerIds;
   mapping(address staker => mapping(uint256 workerId => uint256 amount)) public stakedAmounts;
   mapping(uint256 workerId => uint256 amount) public stakedAmountsPerWorker;
   uint256[] public activeWorkerIds;
-  EnumerableSet.AddressSet[] delegators;
+  mapping(address creator => EnumerableSet.UintSet) ownedWorkers;
   uint256 public totalStaked;
 
   event WorkerRegistered(
@@ -43,14 +46,12 @@ contract WorkerRegistration is AccessControl {
   );
   event WorkerDeregistered(uint256 indexed workerId, address indexed account, uint256 deregistedAt);
   event WorkerWithdrawn(uint256 indexed workerId, address indexed account);
-  event Delegated(uint256 indexed workerId, address indexed staker, uint256 amount);
-  event Unstaked(uint256 indexed workerId, address indexed staker, uint256 amount);
 
-  constructor(IERC20 _tSQD, INetworkController _networkController) {
+  constructor(IERC20 _tSQD, INetworkController _networkController, Staking _staking) {
     _setupRole(DEFAULT_ADMIN_ROLE, msg.sender);
     tSQD = _tSQD;
     networkController = _networkController;
-    delegators.push();
+    staking = _staking;
   }
 
   function register(bytes calldata peerId) external {
@@ -59,15 +60,16 @@ contract WorkerRegistration is AccessControl {
 
     workerIdTracker.increment();
     uint256 workerId = workerIdTracker.current();
-    delegators.push();
+    uint256 _bondAmount = bondAmount();
 
     workers[workerId] =
-      Worker({creator: msg.sender, peerId: peerId, bond: bondAmount(), registeredAt: nextEpoch(), deregisteredAt: 0});
+      Worker({creator: msg.sender, peerId: peerId, bond: _bondAmount, registeredAt: nextEpoch(), deregisteredAt: 0});
 
     workerIds[peerId] = workerId;
     activeWorkerIds.push(workerId);
+    ownedWorkers[msg.sender].add(workerId);
 
-    tSQD.transferFrom(msg.sender, address(this), bondAmount());
+    tSQD.transferFrom(msg.sender, address(this), _bondAmount);
     emit WorkerRegistered(workerId, peerId, msg.sender, workers[workerId].registeredAt);
   }
 
@@ -79,7 +81,6 @@ contract WorkerRegistration is AccessControl {
 
     workers[workerId].deregisteredAt = nextEpoch();
 
-    // Remove the workerId from the activeWorkerIds array
     for (uint256 i = 0; i < activeWorkerIds.length; i++) {
       if (activeWorkerIds[i] == workerId) {
         activeWorkerIds[i] = activeWorkerIds[activeWorkerIds.length - 1];
@@ -110,45 +111,16 @@ contract WorkerRegistration is AccessControl {
   function returnExcessiveBond(bytes calldata peerId) external {
     uint256 workerId = workerIds[peerId];
     require(workerId != 0, "Worker not registered");
+    uint256 _bondAmount = bondAmount();
 
-    uint256 excessiveBond = workers[workerId].bond - bondAmount();
-    workers[workerId].bond = bondAmount();
+    uint256 excessiveBond = workers[workerId].bond - _bondAmount;
+    workers[workerId].bond = _bondAmount;
 
     tSQD.transfer(msg.sender, excessiveBond);
   }
 
-  function delegate(bytes calldata peerId, uint256 amount) external {
-    uint256 workerId = workerIds[peerId];
-    require(workerId != 0, "Worker not registered");
-    require(isWorkerActive(workers[workerId]), "Worker not active");
-
-    tSQD.transferFrom(msg.sender, address(this), amount);
-    stakedAmounts[msg.sender][workerId] += amount;
-    totalStaked += amount;
-    stakedAmountsPerWorker[workerId] += amount;
-    delegators[workerId].add(msg.sender);
-
-    emit Delegated(workerId, msg.sender, amount);
-  }
-
-  function unstake(bytes calldata peerId, uint256 amount) external {
-    uint256 workerId = workerIds[peerId];
-    require(workerId != 0, "Worker not registered");
-
-    uint256 stakedAmount = stakedAmounts[msg.sender][workerId];
-    require(stakedAmount >= amount, "Insufficient staked amount");
-
-    stakedAmounts[msg.sender][workerId] -= amount;
-    totalStaked -= amount;
-    stakedAmountsPerWorker[workerId] -= amount;
-    tSQD.transfer(msg.sender, amount);
-
-    emit Unstaked(workerId, msg.sender, amount);
-  }
-
   function nextEpoch() public view returns (uint128) {
-    uint128 _epochLength = epochLength();
-    return (uint128(block.number) / _epochLength + 1) * _epochLength;
+    return networkController.nextEpoch();
   }
 
   function getActiveWorkers() public view returns (Worker[] memory) {
@@ -160,6 +132,22 @@ contract WorkerRegistration is AccessControl {
       Worker storage worker = workers[workerId];
       if (isWorkerActive(worker)) {
         activeWorkers[activeIndex] = worker;
+        activeIndex++;
+      }
+    }
+
+    return activeWorkers;
+  }
+
+  function getActiveWorkerIds() public view returns (uint256[] memory) {
+    uint256[] memory activeWorkers = new uint[](getActiveWorkerCount());
+
+    uint256 activeIndex = 0;
+    for (uint256 i = 0; i < activeWorkerIds.length; i++) {
+      uint256 workerId = activeWorkerIds[i];
+      Worker storage worker = workers[workerId];
+      if (isWorkerActive(worker)) {
+        activeWorkers[activeIndex] = workerId;
         activeIndex++;
       }
     }
@@ -189,6 +177,10 @@ contract WorkerRegistration is AccessControl {
     return workers[workerId];
   }
 
+  function getOwnedWorkers(address owner) external view returns (uint256[] memory) {
+    return ownedWorkers[owner].values();
+  }
+
   function getAllWorkersCount() external view returns (uint256) {
     return activeWorkerIds.length;
   }
@@ -198,17 +190,7 @@ contract WorkerRegistration is AccessControl {
   }
 
   function activeStake() public view returns (uint256) {
-    uint256 stake = 0;
-    uint256 activeWorkersCount = activeWorkerIds.length;
-    for (uint256 i = 0; i < activeWorkersCount; i++) {
-      uint256 workerId = activeWorkerIds[i];
-      Worker storage worker = workers[workerId];
-      if (isWorkerActive(worker)) {
-        stake += stakedAmountsPerWorker[workerId];
-      }
-    }
-
-    return stake;
+    return staking.activeStake(getActiveWorkerIds());
   }
 
   function bondAmount() public view returns (uint256) {
@@ -226,9 +208,5 @@ contract WorkerRegistration is AccessControl {
 
   function lockPeriod() public view returns (uint128) {
     return networkController.epochLength();
-  }
-
-  function getStakers(bytes calldata peerId) external view returns (address[] memory) {
-    return delegators[workerIds[peerId]].values();
   }
 }

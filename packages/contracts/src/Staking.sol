@@ -15,22 +15,22 @@ struct StakerRewards {
 }
 
 contract Staking is AccessControl, IStaking {
-  using EnumerableSet for EnumerableSet.AddressSet;
+  using EnumerableSet for EnumerableSet.UintSet;
 
   uint256 internal constant PRECISION = 1e18;
   bytes32 public constant REWARDS_DISTRIBUTOR_ROLE = keccak256("REWARDS_DISTRIBUTOR_ROLE");
 
   IERC20 public token;
-  mapping(address worker => StakerRewards) internal rewards;
+  mapping(uint256 worker => StakerRewards) internal rewards;
   mapping(address staker => uint256) _claimable;
-  mapping(address staker => EnumerableSet.AddressSet workers) delegatedTo;
+  mapping(address staker => EnumerableSet.UintSet workers) delegatedTo;
 
   constructor(IERC20 _token) {
     _setupRole(DEFAULT_ADMIN_ROLE, msg.sender);
     token = _token;
   }
 
-  function distribute(address[] calldata workers, uint256[] calldata amounts)
+  function distribute(uint256[] calldata workers, uint256[] calldata amounts)
     external
     onlyRole(REWARDS_DISTRIBUTOR_ROLE)
   {
@@ -39,14 +39,14 @@ contract Staking is AccessControl, IStaking {
     }
   }
 
-  function _distribute(address worker, uint256 amount) internal {
+  function _distribute(uint256 worker, uint256 amount) internal {
     if (amount == 0) return;
     uint256 totalStaked = rewards[worker].totalStaked;
     require(totalStaked > 0, "Nothing staked");
     rewards[worker].cumulatedRewardsPerShare += amount * PRECISION / totalStaked;
   }
 
-  function deposit(address worker, uint256 amount) external {
+  function deposit(uint256 worker, uint256 amount) external {
     StakerRewards storage _rewards = rewards[worker];
     updateCheckpoint(_rewards);
     _rewards.totalStaked += amount;
@@ -56,7 +56,7 @@ contract Staking is AccessControl, IStaking {
     token.transferFrom(msg.sender, address(this), amount);
   }
 
-  function withdraw(address worker, uint256 amount) external {
+  function withdraw(uint256 worker, uint256 amount) external {
     StakerRewards storage _rewards = rewards[worker];
     require(_rewards.depositAmount[msg.sender] >= amount, "Insufficient staked amount");
     updateCheckpoint(_rewards);
@@ -69,8 +69,16 @@ contract Staking is AccessControl, IStaking {
     token.transfer(msg.sender, amount);
   }
 
+  function activeStake(uint256[] calldata activeWorkers) external view returns (uint256) {
+    uint256 result = 0;
+    for (uint256 i = 0; i < activeWorkers.length; i++) {
+      result += rewards[activeWorkers[i]].totalStaked;
+    }
+    return result;
+  }
+
   function claim(address staker) external onlyRole(REWARDS_DISTRIBUTOR_ROLE) returns (uint256) {
-    address[] memory workers = delegatedTo[staker].values();
+    uint256[] memory workers = delegatedTo[staker].values();
     uint256 reward = _claimable[staker];
     for (uint256 i = 0; i < workers.length; i++) {
       reward += pendingReward(rewards[workers[i]], staker);
@@ -81,7 +89,7 @@ contract Staking is AccessControl, IStaking {
   }
 
   function claimable(address staker) external view returns (uint256) {
-    address[] memory workers = delegatedTo[staker].values();
+    uint256[] memory workers = delegatedTo[staker].values();
     uint256 reward = _claimable[staker];
     for (uint256 i = 0; i < workers.length; i++) {
       reward += pendingReward(rewards[workers[i]], staker);

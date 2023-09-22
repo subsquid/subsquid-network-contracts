@@ -67,8 +67,9 @@ contract WorkerRegistrationDeregisterTest is WorkerRegistrationTest {
     workerRegistration.register(workerId2);
     jumpEpoch();
 
-    workerRegistration.delegate(workerId, 100);
-    workerRegistration.delegate(workerId2, 200);
+    token.approve(address(staking), 300);
+    staking.deposit(1, 100);
+    staking.deposit(2, 200);
     assertEq(workerRegistration.effectiveTVL(), workerRegistration.BOND_AMOUNT() * 2 + 300);
 
     workerRegistration.deregister(workerId);

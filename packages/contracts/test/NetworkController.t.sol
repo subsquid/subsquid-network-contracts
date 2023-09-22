@@ -48,13 +48,17 @@ contract NetworkControllerTest is Test {
 
   function test_RevertsIf_SettingEpochLengthNotByAdmin() public {
     hoax(address(1));
-    vm.expectRevert("AccessControl: account 0x0000000000000000000000000000000000000001 is missing role 0x0000000000000000000000000000000000000000000000000000000000000000");
+    vm.expectRevert(
+      "AccessControl: account 0x0000000000000000000000000000000000000001 is missing role 0x0000000000000000000000000000000000000000000000000000000000000000"
+    );
     controller.setEpochLength(10);
   }
 
   function test_RevertsIf_SettingBondAmountNotByAdmin() public {
     hoax(address(1));
-    vm.expectRevert("AccessControl: account 0x0000000000000000000000000000000000000001 is missing role 0x0000000000000000000000000000000000000000000000000000000000000000");
+    vm.expectRevert(
+      "AccessControl: account 0x0000000000000000000000000000000000000001 is missing role 0x0000000000000000000000000000000000000000000000000000000000000000"
+    );
     controller.setBondAmount(10);
   }
 }

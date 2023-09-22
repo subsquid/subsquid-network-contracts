@@ -76,4 +76,20 @@ contract WorkerRegistrationWithdrawTest is WorkerRegistrationTest {
     emit WorkerWithdrawn(1, creator);
     workerRegistration.withdraw(workerId);
   }
+
+  function testCanClaimRewardsForWithdrawnWorker() public {
+    workerRegistration.register(workerId);
+    jumpEpoch();
+    workerRegistration.deregister(workerId);
+    jumpEpoch();
+    jumpEpoch();
+    workerRegistration.withdraw(workerId);
+    (uint256[] memory recipients, uint256[] memory workerAmounts, uint256[] memory stakerAmounts) = prepareRewards(1);
+    rewardsDistribution.distribute(1, recipients, workerAmounts, stakerAmounts);
+    uint256 claimable = rewardsDistribution.claimable(workerOwner);
+    uint256 balanceBefore = token.balanceOf(workerOwner);
+    hoax(workerOwner);
+    treasury.claim(rewardsDistribution);
+    assertEq(token.balanceOf(workerOwner) - balanceBefore, claimable);
+  }
 }

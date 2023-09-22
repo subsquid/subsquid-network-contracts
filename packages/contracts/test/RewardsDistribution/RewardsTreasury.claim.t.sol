@@ -4,44 +4,46 @@ import "./RewardsDistribution.t.sol";
 
 contract RewardsDistributionClaimTest is RewardsDistributionTest {
   function testTransfersClaimableRewardsToSender() public {
-    (address[] memory recipients, uint256[] memory workerAmounts, uint256[] memory stakerAmounts) = prepareRewards(4);
+    (uint256[] memory recipients, uint256[] memory workerAmounts, uint256[] memory stakerAmounts) = prepareRewards(4);
     rewardsDistribution.distribute(1, recipients, workerAmounts, stakerAmounts);
-    uint256 claimable = rewardsDistribution.claimable(recipients[0]);
-    hoax(recipients[0]);
+    uint256 claimable = rewardsDistribution.claimable(workerOwner);
+    uint256 balanceBefore = token.balanceOf(workerOwner);
+    hoax(workerOwner);
     treasury.claim(rewardsDistribution);
-    assertEq(rewardsDistribution.claimable(recipients[0]), 0);
-    assertEq(token.balanceOf(recipients[0]), claimable);
+    assertEq(rewardsDistribution.claimable(workerOwner), 0);
+    assertEq(token.balanceOf(workerOwner) - balanceBefore, claimable);
   }
 
   function testCannotClaimSameRewardTwice() public {
-    (address[] memory recipients, uint256[] memory workerAmounts, uint256[] memory stakerAmounts) = prepareRewards(4);
+    (uint256[] memory recipients, uint256[] memory workerAmounts, uint256[] memory stakerAmounts) = prepareRewards(4);
     rewardsDistribution.distribute(1, recipients, workerAmounts, stakerAmounts);
-    uint256 claimable = rewardsDistribution.claimable(recipients[0]);
-    hoax(recipients[0]);
+    uint256 claimable = rewardsDistribution.claimable(workerOwner);
+    uint256 balanceBefore = token.balanceOf(workerOwner);
+    hoax(workerOwner);
     treasury.claim(rewardsDistribution);
-    assertEq(token.balanceOf(recipients[0]), claimable);
+    assertEq(token.balanceOf(workerOwner) - balanceBefore, claimable);
 
-    hoax(recipients[0]);
+    hoax(workerOwner);
     treasury.claim(rewardsDistribution);
-    assertEq(token.balanceOf(recipients[0]), claimable);
+    assertEq(token.balanceOf(workerOwner) - balanceBefore, claimable);
   }
 
   function testClaimEmitsEvent() public {
-    (address[] memory recipients, uint256[] memory workerAmounts, uint256[] memory stakerAmounts) = prepareRewards(4);
+    (uint256[] memory recipients, uint256[] memory workerAmounts, uint256[] memory stakerAmounts) = prepareRewards(4);
     rewardsDistribution.distribute(1, recipients, workerAmounts, stakerAmounts);
-    uint256 claimable = rewardsDistribution.claimable(recipients[0]);
-    hoax(recipients[0]);
+    uint256 claimable = rewardsDistribution.claimable(workerOwner);
+    hoax(workerOwner);
     vm.expectEmit(address(rewardsDistribution));
-    emit Claimed(recipients[0], claimable);
+    emit Claimed(workerOwner, claimable);
     treasury.claim(rewardsDistribution);
   }
 
   function testDistributorClaimCannotBeCalledByNotTreasury() public {
-    (address[] memory recipients, uint256[] memory workerAmounts, uint256[] memory stakerAmounts) = prepareRewards(1);
+    (uint256[] memory recipients, uint256[] memory workerAmounts, uint256[] memory stakerAmounts) = prepareRewards(1);
     rewardsDistribution.distribute(1, recipients, workerAmounts, stakerAmounts);
     vm.expectRevert(
       "AccessControl: account 0x7fa9385be102ac3eac297483dd6233d62b3e1496 is missing role 0x1b79d793df9d39a01a8803af5b473fcb035fc3f70eaeb117debd77529e6aefe8"
     );
-    rewardsDistribution.claim(recipients[0]);
+    rewardsDistribution.claim(workerOwner);
   }
 }

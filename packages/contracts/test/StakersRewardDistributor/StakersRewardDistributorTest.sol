@@ -9,13 +9,13 @@ import "forge-std/Test.sol";
 contract StakingHelper is Staking {
   constructor(IERC20 token) Staking(token) {}
 
-  function distribute(address worker, uint256 amount) external {
+  function distribute(uint256 worker, uint256 amount) external {
     _distribute(worker, amount);
   }
 }
 
 contract StakersRewardDistributionTest is Test {
-  address[] workers = [address(0)];
+  uint256[] workers = [1234];
   StakingHelper rewards;
   IERC20 token;
 

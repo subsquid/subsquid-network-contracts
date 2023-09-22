@@ -2,13 +2,13 @@
 pragma solidity ^0.8.18;
 
 interface IStaking {
-  function deposit(address worker, uint256 amount) external;
+  function deposit(uint256 worker, uint256 amount) external;
 
-  function withdraw(address worker, uint256 amount) external;
+  function withdraw(uint256 worker, uint256 amount) external;
 
-  function claim(address worker) external returns (uint256);
+  function claim(address staker) external returns (uint256);
 
-  function claimable(address worker) external view returns (uint256);
+  function claimable(address staker) external view returns (uint256);
 
-  function distribute(address[] memory workers, uint256[] memory amounts) external;
+  function distribute(uint256[] memory workers, uint256[] memory amounts) external;
 }
