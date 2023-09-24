@@ -6,6 +6,7 @@ import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 
 import "./interfaces/IStaking.sol";
+import "./NetworkController.sol";
 
 struct StakerRewards {
   uint256 cumulatedRewardsPerShare;
@@ -21,19 +22,23 @@ contract Staking is AccessControl, IStaking {
   bytes32 public constant REWARDS_DISTRIBUTOR_ROLE = keccak256("REWARDS_DISTRIBUTOR_ROLE");
 
   IERC20 public token;
+  INetworkController public network;
   mapping(uint256 worker => StakerRewards) internal rewards;
   mapping(address staker => uint256) _claimable;
   mapping(address staker => EnumerableSet.UintSet workers) delegatedTo;
+  uint256 public lastEpochRewarded;
 
-  constructor(IERC20 _token) {
+  constructor(IERC20 _token, INetworkController _network) {
     _setupRole(DEFAULT_ADMIN_ROLE, msg.sender);
     token = _token;
+    network = _network;
   }
 
   function distribute(uint256[] calldata workers, uint256[] calldata amounts)
     external
     onlyRole(REWARDS_DISTRIBUTOR_ROLE)
   {
+    lastEpochRewarded = network.epochNumber();
     for (uint256 i = 0; i < workers.length; i++) {
       _distribute(workers[i], amounts[i]);
     }
@@ -47,6 +52,8 @@ contract Staking is AccessControl, IStaking {
   }
 
   function deposit(uint256 worker, uint256 amount) external {
+    require(lastEpochRewarded + 1 >= network.epochNumber() || lastEpochRewarded == 0, "Rewards out of date");
+
     StakerRewards storage _rewards = rewards[worker];
     updateCheckpoint(_rewards);
     _rewards.totalStaked += amount;

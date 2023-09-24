@@ -17,8 +17,9 @@ contract RewardCalculationTest is Test {
     holders[0] = address(this);
 
     tSQD token = new tSQD(holders, shares);
+    NetworkController nc = new NetworkController(2, 100);
     WorkerRegistration workerRegistration =
-      new WorkerRegistration(token, new NetworkController(2, 100), new Staking(token));
+      new WorkerRegistration(token, nc, new Staking(token, nc));
 
     rewardCalculation = new RewardCalculation(workerRegistration);
   }

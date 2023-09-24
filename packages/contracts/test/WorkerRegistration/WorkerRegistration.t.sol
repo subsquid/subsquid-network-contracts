@@ -44,7 +44,7 @@ contract WorkerRegistrationTest is Test {
     holders[0] = creator;
 
     token = new tSQD(holders, shares);
-    staking = new Staking(token);
+    staking = new Staking(token, networkController);
     workerRegistration = new WorkerRegistration(token, networkController, staking);
     token.approve(address(workerRegistration), workerRegistration.BOND_AMOUNT());
   }

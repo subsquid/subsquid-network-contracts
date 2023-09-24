@@ -9,11 +9,13 @@ import "../../src/NetworkController.sol";
 import "../../src/Staking.sol";
 
 contract RewardsDistributionTest is Test {
+  bytes workerId = "1337";
   uint256 epochRewardAmount = 1000;
   address workerOwner = address(1);
   DistributedRewardsDistribution rewardsDistribution;
   RewardTreasury treasury;
   Staking staking;
+  WorkerRegistration workerRegistration;
   IERC20 token;
 
   event NewReward(address indexed sender, uint256 amount);
@@ -28,14 +30,15 @@ contract RewardsDistributionTest is Test {
     holders[1] = workerOwner;
 
     token = new tSQD(holders, shares);
-    staking = new Staking(token);
-    WorkerRegistration wr = new WorkerRegistration(token, new NetworkController(1, 1), staking);
+    NetworkController networkController = new NetworkController(1, 1);
+    staking = new Staking(token, networkController);
+    workerRegistration = new WorkerRegistration(token, networkController, staking);
     token.approve(address(staking), type(uint256).max);
     hoax(workerOwner);
-    token.approve(address(wr), type(uint256).max);
+    token.approve(address(workerRegistration), type(uint256).max);
     hoax(workerOwner);
-    wr.register("1337");
-    rewardsDistribution = new DistributedRewardsDistribution(address(this), staking, wr);
+    workerRegistration.register(workerId);
+    rewardsDistribution = new DistributedRewardsDistribution(address(this), staking, workerRegistration);
     staking.grantRole(staking.REWARDS_DISTRIBUTOR_ROLE(), address(rewardsDistribution));
     treasury = new RewardTreasury(address(this), token);
     rewardsDistribution.addDistributor(address(this));

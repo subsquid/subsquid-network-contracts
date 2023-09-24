@@ -7,7 +7,7 @@ import "../../src/tSQD.sol";
 import "forge-std/Test.sol";
 
 contract StakingHelper is Staking {
-  constructor(IERC20 token) Staking(token) {}
+  constructor(IERC20 token, INetworkController network) Staking(token, network) {}
 
   function distribute(uint256 worker, uint256 amount) external {
     _distribute(worker, amount);
@@ -28,7 +28,7 @@ contract StakersRewardDistributionTest is Test {
     holders[1] = address(1);
 
     token = new tSQD(holders, shares);
-    rewards = new StakingHelper(token);
+    rewards = new StakingHelper(token, new NetworkController(1, 1));
     token.approve(address(rewards), type(uint256).max);
     hoax(address(1));
     token.approve(address(rewards), type(uint256).max);

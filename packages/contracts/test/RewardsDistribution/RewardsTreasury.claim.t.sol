@@ -46,4 +46,21 @@ contract RewardsDistributionClaimTest is RewardsDistributionTest {
     );
     rewardsDistribution.claim(workerOwner);
   }
+
+  function test_CanClaimRewardsForWithdrawnWorker() public {
+    (uint256[] memory recipients, uint256[] memory workerAmounts, uint256[] memory stakerAmounts) = prepareRewards(1);
+    startHoax(workerOwner);
+    vm.roll(block.number + 3);
+    workerRegistration.deregister(workerId);
+    vm.roll(block.number + 3);
+    workerRegistration.withdraw(workerId);
+    hoax(address(this));
+    rewardsDistribution.distribute(1, recipients, workerAmounts, stakerAmounts);
+    uint256 claimable = rewardsDistribution.claimable(workerOwner);
+    assertGt(claimable, 0);
+    uint256 balanceBefore = token.balanceOf(workerOwner);
+    hoax(workerOwner);
+    treasury.claim(rewardsDistribution);
+    assertEq(token.balanceOf(workerOwner) - balanceBefore, claimable);
+  }
 }
