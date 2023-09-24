@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.18;
+pragma solidity 0.8.18;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/utils/Counters.sol";
@@ -15,7 +15,6 @@ contract WorkerRegistration is AccessControl {
   using EnumerableSet for EnumerableSet.UintSet;
 
   IERC20 public tSQD;
-  uint256 public storagePerWorkerInGb = 1000;
 
   Counters.Counter private workerIdTracker;
 
@@ -35,11 +34,8 @@ contract WorkerRegistration is AccessControl {
   Staking public staking;
   mapping(uint256 => Worker) public workers;
   mapping(bytes peerId => uint256 id) public workerIds;
-  mapping(address staker => mapping(uint256 workerId => uint256 amount)) public stakedAmounts;
-  mapping(uint256 workerId => uint256 amount) public stakedAmountsPerWorker;
   uint256[] public activeWorkerIds;
-  mapping(address creator => EnumerableSet.UintSet) ownedWorkers;
-  uint256 public totalStaked;
+  mapping(address creator => EnumerableSet.UintSet) internal ownedWorkers;
 
   event WorkerRegistered(
     uint256 indexed workerId, bytes indexed peerId, address indexed registrar, uint256 registeredAt
@@ -194,11 +190,6 @@ contract WorkerRegistration is AccessControl {
   }
 
   function bondAmount() public view returns (uint256) {
-    return networkController.bondAmount();
-  }
-
-  // Left for backwards compatibility, to be removed later
-  function BOND_AMOUNT() external view returns (uint256) {
     return networkController.bondAmount();
   }
 

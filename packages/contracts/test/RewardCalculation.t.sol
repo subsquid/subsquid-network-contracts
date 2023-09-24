@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity ^0.8.16;
+pragma solidity 0.8.18;
 
 import "forge-std/Test.sol";
 import "../src/RewardCalculation.sol";
@@ -18,10 +18,9 @@ contract RewardCalculationTest is Test {
 
     tSQD token = new tSQD(holders, shares);
     NetworkController nc = new NetworkController(2, 100);
-    WorkerRegistration workerRegistration =
-      new WorkerRegistration(token, nc, new Staking(token, nc));
+    WorkerRegistration workerRegistration = new WorkerRegistration(token, nc, new Staking(token, nc));
 
-    rewardCalculation = new RewardCalculation(workerRegistration);
+    rewardCalculation = new RewardCalculation(workerRegistration, nc);
   }
 
   function testApy() public {

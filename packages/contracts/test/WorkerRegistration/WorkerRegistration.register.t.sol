@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity ^0.8.16;
+pragma solidity 0.8.18;
 
 import "./WorkerRegistration.t.sol";
 
@@ -8,7 +8,7 @@ contract WorkerRegistrationRegisterTest is WorkerRegistrationTest {
     uint256 registrationBalanceBefore = token.balanceOf(address(workerRegistration));
     workerRegistration.register(workerId);
     uint256 registrationBalanceAfter = token.balanceOf(address(workerRegistration));
-    assertEq(registrationBalanceAfter, registrationBalanceBefore + workerRegistration.BOND_AMOUNT());
+    assertEq(registrationBalanceAfter, registrationBalanceBefore + workerRegistration.bondAmount());
   }
 
   function testRegisterWorkerEmitsEvent() public {
@@ -32,7 +32,7 @@ contract WorkerRegistrationRegisterTest is WorkerRegistrationTest {
   }
 
   function testIncrementsIdForNextWorker() public {
-    token.approve(address(workerRegistration), workerRegistration.BOND_AMOUNT() * 2);
+    token.approve(address(workerRegistration), workerRegistration.bondAmount() * 2);
 
     workerRegistration.register(workerId);
     workerRegistration.register(workerId2);
@@ -45,7 +45,7 @@ contract WorkerRegistrationRegisterTest is WorkerRegistrationTest {
     WorkerRegistration.Worker memory workerStruct = workerRegistration.getWorkerByIndex(0);
     assertEq(workerStruct.creator, creator);
     assertEq(workerStruct.peerId, workerId);
-    assertEq(workerStruct.bond, workerRegistration.BOND_AMOUNT());
+    assertEq(workerStruct.bond, workerRegistration.bondAmount());
     assertEq(workerStruct.registeredAt, nextEpoch());
     assertEq(workerStruct.deregisteredAt, 0);
   }

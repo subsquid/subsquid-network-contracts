@@ -23,10 +23,15 @@ contract Staking is AccessControl, IStaking {
 
   IERC20 public token;
   INetworkController public network;
-  mapping(uint256 worker => StakerRewards) internal rewards;
-  mapping(address staker => uint256) _claimable;
-  mapping(address staker => EnumerableSet.UintSet workers) delegatedTo;
   uint256 public lastEpochRewarded;
+  mapping(uint256 worker => StakerRewards) internal rewards;
+  mapping(address staker => uint256) internal _claimable;
+  mapping(address staker => EnumerableSet.UintSet workers) internal delegatedTo;
+
+  event Distributed(uint256 epoch);
+  event Deposited(uint256 indexed worker, address indexed staker, uint256 amount);
+  event Withdrawn(uint256 indexed worker, address indexed staker, uint256 amount);
+  event Claimed(address indexed staker, uint256 amount);
 
   constructor(IERC20 _token, INetworkController _network) {
     _setupRole(DEFAULT_ADMIN_ROLE, msg.sender);
@@ -42,6 +47,8 @@ contract Staking is AccessControl, IStaking {
     for (uint256 i = 0; i < workers.length; i++) {
       _distribute(workers[i], amounts[i]);
     }
+
+    emit Distributed(lastEpochRewarded);
   }
 
   function _distribute(uint256 worker, uint256 amount) internal {
@@ -61,6 +68,8 @@ contract Staking is AccessControl, IStaking {
     delegatedTo[msg.sender].add(worker);
 
     token.transferFrom(msg.sender, address(this), amount);
+
+    emit Deposited(worker, msg.sender, amount);
   }
 
   function withdraw(uint256 worker, uint256 amount) external {
@@ -74,6 +83,8 @@ contract Staking is AccessControl, IStaking {
     }
 
     token.transfer(msg.sender, amount);
+
+    emit Withdrawn(worker, msg.sender, amount);
   }
 
   function activeStake(uint256[] calldata activeWorkers) external view returns (uint256) {
@@ -92,6 +103,9 @@ contract Staking is AccessControl, IStaking {
       rewards[workers[i]].checkpoint[msg.sender] = rewards[workers[i]].cumulatedRewardsPerShare;
     }
     _claimable[staker] = 0;
+
+    emit Claimed(staker, reward);
+
     return reward;
   }
 

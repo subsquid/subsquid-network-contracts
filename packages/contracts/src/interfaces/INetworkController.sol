@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.18;
+pragma solidity 0.8.18;
 
 interface INetworkController {
   function epochLength() external view returns (uint128);
@@ -9,4 +9,6 @@ interface INetworkController {
   function nextEpoch() external view returns (uint128);
 
   function epochNumber() external view returns (uint128);
+
+  function storagePerWorkerInGb() external view returns (uint128);
 }

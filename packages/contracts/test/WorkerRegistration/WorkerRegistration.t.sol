@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity ^0.8.16;
+pragma solidity 0.8.18;
 
 import "forge-std/Test.sol";
 import "../../src/WorkerRegistration.sol";
@@ -46,6 +46,6 @@ contract WorkerRegistrationTest is Test {
     token = new tSQD(holders, shares);
     staking = new Staking(token, networkController);
     workerRegistration = new WorkerRegistration(token, networkController, staking);
-    token.approve(address(workerRegistration), workerRegistration.BOND_AMOUNT());
+    token.approve(address(workerRegistration), workerRegistration.bondAmount());
   }
 }

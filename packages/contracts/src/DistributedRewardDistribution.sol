@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity ^0.8.18;
+pragma solidity 0.8.18;
 
 import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
@@ -27,7 +27,14 @@ contract DistributedRewardsDistribution is AccessControl, IRewardsDistribution {
   event NewCommitment(
     address indexed who, uint256 epoch, uint256[] recipients, uint256[] workerRewards, uint256[] stakerRewards
   );
+  event Approved(
+    address indexed who, uint256 epoch, uint256[] recipients, uint256[] workerRewards, uint256[] stakerRewards
+  );
+  event Distributed(uint256 epoch);
   event Claimed(address indexed by, uint256 amount);
+
+  event DistributorAdded(address indexed distributor);
+  event DistributorRemoved(address indexed distributor);
 
   constructor(address admin, IStaking _staking, WorkerRegistration _workers) {
     _setupRole(DEFAULT_ADMIN_ROLE, admin);
@@ -37,10 +44,14 @@ contract DistributedRewardsDistribution is AccessControl, IRewardsDistribution {
 
   function addDistributor(address distributor) external onlyRole(DEFAULT_ADMIN_ROLE) {
     distributors.add(distributor);
+
+    emit DistributorAdded(distributor);
   }
 
   function removeDistributor(address distributor) external onlyRole(DEFAULT_ADMIN_ROLE) {
     distributors.remove(distributor);
+
+    emit DistributorRemoved(distributor);
   }
 
   function distributorIndex() public view returns (uint256) {
@@ -73,6 +84,8 @@ contract DistributedRewardsDistribution is AccessControl, IRewardsDistribution {
     if (approves[epoch] == APPROVES_REQUIRED) {
       distribute(epoch, recipients, workerRewards, _stakerRewards);
     }
+
+    emit Approved(msg.sender, epoch, recipients, workerRewards, _stakerRewards);
   }
 
   function distribute(
@@ -89,6 +102,8 @@ contract DistributedRewardsDistribution is AccessControl, IRewardsDistribution {
     }
     staking.distribute(recipients, _stakerRewards);
     lastEpochRewarded++;
+
+    emit Distributed(epoch);
   }
 
   function claim(address who) external onlyRole(REWARDS_TREASURY_ROLE) returns (uint256) {
