@@ -54,12 +54,12 @@ contract RewardsDistributionClaimTest is RewardsDistributionTest {
     workerRegistration.deregister(workerId);
     vm.roll(block.number + 3);
     workerRegistration.withdraw(workerId);
-    hoax(address(this));
+    startHoax(address(this));
     rewardsDistribution.distribute(1, recipients, workerAmounts, stakerAmounts);
     uint256 claimable = rewardsDistribution.claimable(workerOwner);
     assertGt(claimable, 0);
     uint256 balanceBefore = token.balanceOf(workerOwner);
-    hoax(workerOwner);
+    startHoax(workerOwner);
     treasury.claim(rewardsDistribution);
     assertEq(token.balanceOf(workerOwner) - balanceBefore, claimable);
   }
