@@ -38,9 +38,9 @@ contract RewardsDistributionTest is Test {
     token.approve(address(workerRegistration), type(uint256).max);
     hoax(workerOwner);
     workerRegistration.register(workerId);
-    rewardsDistribution = new DistributedRewardsDistribution(address(this), staking, workerRegistration);
+    rewardsDistribution = new DistributedRewardsDistribution(staking, workerRegistration);
     staking.grantRole(staking.REWARDS_DISTRIBUTOR_ROLE(), address(rewardsDistribution));
-    treasury = new RewardTreasury(address(this), token);
+    treasury = new RewardTreasury(token);
     rewardsDistribution.addDistributor(address(this));
     rewardsDistribution.grantRole(rewardsDistribution.REWARDS_TREASURY_ROLE(), address(treasury));
     treasury.setWhitelistedDistributor(rewardsDistribution, true);
