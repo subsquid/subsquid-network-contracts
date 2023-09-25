@@ -8,13 +8,6 @@ import "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 import "./interfaces/IStaking.sol";
 import "./NetworkController.sol";
 
-struct StakerRewards {
-  uint256 cumulatedRewardsPerShare;
-  mapping(address staker => uint256) checkpoint;
-  mapping(address staker => uint256) depositAmount;
-  uint256 totalStaked;
-}
-
 contract Staking is AccessControl, IStaking {
   using EnumerableSet for EnumerableSet.UintSet;
 

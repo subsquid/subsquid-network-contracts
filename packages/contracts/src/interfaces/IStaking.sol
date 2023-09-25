@@ -2,6 +2,13 @@
 pragma solidity 0.8.18;
 
 interface IStaking {
+  struct StakerRewards {
+    uint256 cumulatedRewardsPerShare;
+    mapping(address staker => uint256) checkpoint;
+    mapping(address staker => uint256) depositAmount;
+    uint256 totalStaked;
+  }
+
   event Distributed(uint256 epoch);
   event Deposited(uint256 indexed worker, address indexed staker, uint256 amount);
   event Withdrawn(uint256 indexed worker, address indexed staker, uint256 amount);
