@@ -19,16 +19,16 @@ contract Deploy is Script {
     // Don't redeploy token yet
     IERC20 token = IERC20(address(0x6a117CBe9Bfab42151396FC54ddb588151a8Aac7));
     NetworkController network = new NetworkController(100, 100000 ether);
-//    Staking staking = new Staking(token, network);
-//    WorkerRegistration workerRegistration = new WorkerRegistration(token, network, staking);
-//    RewardTreasury treasury = new RewardTreasury(token);
-//    DistributedRewardsDistribution distributor = new DistributedRewardsDistribution(staking, workerRegistration);
-//    new RewardCalculation(workerRegistration, network);
-//
-//    staking.grantRole(staking.REWARDS_DISTRIBUTOR_ROLE(), address(distributor));
-//    treasury.setWhitelistedDistributor(distributor, true);
-//    distributor.grantRole(distributor.REWARDS_TREASURY_ROLE(), address(treasury));
-//    distributor.grantRole(distributor.REWARDS_DISTRIBUTOR_ROLE(), address(distributor));
+    Staking staking = new Staking(token, network);
+    WorkerRegistration workerRegistration = new WorkerRegistration(token, network, staking);
+    RewardTreasury treasury = new RewardTreasury(token);
+    DistributedRewardsDistribution distributor = new DistributedRewardsDistribution(staking, workerRegistration);
+    new RewardCalculation(workerRegistration, network);
+
+    staking.grantRole(staking.REWARDS_DISTRIBUTOR_ROLE(), address(distributor));
+    treasury.setWhitelistedDistributor(distributor, true);
+    distributor.grantRole(distributor.REWARDS_TREASURY_ROLE(), address(treasury));
+    distributor.grantRole(distributor.REWARDS_DISTRIBUTOR_ROLE(), address(distributor));
 
     vm.stopBroadcast();
 

@@ -2,6 +2,9 @@
 src = "src"
 out = "artifacts"
 libs = ["lib"]
+remappings = [
+    "@openzeppelin/=lib/openzeppelin-contracts/",
+]
 
 [fmt]
 int_types = "long"
