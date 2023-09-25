@@ -31,6 +31,5 @@ contract Deploy is Script {
     distributor.grantRole(distributor.REWARDS_DISTRIBUTOR_ROLE(), address(distributor));
 
     vm.stopBroadcast();
-
   }
 }
