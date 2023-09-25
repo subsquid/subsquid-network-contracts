@@ -6,6 +6,7 @@ import "../src/RewardCalculation.sol";
 import "../src/WorkerRegistration.sol";
 import "../src/testnet/tSQD.sol";
 import "../src/NetworkController.sol";
+import "../src/Staking.sol";
 
 contract RewardCalculationTest is Test {
   RewardCalculation rewardCalculation;

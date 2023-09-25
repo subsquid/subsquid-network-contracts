@@ -5,6 +5,7 @@ import "forge-std/Test.sol";
 import "../../src/WorkerRegistration.sol";
 import "../../src/testnet/tSQD.sol";
 import "../../src/NetworkController.sol";
+import "../../src/Staking.sol";
 
 contract WorkerRegistrationTest is Test {
   uint256 constant creatorPrivateKey = 0xabc123;

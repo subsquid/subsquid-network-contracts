@@ -15,5 +15,7 @@ interface IStaking {
 
   function claimable(address staker) external view returns (uint256);
 
-  function distribute(uint256[] memory workers, uint256[] memory amounts) external;
+  function activeStake(uint256[] calldata workers) external view returns (uint256);
+
+  function distribute(uint256[] calldata workers, uint256[] calldata amounts) external;
 }

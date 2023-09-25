@@ -7,6 +7,7 @@ import "../../src/testnet/tSQD.sol";
 import "../../src/RewardTreasury.sol";
 import "../../src/NetworkController.sol";
 import "../../src/Staking.sol";
+import "../../src/WorkerRegistration.sol";
 
 contract RewardsDistributionTest is Test {
   bytes workerId = "1337";

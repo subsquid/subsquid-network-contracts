@@ -1,15 +1,16 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.18;
 
-import "./WorkerRegistration.sol";
+import "./interfaces/IWorkerRegistration.sol";
+import "./interfaces/INetworkController.sol";
 
 contract RewardCalculation {
   uint256 internal constant year = 365 days;
 
-  WorkerRegistration public immutable workerRegistration;
+  IWorkerRegistration public immutable workerRegistration;
   INetworkController public immutable networkController;
 
-  constructor(WorkerRegistration _workerRegistration, INetworkController _networkController) {
+  constructor(IWorkerRegistration _workerRegistration, INetworkController _networkController) {
     workerRegistration = _workerRegistration;
     networkController = _networkController;
   }

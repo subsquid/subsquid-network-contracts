@@ -4,7 +4,7 @@ pragma solidity 0.8.18;
 import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
-import "./WorkerRegistration.sol";
+import "./interfaces/IWorkerRegistration.sol";
 import "./interfaces/IRewardsDistribution.sol";
 import "./interfaces/IStaking.sol";
 
@@ -20,7 +20,7 @@ contract DistributedRewardsDistribution is AccessControl, IRewardsDistribution {
   mapping(uint256 epoch => uint8) public approves;
   uint256 public lastEpochRewarded;
   IStaking public immutable staking;
-  WorkerRegistration public immutable workers;
+  IWorkerRegistration public immutable workers;
   EnumerableSet.AddressSet private distributors;
 
   event NewCommitment(
@@ -35,7 +35,7 @@ contract DistributedRewardsDistribution is AccessControl, IRewardsDistribution {
   event DistributorAdded(address indexed distributor);
   event DistributorRemoved(address indexed distributor);
 
-  constructor(IStaking _staking, WorkerRegistration _workers) {
+  constructor(IStaking _staking, IWorkerRegistration _workers) {
     _setupRole(DEFAULT_ADMIN_ROLE, msg.sender);
     staking = _staking;
     workers = _workers;
@@ -60,9 +60,9 @@ contract DistributedRewardsDistribution is AccessControl, IRewardsDistribution {
 
   function commit(
     uint256 epoch,
-    uint256[] memory recipients,
-    uint256[] memory workerRewards,
-    uint256[] memory _stakerRewards
+    uint256[] calldata recipients,
+    uint256[] calldata workerRewards,
+    uint256[] calldata _stakerRewards
   ) external {
     require(distributors.at(distributorIndex()) == msg.sender, "Not a distributor");
     commitments[epoch] = keccak256(msg.data[4:]);
@@ -73,9 +73,9 @@ contract DistributedRewardsDistribution is AccessControl, IRewardsDistribution {
 
   function approve(
     uint256 epoch,
-    uint256[] memory recipients,
-    uint256[] memory workerRewards,
-    uint256[] memory _stakerRewards
+    uint256[] calldata recipients,
+    uint256[] calldata workerRewards,
+    uint256[] calldata _stakerRewards
   ) external onlyRole(REWARDS_DISTRIBUTOR_ROLE) {
     require(commitments[epoch] != 0, "Commitment does not exist");
     require(commitments[epoch] == keccak256(msg.data[4:]), "Commitment mismatch");
@@ -89,9 +89,9 @@ contract DistributedRewardsDistribution is AccessControl, IRewardsDistribution {
 
   function distribute(
     uint256 epoch,
-    uint256[] memory recipients,
-    uint256[] memory workerRewards,
-    uint256[] memory _stakerRewards
+    uint256[] calldata recipients,
+    uint256[] calldata workerRewards,
+    uint256[] calldata _stakerRewards
   ) public {
     require(recipients.length == workerRewards.length, "Recipients and worker amounts length mismatch");
     require(recipients.length == _stakerRewards.length, "Recipients and staker amounts length mismatch");

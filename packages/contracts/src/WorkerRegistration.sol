@@ -7,9 +7,10 @@ import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 
 import "./interfaces/INetworkController.sol";
-import "./Staking.sol";
+import "./interfaces/IStaking.sol";
+import "./interfaces/IWorkerRegistration.sol";
 
-contract WorkerRegistration is AccessControl {
+contract WorkerRegistration is AccessControl, IWorkerRegistration {
   using Counters for Counters.Counter;
   using EnumerableSet for EnumerableSet.AddressSet;
   using EnumerableSet for EnumerableSet.UintSet;
@@ -30,7 +31,7 @@ contract WorkerRegistration is AccessControl {
 
   IERC20 public immutable tSQD;
   INetworkController public immutable networkController;
-  Staking public immutable staking;
+  IStaking public immutable staking;
   mapping(uint256 => Worker) public workers;
   mapping(bytes peerId => uint256 id) public workerIds;
   uint256[] public activeWorkerIds;
@@ -42,7 +43,7 @@ contract WorkerRegistration is AccessControl {
   event WorkerDeregistered(uint256 indexed workerId, address indexed account, uint256 deregistedAt);
   event WorkerWithdrawn(uint256 indexed workerId, address indexed account);
 
-  constructor(IERC20 _tSQD, INetworkController _networkController, Staking _staking) {
+  constructor(IERC20 _tSQD, INetworkController _networkController, IStaking _staking) {
     _setupRole(DEFAULT_ADMIN_ROLE, msg.sender);
     tSQD = _tSQD;
     networkController = _networkController;
