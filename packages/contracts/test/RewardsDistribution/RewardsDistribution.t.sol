@@ -3,7 +3,7 @@ pragma solidity 0.8.18;
 
 import "forge-std/Test.sol";
 import "../../src/DistributedRewardDistribution.sol";
-import "../../src/tSQD.sol";
+import "../../src/testnet/tSQD.sol";
 import "../../src/RewardTreasury.sol";
 import "../../src/NetworkController.sol";
 import "../../src/Staking.sol";

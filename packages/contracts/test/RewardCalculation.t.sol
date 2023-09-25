@@ -4,7 +4,7 @@ pragma solidity 0.8.18;
 import "forge-std/Test.sol";
 import "../src/RewardCalculation.sol";
 import "../src/WorkerRegistration.sol";
-import "../src/tSQD.sol";
+import "../src/testnet/tSQD.sol";
 import "../src/NetworkController.sol";
 
 contract RewardCalculationTest is Test {

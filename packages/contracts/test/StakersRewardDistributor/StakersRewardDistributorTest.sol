@@ -3,7 +3,7 @@ pragma solidity 0.8.18;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "../../src/Staking.sol";
-import "../../src/tSQD.sol";
+import "../../src/testnet/tSQD.sol";
 import "forge-std/Test.sol";
 
 contract StakingHelper is Staking {
