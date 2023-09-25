@@ -21,17 +21,12 @@ contract Staking is AccessControl, IStaking {
   uint256 internal constant PRECISION = 1e18;
   bytes32 public constant REWARDS_DISTRIBUTOR_ROLE = keccak256("REWARDS_DISTRIBUTOR_ROLE");
 
-  IERC20 public token;
-  INetworkController public network;
+  IERC20 public immutable token;
+  INetworkController public immutable network;
   uint256 public lastEpochRewarded;
   mapping(uint256 worker => StakerRewards) internal rewards;
   mapping(address staker => uint256) internal _claimable;
   mapping(address staker => EnumerableSet.UintSet workers) internal delegatedTo;
-
-  event Distributed(uint256 epoch);
-  event Deposited(uint256 indexed worker, address indexed staker, uint256 amount);
-  event Withdrawn(uint256 indexed worker, address indexed staker, uint256 amount);
-  event Claimed(address indexed staker, uint256 amount);
 
   constructor(IERC20 _token, INetworkController _network) {
     _setupRole(DEFAULT_ADMIN_ROLE, msg.sender);

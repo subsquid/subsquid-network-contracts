@@ -6,8 +6,8 @@ import "./WorkerRegistration.sol";
 contract RewardCalculation {
   uint256 internal constant year = 365 days;
 
-  WorkerRegistration public workerRegistration;
-  INetworkController public networkController;
+  WorkerRegistration public immutable workerRegistration;
+  INetworkController public immutable networkController;
 
   constructor(WorkerRegistration _workerRegistration, INetworkController _networkController) {
     workerRegistration = _workerRegistration;

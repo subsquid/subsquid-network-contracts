@@ -8,7 +8,7 @@ import "./interfaces/IRewardsDistribution.sol";
 
 contract RewardTreasury is AccessControl {
   mapping(IRewardsDistribution => bool) public isWhitelistedDistributor;
-  IERC20 public rewardToken;
+  IERC20 public immutable rewardToken;
 
   event Claimed(address indexed by, uint256 amount);
   event WhitelistedDistributorSet(IRewardsDistribution indexed distributor, bool isWhitelisted);

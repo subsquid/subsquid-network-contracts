@@ -13,14 +13,14 @@ contract DistributedRewardsDistribution is AccessControl, IRewardsDistribution {
 
   bytes32 public constant REWARDS_DISTRIBUTOR_ROLE = keccak256("REWARDS_DISTRIBUTOR_ROLE");
   bytes32 public constant REWARDS_TREASURY_ROLE = keccak256("REWARDS_TREASURY_ROLE");
-  uint8 public constant APPROVES_REQUIRED = 3;
+  uint8 internal constant APPROVES_REQUIRED = 3;
 
   mapping(uint256 workerId => uint256) _claimable;
   mapping(uint256 epoch => bytes32) public commitments;
   mapping(uint256 epoch => uint8) public approves;
   uint256 public lastEpochRewarded;
-  IStaking public staking;
-  WorkerRegistration public workers;
+  IStaking public immutable staking;
+  WorkerRegistration public immutable workers;
   EnumerableSet.AddressSet private distributors;
 
   event NewCommitment(

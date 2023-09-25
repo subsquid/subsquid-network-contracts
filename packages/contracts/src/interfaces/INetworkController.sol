@@ -2,6 +2,10 @@
 pragma solidity 0.8.18;
 
 interface INetworkController {
+  event EpochLengthUpdated(uint128 epochLength);
+  event BondAmountUpdated(uint256 bondAmount);
+  event StoragePerWorkerInGbUpdated(uint128 storagePerWorkerInGb);
+
   function epochLength() external view returns (uint128);
 
   function bondAmount() external view returns (uint256);

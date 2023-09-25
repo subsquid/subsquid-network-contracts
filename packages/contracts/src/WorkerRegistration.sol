@@ -14,8 +14,6 @@ contract WorkerRegistration is AccessControl {
   using EnumerableSet for EnumerableSet.AddressSet;
   using EnumerableSet for EnumerableSet.UintSet;
 
-  IERC20 public tSQD;
-
   Counters.Counter private workerIdTracker;
 
   struct Worker {
@@ -30,8 +28,9 @@ contract WorkerRegistration is AccessControl {
     uint128 deregisteredAt;
   }
 
-  INetworkController public networkController;
-  Staking public staking;
+  IERC20 public immutable tSQD;
+  INetworkController public immutable networkController;
+  Staking public immutable staking;
   mapping(uint256 => Worker) public workers;
   mapping(bytes peerId => uint256 id) public workerIds;
   uint256[] public activeWorkerIds;

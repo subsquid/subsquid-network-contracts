@@ -11,10 +11,6 @@ contract NetworkController is AccessControl, INetworkController {
   uint128 internal epochCheckpoint;
   uint128 public storagePerWorkerInGb = 1000;
 
-  event EpochLengthUpdated(uint128 epochLength);
-  event BondAmountUpdated(uint256 bondAmount);
-  event StoragePerWorkerInGbUpdated(uint128 storagePerWorkerInGb);
-
   constructor(uint128 _epochLength, uint256 _bondAmount) {
     _setupRole(DEFAULT_ADMIN_ROLE, msg.sender);
     epochLength = _epochLength;
