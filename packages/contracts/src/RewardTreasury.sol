@@ -13,9 +13,9 @@ contract RewardTreasury is AccessControl {
   event Claimed(address indexed by, uint256 amount);
   event WhitelistedDistributorSet(IRewardsDistribution indexed distributor, bool isWhitelisted);
 
-  constructor(address admin, IERC20 _rewardToken) {
+  constructor(IERC20 _rewardToken) {
     rewardToken = _rewardToken;
-    _setupRole(DEFAULT_ADMIN_ROLE, admin);
+    _setupRole(DEFAULT_ADMIN_ROLE, msg.sender);
   }
 
   function claim(IRewardsDistribution rewardDistribution) external {

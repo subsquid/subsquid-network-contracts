@@ -1,16 +1,19 @@
 [profile.default]
 src = "src"
 out = "artifacts"
-libs = ["node_modules", "lib"]
-allow_paths = ["../../node_modules"]
+libs = ["lib"]
 remappings = [
-    "@ensdomains/=node_modules/@ensdomains/",
-    "@openzeppelin/=node_modules/@openzeppelin/",
-    "hardhat-deploy/=node_modules/hardhat-deploy/",
-    "hardhat/=node_modules/hardhat/",
+    "@openzeppelin/=lib/openzeppelin-contracts/",
 ]
 
 [fmt]
 int_types = "long"
 tab_width = 2
+
+[rpc_endpoints]
+arbitrum-goerli = "https://goerli-rollup.arbitrum.io/rpc"
+
+[etherscan]
+arbitrum-goerli = { key = "N89QM8KDR8SZ52I7YCSN6Z35QAUFUYBHBV" }
+
 # See more config options https://github.com/foundry-rs/foundry/tree/master/config

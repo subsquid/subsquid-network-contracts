@@ -4,7 +4,6 @@ pragma solidity 0.8.18;
 import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
-import "forge-std/console2.sol";
 import "./WorkerRegistration.sol";
 import "./interfaces/IRewardsDistribution.sol";
 import "./interfaces/IStaking.sol";
@@ -36,8 +35,8 @@ contract DistributedRewardsDistribution is AccessControl, IRewardsDistribution {
   event DistributorAdded(address indexed distributor);
   event DistributorRemoved(address indexed distributor);
 
-  constructor(address admin, IStaking _staking, WorkerRegistration _workers) {
-    _setupRole(DEFAULT_ADMIN_ROLE, admin);
+  constructor(IStaking _staking, WorkerRegistration _workers) {
+    _setupRole(DEFAULT_ADMIN_ROLE, msg.sender);
     staking = _staking;
     workers = _workers;
   }
