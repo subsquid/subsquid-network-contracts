@@ -1,14 +1,17 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.18;
+pragma solidity 0.8.18;
 
 import "./WorkerRegistration.sol";
 
 contract RewardCalculation {
-  WorkerRegistration public workerRegistration;
-  uint256 year = 365 days;
+  uint256 internal constant year = 365 days;
 
-  constructor(WorkerRegistration _workerRegistration) {
+  WorkerRegistration public workerRegistration;
+  INetworkController public networkController;
+
+  constructor(WorkerRegistration _workerRegistration, INetworkController _networkController) {
     workerRegistration = _workerRegistration;
+    networkController = _networkController;
   }
 
   function apy(uint256 target, uint256 actual) public pure returns (uint256) {
@@ -27,10 +30,10 @@ contract RewardCalculation {
   }
 
   function currentApy(uint256 targetGb) public view returns (uint256) {
-    return apy(targetGb, workerRegistration.getActiveWorkerCount() * workerRegistration.storagePerWorkerInGb());
+    return apy(targetGb, workerRegistration.getActiveWorkerCount() * networkController.storagePerWorkerInGb());
   }
 
   function epochReward(uint256 targetGb) public view returns (uint256) {
-    return currentApy(targetGb) * workerRegistration.effectiveTVL() * workerRegistration.epochLength() / year / 10000;
+    return currentApy(targetGb) * workerRegistration.effectiveTVL() * networkController.epochLength() / year / 10000;
   }
 }

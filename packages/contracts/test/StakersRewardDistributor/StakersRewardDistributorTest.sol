@@ -1,46 +1,38 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity 0.8.18;
 
-import "../../src/StakersRewardDistributor.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "../../src/Staking.sol";
+import "../../src/tSQD.sol";
 import "forge-std/Test.sol";
 
-contract RewardsImplementation {
-  using StakersRewardDistributor for StakerRewards;
+contract StakingHelper is Staking {
+  constructor(IERC20 token, INetworkController network) Staking(token, network) {}
 
-  StakerRewards rewards;
-  uint256 latestRewardEpoch;
-
-  function distribute(uint256 amount) external {
-    latestRewardEpoch++;
-    rewards.distribute(amount, latestRewardEpoch);
-  }
-
-  function deposit(uint256 amount, uint256 currentEpoch) external returns (uint256) {
-    return rewards.deposit(amount, currentEpoch, latestRewardEpoch);
-  }
-
-  function withdraw(uint256 amount, uint256 currentEpoch) external returns (uint256) {
-    return rewards.withdraw(amount, currentEpoch, latestRewardEpoch);
-  }
-
-  function claimable(address staker) external view returns (uint256) {
-    uint256 claimableReward = rewards.reward(staker, latestRewardEpoch);
-    if (rewards.hasPendingTransitionRewards(staker)) {
-      claimableReward += rewards.transitionReward(staker, latestRewardEpoch);
-    }
-    return claimableReward;
-  }
-
-  function claim() external returns (uint256) {
-    return rewards.claim(latestRewardEpoch);
+  function distribute(uint256 worker, uint256 amount) external {
+    _distribute(worker, amount);
   }
 }
 
 contract StakersRewardDistributionTest is Test {
-  RewardsImplementation rewards;
+  uint256[] workers = [1234];
+  StakingHelper rewards;
+  IERC20 token;
 
   function setUp() public {
-    rewards = new RewardsImplementation();
+    uint256[] memory shares = new uint256[](2);
+    shares[0] = 50;
+    shares[1] = 50;
+    address[] memory holders = new address[](2);
+    holders[0] = address(this);
+    holders[1] = address(1);
+
+    token = new tSQD(holders, shares);
+    rewards = new StakingHelper(token, new NetworkController(1, 1));
+    token.approve(address(rewards), type(uint256).max);
+    hoax(address(1));
+    token.approve(address(rewards), type(uint256).max);
+    rewards.grantRole(rewards.REWARDS_DISTRIBUTOR_ROLE(), address(this));
   }
 
   function assertPairClaimable(uint256 rewardA, uint256 rewardB) internal {
