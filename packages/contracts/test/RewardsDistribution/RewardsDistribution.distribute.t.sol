@@ -51,7 +51,7 @@ contract RewardsDistributionDistributeTest is RewardsDistributionTest {
     (uint256[] memory recipients, uint256[] memory workerAmounts, uint256[] memory stakerAmounts) = prepareRewards(1);
     rewardsDistribution.distributeHelper(1, recipients, workerAmounts, stakerAmounts);
     assertEq(rewardsDistribution.claimable(workerOwner), epochRewardAmount);
-    rewardsDistribution.distributeHelper(2, recipients, workerAmounts, stakerAmounts);
+    rewardsDistribution.distributeHelper(3, recipients, workerAmounts, stakerAmounts);
     assertEq(rewardsDistribution.claimable(workerOwner), epochRewardAmount * 2);
   }
 }

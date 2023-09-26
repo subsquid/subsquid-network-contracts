@@ -16,20 +16,30 @@ contract DistributedRewardsDistribution is AccessControl, IRewardsDistribution {
   uint8 internal constant APPROVES_REQUIRED = 3;
 
   mapping(uint256 workerId => uint256) _claimable;
-  mapping(uint256 epoch => bytes32) public commitments;
-  mapping(uint256 epoch => uint8) public approves;
-  uint256 public lastEpochRewarded;
+  mapping(uint256 block => bytes32) public commitments;
+  mapping(uint256 block => uint8) public approves;
+  uint256 public lastBlockRewarded;
   IStaking public immutable staking;
   IWorkerRegistration public immutable workers;
   EnumerableSet.AddressSet private distributors;
 
   event NewCommitment(
-    address indexed who, uint256 epoch, uint256[] recipients, uint256[] workerRewards, uint256[] stakerRewards
+    address indexed who,
+    uint256 fromBlock,
+    uint256 toBlock,
+    uint256[] recipients,
+    uint256[] workerRewards,
+    uint256[] stakerRewards
   );
   event Approved(
-    address indexed who, uint256 epoch, uint256[] recipients, uint256[] workerRewards, uint256[] stakerRewards
+    address indexed who,
+    uint256 fromBlock,
+    uint256 toBlock,
+    uint256[] recipients,
+    uint256[] workerRewards,
+    uint256[] stakerRewards
   );
-  event Distributed(uint256 epoch);
+  event Distributed(uint256 fromBlock, uint256 toBlock);
   event Claimed(address indexed by, uint256 amount);
 
   event DistributorAdded(address indexed distributor);
@@ -58,51 +68,59 @@ contract DistributedRewardsDistribution is AccessControl, IRewardsDistribution {
     return uint256(blockhash(slotStart)) % distributors.length();
   }
 
+  function currentDistributor() public view returns (address) {
+    return distributors.at(distributorIndex());
+  }
+
   function commit(
-    uint256 epoch,
+    uint256 fromBlock,
+    uint256 toBlock,
     uint256[] calldata recipients,
     uint256[] calldata workerRewards,
     uint256[] calldata _stakerRewards
   ) external {
-    require(distributors.at(distributorIndex()) == msg.sender, "Not a distributor");
-    commitments[epoch] = keccak256(msg.data[4:]);
-    approves[epoch] = 1;
+    require(currentDistributor() == msg.sender, "Not a distributor");
+    require(toBlock < block.number, "Future block");
+    commitments[toBlock] = keccak256(msg.data[4:]);
+    approves[toBlock] = 1;
 
-    emit NewCommitment(msg.sender, epoch, recipients, workerRewards, _stakerRewards);
+    emit NewCommitment(msg.sender, fromBlock, toBlock, recipients, workerRewards, _stakerRewards);
   }
 
   function approve(
-    uint256 epoch,
+    uint256 fromBlock,
+    uint256 toBlock,
     uint256[] calldata recipients,
     uint256[] calldata workerRewards,
     uint256[] calldata _stakerRewards
   ) external onlyRole(REWARDS_DISTRIBUTOR_ROLE) {
-    require(commitments[epoch] != 0, "Commitment does not exist");
-    require(commitments[epoch] == keccak256(msg.data[4:]), "Commitment mismatch");
-    approves[epoch]++;
-    if (approves[epoch] == APPROVES_REQUIRED) {
-      distribute(epoch, recipients, workerRewards, _stakerRewards);
+    require(commitments[toBlock] != 0, "Commitment does not exist");
+    require(commitments[toBlock] == keccak256(msg.data[4:]), "Commitment mismatch");
+    approves[toBlock]++;
+    if (approves[toBlock] == APPROVES_REQUIRED) {
+      distribute(fromBlock, toBlock, recipients, workerRewards, _stakerRewards);
     }
 
-    emit Approved(msg.sender, epoch, recipients, workerRewards, _stakerRewards);
+    emit Approved(msg.sender, fromBlock, toBlock, recipients, workerRewards, _stakerRewards);
   }
 
   function distribute(
-    uint256 epoch,
+    uint256 fromBlock,
+    uint256 toBlock,
     uint256[] calldata recipients,
     uint256[] calldata workerRewards,
     uint256[] calldata _stakerRewards
   ) internal {
     require(recipients.length == workerRewards.length, "Recipients and worker amounts length mismatch");
     require(recipients.length == _stakerRewards.length, "Recipients and staker amounts length mismatch");
-    require(epoch == lastEpochRewarded + 1, "Invalid epoch");
+    require(lastBlockRewarded == 0 || fromBlock == lastBlockRewarded + 1, "Not all blocks covered");
     for (uint256 i = 0; i < recipients.length; i++) {
       _claimable[recipients[i]] += workerRewards[i];
     }
     staking.distribute(recipients, _stakerRewards);
-    lastEpochRewarded++;
+    lastBlockRewarded = toBlock;
 
-    emit Distributed(epoch);
+    emit Distributed(fromBlock, toBlock);
   }
 
   function claim(address who) external onlyRole(REWARDS_TREASURY_ROLE) returns (uint256) {

@@ -13,12 +13,12 @@ contract DistributionHelper is DistributedRewardsDistribution {
   constructor(IStaking _staking, IWorkerRegistration _workers) DistributedRewardsDistribution(_staking, _workers) {}
 
   function distributeHelper(
-    uint256 epoch,
+    uint256 fromBlock,
     uint256[] calldata recipients,
     uint256[] calldata workerRewards,
     uint256[] calldata _stakerRewards
   ) public {
-    distribute(epoch, recipients, workerRewards, _stakerRewards);
+    distribute(fromBlock, fromBlock + 1, recipients, workerRewards, _stakerRewards);
   }
 }
 
