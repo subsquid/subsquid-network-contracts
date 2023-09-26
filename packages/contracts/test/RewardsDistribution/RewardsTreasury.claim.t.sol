@@ -5,7 +5,7 @@ import "./RewardsDistribution.t.sol";
 contract RewardsDistributionClaimTest is RewardsDistributionTest {
   function testTransfersClaimableRewardsToSender() public {
     (uint256[] memory recipients, uint256[] memory workerAmounts, uint256[] memory stakerAmounts) = prepareRewards(4);
-    rewardsDistribution.distribute(1, recipients, workerAmounts, stakerAmounts);
+    rewardsDistribution.distributeHelper(1, recipients, workerAmounts, stakerAmounts);
     uint256 claimable = rewardsDistribution.claimable(workerOwner);
     uint256 balanceBefore = token.balanceOf(workerOwner);
     hoax(workerOwner);
@@ -16,7 +16,7 @@ contract RewardsDistributionClaimTest is RewardsDistributionTest {
 
   function testCannotClaimSameRewardTwice() public {
     (uint256[] memory recipients, uint256[] memory workerAmounts, uint256[] memory stakerAmounts) = prepareRewards(4);
-    rewardsDistribution.distribute(1, recipients, workerAmounts, stakerAmounts);
+    rewardsDistribution.distributeHelper(1, recipients, workerAmounts, stakerAmounts);
     uint256 claimable = rewardsDistribution.claimable(workerOwner);
     uint256 balanceBefore = token.balanceOf(workerOwner);
     hoax(workerOwner);
@@ -30,7 +30,7 @@ contract RewardsDistributionClaimTest is RewardsDistributionTest {
 
   function testClaimEmitsEvent() public {
     (uint256[] memory recipients, uint256[] memory workerAmounts, uint256[] memory stakerAmounts) = prepareRewards(4);
-    rewardsDistribution.distribute(1, recipients, workerAmounts, stakerAmounts);
+    rewardsDistribution.distributeHelper(1, recipients, workerAmounts, stakerAmounts);
     uint256 claimable = rewardsDistribution.claimable(workerOwner);
     hoax(workerOwner);
     vm.expectEmit(address(rewardsDistribution));
@@ -40,7 +40,7 @@ contract RewardsDistributionClaimTest is RewardsDistributionTest {
 
   function testDistributorClaimCannotBeCalledByNotTreasury() public {
     (uint256[] memory recipients, uint256[] memory workerAmounts, uint256[] memory stakerAmounts) = prepareRewards(1);
-    rewardsDistribution.distribute(1, recipients, workerAmounts, stakerAmounts);
+    rewardsDistribution.distributeHelper(1, recipients, workerAmounts, stakerAmounts);
     vm.expectRevert(
       "AccessControl: account 0x7fa9385be102ac3eac297483dd6233d62b3e1496 is missing role 0x1b79d793df9d39a01a8803af5b473fcb035fc3f70eaeb117debd77529e6aefe8"
     );
@@ -55,7 +55,7 @@ contract RewardsDistributionClaimTest is RewardsDistributionTest {
     vm.roll(block.number + 3);
     workerRegistration.withdraw(workerId);
     startHoax(address(this));
-    rewardsDistribution.distribute(1, recipients, workerAmounts, stakerAmounts);
+    rewardsDistribution.distributeHelper(1, recipients, workerAmounts, stakerAmounts);
     uint256 claimable = rewardsDistribution.claimable(workerOwner);
     assertGt(claimable, 0);
     uint256 balanceBefore = token.balanceOf(workerOwner);

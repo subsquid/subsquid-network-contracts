@@ -9,11 +9,24 @@ import "../../src/NetworkController.sol";
 import "../../src/Staking.sol";
 import "../../src/WorkerRegistration.sol";
 
+contract DistributionHelper is DistributedRewardsDistribution {
+  constructor(IStaking _staking, IWorkerRegistration _workers) DistributedRewardsDistribution(_staking, _workers) {}
+
+  function distributeHelper(
+    uint256 epoch,
+    uint256[] calldata recipients,
+    uint256[] calldata workerRewards,
+    uint256[] calldata _stakerRewards
+  ) public {
+    distribute(epoch, recipients, workerRewards, _stakerRewards);
+  }
+}
+
 contract RewardsDistributionTest is Test {
   bytes workerId = "1337";
   uint256 epochRewardAmount = 1000;
   address workerOwner = address(1);
-  DistributedRewardsDistribution rewardsDistribution;
+  DistributionHelper rewardsDistribution;
   RewardTreasury treasury;
   Staking staking;
   WorkerRegistration workerRegistration;
@@ -39,7 +52,7 @@ contract RewardsDistributionTest is Test {
     token.approve(address(workerRegistration), type(uint256).max);
     hoax(workerOwner);
     workerRegistration.register(workerId);
-    rewardsDistribution = new DistributedRewardsDistribution(staking, workerRegistration);
+    rewardsDistribution = new DistributionHelper(staking, workerRegistration);
     staking.grantRole(staking.REWARDS_DISTRIBUTOR_ROLE(), address(rewardsDistribution));
     treasury = new RewardTreasury(token);
     rewardsDistribution.addDistributor(address(this));

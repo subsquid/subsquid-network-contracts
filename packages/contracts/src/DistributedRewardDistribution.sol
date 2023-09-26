@@ -92,7 +92,7 @@ contract DistributedRewardsDistribution is AccessControl, IRewardsDistribution {
     uint256[] calldata recipients,
     uint256[] calldata workerRewards,
     uint256[] calldata _stakerRewards
-  ) public {
+  ) internal {
     require(recipients.length == workerRewards.length, "Recipients and worker amounts length mismatch");
     require(recipients.length == _stakerRewards.length, "Recipients and staker amounts length mismatch");
     require(epoch == lastEpochRewarded + 1, "Invalid epoch");

@@ -6,7 +6,7 @@ contract RewardsDistributionDistributeTest is RewardsDistributionTest {
   function gasUsageForNWorkers(uint256 n) internal {
     (uint256[] memory recipients, uint256[] memory workerAmounts, uint256[] memory stakerAmounts) = prepareRewards(n);
     uint256 gasBefore = gasleft();
-    rewardsDistribution.distribute(1, recipients, workerAmounts, stakerAmounts);
+    rewardsDistribution.distributeHelper(1, recipients, workerAmounts, stakerAmounts);
     uint256 gasAfter = gasleft();
     uint256 gasUsed = gasBefore - gasAfter;
     emit log_named_uint("gasUsed", gasUsed);
@@ -30,28 +30,28 @@ contract RewardsDistributionDistributeTest is RewardsDistributionTest {
       "AccessControl: account 0x000000000000000000000000000000000000007b is missing role 0x9df62d436bfc9f3be4953ab398f3aa862316b013d490e2138c80b4b2eadeabd7"
     );
     hoax(address(123));
-    rewardsDistribution.distribute(1, recipients, workerAmounts, stakerAmounts);
+    rewardsDistribution.distributeHelper(1, recipients, workerAmounts, stakerAmounts);
   }
 
   function testDistributeArgLengthsShouldMatch() public {
     (uint256[] memory recipients,,) = prepareRewards(1);
     (, uint256[] memory workerAmounts, uint256[] memory stakerAmounts) = prepareRewards(2);
     vm.expectRevert("Recipients and worker amounts length mismatch");
-    rewardsDistribution.distribute(1, recipients, workerAmounts, stakerAmounts);
+    rewardsDistribution.distributeHelper(1, recipients, workerAmounts, stakerAmounts);
   }
 
   function xtestDistributeEmitsEvent() public {
     (uint256[] memory recipients, uint256[] memory workerAmounts, uint256[] memory stakerAmounts) = prepareRewards(2);
     vm.expectEmit(address(rewardsDistribution));
     emit NewReward(address(this), epochRewardAmount);
-    rewardsDistribution.distribute(1, recipients, workerAmounts, stakerAmounts);
+    rewardsDistribution.distributeHelper(1, recipients, workerAmounts, stakerAmounts);
   }
 
   function testIncreasesClaimableAmount() public {
     (uint256[] memory recipients, uint256[] memory workerAmounts, uint256[] memory stakerAmounts) = prepareRewards(1);
-    rewardsDistribution.distribute(1, recipients, workerAmounts, stakerAmounts);
+    rewardsDistribution.distributeHelper(1, recipients, workerAmounts, stakerAmounts);
     assertEq(rewardsDistribution.claimable(workerOwner), epochRewardAmount);
-    rewardsDistribution.distribute(2, recipients, workerAmounts, stakerAmounts);
+    rewardsDistribution.distributeHelper(2, recipients, workerAmounts, stakerAmounts);
     assertEq(rewardsDistribution.claimable(workerOwner), epochRewardAmount * 2);
   }
 }

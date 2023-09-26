@@ -2,7 +2,7 @@
 pragma solidity 0.8.18;
 
 interface IWorkerRegistration {
-  function getActiveWorkerCount() external view returns (uint);
-  function effectiveTVL() external view returns (uint);
-  function getOwnedWorkers(address who) external view returns (uint[] memory);
+  function getActiveWorkerCount() external view returns (uint256);
+  function effectiveTVL() external view returns (uint256);
+  function getOwnedWorkers(address who) external view returns (uint256[] memory);
 }
