@@ -55,7 +55,7 @@ importers:
       dayjs: ^1.11.9
       ts-node: ^10.9.1
       typescript: ^5.0.4
-      viem: ^1.4.2
+      viem: ^1.5.4
     dependencies:
       bs58: 5.0.0
       clickhouse: 2.6.0
