@@ -24,27 +24,18 @@ contract RewardsDistributionDistributeTest is RewardsDistributionTest {
     gasUsageForNWorkers(1000);
   }
 
-  function xtestDistributeCannotDistributeRewardsIfNotAllowed() public {
-    (uint256[] memory recipients, uint256[] memory workerAmounts, uint256[] memory stakerAmounts) = prepareRewards(1);
-    vm.expectRevert(
-      "AccessControl: account 0x000000000000000000000000000000000000007b is missing role 0x9df62d436bfc9f3be4953ab398f3aa862316b013d490e2138c80b4b2eadeabd7"
-    );
-    hoax(address(123));
-    rewardsDistribution.distributeHelper(1, recipients, workerAmounts, stakerAmounts);
-  }
-
-  function testDistributeArgLengthsShouldMatch() public {
-    (uint256[] memory recipients,,) = prepareRewards(1);
-    (, uint256[] memory workerAmounts, uint256[] memory stakerAmounts) = prepareRewards(2);
-    vm.expectRevert("Recipients and worker amounts length mismatch");
-    rewardsDistribution.distributeHelper(1, recipients, workerAmounts, stakerAmounts);
-  }
-
-  function xtestDistributeEmitsEvent() public {
+  function testDistributeEmitsEvent() public {
     (uint256[] memory recipients, uint256[] memory workerAmounts, uint256[] memory stakerAmounts) = prepareRewards(2);
     vm.expectEmit(address(rewardsDistribution));
-    emit NewReward(address(this), epochRewardAmount);
+    emit Distributed(6, 7);
+    rewardsDistribution.distributeHelper(6, recipients, workerAmounts, stakerAmounts);
+  }
+
+  function test_RevertsIf_SomeBlocksSkipped() public {
+    (uint256[] memory recipients, uint256[] memory workerAmounts, uint256[] memory stakerAmounts) = prepareRewards(2);
     rewardsDistribution.distributeHelper(1, recipients, workerAmounts, stakerAmounts);
+    vm.expectRevert("Not all blocks covered");
+    rewardsDistribution.distributeHelper(4, recipients, workerAmounts, stakerAmounts);
   }
 
   function testIncreasesClaimableAmount() public {

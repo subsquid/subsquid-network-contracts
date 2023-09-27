@@ -18,6 +18,7 @@ contract DistributedRewardsDistribution is AccessControl, IRewardsDistribution {
   mapping(uint256 workerId => uint256) _claimable;
   mapping(uint256 block => bytes32) public commitments;
   mapping(uint256 block => uint8) public approves;
+  mapping(bytes32 => mapping(address => bool)) public alreadyApproved;
   uint256 public lastBlockRewarded;
   IStaking public immutable staking;
   IWorkerRegistration public immutable workers;
@@ -81,10 +82,16 @@ contract DistributedRewardsDistribution is AccessControl, IRewardsDistribution {
     uint256[] calldata workerRewards,
     uint256[] calldata _stakerRewards
   ) external {
+    require(recipients.length == workerRewards.length, "Recipients and worker amounts length mismatch");
+    require(recipients.length == _stakerRewards.length, "Recipients and staker amounts length mismatch");
+
     require(currentDistributor() == msg.sender, "Not a distributor");
     require(toBlock < block.number, "Future block");
-    commitments[toBlock] = keccak256(msg.data[4:]);
+    bytes32 commitment = keccak256(msg.data[4:]);
+    require(!alreadyApproved[commitment][msg.sender], "Already approved");
+    commitments[toBlock] = commitment;
     approves[toBlock] = 1;
+    alreadyApproved[commitment][msg.sender] = true;
 
     emit NewCommitment(msg.sender, fromBlock, toBlock, recipients, workerRewards, _stakerRewards);
   }
@@ -96,10 +103,13 @@ contract DistributedRewardsDistribution is AccessControl, IRewardsDistribution {
     uint256[] calldata workerRewards,
     uint256[] calldata _stakerRewards
   ) external onlyRole(REWARDS_DISTRIBUTOR_ROLE) {
-    // disallow to approve twice
     require(commitments[toBlock] != 0, "Commitment does not exist");
-    require(commitments[toBlock] == keccak256(msg.data[4:]), "Commitment mismatch");
+    bytes32 commitment = keccak256(msg.data[4:]);
+    require(commitments[toBlock] == commitment, "Commitment mismatch");
+    require(!alreadyApproved[commitment][msg.sender], "Already approved");
     approves[toBlock]++;
+    alreadyApproved[commitment][msg.sender] = true;
+
     if (approves[toBlock] == APPROVES_REQUIRED) {
       distribute(fromBlock, toBlock, recipients, workerRewards, _stakerRewards);
     }
@@ -114,8 +124,6 @@ contract DistributedRewardsDistribution is AccessControl, IRewardsDistribution {
     uint256[] calldata workerRewards,
     uint256[] calldata _stakerRewards
   ) internal {
-    require(recipients.length == workerRewards.length, "Recipients and worker amounts length mismatch");
-    require(recipients.length == _stakerRewards.length, "Recipients and staker amounts length mismatch");
     require(lastBlockRewarded == 0 || fromBlock == lastBlockRewarded + 1, "Not all blocks covered");
     for (uint256 i = 0; i < recipients.length; i++) {
       _claimable[recipients[i]] += workerRewards[i];

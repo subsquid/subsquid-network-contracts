@@ -32,7 +32,7 @@ contract RewardsDistributionTest is Test {
   WorkerRegistration workerRegistration;
   IERC20 token;
 
-  event NewReward(address indexed sender, uint256 amount);
+  event Distributed(uint256 fromBlock, uint256 toBlock);
   event Claimed(address indexed who, uint256 amount);
 
   function setUp() public {
