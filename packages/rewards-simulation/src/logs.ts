@@ -1,6 +1,9 @@
 import {ClickHouse} from 'clickhouse';
 import dayjs, {Dayjs} from "dayjs";
 import fs from 'fs';
+import utc from "dayjs/plugin/utc";
+
+dayjs.extend(utc)
 
 const clickhouse = new ClickHouse({
   url: 'https://clickhouse.subsquid.io/',
@@ -12,7 +15,7 @@ const clickhouse = new ClickHouse({
 });
 
 function formatDate(date: Date) {
-  return dayjs(date).format('YYYY-MM-DD HH:mm:ss')
+  return dayjs(date).utc().format('YYYY-MM-DD HH:mm:ss')
 }
 
 export interface Work {
@@ -64,6 +67,12 @@ function secondDiffs(dates: Dayjs[]) {
 function totalOfflineSeconds(diffs: number[]) {
   const THRESHOLD = 65
   return diffs.filter(diff => diff > THRESHOLD).reduce((acc, diff) => acc + diff, 0)
+}
+
+export async function hasNewerPings(from: Date) {
+  const query = `select count() as count from testnet.worker_pings where timestamp >= '${formatDate(from)}'`;
+  const [{count}] = await clickhouse.query(query).toPromise() as [{count: number}]
+  return count > 0
 }
 
 async function clickhouseGetPings(from: Date, to: Date) {

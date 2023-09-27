@@ -16,6 +16,6 @@ export function formatSqd(value: bigint) {
   return formatEther(value).replace(/(\.\d{2})\d+/, '$1')
 }
 
-export function fromBase58(value: string) {
+export function fromBase58(value: string): `0x${string}` {
   return `0x${Buffer.from(decode(value)).toString('hex')}`
 }

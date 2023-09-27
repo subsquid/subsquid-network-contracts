@@ -1,21 +1,19 @@
 import workerRegistrationAbi from '../../contracts/artifacts/WorkerRegistration.sol/WorkerRegistration'
 import tSQDAbi from '../../contracts/artifacts/tSQD.sol/tSQD'
 import rewardCalculationAbi from '../../contracts/artifacts/RewardCalculation.sol/RewardCalculation'
-import rewardsDistributionAbi from '../../contracts/artifacts/RewardsDistribution.sol/RewardsDistribution'
+import rewardsDistributionAbi from '../../contracts/artifacts/DistributedRewardDistribution.sol/DistributedRewardsDistribution'
 import {Address, getContract, GetContractReturnType} from "viem";
 import {publicClient, walletClient} from "./client";
 import tsqdDeployment from "../../contracts/deployments/arbitrum-goerli/tSQD.json";
-import workerRegistrationDeployment from "../../contracts/deployments/arbitrum-goerli/WorkerRegistrationFacade.json";
-import rewardCalculationDeployment from "../../contracts/deployments/arbitrum-goerli/RewardCalculation.json";
-import rewardsDistributionDeployment from "../../contracts/deployments/arbitrum-goerli/RewardsDistribution.json";
+import deployments from "../../contracts/deployments/421613.json";
 
 type ContractName = keyof typeof abis
 
 export const addresses = {
-  workerRegistration: workerRegistrationDeployment.address,
+  workerRegistration: deployments.WorkerRegistration,
   tSQD: tsqdDeployment.address,
-  rewardCalculation: rewardCalculationDeployment.address,
-  rewardsDistribution: rewardsDistributionDeployment.address,
+  rewardCalculation: deployments.RewardCalculation,
+  rewardsDistribution: deployments.DistributedRewardsDistribution,
 } as { [key in ContractName]: Address }
 
 export const abis = {

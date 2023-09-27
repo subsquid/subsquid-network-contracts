@@ -53,12 +53,14 @@ contract DistributedRewardsDistribution is AccessControl, IRewardsDistribution {
 
   function addDistributor(address distributor) external onlyRole(DEFAULT_ADMIN_ROLE) {
     distributors.add(distributor);
+    _grantRole(REWARDS_DISTRIBUTOR_ROLE, distributor);
 
     emit DistributorAdded(distributor);
   }
 
   function removeDistributor(address distributor) external onlyRole(DEFAULT_ADMIN_ROLE) {
     distributors.remove(distributor);
+    _revokeRole(REWARDS_DISTRIBUTOR_ROLE, distributor);
 
     emit DistributorRemoved(distributor);
   }
@@ -94,6 +96,7 @@ contract DistributedRewardsDistribution is AccessControl, IRewardsDistribution {
     uint256[] calldata workerRewards,
     uint256[] calldata _stakerRewards
   ) external onlyRole(REWARDS_DISTRIBUTOR_ROLE) {
+    // disallow to approve twice
     require(commitments[toBlock] != 0, "Commitment does not exist");
     require(commitments[toBlock] == keccak256(msg.data[4:]), "Commitment mismatch");
     approves[toBlock]++;

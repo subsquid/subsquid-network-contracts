@@ -5,7 +5,7 @@
     "bs58": "^5.0.0",
     "clickhouse": "^2.6.0",
     "dayjs": "^1.11.9",
-    "viem": "^1.4.2"
+    "viem": "^1.5.4"
   },
   "scripts": {
     "reward-simulation": "ts-node src/generate-logs.ts && ts-node src/index.ts",
