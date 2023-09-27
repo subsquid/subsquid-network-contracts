@@ -2,7 +2,7 @@ import workerRegistrationAbi from '../../contracts/artifacts/WorkerRegistration.
 import tSQDAbi from '../../contracts/artifacts/tSQD.sol/tSQD'
 import rewardCalculationAbi from '../../contracts/artifacts/RewardCalculation.sol/RewardCalculation'
 import rewardsDistributionAbi from '../../contracts/artifacts/DistributedRewardDistribution.sol/DistributedRewardsDistribution'
-import {Address, getContract, GetContractReturnType} from "viem";
+import {Address, getContract, GetContractReturnType, WalletClient} from "viem";
 import {publicClient, walletClient} from "./client";
 import tsqdDeployment from "../../contracts/deployments/arbitrum-goerli/tSQD.json";
 import deployments from "../../contracts/deployments/421613.json";
@@ -23,12 +23,12 @@ export const abis = {
   rewardsDistribution: rewardsDistributionAbi,
 } as const
 
-function contract<T extends ContractName>(name: T): GetContractReturnType<typeof abis[T]['abi'], typeof publicClient, typeof walletClient> {
+export function contract<T extends ContractName>(name: T, _walletClient: WalletClient = walletClient): GetContractReturnType<typeof abis[T]['abi'], typeof publicClient, typeof walletClient> {
   return getContract({
     address: addresses[name],
     abi: abis[name].abi as any,
     publicClient,
-    walletClient,
+    walletClient: _walletClient,
   }) as any
 }
 
