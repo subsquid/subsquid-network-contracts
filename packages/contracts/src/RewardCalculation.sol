@@ -34,7 +34,7 @@ contract RewardCalculation {
     return apy(targetGb, workerRegistration.getActiveWorkerCount() * networkController.storagePerWorkerInGb());
   }
 
-  function epochReward(uint256 targetGb) public view returns (uint256) {
-    return currentApy(targetGb) * workerRegistration.effectiveTVL() * networkController.epochLength() / year / 10000;
+  function epochReward(uint256 targetGb, uint256 epochLengthInSeconds) public view returns (uint256) {
+    return currentApy(targetGb) * workerRegistration.effectiveTVL() * epochLengthInSeconds / year / 10000;
   }
 }

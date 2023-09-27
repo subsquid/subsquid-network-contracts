@@ -61,4 +61,24 @@ contract NetworkControllerTest is Test {
     );
     controller.setBondAmount(10);
   }
+
+  function test_RevertsIf_SettingStorageAmountNotByAdmin() public {
+    hoax(address(1));
+    vm.expectRevert(
+      "AccessControl: account 0x0000000000000000000000000000000000000001 is missing role 0x0000000000000000000000000000000000000000000000000000000000000000"
+    );
+    controller.setStoragePerWorkerInGb(10);
+  }
+
+  function test_changesBondAmount() public {
+    assertEq(controller.bondAmount(), 100);
+    controller.setBondAmount(10);
+    assertEq(controller.bondAmount(), 10);
+  }
+
+  function test_changesStorageAmount() public {
+    assertEq(controller.storagePerWorkerInGb(), 1000);
+    controller.setStoragePerWorkerInGb(10);
+    assertEq(controller.storagePerWorkerInGb(), 10);
+  }
 }
