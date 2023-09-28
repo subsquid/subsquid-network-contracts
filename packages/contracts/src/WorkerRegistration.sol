@@ -42,6 +42,7 @@ contract WorkerRegistration is AccessControl, IWorkerRegistration {
   );
   event WorkerDeregistered(uint256 indexed workerId, address indexed account, uint256 deregistedAt);
   event WorkerWithdrawn(uint256 indexed workerId, address indexed account);
+  event ExcessiveBondReturned(uint256 indexed workerId, uint256 amount);
 
   constructor(IERC20 _tSQD, INetworkController _networkController, IStaking _staking) {
     _setupRole(DEFAULT_ADMIN_ROLE, msg.sender);
@@ -113,6 +114,8 @@ contract WorkerRegistration is AccessControl, IWorkerRegistration {
     workers[workerId].bond = _bondAmount;
 
     tSQD.transfer(msg.sender, excessiveBond);
+
+    emit ExcessiveBondReturned(workerId, excessiveBond);
   }
 
   function nextEpoch() public view returns (uint128) {

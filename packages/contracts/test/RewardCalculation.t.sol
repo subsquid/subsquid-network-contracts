@@ -44,9 +44,17 @@ contract RewardCalculationTest is Test {
     assertEq(rewardCalculation.apy(1000, 30000), 0);
   }
 
-  function mockWorkersCount(uint n) internal {
-    vm.mockCall(address(rewardCalculation.workerRegistration()), abi.encodeWithSelector(WorkerRegistration.getActiveWorkerCount.selector), abi.encode(n));
-    vm.mockCall(address(rewardCalculation.workerRegistration()), abi.encodeWithSelector(WorkerRegistration.effectiveTVL.selector), abi.encode(n * bondAmount));
+  function mockWorkersCount(uint256 n) internal {
+    vm.mockCall(
+      address(rewardCalculation.workerRegistration()),
+      abi.encodeWithSelector(WorkerRegistration.getActiveWorkerCount.selector),
+      abi.encode(n)
+    );
+    vm.mockCall(
+      address(rewardCalculation.workerRegistration()),
+      abi.encodeWithSelector(WorkerRegistration.effectiveTVL.selector),
+      abi.encode(n * bondAmount)
+    );
   }
 
   function test_currentApy() public {

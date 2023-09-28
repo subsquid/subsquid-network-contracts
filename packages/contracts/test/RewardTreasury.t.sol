@@ -44,9 +44,9 @@ contract RewardTreasuryTest is Test {
   }
 
   function test_ClaimTransfersAmountReturnedByDistributorToSender() public {
-    uint addressBefore = token.balanceOf(address(this));
+    uint256 addressBefore = token.balanceOf(address(this));
     treasury.claim(distributor);
-    uint addressAfter = token.balanceOf(address(this));
+    uint256 addressAfter = token.balanceOf(address(this));
     assertEq(addressAfter, addressBefore + 69);
   }
 
@@ -88,7 +88,9 @@ contract RewardTreasuryTest is Test {
   }
 
   function test_RevertsIf_SetWhitelistedDistributorNotCalledByAdmin() public {
-    vm.expectRevert("AccessControl: account 0x0000000000000000000000000000000000000002 is missing role 0x0000000000000000000000000000000000000000000000000000000000000000");
+    vm.expectRevert(
+      "AccessControl: account 0x0000000000000000000000000000000000000002 is missing role 0x0000000000000000000000000000000000000000000000000000000000000000"
+    );
     hoax(address(2));
     treasury.setWhitelistedDistributor(distributor, true);
   }

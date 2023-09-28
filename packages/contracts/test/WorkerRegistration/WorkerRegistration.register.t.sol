@@ -4,26 +4,26 @@ pragma solidity 0.8.18;
 import "./WorkerRegistration.t.sol";
 
 contract WorkerRegistrationRegisterTest is WorkerRegistrationTest {
-  function testRegisterWorkerTransfersToken() public {
+  function test_RegisterWorkerTransfersToken() public {
     uint256 registrationBalanceBefore = token.balanceOf(address(workerRegistration));
     workerRegistration.register(workerId);
     uint256 registrationBalanceAfter = token.balanceOf(address(workerRegistration));
     assertEq(registrationBalanceAfter, registrationBalanceBefore + workerRegistration.bondAmount());
   }
 
-  function testRegisterWorkerEmitsEvent() public {
+  function test_RegisterWorkerEmitsEvent() public {
     vm.expectEmit(address(workerRegistration));
     emit WorkerRegistered(1, workerId, creator, nextEpoch());
     workerRegistration.register(workerId);
   }
 
-  function testRevertsIfSameWorkedRegisteredTwice() public {
+  function test_RevertsIfSameWorkedRegisteredTwice() public {
     workerRegistration.register(workerId);
     vm.expectRevert("Worker already registered");
     workerRegistration.register(workerId);
   }
 
-  function testRevertsIfPeerIdIsOver64Bytes() public {
+  function test_RevertsIfPeerIdIsOver64Bytes() public {
     bytes memory idWith64Bytes = abi.encodePacked(uint256(1), uint256(2));
     workerRegistration.register(idWith64Bytes);
     bytes memory idWith65Bytes = abi.encodePacked(uint256(1), uint256(2), true);
@@ -31,7 +31,7 @@ contract WorkerRegistrationRegisterTest is WorkerRegistrationTest {
     workerRegistration.register(idWith65Bytes);
   }
 
-  function testIncrementsIdForNextWorker() public {
+  function test_IncrementsIdForNextWorker() public {
     token.approve(address(workerRegistration), workerRegistration.bondAmount() * 2);
 
     workerRegistration.register(workerId);
@@ -39,7 +39,7 @@ contract WorkerRegistrationRegisterTest is WorkerRegistrationTest {
     assertEq(workerRegistration.workerIds(workerId2), 2);
   }
 
-  function testCorrectlyCreatesWorkerStruct() public {
+  function test_CorrectlyCreatesWorkerStruct() public {
     workerRegistration.register(workerId);
 
     WorkerRegistration.Worker memory workerStruct = workerRegistration.getWorkerByIndex(0);
@@ -48,5 +48,14 @@ contract WorkerRegistrationRegisterTest is WorkerRegistrationTest {
     assertEq(workerStruct.bond, workerRegistration.bondAmount());
     assertEq(workerStruct.registeredAt, nextEpoch());
     assertEq(workerStruct.deregisteredAt, 0);
+  }
+
+  function test_RegisteredWorkerAppearsInActiveWorkersAfterNextEpochStart() public {
+    workerRegistration.register(workerId);
+    assertEq(workerRegistration.getActiveWorkerCount(), 0);
+    jumpEpoch();
+    assertEq(workerRegistration.getActiveWorkerCount(), 1);
+    assertEq(workerRegistration.getActiveWorkerIds()[0], 1);
+    assertEq(workerRegistration.getActiveWorkers()[0].peerId, workerId);
   }
 }

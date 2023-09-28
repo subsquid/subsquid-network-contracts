@@ -60,7 +60,7 @@ contract WorkerRegistrationDeregisterTest is WorkerRegistrationTest {
     assertEq(workerRegistration.getWorkerByIndex(0).peerId, workerId2);
   }
 
-  function testExcludesInactiveWorkerStakeFromTVL() public {
+  function testExcludesInactiveWorkerStakeFromTVLAndActiveStake() public {
     token.approve(address(workerRegistration), workerRegistration.bondAmount() * 2 + 300);
 
     workerRegistration.register(workerId);
@@ -74,7 +74,9 @@ contract WorkerRegistrationDeregisterTest is WorkerRegistrationTest {
 
     workerRegistration.deregister(workerId);
     assertEq(workerRegistration.effectiveTVL(), workerRegistration.bondAmount() + 200);
+    assertEq(workerRegistration.activeStake(), 200);
     workerRegistration.deregister(workerId2);
+    assertEq(workerRegistration.activeStake(), 0);
     assertEq(workerRegistration.effectiveTVL(), 0);
   }
 

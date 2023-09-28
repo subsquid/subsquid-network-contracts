@@ -12,7 +12,7 @@ contract WorkerRegistrationTest is Test {
 
   uint128 constant EPOCH_LENGTH = 2;
   WorkerRegistration public workerRegistration;
-  INetworkController public networkController;
+  NetworkController public networkController;
   Staking public staking;
   IERC20 public token;
 

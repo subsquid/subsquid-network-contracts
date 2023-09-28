@@ -25,8 +25,6 @@ contract RewardsDistributionCommitApproveTest is RewardsDistributionTest {
     rewardsDistribution.commit(1, 2, recipients, correctWorkerAmounts, stakerAmounts);
   }
 
-
-
   function test_RevertsIf_CommittingForFutureBlock() public {
     (uint256[] memory recipients, uint256[] memory workerAmounts, uint256[] memory stakerAmounts) = prepareRewards(1);
     vm.roll(10);
@@ -85,7 +83,9 @@ contract RewardsDistributionCommitApproveTest is RewardsDistributionTest {
     vm.roll(10);
     rewardsDistribution.commit(1, 4, recipients, workerAmounts, stakerAmounts);
     startHoax(address(1));
-    vm.expectRevert("AccessControl: account 0x0000000000000000000000000000000000000001 is missing role 0x9df62d436bfc9f3be4953ab398f3aa862316b013d490e2138c80b4b2eadeabd7");
+    vm.expectRevert(
+      "AccessControl: account 0x0000000000000000000000000000000000000001 is missing role 0x9df62d436bfc9f3be4953ab398f3aa862316b013d490e2138c80b4b2eadeabd7"
+    );
     rewardsDistribution.approve(1, 4, recipients, workerAmounts, stakerAmounts);
   }
 
