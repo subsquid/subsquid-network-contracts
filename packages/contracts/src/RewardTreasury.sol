@@ -10,7 +10,7 @@ contract RewardTreasury is AccessControl {
   mapping(IRewardsDistribution => bool) public isWhitelistedDistributor;
   IERC20 public immutable rewardToken;
 
-  event Claimed(address indexed by, uint256 amount);
+  event Claimed(address indexed by, address indexed receiver, uint256 amount);
   event WhitelistedDistributorSet(IRewardsDistribution indexed distributor, bool isWhitelisted);
 
   constructor(IERC20 _rewardToken) {
@@ -19,11 +19,11 @@ contract RewardTreasury is AccessControl {
   }
 
   function claim(IRewardsDistribution rewardDistribution) external {
-    require(isWhitelistedDistributor[rewardDistribution], "Distributor not whitelisted");
-    uint256 reward = rewardDistribution.claim(msg.sender);
-    rewardToken.transfer(msg.sender, reward);
+    _claim(rewardDistribution, msg.sender);
+  }
 
-    emit Claimed(msg.sender, reward);
+  function claimFor(IRewardsDistribution rewardDistribution, address receiver) external {
+    _claim(rewardDistribution, receiver);
   }
 
   function claimable(IRewardsDistribution rewardDistribution, address worker) external view returns (uint256) {
@@ -37,5 +37,13 @@ contract RewardTreasury is AccessControl {
     isWhitelistedDistributor[distributor] = isWhitelisted;
 
     emit WhitelistedDistributorSet(distributor, isWhitelisted);
+  }
+
+  function _claim(IRewardsDistribution rewardDistribution, address receiver) internal {
+    require(isWhitelistedDistributor[rewardDistribution], "Distributor not whitelisted");
+    uint256 reward = rewardDistribution.claim(msg.sender);
+    rewardToken.transfer(receiver, reward);
+
+    emit Claimed(msg.sender, receiver, reward);
   }
 }
