@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 
-const { ethers } = require('ethers');
+const {ethers} = require('ethers');
 const bs58 = require('bs58');
 const fs = require("fs");
 
 const RPC_PROVIDER_URL = process.env.RPC_PROVIDER_URL || 'http://127.0.0.1:8545'
 console.log(`Using RPC: ${RPC_PROVIDER_URL}`)
 
-const NETWORK_NAME=process.env.NETWORK_NAME || 'localhost'
+const NETWORK_NAME = process.env.NETWORK_NAME || 'localhost'
 
 const SUPPORTED_NETWORKS = ['localhost', 'arbitrum-goerli']
 
@@ -33,21 +33,22 @@ if (process.argv.length < 4) {
 
 const base58PeerID = process.argv[2];
 const privateKey = process.argv[3];
+const mode = process.argv[4]
+
+// Connect to the network using the provided private key
+const provider = new ethers.providers.JsonRpcProvider(RPC_PROVIDER_URL);
+const wallet = new ethers.Wallet(privateKey, provider);
+
+// Decode the base58-encoded PeerID and zero-pad if necessary
+const decodedPeerID = bs58.decode(base58PeerID);
+
+// Connect to the WorkerRegistration contract
+const workerRegistrationContract = new ethers.Contract(workerRegistrationAddress, workerRegistrationABI, wallet);
+const tSQDTokenContract = new ethers.Contract(tSQDTokenAddress, tSQDTokenABI, wallet);
 
 const registerWorker = async () => {
-  // Connect to the network using the provided private key
-  const provider = new ethers.providers.JsonRpcProvider(RPC_PROVIDER_URL);
-  const wallet = new ethers.Wallet(privateKey, provider);
-
-  // Decode the base58-encoded PeerID and zero-pad if necessary
-  const decodedPeerID = bs58.decode(base58PeerID);
-
-  // Connect to the WorkerRegistration contract
-  const workerRegistrationContract = new ethers.Contract(workerRegistrationAddress, workerRegistrationABI, wallet);
-  const tSQDTokenContract = new ethers.Contract(tSQDTokenAddress, tSQDTokenABI, wallet);
-
   try {
-    const balance =  await tSQDTokenContract.balanceOf(wallet.address);
+    const balance = await tSQDTokenContract.balanceOf(wallet.address);
     console.log("tSQD balance:", ethers.utils.formatUnits(balance, 18));
     // approve
     console.log("Approving SQD spend");
@@ -66,4 +67,43 @@ const registerWorker = async () => {
   }
 };
 
-registerWorker();
+const deregisterWorker = async () => {
+  try {
+    console.log("Deregistering");
+    const tx = await workerRegistrationContract.deregister(decodedPeerID);
+    await tx.wait();
+
+    console.log(`Worker with PeerID ${base58PeerID} deregistered successfully.`);
+    console.log('Wait until next epoch and call');
+    console.log('docker run subsquid/worker-registration:mirovia <PEER_ID> <WALLET_PRIVATE_KEY> withdraw');
+  } catch (err) {
+    console.error('Error registering worker:', err.message);
+  }
+}
+
+const withdrawWorker = async () => {
+  try {
+    console.log("Withdrawing");
+    const tx = await workerRegistrationContract.withdraw(decodedPeerID);
+    await tx.wait();
+
+    console.log(`Worker with PeerID ${base58PeerID} withdrawn successfully.`);
+  } catch (err) {
+    console.error('Error registering worker:', err.message);
+  }
+};
+
+switch (mode) {
+  case 'deregister':
+    deregisterWorker()
+    break
+  case 'withdraw':
+    withdrawWorker()
+    break
+  case undefined:
+  case 'register':
+    registerWorker();
+    break
+  default:
+    console.log('Unknown mode:', mode)
+}
