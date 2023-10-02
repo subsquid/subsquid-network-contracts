@@ -1,8 +1,8 @@
 {
-  "NetworkController": "0xeE3DE91c090fE060a40d02fc27736a5Bfde42AF5",
-  "Staking": "0x656784fA15EA55c4a5AC7e1405bce53Ce02fB427",
-  "WorkerRegistration": "0xF09F460F62E7822c263c0CF061FE17cA4185F3EA",
-  "RewardTreasury": "0x783b3D801e8b8AA78d27b97923c45E40098F6aA8",
-  "DistributedRewardsDistribution": "0x9A1bE502a03784F5E3aC5AB85670E9e3C229d40f",
-  "RewardCalculation": "0xc06E721820a2a8dBD699D691F4d8bA03294c34a9"
+  "NetworkController": "0x8494173342c2580B01aD7111Cb555f489fFc265d",
+  "Staking": "0x537cE40D223c74839A54e04B4Cce126adF5c4ae3",
+  "WorkerRegistration": "0x167FBF61a846612358017CBdC033A4e483dA4c05",
+  "RewardTreasury": "0x79B1E93a472e8c89aB138E30E27D67B270eE9Bce",
+  "DistributedRewardsDistribution": "0x3797C47B070E5519b5919FB116fdefA685d7aC4F",
+  "RewardCalculation": "0xdFea193804dcf25F47165FF70A3Aec995Fd3700A"
 }

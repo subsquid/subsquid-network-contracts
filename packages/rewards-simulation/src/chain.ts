@@ -1,5 +1,5 @@
 import {addresses, contract, contracts} from "./config";
-import {l1Client, publicClient, walletClient} from "./client";
+import {l1Client, publicClient} from "./client";
 import {isAddressEqual, parseAbiItem, WalletClient} from "viem";
 import {logger} from "./logger";
 import {fromBase58} from "./utils";
@@ -44,8 +44,12 @@ export async function getBlockTimestamp(blockNumber: number) {
   })).timestamp) * 1000)
 }
 
-export async function canCommit() {
+export async function canCommit(walletClient: WalletClient) {
   return isAddressEqual(await contracts.rewardsDistribution.read.currentDistributor(), walletClient.account.address)
+}
+
+export async function alreadyCommitted(block: bigint) {
+  return await contracts.rewardsDistribution.read.commitments([block]) !== '0x0000000000000000000000000000000000000000000000000000000000000000'
 }
 
 export async function commitRewards(fromBlock: number, toBlock: number, rewards: {[key: string]: bigint}, walletClient: WalletClient) {
@@ -53,28 +57,24 @@ export async function commitRewards(fromBlock: number, toBlock: number, rewards:
     logger.log('No rewards to distribute')
     return
   }
-  const workerPeerIds = Object.keys(rewards)
+  const workerPeerIds = Object.keys(rewards ?? {})
   const workerIds = await Promise.all(workerPeerIds.map(peerId => getWorkerId(peerId)))
   const rewardAmounts = workerPeerIds.map(id => rewards[id])
   const stakedAmounts = workerPeerIds.map(id => 0n)
-  const tx = await contract('rewardsDistribution', walletClient).write.commit([BigInt(fromBlock), BigInt(toBlock), workerIds, rewardAmounts, stakedAmounts], {})
+  const tx = await contract('rewardsDistribution', walletClient).write.commit([BigInt(fromBlock), BigInt(toBlock), workerIds, rewardAmounts, stakedAmounts], {}).catch(logger.log)
   logger.log('Commit rewards', tx)
 }
 
 export async function approveRewards(fromBlock: number, toBlock: number, rewards: {[key: string]: bigint}, walletClient: WalletClient) {
-  if (!rewards) {
-    logger.log('No rewards to distribute')
-    return
-  }
-  const workerPeerIds = Object.keys(rewards)
+  const workerPeerIds = Object.keys(rewards ?? {})
   const workerIds = await Promise.all(workerPeerIds.map(peerId => getWorkerId(peerId)))
   const rewardAmounts = workerPeerIds.map(id => rewards[id])
   const stakedAmounts = workerPeerIds.map(id => 0n)
-  const tx = await contract('rewardsDistribution', walletClient).write.approve([BigInt(fromBlock), BigInt(toBlock), workerIds, rewardAmounts, stakedAmounts], {})
-  logger.log('Commit rewards', tx)
+  const tx = await contract('rewardsDistribution', walletClient).write.approve([BigInt(fromBlock), BigInt(toBlock), workerIds, rewardAmounts, stakedAmounts], {}).catch(logger.log)
+  logger.log('Approve rewards', tx)
 }
 
-export async function watchCommits(onLogs?: (logs: any) => void) {
+export async function watchCommits(onLogs: (logs: any) => void) {
   const t = (await publicClient.getLogs({
     address: addresses.rewardsDistribution,// addresses.workerRegistration,
     event: parseAbiItem(`event NewCommitment(address indexed who,uint256 fromBlock,uint256 toBlock,uint256[] recipients,uint256[] workerRewards,uint256[] stakerRewards)`),

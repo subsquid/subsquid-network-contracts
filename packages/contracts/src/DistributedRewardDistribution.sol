@@ -117,6 +117,26 @@ contract DistributedRewardsDistribution is AccessControl, IRewardsDistribution {
     emit Approved(msg.sender, fromBlock, toBlock, recipients, workerRewards, _stakerRewards);
   }
 
+  function canApprove(
+    uint256 fromBlock,
+    uint256 toBlock,
+    uint256[] calldata recipients,
+    uint256[] calldata workerRewards,
+    uint256[] calldata _stakerRewards
+  ) external view returns (bool) {
+    if (commitments[toBlock] == 0) {
+      return false;
+    }
+    bytes32 commitment = keccak256(msg.data[4:]);
+    if (commitments[toBlock] != commitment) {
+      return false;
+    }
+    if (alreadyApproved[commitment][msg.sender]) {
+      return false;
+    }
+    return true;
+  }
+
   function distribute(
     uint256 fromBlock,
     uint256 toBlock,

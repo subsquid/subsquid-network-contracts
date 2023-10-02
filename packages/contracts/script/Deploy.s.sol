@@ -28,8 +28,11 @@ contract Deploy is Script {
     staking.grantRole(staking.REWARDS_DISTRIBUTOR_ROLE(), address(distributor));
     treasury.setWhitelistedDistributor(distributor, true);
     distributor.grantRole(distributor.REWARDS_TREASURY_ROLE(), address(treasury));
-    distributor.grantRole(distributor.REWARDS_DISTRIBUTOR_ROLE(), address(distributor));
-
+    distributor.addDistributor(0xedFa74C6bC620CC992d4D2C9A27803748B8f5a64);
+    distributor.addDistributor(0xA017446a6f5C59Bf8F62Cd448BbED5052965c3ea);
+    distributor.addDistributor(0x70962aC6a813568B0d3DD9Db03f4aDb93A217a2a);
+    distributor.addDistributor(0x1F1CA43b81956cF364c76D347e32a0e1E45B0385);
+    distributor.addDistributor(0x88f8fC3bF9da86Eb2c09Ed0E2AC79b67ac468e60);
     vm.stopBroadcast();
   }
 }

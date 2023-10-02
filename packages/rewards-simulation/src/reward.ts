@@ -45,8 +45,8 @@ async function dTraffic(workers: Workers, stakes: Stakes, bond: bigint) {
 async function dLiveness(networkStats: NetworkStats) {
   const dL: Record<string, number> = {}
   for (const [worker, {livenessFactor}] of Object.entries(networkStats)) {
-    if (livenessFactor < 0.7) dL[worker] = 0
-    else if (livenessFactor < 0.9) dL[worker] = 9 * livenessFactor - 6.3
+    if (livenessFactor < 0.8) dL[worker] = 0
+    else if (livenessFactor < 0.9) dL[worker] = 9 * livenessFactor - 7.2
     else if (livenessFactor < 0.95) dL[worker] = 2 * livenessFactor - 0.9
     else dL[worker] = 1
   }
@@ -68,6 +68,7 @@ function printPercentageUnlocked(totalReward: bigint, totalUnlocked: bigint) {
 }
 
 export async function epochStats(from: Date, to: Date) {
+  logger.log(from, '-', to)
   const workers = await clickhouseBytesSent(from, to)
   const _bond = await bond()
   const stakes = getStakes(workers)
@@ -76,7 +77,6 @@ export async function epochStats(from: Date, to: Date) {
   const lf = await livenessFactor(from, to)
   const dL = await dLiveness(lf)
   const rm = await rMax()
-  logger.log(from, '-', to)
   const stats: any = {}
   const rewards: { [key in string]: bigint } = {}
   for (const workersKey in dL) {

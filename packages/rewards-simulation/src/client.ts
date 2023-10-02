@@ -17,8 +17,3 @@ export const walletClient = createWalletClient({
   transport: http(),
   account: privateKeyToAccount(process.env.PRIVATE_KEY as any),
 })
-
-// walletClient.request({
-//   method: 'evm_setIntervalMining',
-//   params: [3000]
-// })
