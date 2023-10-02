@@ -8,6 +8,13 @@ import "./interfaces/IWorkerRegistration.sol";
 import "./interfaces/IRewardsDistribution.sol";
 import "./interfaces/IStaking.sol";
 
+/**
+ * @title Distributed Rewards Distribution Contract
+ * @dev Contract has a list of whitelisted distributors
+ * Each distributor has a timeframe (256 blocks) to commit a distribution
+ * Other distributors can approve it
+ * After 3 approvals, the distribution is executed
+ */
 contract DistributedRewardsDistribution is AccessControl, IRewardsDistribution {
   using EnumerableSet for EnumerableSet.AddressSet;
 
@@ -41,7 +48,6 @@ contract DistributedRewardsDistribution is AccessControl, IRewardsDistribution {
     uint256[] stakerRewards
   );
   event Distributed(uint256 fromBlock, uint256 toBlock);
-  event Claimed(address indexed by, uint256 amount);
 
   event DistributorAdded(address indexed distributor);
   event DistributorRemoved(address indexed distributor);
@@ -52,6 +58,10 @@ contract DistributedRewardsDistribution is AccessControl, IRewardsDistribution {
     workers = _workers;
   }
 
+  /**
+   * @dev Add whitelisted distributor
+   * Only admin can call this function
+   */
   function addDistributor(address distributor) external onlyRole(DEFAULT_ADMIN_ROLE) {
     distributors.add(distributor);
     _grantRole(REWARDS_DISTRIBUTOR_ROLE, distributor);
@@ -59,6 +69,10 @@ contract DistributedRewardsDistribution is AccessControl, IRewardsDistribution {
     emit DistributorAdded(distributor);
   }
 
+  /**
+   * @dev Remove whitelisted distributor
+   * Only admin can call this function
+   */
   function removeDistributor(address distributor) external onlyRole(DEFAULT_ADMIN_ROLE) {
     distributors.remove(distributor);
     _revokeRole(REWARDS_DISTRIBUTOR_ROLE, distributor);
@@ -66,15 +80,30 @@ contract DistributedRewardsDistribution is AccessControl, IRewardsDistribution {
     emit DistributorRemoved(distributor);
   }
 
+  /**
+   * @notice Distributor has 256 blocks to commit a distribution
+   */
   function distributorIndex() public view returns (uint256) {
     uint256 slotStart = block.number / 256 * 256;
     return uint256(blockhash(slotStart)) % distributors.length();
   }
 
+  /// @return the distributor which can currently commit rewards
   function currentDistributor() public view returns (address) {
     return distributors.at(distributorIndex());
   }
 
+  /**
+   * @dev Commit rewards for a worker
+   * @param fromBlock block from which the rewards are calculated
+   * @param toBlock block to which the rewards are calculated
+   * @param recipients array of recipients of rewards
+   * @param workerRewards array of rewards for workers
+   * @param _stakerRewards array of rewards for stakers
+   * can only be called by current distributor
+   * lengths of recipients, workerRewards and _stakerRewards must be equal
+   * can recommit to same toBlock, but this drops approve count back to 1
+   */
   function commit(
     uint256 fromBlock,
     uint256 toBlock,
@@ -96,6 +125,11 @@ contract DistributedRewardsDistribution is AccessControl, IRewardsDistribution {
     emit NewCommitment(msg.sender, fromBlock, toBlock, recipients, workerRewards, _stakerRewards);
   }
 
+  /**
+   * @dev Approve a commitment
+   * Same args as for commit
+   * After 3 approvals, the distribution is executed
+   */
   function approve(
     uint256 fromBlock,
     uint256 toBlock,
@@ -117,26 +151,33 @@ contract DistributedRewardsDistribution is AccessControl, IRewardsDistribution {
     emit Approved(msg.sender, fromBlock, toBlock, recipients, workerRewards, _stakerRewards);
   }
 
+  /// @return true if the commitment can be approved by `who`
   function canApprove(
+    address who,
     uint256 fromBlock,
     uint256 toBlock,
     uint256[] calldata recipients,
     uint256[] calldata workerRewards,
     uint256[] calldata _stakerRewards
   ) external view returns (bool) {
+    if (!hasRole(REWARDS_DISTRIBUTOR_ROLE, who)) {
+      return false;
+    }
     if (commitments[toBlock] == 0) {
       return false;
     }
-    bytes32 commitment = keccak256(msg.data[4:]);
+    bytes32 commitment = keccak256(abi.encode(fromBlock, toBlock, recipients, workerRewards, _stakerRewards));
     if (commitments[toBlock] != commitment) {
       return false;
     }
-    if (alreadyApproved[commitment][msg.sender]) {
+    if (alreadyApproved[commitment][who]) {
       return false;
     }
     return true;
   }
 
+  /// @dev All distributions must be sequential and not blocks can be missed
+  /// E.g, after distribution for blocks [A, B], next one bust be for [B + 1, C]
   function distribute(
     uint256 fromBlock,
     uint256 toBlock,
@@ -154,6 +195,7 @@ contract DistributedRewardsDistribution is AccessControl, IRewardsDistribution {
     emit Distributed(fromBlock, toBlock);
   }
 
+  /// @dev Treasury claims rewards for an address
   function claim(address who) external onlyRole(REWARDS_TREASURY_ROLE) returns (uint256) {
     uint256 reward = staking.claim(who);
     uint256[] memory ownedWorkers = workers.getOwnedWorkers(who);
@@ -167,6 +209,7 @@ contract DistributedRewardsDistribution is AccessControl, IRewardsDistribution {
     return reward;
   }
 
+  /// @return claimable amount for the address
   function claimable(address who) external view returns (uint256) {
     uint256 reward = staking.claimable(who);
     uint256[] memory ownedWorkers = workers.getOwnedWorkers(who);

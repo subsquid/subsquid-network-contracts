@@ -24,4 +24,13 @@ contract WorkerRegistrationExcessiveBondTest is WorkerRegistrationTest {
     workerRegistration.returnExcessiveBond(workerId);
     assertEq(token.balanceOf(address(creator)), balanceBefore);
   }
+
+  function test_RevertsIf_NotCalledByCreator() public {
+    workerRegistration.register(workerId);
+    jumpEpoch();
+    networkController.setBondAmount(60);
+    vm.expectRevert("Not worker creator");
+    vm.startPrank(address(1));
+    workerRegistration.returnExcessiveBond(workerId);
+  }
 }

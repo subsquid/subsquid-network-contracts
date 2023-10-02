@@ -8,6 +8,16 @@ import "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 import "./interfaces/IStaking.sol";
 import "./NetworkController.sol";
 
+/**
+ * @title Staking Contract
+ * @dev Stake tSQD tokens to earn rewards for the staked worker
+ * Stakes and rewards are calculated per each worker separately
+ * Distributions are expected to be called by the RewardsDistributor contract on each epoch, but this is not enforced
+ * Rewards are shared between all stakers of a worker proportionally to their stake
+ * On each reward distriution, the cumulative rewards per share is increased by a value v
+ * Which represents how much reward staker is getting per each staked wei
+ * So the reward at any point is calculated as difference between current cumulative rewards per share and its value when the user's last action was performed
+ */
 contract Staking is AccessControl, IStaking {
   using EnumerableSet for EnumerableSet.UintSet;
 
@@ -27,6 +37,13 @@ contract Staking is AccessControl, IStaking {
     network = _network;
   }
 
+  /**
+   * @dev Distribute tokens to stakers in favour of a worker
+   * i-th element in amounts array is the amount of tokens to distribute to the stakers of i-th worker
+   * will update lastEpochRewarded to current epoch
+   * will increase cumulative rewards per share for each worker
+   * @dev will revert if total staked amount of a worker is 0 and distributed amount is not 0
+   */
   function distribute(uint256[] calldata workers, uint256[] calldata amounts)
     external
     onlyRole(REWARDS_DISTRIBUTOR_ROLE)
@@ -46,8 +63,14 @@ contract Staking is AccessControl, IStaking {
     rewards[worker].cumulatedRewardsPerShare += amount * PRECISION / totalStaked;
   }
 
+  /**
+   * @dev Deposit amount of tokens in favour of a worker
+   * Will remember claimable rewards and update checkpoint for the staker
+   * Cannot deposit if rewards were not distributed for 2 epochs (this means something is broken)
+   * @notice transfers amount of tSQD from msg.sender to this contract
+   */
   function deposit(uint256 worker, uint256 amount) external {
-    require(lastEpochRewarded + 1 >= network.epochNumber() || lastEpochRewarded == 0, "Rewards out of date");
+    require(lastEpochRewarded + 2 >= network.epochNumber() || lastEpochRewarded == 0, "Rewards out of date");
 
     StakerRewards storage _rewards = rewards[worker];
     updateCheckpoint(_rewards);
@@ -60,6 +83,12 @@ contract Staking is AccessControl, IStaking {
     emit Deposited(worker, msg.sender, amount);
   }
 
+  /**
+   * @dev Withdraw amount of tokens staked in favour of a worker
+   * Will remember claimable rewards and update checkpoint for the staker
+   * Can withdraw even if rewards were not distributed for 2 epochs because we cannot lock user's funds
+   * @notice transfers amount of tSQD from this contract to msg.sender
+   */
   function withdraw(uint256 worker, uint256 amount) external {
     StakerRewards storage _rewards = rewards[worker];
     require(_rewards.depositAmount[msg.sender] >= amount, "Insufficient staked amount");
@@ -83,6 +112,12 @@ contract Staking is AccessControl, IStaking {
     return result;
   }
 
+  /**
+   * @dev Claim rewards for a staker
+   * Will update checkpoint and set prevoiously claimed rewards to 0
+   * Can only be called by rewards distributor
+   * @notice should not transfer any tokens
+   */
   function claim(address staker) external onlyRole(REWARDS_DISTRIBUTOR_ROLE) returns (uint256) {
     uint256[] memory workers = delegatedTo[staker].values();
     uint256 reward = _claimable[staker];
@@ -97,6 +132,10 @@ contract Staking is AccessControl, IStaking {
     return reward;
   }
 
+  /**
+   * @dev Claimable amount
+   * @notice does not modify any state
+   */
   function claimable(address staker) external view returns (uint256) {
     uint256[] memory workers = delegatedTo[staker].values();
     uint256 reward = _claimable[staker];

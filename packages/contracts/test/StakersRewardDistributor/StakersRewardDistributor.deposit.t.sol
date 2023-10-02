@@ -9,6 +9,15 @@ contract StakersRewardDistributionDepositTest is StakersRewardDistributionTest {
     rewards.distribute(workers[0], 100);
   }
 
+  function test_RevertsIf_NoDistributionsFor2Epochs() public {
+    vm.roll(10);
+    rewards.deposit(workers[0], 100);
+    rewards.distribute(workers[0], 100);
+    vm.roll(20);
+    vm.expectRevert("Rewards out of date");
+    rewards.deposit(workers[0], 100);
+  }
+
   function test_DistributeForOneStakerAndAllPreviousEpochsWereRewarded() public {
     rewards.deposit(workers[0], 100);
     rewards.distribute(workers[0], 100);

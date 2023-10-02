@@ -4,6 +4,12 @@ pragma solidity 0.8.18;
 import "@openzeppelin/contracts/access/AccessControl.sol";
 import "./interfaces/INetworkController.sol";
 
+/**
+ * @title Network Controller Contract
+ * @dev Contract that controls network parameters
+ * All setters can only be called by admin
+ * See getters descriptions in interface
+ */
 contract NetworkController is AccessControl, INetworkController {
   uint128 public epochLength;
   uint128 public firstEpochBlock;

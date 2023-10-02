@@ -10,6 +10,7 @@ contract StakingHelper is Staking {
   constructor(IERC20 token, INetworkController network) Staking(token, network) {}
 
   function distribute(uint256 worker, uint256 amount) external {
+    lastEpochRewarded = network.epochNumber();
     _distribute(worker, amount);
   }
 }

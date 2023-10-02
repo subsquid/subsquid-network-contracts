@@ -32,17 +32,6 @@ contract RewardsDistributionCommitApproveTest is RewardsDistributionTest {
     rewardsDistribution.commit(1, 11, recipients, workerAmounts, stakerAmounts);
   }
 
-  function xtest_RevertsIf_TryingToDistributeInWrongWindow() public {
-    (uint256[] memory recipients, uint256[] memory workerAmounts, uint256[] memory stakerAmounts) = prepareRewards(1);
-    rewardsDistribution.addDistributor(address(1));
-    vm.roll(10);
-    vm.expectRevert("Not a distributor");
-    hoax(address(1));
-    rewardsDistribution.commit(1, 4, recipients, workerAmounts, stakerAmounts);
-    vm.roll(256);
-    rewardsDistribution.commit(1, 4, recipients, workerAmounts, stakerAmounts);
-  }
-
   function test_RevertsIf_CommittingSameDataTwice() public {
     (uint256[] memory recipients, uint256[] memory workerAmounts, uint256[] memory stakerAmounts) = prepareRewards(1);
     vm.roll(10);
@@ -121,5 +110,44 @@ contract RewardsDistributionCommitApproveTest is RewardsDistributionTest {
     vm.expectEmit(address(rewardsDistribution));
     emit Distributed(1, 4);
     rewardsDistribution.approve(1, 4, recipients, workerAmounts, stakerAmounts);
+  }
+
+  function test_canApproveReturnsTrueIfCanApprove() public {
+    (uint256[] memory recipients, uint256[] memory workerAmounts, uint256[] memory stakerAmounts) = prepareRewards(1);
+    rewardsDistribution.addDistributor(address(1));
+    vm.roll(10);
+    rewardsDistribution.commit(1, 4, recipients, workerAmounts, stakerAmounts);
+    assertEq(rewardsDistribution.canApprove(address(1), 1, 4, recipients, workerAmounts, stakerAmounts), true);
+  }
+
+  function test_canApproveReturnsTrueIfNothingWasCommitted() public {
+    (uint256[] memory recipients, uint256[] memory workerAmounts, uint256[] memory stakerAmounts) = prepareRewards(1);
+    rewardsDistribution.addDistributor(address(1));
+    assertEq(rewardsDistribution.canApprove(address(1), 1, 4, recipients, workerAmounts, stakerAmounts), false);
+  }
+
+  function test_canApproveReturnsFalseIfAlreadyApproved() public {
+    (uint256[] memory recipients, uint256[] memory workerAmounts, uint256[] memory stakerAmounts) = prepareRewards(2);
+    rewardsDistribution.addDistributor(address(1));
+    vm.roll(10);
+    rewardsDistribution.commit(1, 4, recipients, workerAmounts, stakerAmounts);
+    hoax(address(1));
+    rewardsDistribution.approve(1, 4, recipients, workerAmounts, stakerAmounts);
+    assertEq(rewardsDistribution.canApprove(address(1), 1, 4, recipients, workerAmounts, stakerAmounts), false);
+  }
+
+  function test_canApproveReturnsFalseIfCommitmentMismatch() public {
+    (uint256[] memory recipients, uint256[] memory workerAmounts, uint256[] memory stakerAmounts) = prepareRewards(2);
+    rewardsDistribution.addDistributor(address(1));
+    vm.roll(10);
+    rewardsDistribution.commit(1, 4, recipients, workerAmounts, stakerAmounts);
+    assertEq(rewardsDistribution.canApprove(address(1), 2, 4, recipients, workerAmounts, stakerAmounts), false);
+  }
+
+  function test_canApproveReturnsFalseIfNotADistributor() public {
+    (uint256[] memory recipients, uint256[] memory workerAmounts, uint256[] memory stakerAmounts) = prepareRewards(2);
+    vm.roll(10);
+    rewardsDistribution.commit(1, 4, recipients, workerAmounts, stakerAmounts);
+    assertEq(rewardsDistribution.canApprove(address(1), 1, 4, recipients, workerAmounts, stakerAmounts), false);
   }
 }

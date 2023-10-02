@@ -10,6 +10,15 @@ import "./interfaces/INetworkController.sol";
 import "./interfaces/IStaking.sol";
 import "./interfaces/IWorkerRegistration.sol";
 
+/**
+ * @title Worker Registration Contract
+ * @dev Worker registration and managing
+ * - A single account can register multiple workers
+ * - Worker becomes active and eligible for rewards only after the next epoch after registration has started
+ * - Active worker can be deregistered
+ * - After worker is deregistered, it becomes inactive only after the next epoch has started
+ * - Worker bond can be withdrawn after the lock period has passed after the worker has been deregistered
+ */
 contract WorkerRegistration is AccessControl, IWorkerRegistration {
   using Counters for Counters.Counter;
   using EnumerableSet for EnumerableSet.AddressSet;
@@ -21,11 +30,7 @@ contract WorkerRegistration is AccessControl, IWorkerRegistration {
     address creator;
     bytes peerId;
     uint256 bond;
-    // the worker is registered at the start
-    // of the next epoch, after register() is called
     uint128 registeredAt;
-    // the worker is de-registered at the start of
-    // the next epoch, after deregister() is called
     uint128 deregisteredAt;
   }
 
@@ -44,6 +49,11 @@ contract WorkerRegistration is AccessControl, IWorkerRegistration {
   event WorkerWithdrawn(uint256 indexed workerId, address indexed account);
   event ExcessiveBondReturned(uint256 indexed workerId, uint256 amount);
 
+  /**
+   * @param _tSQD tSQD token.
+   * @param _networkController The network controller contract.
+   * @param _staking The staking contract.
+   */
   constructor(IERC20 _tSQD, INetworkController _networkController, IStaking _staking) {
     _setupRole(DEFAULT_ADMIN_ROLE, msg.sender);
     tSQD = _tSQD;
@@ -51,6 +61,12 @@ contract WorkerRegistration is AccessControl, IWorkerRegistration {
     staking = _staking;
   }
 
+  /**
+   * @dev Registers a worker.
+   * @param peerId The unique peer ID of the worker.
+   * @notice Peer ID is a unique identifier of the worker. It is expected to be a hex representation of the libp2p peer ID of the worker
+   * @notice bondAmount of tSQD tokens will be transferred from the caller to this contract
+   */
   function register(bytes calldata peerId) external {
     require(peerId.length <= 64, "Peer ID too large");
     require(workerIds[peerId] == 0, "Worker already registered");
@@ -70,6 +86,13 @@ contract WorkerRegistration is AccessControl, IWorkerRegistration {
     emit WorkerRegistered(workerId, peerId, msg.sender, workers[workerId].registeredAt);
   }
 
+  /**
+   * @dev Deregisters a worker.
+   * @param peerId The unique peer ID of the worker.
+   * @notice Worker must be active
+   * @notice Worker must be registered by the caller
+   * @notice Worker becomes inactive after current epoch ends
+   */
   function deregister(bytes calldata peerId) external {
     uint256 workerId = workerIds[peerId];
     require(workerId != 0, "Worker not registered");
@@ -89,6 +112,13 @@ contract WorkerRegistration is AccessControl, IWorkerRegistration {
     emit WorkerDeregistered(workerId, msg.sender, workers[workerId].deregisteredAt);
   }
 
+  /**
+   * @dev Withdraws the bond of a worker.
+   * @param peerId The unique peer ID of the worker.
+   * @notice Worker must be inactive
+   * @notice Worker must be registered by the caller
+   * @notice Worker must be deregistered for at least lockPeriod
+   */
   function withdraw(bytes calldata peerId) external {
     uint256 workerId = workerIds[peerId];
     require(workerId != 0, "Worker not registered");
@@ -105,9 +135,16 @@ contract WorkerRegistration is AccessControl, IWorkerRegistration {
     emit WorkerWithdrawn(workerId, msg.sender);
   }
 
+  /**
+   * @dev Returns the excessive bond of a worker.
+   * In case bond has been reduced, the difference can be returned to the worker creator.
+   * @param peerId The unique peer ID of the worker.
+   * @notice Worker must be registered by the caller
+   */
   function returnExcessiveBond(bytes calldata peerId) external {
     uint256 workerId = workerIds[peerId];
     require(workerId != 0, "Worker not registered");
+    require(workers[workerId].creator == msg.sender, "Not worker creator");
     uint256 _bondAmount = bondAmount();
 
     uint256 excessiveBond = workers[workerId].bond - _bondAmount;
@@ -118,10 +155,12 @@ contract WorkerRegistration is AccessControl, IWorkerRegistration {
     emit ExcessiveBondReturned(workerId, excessiveBond);
   }
 
+  /// @dev Next epoch start block number.
   function nextEpoch() public view returns (uint128) {
     return networkController.nextEpoch();
   }
 
+  /// @dev Returns the list of active workers.
   function getActiveWorkers() public view returns (Worker[] memory) {
     Worker[] memory activeWorkers = new Worker[](getActiveWorkerCount());
 
@@ -138,6 +177,7 @@ contract WorkerRegistration is AccessControl, IWorkerRegistration {
     return activeWorkers;
   }
 
+  /// @dev Returns the list of active worker IDs.
   function getActiveWorkerIds() public view returns (uint256[] memory) {
     uint256[] memory activeWorkers = new uint[](getActiveWorkerCount());
 
@@ -154,10 +194,12 @@ contract WorkerRegistration is AccessControl, IWorkerRegistration {
     return activeWorkers;
   }
 
+  /// @dev Returns true if worker is active.
   function isWorkerActive(Worker storage worker) internal view returns (bool) {
     return worker.registeredAt <= block.number && (worker.deregisteredAt == 0 || worker.deregisteredAt >= block.number);
   }
 
+  /// @dev Returns the number of active workers.
   function getActiveWorkerCount() public view returns (uint256) {
     uint256 activeCount = 0;
     for (uint256 i = 0; i < activeWorkerIds.length; i++) {
@@ -176,6 +218,7 @@ contract WorkerRegistration is AccessControl, IWorkerRegistration {
     return workers[workerId];
   }
 
+  /// @dev Returns the ids of all worker created by the owner account
   function getOwnedWorkers(address owner) external view returns (uint256[] memory) {
     return ownedWorkers[owner].values();
   }
@@ -184,6 +227,8 @@ contract WorkerRegistration is AccessControl, IWorkerRegistration {
     return activeWorkerIds.length;
   }
 
+  /// @dev Returns the effective TVL which is as sum of all worker bonds and
+  /// tokens staked for active workers
   function effectiveTVL() external view returns (uint256) {
     return getActiveWorkerCount() * bondAmount() + activeStake();
   }
