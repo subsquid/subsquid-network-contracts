@@ -119,7 +119,7 @@ contract Staking is AccessControl, IStaking {
    * @notice should not transfer any tokens
    */
   function claim(address staker) external onlyRole(REWARDS_DISTRIBUTOR_ROLE) returns (uint256) {
-    uint256[] memory workers = delegatedTo[staker].values();
+    uint256[] memory workers = delegates(staker);
     uint256 reward = _claimable[staker];
     for (uint256 i = 0; i < workers.length; i++) {
       reward += pendingReward(rewards[workers[i]], staker);
@@ -137,12 +137,16 @@ contract Staking is AccessControl, IStaking {
    * @notice does not modify any state
    */
   function claimable(address staker) external view returns (uint256) {
-    uint256[] memory workers = delegatedTo[staker].values();
+    uint256[] memory workers = delegates(staker);
     uint256 reward = _claimable[staker];
     for (uint256 i = 0; i < workers.length; i++) {
       reward += pendingReward(rewards[workers[i]], staker);
     }
     return reward;
+  }
+
+  function delegates(address staker) public view returns (uint256[] memory) {
+    return delegatedTo[staker].values();
   }
 
   function updateCheckpoint(StakerRewards storage _rewards) internal {

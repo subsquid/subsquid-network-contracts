@@ -37,6 +37,15 @@ contract StakersRewardDistributionWithdrawTest is StakersRewardDistributionTest 
     rewards.withdraw(workers[0], 200);
   }
 
+  function test_FullWithdrawRemovesStakerFromDelegatedTo() public {
+    rewards.deposit(workers[0], 100);
+    rewards.deposit(1337, 100);
+    rewards.withdraw(workers[0], 50);
+    assertEq(rewards.delegates(address(this)).length, 2);
+    rewards.withdraw(workers[0], 50);
+    assertEq(rewards.delegates(address(this)).length, 1);
+  }
+
   function test_MultipleDepositsAndWithdraws() public {
     rewards.deposit(workers[0], 100);
     hoax(address(1));

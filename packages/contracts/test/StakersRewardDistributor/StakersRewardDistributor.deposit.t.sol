@@ -58,6 +58,22 @@ contract StakersRewardDistributionDepositTest is StakersRewardDistributionTest {
     assertPairClaimable(33 + 200, 66 + 200);
   }
 
+  function test_DepositAddsWorkedToDelegatedList() public {
+    assertEq(rewards.delegates(address(this)).length, 0);
+    rewards.deposit(workers[0], 200);
+    assertEq(rewards.delegates(address(this)).length, 1);
+    assertEq(rewards.delegates(address(this))[0], workers[0]);
+    rewards.deposit(1337, 200);
+    assertEq(rewards.delegates(address(this)).length, 2);
+    assertEq(rewards.delegates(address(this))[0], workers[0]);
+    assertEq(rewards.delegates(address(this))[1], 1337);
+
+    rewards.deposit(workers[0], 200);
+    assertEq(rewards.delegates(address(this)).length, 2);
+    assertEq(rewards.delegates(address(this))[0], workers[0]);
+    assertEq(rewards.delegates(address(this))[1], 1337);
+  }
+
   function test_Claim() public {
     rewards.deposit(workers[0], 100);
     hoax(address(1));
