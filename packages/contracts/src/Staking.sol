@@ -134,7 +134,7 @@ contract Staking is AccessControl, IStaking {
     uint256 reward = _claimable[staker];
     for (uint256 i = 0; i < workers.length; i++) {
       reward += pendingReward(rewards[workers[i]], staker);
-      rewards[workers[i]].checkpoint[msg.sender] = rewards[workers[i]].cumulatedRewardsPerShare;
+      rewards[workers[i]].checkpoint[sender] = rewards[workers[i]].cumulatedRewardsPerShare;
     }
     _claimable[staker] = 0;
 
