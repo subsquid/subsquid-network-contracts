@@ -57,10 +57,10 @@ export async function bytesSent(from: Date, to: Date) {
   return workers
 }
 
-function secondDiffs(dates: Dayjs[]) {
+function secondDiffs(dates: number[]) {
   return dates.map((date, i) => {
     if (i === 0) return 0
-    return date.diff(dates[i - 1], 'second')
+    return date - dates[i - 1]
   }).slice(1)
 }
 
@@ -77,10 +77,10 @@ export async function hasNewerPings(from: Date) {
 
 async function clickhouseGetPings(from: Date, to: Date) {
   const query = `select workerId, timestamp from testnet.worker_pings where timestamp >= '${formatDate(from)}' and timestamp <= '${formatDate(to)}' order by timestamp`;
-  const pings: Record<string, Dayjs[]> = {}
+  const pings: Record<string, number[]> = {}
   for await (const row of clickhouse.query(query).stream()) {
-    if (!pings[row.workerId]) pings[row.workerId] = [dayjs(from)]
-    pings[row.workerId].push(dayjs(row.timestamp))
+    if (!pings[row.workerId]) pings[row.workerId] = [dayjs(formatDate(from)).utc().unix()]
+    pings[row.workerId].push(dayjs(row.timestamp).utc().unix())
   }
   return pings
 }
@@ -107,7 +107,7 @@ export async function livenessFactor(from: Date, to: Date) {
     livenessFactor: number
   }> = {}
   for (const workersKey in pings) {
-    pings[workersKey].push(dayjs(to))
+    pings[workersKey].push(dayjs(formatDate(to)).utc().unix())
     const diffs = secondDiffs(pings[workersKey])
     const totalTimeOffline = totalOfflineSeconds(diffs)
     netwotkStats[workersKey] = {
@@ -120,9 +120,3 @@ export async function livenessFactor(from: Date, to: Date) {
 }
 
 export type NetworkStats = Awaited<ReturnType<typeof livenessFactor>>
-
-export function getStakes(workers: Workers): {[key: string]: bigint } {
-  return Object.fromEntries(Object.keys(workers).map(workerId => [workerId, 0n]))
-}
-
-export type Stakes = ReturnType<typeof getStakes>

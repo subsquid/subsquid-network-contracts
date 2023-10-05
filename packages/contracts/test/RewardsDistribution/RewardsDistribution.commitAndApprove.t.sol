@@ -58,7 +58,7 @@ contract RewardsDistributionCommitApproveTest is RewardsDistributionTest {
     startHoax(address(1));
     vm.expectRevert("Commitment does not exist");
     rewardsDistribution.approve(1, 5, recipients, workerAmounts, stakerAmounts);
-    vm.expectRevert("Commitment mismatch");
+    vm.expectRevert("Commitment does not exist");
     rewardsDistribution.approve(2, 4, recipients, workerAmounts, stakerAmounts);
     startHoax(address(this));
     (recipients, workerAmounts, stakerAmounts) = prepareRewards(2);

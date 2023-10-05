@@ -23,8 +23,8 @@ contract DistributedRewardsDistribution is AccessControl, IRewardsDistribution {
   uint8 internal constant APPROVES_REQUIRED = 3;
 
   mapping(uint256 workerId => uint256) _claimable;
-  mapping(uint256 block => bytes32) public commitments;
-  mapping(uint256 block => uint8) public approves;
+  mapping(uint256 fromBlock => mapping(uint256 toBlock => bytes32)) public commitments;
+  mapping(uint256 fromBlock => mapping(uint256 toBlock => uint8)) public approves;
   mapping(bytes32 => mapping(address => bool)) public alreadyApproved;
   uint256 public lastBlockRewarded;
   IStaking public immutable staking;
@@ -118,8 +118,8 @@ contract DistributedRewardsDistribution is AccessControl, IRewardsDistribution {
     require(toBlock < block.number, "Future block");
     bytes32 commitment = keccak256(msg.data[4:]);
     require(!alreadyApproved[commitment][msg.sender], "Already approved");
-    commitments[toBlock] = commitment;
-    approves[toBlock] = 1;
+    commitments[fromBlock][toBlock] = commitment;
+    approves[fromBlock][toBlock] = 1;
     alreadyApproved[commitment][msg.sender] = true;
 
     emit NewCommitment(msg.sender, fromBlock, toBlock, recipients, workerRewards, _stakerRewards);
@@ -137,14 +137,14 @@ contract DistributedRewardsDistribution is AccessControl, IRewardsDistribution {
     uint256[] calldata workerRewards,
     uint256[] calldata _stakerRewards
   ) external onlyRole(REWARDS_DISTRIBUTOR_ROLE) {
-    require(commitments[toBlock] != 0, "Commitment does not exist");
+    require(commitments[fromBlock][toBlock] != 0, "Commitment does not exist");
     bytes32 commitment = keccak256(msg.data[4:]);
-    require(commitments[toBlock] == commitment, "Commitment mismatch");
+    require(commitments[fromBlock][toBlock] == commitment, "Commitment mismatch");
     require(!alreadyApproved[commitment][msg.sender], "Already approved");
-    approves[toBlock]++;
+    approves[fromBlock][toBlock]++;
     alreadyApproved[commitment][msg.sender] = true;
 
-    if (approves[toBlock] == APPROVES_REQUIRED) {
+    if (approves[fromBlock][toBlock] == APPROVES_REQUIRED) {
       distribute(fromBlock, toBlock, recipients, workerRewards, _stakerRewards);
     }
 
@@ -163,11 +163,11 @@ contract DistributedRewardsDistribution is AccessControl, IRewardsDistribution {
     if (!hasRole(REWARDS_DISTRIBUTOR_ROLE, who)) {
       return false;
     }
-    if (commitments[toBlock] == 0) {
+    if (commitments[fromBlock][toBlock] == 0) {
       return false;
     }
     bytes32 commitment = keccak256(abi.encode(fromBlock, toBlock, recipients, workerRewards, _stakerRewards));
-    if (commitments[toBlock] != commitment) {
+    if (commitments[fromBlock][toBlock] != commitment) {
       return false;
     }
     if (alreadyApproved[commitment][who]) {

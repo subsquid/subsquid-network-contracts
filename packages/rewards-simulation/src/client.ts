@@ -4,7 +4,7 @@ import {privateKeyToAccount} from 'viem/accounts'
 
 export const publicClient = createPublicClient({
   chain: arbitrumGoerli,
-  transport: http(),
+  transport: http('https://arbitrum-goerli.infura.io/v3/e4b66244e61a4149af62215a6d907226'),
 })
 
 export const l1Client = createPublicClient({

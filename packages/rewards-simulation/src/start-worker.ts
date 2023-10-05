@@ -35,25 +35,27 @@ async function earliestEpoch(registrations: Registrations) {
 }
 
 async function commitIfPossible(walletClient: WalletClient) {
-  if (await canCommit(walletClient)) {
-    const MAX_COMMIT_LENGTH = await epochLength() * 1_000
-    logger.log('Can commit', walletClient.account.address)
-    let _lastRewardedBlock = await lastRewardedBlock()
-    if (_lastRewardedBlock === 0) {
-      _lastRewardedBlock = await firstRegistrationBlock(await getRegistrations())
+  const epochLen = await epochLength()
+  try {
+    if (await canCommit(walletClient)) {
+      const MAX_COMMIT_LENGTH = epochLen * 1_000
+      logger.log('Can commit', walletClient.account.address)
+      let _lastRewardedBlock = await lastRewardedBlock()
+      if (_lastRewardedBlock === 0) {
+        _lastRewardedBlock = await firstRegistrationBlock(await getRegistrations())
+      }
+      let currentEpochStart = getEpochStart(await getBlockNumber(), epochLen)
+      if (currentEpochStart - _lastRewardedBlock > MAX_COMMIT_LENGTH) {
+        currentEpochStart = _lastRewardedBlock + MAX_COMMIT_LENGTH
+      }
+      const fromBlock = _lastRewardedBlock + 1
+      const toBlock = currentEpochStart - 1
+      if (fromBlock < toBlock && await hasNewerPings(await getBlockTimestamp(toBlock + 1))) {
+        const rewards = await epochStats(await getBlockTimestamp(fromBlock), await getBlockTimestamp(toBlock))
+        await commitRewards(fromBlock, toBlock, rewards, walletClient)
+      }
     }
-    let currentEpochStart = getEpochStart(await getBlockNumber(), await epochLength())
-    if (currentEpochStart - _lastRewardedBlock > MAX_COMMIT_LENGTH) {
-      currentEpochStart = _lastRewardedBlock + MAX_COMMIT_LENGTH
-    }
-    const fromBlock = _lastRewardedBlock + 1
-    const toBlock = currentEpochStart - 1
-    if (fromBlock < toBlock && await hasNewerPings(await getBlockTimestamp(toBlock + 1)) && !await alreadyCommitted(BigInt(toBlock))) {
-      const rewards = await epochStats(await getBlockTimestamp(fromBlock), await getBlockTimestamp(toBlock))
-      await commitRewards(fromBlock, toBlock, rewards, walletClient)
-      setTimeout(() => commitIfPossible(walletClient), 10 * 60 * 1000)
-    }
-  }
+  } catch (e) {logger.log(e)}
   setTimeout(() => commitIfPossible(walletClient), 60 * 1000)
 }
 
@@ -81,9 +83,9 @@ export async function startWorker(index: number) {
     })
   }
   commitIfPossible(walletClient)
-  watchCommits(async (args) => {
-    if (!args.fromBlock) return
-    const rewards = await epochStats(await getBlockTimestamp(args.fromBlock), await getBlockTimestamp(args.toBlock))
-    await approveRewards(args.fromBlock, args.toBlock, rewards, walletClient)
+  watchCommits(async ({fromBlock, toBlock}) => {
+    if (!fromBlock) return
+    const rewards = await epochStats(await getBlockTimestamp(fromBlock), await getBlockTimestamp(toBlock))
+    await approveRewards(fromBlock, toBlock, rewards, walletClient)
   })
 }

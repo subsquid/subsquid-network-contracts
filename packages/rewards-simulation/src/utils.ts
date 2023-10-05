@@ -13,7 +13,7 @@ export function bigSum(array: bigint[]) {
 }
 
 export function formatSqd(value: bigint) {
-  return formatEther(value).replace(/(\.\d{2})\d+/, '$1')
+  return formatEther(value).replace(/(\.\d{3})\d+/, '$1')
 }
 
 export function fromBase58(value: string): `0x${string}` {

@@ -104,6 +104,17 @@ contract Staking is AccessControl, IStaking {
     emit Withdrawn(worker, msg.sender, amount);
   }
 
+  /// @dev For each workerId, returns total staked amount
+  /// i-th element in resulting array is the total staked amount for i-th worker
+  function totalStakedPerWorker(uint256[] calldata workers) external view returns (uint256[] memory) {
+    uint256[] memory result = new uint256[](workers.length);
+    for (uint256 i = 0; i < workers.length; i++) {
+      result[i] = rewards[workers[i]].totalStaked;
+    }
+    return result;
+  }
+
+  /// @dev Total stake for all active workers
   function activeStake(uint256[] calldata activeWorkers) external view returns (uint256) {
     uint256 result = 0;
     for (uint256 i = 0; i < activeWorkers.length; i++) {
@@ -114,7 +125,7 @@ contract Staking is AccessControl, IStaking {
 
   /**
    * @dev Claim rewards for a staker
-   * Will update checkpoint and set prevoiously claimed rewards to 0
+   * Will update checkpoint and set previously claimed rewards to 0
    * Can only be called by rewards distributor
    * @notice should not transfer any tokens
    */

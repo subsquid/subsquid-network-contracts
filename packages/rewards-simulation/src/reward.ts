@@ -1,17 +1,13 @@
-import {clickhouseBytesSent, getStakes, livenessFactor, NetworkStats, Stakes, Workers} from "./logs";
-import {bond, epochLength} from "./chain";
+import {clickhouseBytesSent, livenessFactor, NetworkStats, Workers} from "./logs";
+import {bond, clearUnknownWorkers, currentApy, getStakes, preloadWorkerIds, Stakes} from "./chain";
 import {parseEther} from "viem";
 import {bigSum, formatSqd, keysToFixed, sum} from "./utils";
 import {logger} from "./logger";
+import dayjs from "dayjs";
 
-const FIXED_R_APR = 0.8
 const YEAR = 365 * 24 * 60 * 60
 const PRECISION = 100_000_000
 const nPRECISION = 100_000_000n
-
-function getStake(worker: string) {
-  return 0n
-}
 
 function normalize(workers: Workers): Workers {
   const totalBytesSent = sum(Object.values(workers).map(({bytesSent}) => bytesSent))
@@ -36,7 +32,7 @@ async function dTraffic(workers: Workers, stakes: Stakes, bond: bigint) {
   const T = sum(Object.values(workers).map(({t}) => t));
   const dT: { [key in string]: number } = {}
   for (const workersKey in workers) {
-    const s = Number((getStake(workersKey) + bond) * nPRECISION / totalStake) / PRECISION;
+    const s = Number((stakes[workersKey] + bond) * nPRECISION / totalStake) / PRECISION;
     dT[workersKey] = Math.min(1, (workers[workersKey].t / T / s) ** ALPHA);
   }
   return dT
@@ -53,13 +49,13 @@ async function dLiveness(networkStats: NetworkStats) {
   return dL
 }
 
-async function rMax() {
-  return FIXED_R_APR * await epochLength() / YEAR
+async function rMax(length: number) {
+  return await currentApy() * length / YEAR
 }
 
-async function rUnlocked(stakes: Stakes) {
+async function rUnlocked(stakes: Stakes, timeLength: number) {
   const totalStaked = await bond() * BigInt(Object.keys(stakes).length) + bigSum(Object.values(stakes))
-  return BigInt(FIXED_R_APR * 10) * totalStaked * BigInt(await epochLength()) / BigInt(YEAR) / 10n
+  return BigInt(await currentApy() * 10) * totalStaked * BigInt(timeLength) / BigInt(YEAR) / 10n
 }
 
 function printPercentageUnlocked(totalReward: bigint, totalUnlocked: bigint) {
@@ -67,22 +63,28 @@ function printPercentageUnlocked(totalReward: bigint, totalUnlocked: bigint) {
   else logger.log('Percentage unlocked', Number(totalReward * 10000n / totalUnlocked) / 100, '%')
 }
 
+export type Rewards = { [key in string]: { workerReward: bigint, stakerReward: bigint } };
+
 export async function epochStats(from: Date, to: Date) {
+  const _epochLength = dayjs(to).diff(dayjs(from), 'second')
   logger.log(from, '-', to)
-  const workers = await clickhouseBytesSent(from, to)
+  let workers = await clickhouseBytesSent(from, to)
   const _bond = await bond()
-  const stakes = getStakes(workers)
+  await preloadWorkerIds(Object.keys(workers))
+  workers = clearUnknownWorkers(workers)
+  const stakes = await getStakes(workers)
   const t = getT(workers)
   const dT = await dTraffic(t, stakes, _bond)
   const lf = await livenessFactor(from, to)
   const dL = await dLiveness(lf)
-  const rm = await rMax()
+  const rm = await rMax(_epochLength)
   const stats: any = {}
-  const rewards: { [key in string]: bigint } = {}
+  const rewards: Rewards = {}
   for (const workersKey in dL) {
     const r = rm * dL[workersKey] * dT[workersKey] || 0
-    const workerReward = BigInt(Math.floor(r * PRECISION)) * (_bond + getStake(workersKey) / 2n) / nPRECISION
-    const stakerReward = BigInt(Math.floor(r * PRECISION)) * getStake(workersKey) / 2n / nPRECISION
+    const stake = stakes[workersKey] ?? 0n
+    const workerReward = BigInt(Math.floor(r * PRECISION)) * (_bond + stake / 2n) / nPRECISION
+    const stakerReward = BigInt(Math.floor(r * PRECISION)) * stake / 2n / nPRECISION
     stats[workersKey] = keysToFixed({
       t: t[workersKey]?.t,
       dTraffic: dT[workersKey],
@@ -91,11 +93,14 @@ export async function epochStats(from: Date, to: Date) {
       workerReward: formatSqd(workerReward),
       stakerReward: formatSqd(stakerReward),
     })
-    rewards[workersKey] = workerReward
+    rewards[workersKey] = {
+      workerReward,
+      stakerReward,
+    }
   }
   if (Object.keys(stats).length === 0) return
   logger.table(stats)
-  const totalUnlocked = await rUnlocked(getStakes(workers))
+  const totalUnlocked = await rUnlocked(stakes, _epochLength)
   const totalReward = bigSum(Object.values(stats).map(({
                                                          workerReward,
                                                          stakerReward
