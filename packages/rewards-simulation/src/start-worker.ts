@@ -35,8 +35,8 @@ async function earliestEpoch(registrations: Registrations) {
 }
 
 async function commitIfPossible(walletClient: WalletClient) {
-  const epochLen = await epochLength()
   try {
+    const epochLen = await epochLength()
     if (await canCommit(walletClient)) {
       const MAX_COMMIT_LENGTH = epochLen * 1_000
       logger.log('Can commit', walletClient.account.address)

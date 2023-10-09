@@ -116,7 +116,9 @@ export async function approveRewards(fromBlock: number, toBlock: number, rewards
     logger.log('Cannot approve rewards', walletClient.account.address)
     return
   }
-  const tx = await contract('rewardsDistribution', walletClient).write.approve([BigInt(fromBlock), BigInt(toBlock), workerIds, rewardAmounts, stakedAmounts], {}).catch(logger.log)
+  const tx = await contract('rewardsDistribution', walletClient).write.approve([BigInt(fromBlock), BigInt(toBlock), workerIds, rewardAmounts, stakedAmounts], {
+    gasLimit: 10_000_000,
+  }).catch(logger.log)
   logger.log('Approve rewards', tx)
 }
 
