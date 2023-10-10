@@ -6,6 +6,14 @@
 
 This is a monorepo that contains contracts and utils that enable [Subsquid](https://subsquid.io/) decentralised network
 
+Subsquid uses [pnpm](https://pnpm.io/) as a package and monorepo manager.
+To install `pnpm`, run `npm install -g pnpm` or consult with [pnpm installation guide](https://pnpm.io/installation).
+
+Install all dependencies using
+```bash
+pnpm install
+```
+
 ### Packages:
  - [Subsquid Network Contracts](./packages/contracts)
- - [Reward Simulator](./packages/reward-simulator), process that calculates rewards based on 
+ - [Reward Simulator](./packages/rewards-simulation), process that calculates rewards based on 

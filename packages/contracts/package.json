@@ -17,6 +17,7 @@
     "test": "forge test -vv",
     "lint": "forge fmt --check",
     "lint:fix": "forge fmt",
+    "deploy": "forge script script/Deploy.s.sol --broadcast --verify --json --rpc-url arbitrum-goerli && node scripts/deployment-json.js",
     "register-worker": "node -r dotenv/config scripts/register-worker.js",
     "list-workers": "node -r dotenv/config scripts/active-workers.js",
     "build": "forge build && npm run build:types",
