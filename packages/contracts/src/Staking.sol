@@ -67,6 +67,7 @@ contract Staking is AccessControl, IStaking {
    * @dev Deposit amount of tokens in favour of a worker
    * Will remember claimable rewards and update checkpoint for the staker
    * Cannot deposit if rewards were not distributed for 2 epochs (this means something is broken)
+   * Cannot withdraw for at least one full epoch latest deposit
    * @notice transfers amount of tSQD from msg.sender to this contract
    */
   function deposit(uint256 worker, uint256 amount) external {
@@ -77,6 +78,7 @@ contract Staking is AccessControl, IStaking {
     _rewards.totalStaked += amount;
     _rewards.depositAmount[msg.sender] += amount;
     delegatedTo[msg.sender].add(worker);
+    rewards[worker].withdrawAllowed[msg.sender] = network.nextEpoch() + network.epochLength();
 
     token.transferFrom(msg.sender, address(this), amount);
 
@@ -92,6 +94,7 @@ contract Staking is AccessControl, IStaking {
   function withdraw(uint256 worker, uint256 amount) external {
     StakerRewards storage _rewards = rewards[worker];
     require(_rewards.depositAmount[msg.sender] >= amount, "Insufficient staked amount");
+    require(_rewards.withdrawAllowed[msg.sender] <= block.number, "Too early to withdraw");
     updateCheckpoint(_rewards);
     _rewards.totalStaked -= amount;
     _rewards.depositAmount[msg.sender] -= amount;
@@ -168,5 +171,13 @@ contract Staking is AccessControl, IStaking {
   function pendingReward(StakerRewards storage _rewards, address staker) internal view returns (uint256) {
     uint256 amount = _rewards.depositAmount[staker];
     return (amount * (_rewards.cumulatedRewardsPerShare - _rewards.checkpoint[staker])) / PRECISION;
+  }
+
+  function getDeposit(address staker, uint256 worker)
+    external
+    view
+    returns (uint256 depositAmount, uint256 withdrawAllowed)
+  {
+    return (rewards[worker].depositAmount[staker], rewards[worker].withdrawAllowed[staker]);
   }
 }

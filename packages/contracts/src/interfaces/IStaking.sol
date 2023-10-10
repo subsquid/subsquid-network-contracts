@@ -9,6 +9,8 @@ interface IStaking {
     mapping(address staker => uint256) checkpoint;
     /// @dev the amount of tokens staked by the user
     mapping(address staker => uint256) depositAmount;
+    /// @dev block from which withdraw is allowed for staker
+    mapping(address staker => uint128) withdrawAllowed;
     /// @dev the total amount of tokens staked
     uint256 totalStaked;
   }

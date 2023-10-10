@@ -19,6 +19,7 @@ contract StakersRewardDistributionTest is Test {
   uint256[] workers = [1234];
   StakingHelper rewards;
   IERC20 token;
+  NetworkController network;
 
   function setUp() public {
     uint256[] memory shares = new uint256[](2);
@@ -29,7 +30,8 @@ contract StakersRewardDistributionTest is Test {
     holders[1] = address(1);
 
     token = new tSQD(holders, shares);
-    rewards = new StakingHelper(token, new NetworkController(1, 1));
+    network = new NetworkController(1,1);
+    rewards = new StakingHelper(token, network);
     token.approve(address(rewards), type(uint256).max);
     hoax(address(1));
     token.approve(address(rewards), type(uint256).max);
