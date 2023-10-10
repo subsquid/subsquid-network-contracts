@@ -6,6 +6,6 @@
 
 This is a monorepo that contains contracts and utils that enable [Subsquid](https://subsquid.io/) decentralised network
 
-Packages:
+### Packages:
  - [Subsquid Network Contracts](./packages/contracts)
- - [Reward Simulator](./packages/reward-simulator)
+ - [Reward Simulator](./packages/reward-simulator), process that calculates rewards based on 
