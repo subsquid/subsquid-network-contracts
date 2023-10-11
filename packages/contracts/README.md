@@ -68,13 +68,13 @@ NETWORK_NAME=
 
 Run 
 ```
-npm run register-worker [base58PeerID] [privateKey]
+pnpm run register-worker [base58PeerID] [privateKey]
 ```
 to register a worker. The provided account must have 100k tSQD for bonding and some gas fee tokens.
 
 Example:
 ```
-npm run register-worker QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx5N 0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d
+pnpm run register-worker QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx5N 0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d
 ```
 
 ## Active Workers 
