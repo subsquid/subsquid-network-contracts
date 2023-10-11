@@ -2,6 +2,14 @@
 
 This package contains a simulator for the rewards system. It will be used to calculate and distribute rewards on Panthalasa testnet.
 
+## Running
+
+To run reward simulation, run
+    
+```bash
+PRIVATE_KEY=0x... CLICKHOUSE_PASSWORD=... pnpm start {number of workers for this process}
+```
+
 ## Rewards
 
 The network rewards are paid out to workers and delegators for each epoch. The Reward Manager submits an on-chain claim commitment, from which each participant can claim.
