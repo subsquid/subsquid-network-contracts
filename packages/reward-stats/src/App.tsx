@@ -13,6 +13,8 @@ const clickhouse = createClient({
 const query = `select workerId, sum(responseBytes), sum(readChunks) from testnet.queries group by workerId`;
 
 export function App() {
+  console.log(import.meta.env);
+
   const rewards = useRewards();
   const [selectedReward, setSelectedReward] = useState(0);
 
