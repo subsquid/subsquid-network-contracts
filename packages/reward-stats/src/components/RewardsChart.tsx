@@ -36,7 +36,8 @@ export const RewardsChart = ({ rewards, workers }: RewardsChartProps) => {
     if (active && payload && label) {
       return (
         <div className="bg-white p-3 ">
-          <p>Worker: {workers?.[label]?.peerId ?? label}</p>
+          <h2 className="font-bold uppercase">Worker {label}</h2>
+          <p>{workers?.[label]?.peerId}</p>
           <p>Creator: {workers?.[label]?.creator}</p>
           <p className="text-[#8884d8]">
             Worker reward: {payload[0].payload.workerReward}
