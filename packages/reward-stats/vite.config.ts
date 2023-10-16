@@ -12,6 +12,5 @@ export default defineConfig({
       util: "util",
     },
   },
-  base: "/subsquid/subsquid-network-contracts",
   plugins: [react()],
 });
