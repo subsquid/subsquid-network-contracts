@@ -45,6 +45,10 @@ jobs:
         uses: foundry-rs/foundry-toolchain@v1
         with:
           version: nightly
+      - name: Run Build
+        run: |
+          pnpm build
+        id: build
       - name: Deploy to Netlify
         uses: nwtgck/actions-netlify@v2.0
         with:
