@@ -12,6 +12,7 @@ on:
 env:
   FOUNDRY_PROFILE: ci
 
+
 jobs:
   # Single deploy job since we're just deploying
   deploy:
