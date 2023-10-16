@@ -51,7 +51,7 @@ const EpochTimestamp = ({
         blockNumber: toBlock,
       })
       .then((block) => setToTimestamp(Number(block.timestamp) * 1000));
-  }, []);
+  }, [fromBlock, toBlock]);
 
   return (
     <div className="text-center ">
