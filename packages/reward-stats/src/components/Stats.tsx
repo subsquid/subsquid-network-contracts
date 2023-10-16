@@ -4,7 +4,6 @@ import { formatEther } from "viem";
 import { ReactNode, useEffect, useState } from "react";
 import { usePublicClient } from "wagmi";
 import { goerli } from "wagmi/chains";
-import { epochStats } from "@subsquid-network/rewards-simulation/src/reward";
 
 const toNumber = (eth: bigint) => Number(formatEther(eth));
 
