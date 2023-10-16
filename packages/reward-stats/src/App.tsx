@@ -3,12 +3,11 @@ import { useEffect, useState } from "react";
 import { RewardLink } from "./components/RewardLink";
 import { Stats } from "./components/Stats";
 import { createClient } from "@clickhouse/client-web";
-import process from "process";
 
 const clickhouse = createClient({
   host: "https://clickhouse.subsquid.io/",
   username: "sqd_read",
-  password: process.env.CLICKHOUSE_PASSWORD,
+  password: import.meta.env.VITE_CLICKHOUSE_PASSWORD,
 });
 
 const query = `select workerId, sum(responseBytes), sum(readChunks) from testnet.queries group by workerId`;
