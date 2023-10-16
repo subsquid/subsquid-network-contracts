@@ -25,6 +25,7 @@ export interface Rewards {
 export const useRewards = () => {
   const [rewards, setRewards] = useState<Rewards[]>([]);
   const publicClient = usePublicClient();
+
   useEffect(() => {
     (async () => {
       const distributions = await publicClient.getLogs({

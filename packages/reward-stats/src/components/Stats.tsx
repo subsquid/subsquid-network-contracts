@@ -4,6 +4,7 @@ import { formatEther } from "viem";
 import { ReactNode, useEffect, useState } from "react";
 import { usePublicClient } from "wagmi";
 import { goerli } from "wagmi/chains";
+import { Workers } from "../hooks/useWorkers";
 
 const toNumber = (eth: bigint) => Number(formatEther(eth));
 
@@ -52,14 +53,6 @@ const EpochTimestamp = ({
       .then((block) => setToTimestamp(Number(block.timestamp) * 1000));
   }, []);
 
-  // useEffect(() => {
-  //   if (fromTimestamp && toTimestamp) {
-  //     epochStats(new Date(fromTimestamp), new Date(toTimestamp)).then(
-  //       console.log,
-  //     );
-  //   }
-  // }, [fromTimestamp, toTimestamp]);
-
   return (
     <div className="text-center ">
       <h2 className="font-bold uppercase">
@@ -72,7 +65,13 @@ const EpochTimestamp = ({
   );
 };
 
-export const Stats = ({ reward }: { reward: Rewards | undefined }) => {
+export const Stats = ({
+  reward,
+  workers,
+}: {
+  reward: Rewards | undefined;
+  workers: Workers | undefined;
+}) => {
   if (!reward) return null;
 
   const chartData = reward.recipients
@@ -111,7 +110,7 @@ export const Stats = ({ reward }: { reward: Rewards | undefined }) => {
         title="Total staker reward"
         value={formatToken(totalStakerReward)}
       />
-      <RewardsChart rewards={chartData} />;
+      <RewardsChart rewards={chartData} workers={workers} />;
     </>
   );
 };
