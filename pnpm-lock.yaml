@@ -4164,7 +4164,6 @@ packages:
       tsv: 0.2.0
       uuid: 3.4.0
     dev: false
-    bundledDependencies: []
 
   /cliui/3.2.0:
     resolution: {integrity: sha512-0yayqDxWQbqk3ojkYqUKqaAQ6AfNKeKWRNA8kR0WXzAsdHpP4BIaOmMAG87JGuO6qcobyW4GjxHd9PmhEd+T9w==}

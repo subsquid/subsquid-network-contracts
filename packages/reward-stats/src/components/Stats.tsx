@@ -53,13 +53,13 @@ const EpochTimestamp = ({
       .then((block) => setToTimestamp(Number(block.timestamp) * 1000));
   }, []);
 
-  useEffect(() => {
-    if (fromTimestamp && toTimestamp) {
-      epochStats(new Date(fromTimestamp), new Date(toTimestamp)).then(
-        console.log,
-      );
-    }
-  }, [fromTimestamp, toTimestamp]);
+  // useEffect(() => {
+  //   if (fromTimestamp && toTimestamp) {
+  //     epochStats(new Date(fromTimestamp), new Date(toTimestamp)).then(
+  //       console.log,
+  //     );
+  //   }
+  // }, [fromTimestamp, toTimestamp]);
 
   return (
     <div className="text-center ">
