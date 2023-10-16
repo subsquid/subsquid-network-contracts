@@ -1,9 +1,9 @@
-import {startWorker} from "./start-worker";
+import { startWorker } from "./start-worker";
 
-const n: number = Number(process.argv[2])
+const n: number = Number(process.argv[2]);
 
-;(async () => {
+(async () => {
   for (let i = 0; i < n; i++) {
-    await startWorker(i)
+    await startWorker(i);
   }
-})()
+})();
