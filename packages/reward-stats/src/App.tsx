@@ -14,7 +14,11 @@ export function App() {
           fromBlock - toBlock
         </p>
         <div className="max-h-[100vh] overflow-y-scroll">
-          <RewardLink rewards={rewards} onClick={setSelectedReward} />
+          <RewardLink
+            rewards={rewards}
+            onClick={setSelectedReward}
+            selected={selectedReward}
+          />
         </div>
       </div>
       <div className="col-span-4 max-h-[100vh] overflow-y-scroll ">

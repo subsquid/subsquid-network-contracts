@@ -20,7 +20,7 @@ export const useStakes = (rewards: Rewards[]): Stakes => {
   return Object.fromEntries(
     allWorkers.map((id, index) => [
       id,
-      BigInt(stakes.data?.[index]?.result as any),
+      BigInt((stakes.data?.[index]?.result as any) ?? 0),
     ]),
   );
 };
