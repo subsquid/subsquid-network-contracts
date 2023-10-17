@@ -6,7 +6,11 @@ interface RewardLinkProps {
   selected: number;
 }
 
-export const RewardLink = ({ rewards, onClick, selected }: RewardLinkProps) => (
+export const RewardLinks = ({
+  rewards,
+  onClick,
+  selected,
+}: RewardLinkProps) => (
   <>
     {rewards.map((reward, idx) => (
       <div

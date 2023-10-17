@@ -1,16 +1,20 @@
 // recharts bar chart component
 import React from "react";
 import {
-  BarChart,
   Bar,
-  XAxis,
-  YAxis,
+  BarChart,
   CartesianGrid,
-  Tooltip,
   Legend,
   ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
 } from "recharts";
 import { Workers } from "../hooks/useWorkers";
+import { Stakes } from "../hooks/useStakes";
+import { formatToken } from "../utils/formatToken";
+import { useBond } from "../hooks/useBond";
+import { toNumber } from "../utils/toNumber";
 
 interface Reward {
   workerId: number;
@@ -21,9 +25,16 @@ interface Reward {
 interface RewardsChartProps {
   rewards: Reward[];
   workers?: Workers;
+  stakes: Stakes;
+  timeDiff: number;
 }
 
-export const RewardsChart = ({ rewards, workers }: RewardsChartProps) => {
+export const RewardsChart = ({
+  rewards,
+  workers,
+  stakes,
+  timeDiff,
+}: RewardsChartProps) => {
   const CustomTooltip = ({
     active,
     payload,
@@ -33,22 +44,46 @@ export const RewardsChart = ({ rewards, workers }: RewardsChartProps) => {
     active?: boolean;
     label?: number;
   }) => {
+    const year = 1000 * 60 * 60 * 24 * 365;
     if (active && payload && label) {
       return (
         <div className="bg-white p-3 ">
           <h2 className="font-bold uppercase">Worker {label}</h2>
           <p>{workers?.[label]?.peerId}</p>
-          <p>Creator: {workers?.[label]?.creator}</p>
           <p className="text-[#8884d8]">
             Worker reward: {payload[0].payload.workerReward}
+            &nbsp;(bond: {formatToken(bond)})
           </p>
           <p className="text-[#82ca9d]">
             Staker reward: {payload[0].payload.stakerReward}
+            &nbsp;(staked: {formatToken(stakes[label])})
           </p>
+          <p className="text-[#8884d8]">
+            Worker APY:{" "}
+            {(
+              (100 * payload[0].payload.workerReward * year) /
+              toNumber(bond) /
+              timeDiff
+            ).toFixed(2)}
+            %
+          </p>
+          {!!stakes[label] && (
+            <p className="text-[#82ca9d]">
+              Staker APY:{" "}
+              {(
+                (100 * payload[0].payload.stakerReward * year) /
+                toNumber(stakes[label]) /
+                timeDiff
+              ).toFixed(2)}
+              %
+            </p>
+          )}
         </div>
       );
     }
   };
+
+  const bond = useBond();
 
   return (
     <ResponsiveContainer height={600}>
