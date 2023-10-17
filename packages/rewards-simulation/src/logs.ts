@@ -25,6 +25,15 @@ export interface Work {
 
 export type Workers = Awaited<ReturnType<typeof bytesSent>>;
 
+export async function getAllWorkers() {
+  const query = "select distinct workerId from testnet.queries";
+  const workerIds: string[] = [];
+  for await (const row of clickhouse.query(query).stream()) {
+    workerIds.push(row.workerId);
+  }
+  return workerIds;
+}
+
 export async function clickhouseBytesSent(from: Date, to: Date) {
   const query = `select workerId, sum(responseBytes), sum(readChunks) from testnet.queries where timestamp >= '${formatDate(
     from,
