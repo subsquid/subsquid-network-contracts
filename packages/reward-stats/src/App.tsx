@@ -2,11 +2,9 @@ import { useRewards } from "./hooks/useRewards";
 import { useState } from "react";
 import { RewardLink } from "./components/RewardLink";
 import { Stats } from "./components/Stats";
-import { useWorkers } from "./hooks/useWorkers";
 
 export function App() {
   const rewards = useRewards();
-  const workers = useWorkers(rewards);
   const [selectedReward, setSelectedReward] = useState(0);
 
   return (
@@ -20,7 +18,7 @@ export function App() {
         </div>
       </div>
       <div className="col-span-4 max-h-[100vh] overflow-y-scroll ">
-        <Stats reward={rewards[selectedReward]} workers={workers} />
+        <Stats rewards={rewards} selectedReward={selectedReward} />
       </div>
     </main>
   );
