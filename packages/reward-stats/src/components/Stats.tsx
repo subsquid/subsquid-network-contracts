@@ -73,6 +73,8 @@ const CommonStats = ({
           title="Workers rewarded"
           value={`${totalWorkersRewarded}/${totalWorkers}`}
         />
+        <StatsRow title="Target Storage" value="30 TB" />
+        <StatsRow title="Available Storage" value={`${totalWorkers} TB`} />
         <StatsRow
           title="Total worker reward"
           value={formatToken(workerReward)}
@@ -89,16 +91,6 @@ const CommonStats = ({
           )} + ${formatToken(totalStake)})`}
         />
         <StatsRow title="APY" value={`${apy.toFixed(2)}%`} />
-        <StatsRow
-          title="Projected yearly reward"
-          value={
-            epochLength &&
-            formatToken(
-              (totalReward * BigInt(1000 * 60 * 60 * 24 * 365)) /
-                BigInt(epochLength),
-            )
-          }
-        />
       </div>
     </div>
   );
