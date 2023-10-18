@@ -5,7 +5,7 @@
     "subsquid-network-register": "packages/contracts/scripts/register-worker.js"
   },
   "dependencies": {
-    "@openzeppelin/contracts": "^4.8.3",
+    "@openzeppelin/contracts": "^4.9.3",
     "bs58": "^5.0.0",
     "dotenv": "^16.0.3",
     "ethers": "^5.7.2",

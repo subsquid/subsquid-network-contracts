@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity 0.8.18;
+pragma solidity 0.8.19;
 
 interface IRewardsDistribution {
   event Claimed(address indexed by, uint256 amount);

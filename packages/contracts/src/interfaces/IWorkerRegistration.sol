@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Unlicensed
-pragma solidity 0.8.18;
+pragma solidity 0.8.19;
 
 interface IWorkerRegistration {
   /// @return The number of active workers.
