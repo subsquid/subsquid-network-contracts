@@ -2,7 +2,6 @@
 pragma solidity 0.8.19;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/utils/Counters.sol";
 import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 
@@ -20,11 +19,10 @@ import "./interfaces/IWorkerRegistration.sol";
  * - Worker bond can be withdrawn after the lock period has passed after the worker has been deregistered
  */
 contract WorkerRegistration is AccessControl, IWorkerRegistration {
-  using Counters for Counters.Counter;
   using EnumerableSet for EnumerableSet.AddressSet;
   using EnumerableSet for EnumerableSet.UintSet;
 
-  Counters.Counter private workerIdTracker;
+  uint256 private workerIdTracker;
 
   struct Worker {
     address creator;
@@ -71,8 +69,8 @@ contract WorkerRegistration is AccessControl, IWorkerRegistration {
     require(peerId.length <= 64, "Peer ID too large");
     require(workerIds[peerId] == 0, "Worker already registered");
 
-    workerIdTracker.increment();
-    uint256 workerId = workerIdTracker.current();
+    workerIdTracker++;
+    uint256 workerId = workerIdTracker;
     uint256 _bondAmount = bondAmount();
 
     workers[workerId] =
