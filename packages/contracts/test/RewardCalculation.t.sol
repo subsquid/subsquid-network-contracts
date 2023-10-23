@@ -78,4 +78,19 @@ contract RewardCalculationTest is Test {
     assertEq(rewardCalculation.epochReward(5000, 20 * 60) / 1e12, 475);
     assertEq(rewardCalculation.epochReward(5000, 40 * 60) / 1e12, 951);
   }
+
+  function test_BoostFactor() public {
+    assertEq(rewardCalculation.boostFactor(1 days), 10000);
+    assertEq(rewardCalculation.boostFactor(59 days), 10000);
+    assertEq(rewardCalculation.boostFactor(60 days), 12000);
+    assertEq(rewardCalculation.boostFactor(89 days), 12000);
+    assertEq(rewardCalculation.boostFactor(90 days), 14000);
+    assertEq(rewardCalculation.boostFactor(179 days), 18000);
+    assertEq(rewardCalculation.boostFactor(180 days), 20000);
+    assertEq(rewardCalculation.boostFactor(359 days), 20000);
+    assertEq(rewardCalculation.boostFactor(360 days), 25000);
+    assertEq(rewardCalculation.boostFactor(719 days), 25000);
+    assertEq(rewardCalculation.boostFactor(720 days), 30000);
+    assertEq(rewardCalculation.boostFactor(10000 days), 30000);
+  }
 }
