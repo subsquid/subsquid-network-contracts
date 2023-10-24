@@ -40,13 +40,6 @@ contract WorkerRegistration is AccessControl, IWorkerRegistration {
   uint256[] public activeWorkerIds;
   mapping(address creator => EnumerableSet.UintSet) internal ownedWorkers;
 
-  event WorkerRegistered(
-    uint256 indexed workerId, bytes indexed peerId, address indexed registrar, uint256 registeredAt
-  );
-  event WorkerDeregistered(uint256 indexed workerId, address indexed account, uint256 deregistedAt);
-  event WorkerWithdrawn(uint256 indexed workerId, address indexed account);
-  event ExcessiveBondReturned(uint256 indexed workerId, uint256 amount);
-
   /**
    * @param _tSQD tSQD token.
    * @param _networkController The network controller contract.
