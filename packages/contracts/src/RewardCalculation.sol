@@ -23,14 +23,14 @@ contract RewardCalculation {
   /// @dev APY based on target and actual storages
   /// smothed base_apr function from [here](https://github.com/subsquid/subsquid-network-contracts/wiki/Whitepaper#reward-rate)
   function apy(uint256 target, uint256 actual) public pure returns (uint256) {
-    int256 def = (int256(target) - int256(actual)) * 10000 / int256(target);
-    if (def >= 9000) {
+    int256 uRate = (int256(target) - int256(actual)) * 10000 / int256(target);
+    if (uRate >= 9000) {
       return 7000;
     }
-    if (def >= 0) {
-      return 2500 + uint256(def) / 2;
+    if (uRate >= 0) {
+      return 2500 + uint256(uRate) / 2;
     }
-    int256 resultApy = 2000 + def / 20;
+    int256 resultApy = 2000 + uRate / 20;
     if (resultApy < 0) {
       return 0;
     }
