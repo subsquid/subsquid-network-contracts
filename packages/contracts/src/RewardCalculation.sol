@@ -15,7 +15,6 @@ contract RewardCalculation {
   IWorkerRegistration public immutable workerRegistration;
   INetworkController public immutable networkController;
 
-
   constructor(IWorkerRegistration _workerRegistration, INetworkController _networkController) {
     workerRegistration = _workerRegistration;
     networkController = _networkController;
@@ -48,7 +47,7 @@ contract RewardCalculation {
     return currentApy(targetGb) * workerRegistration.effectiveTVL() * epochLengthInSeconds / year / 10000;
   }
 
-  function boostFactor(uint256 duration) public pure returns (uint) {
+  function boostFactor(uint256 duration) public pure returns (uint256) {
     if (duration < 60 days) {
       return 10000;
     }

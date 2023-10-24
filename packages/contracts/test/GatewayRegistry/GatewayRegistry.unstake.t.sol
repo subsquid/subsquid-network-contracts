@@ -25,7 +25,7 @@ contract GatewayRegistryStakeTest is GatewayRegistryTest {
   function test_DecreasesStakedAmounts() public {
     gatewayRegistry.stake(100, 200);
     gatewayRegistry.stake(1000, 150);
-    uint timeStart = block.timestamp;
+    uint256 timeStart = block.timestamp;
     vm.warp(block.timestamp + 200);
     gatewayRegistry.unstake(150);
     assertStake(0, 0, timeStart + 200);

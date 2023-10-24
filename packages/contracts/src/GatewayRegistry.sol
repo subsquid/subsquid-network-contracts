@@ -12,19 +12,21 @@ contract GatewayRegistry {
     uint256 amount;
     uint256 lockedUntil;
   }
+  //    uint128 cus;
+  //    uint128 cusPerSQD;
 
   event Staked(address indexed gateway, uint256 amount, uint256 duration, uint256 lockedUntil);
 
-  uint constant BASIS_POINT_MULTIPLIER = 10000;
-  uint constant YEAR = 365 days;
+  uint256 constant BASIS_POINT_MULTIPLIER = 10000;
+  uint256 constant YEAR = 365 days;
 
   mapping(address gateway => Stake[]) public stakes;
   IERC20 public immutable token;
   RewardCalculation public immutable rewards;
   EnumerableSet.AddressSet private gateways;
 
-  uint public baseApyBP = 1200;
-  uint public cuPerSQD = 4000;
+  uint256 public baseApyBP = 1200;
+  uint256 public cuPerSQD = 4000;
 
   constructor(IERC20 _token, RewardCalculation _rewardCalculation) {
     token = _token;
@@ -40,23 +42,26 @@ contract GatewayRegistry {
   }
 
   function allocatedCUs(uint256 amount, uint256 duration) public view returns (uint) {
-    return amount * duration * baseApyBP * cuPerSQD * rewards.boostFactor(duration) / YEAR / BASIS_POINT_MULTIPLIER / BASIS_POINT_MULTIPLIER;
+    return uint(
+      amount * duration * baseApyBP * cuPerSQD * rewards.boostFactor(duration) / YEAR / BASIS_POINT_MULTIPLIER
+        / BASIS_POINT_MULTIPLIER
+    );
   }
 
   function _pushStake(uint256 amount, uint256 duration) internal returns (uint256) {
     uint256 lockedUntil = block.timestamp + duration;
     Stake[] storage _stakes = stakes[msg.sender];
     _stakes.push(Stake(amount, lockedUntil));
-//    for (uint256 i = 0; i < _stakes.length - 1; i++) {
-//      if (_stakes[i].lockedUntil > lockedUntil) {
-//        for (uint256 j = _stakes.length - 1; j > i; j--) {
-//          _stakes[j] = _stakes[j - 1];
-//        }
-//        _stakes[i] = Stake(amount, lockedUntil);
-//        return lockedUntil;
-//      }
-//    }
-//    _stakes[_stakes.length - 1] = Stake(amount, lockedUntil);
+    //    for (uint256 i = 0; i < _stakes.length - 1; i++) {
+    //      if (_stakes[i].lockedUntil > lockedUntil) {
+    //        for (uint256 j = _stakes.length - 1; j > i; j--) {
+    //          _stakes[j] = _stakes[j - 1];
+    //        }
+    //        _stakes[i] = Stake(amount, lockedUntil);
+    //        return lockedUntil;
+    //      }
+    //    }
+    //    _stakes[_stakes.length - 1] = Stake(amount, lockedUntil);
     return lockedUntil;
   }
 
