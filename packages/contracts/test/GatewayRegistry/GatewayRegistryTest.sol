@@ -10,6 +10,7 @@ import "../../src/Staking.sol";
 contract GatewayRegistryTest is Test {
   GatewayRegistry gatewayRegistry;
   tSQD token;
+  RewardCalculation rewardCalc;
 
   event Staked(address indexed gateway, uint256 amount, uint256 duration, uint256 lockedUntil);
 
@@ -22,13 +23,13 @@ contract GatewayRegistryTest is Test {
     token = new tSQD(holders, shares);
     NetworkController nc = new NetworkController(2, 100);
     WorkerRegistration workerRegistration = new WorkerRegistration(token, nc, new Staking(token, nc));
-
-    gatewayRegistry = new GatewayRegistry(token, new RewardCalculation(workerRegistration, nc));
+    rewardCalc = new RewardCalculation(workerRegistration, nc);
+    gatewayRegistry = new GatewayRegistry(IERC20WithMetadata(address(token)), rewardCalc);
     token.approve(address(gatewayRegistry), type(uint256).max);
   }
 
   function assertStake(uint256 stakeId, uint256 amount, uint256 lockedUntil) internal {
-    (uint256 _amount, uint256 _lockedUntil) = gatewayRegistry.stakes(address(this), stakeId);
+    (uint256 _amount, uint256 _lockedUntil,) = gatewayRegistry.stakes(address(this), stakeId);
     assertEq(_amount, amount);
     assertEq(_lockedUntil, lockedUntil);
   }
