@@ -24,10 +24,13 @@ contract GatewayRegistry {
   IERC20WithMetadata public immutable token;
   RewardCalculation public immutable rewards;
   EnumerableSet.AddressSet private gateways;
+  mapping(address gateway => uint) allocatedComputationUnits;
 
   uint256 public baseApyBP = 1200;
   uint256 public cuPerSQD = 4000;
   uint256 internal tokenDecimals;
+
+  event AllocatedCUs(address indexed gateway, uint256[] workerIds, uint256[] cus);
 
   constructor(IERC20WithMetadata _token, RewardCalculation _rewardCalculation) {
     token = _token;
@@ -43,7 +46,7 @@ contract GatewayRegistry {
     emit Staked(msg.sender, amount, duration, lockedUntil);
   }
 
-  function allocatedCUs(uint256 amount, uint256 duration) public view returns (uint256) {
+  function availableCUs(uint256 amount, uint256 duration) public view returns (uint256) {
     return amount * duration * baseApyBP * cuPerSQD * rewards.boostFactor(duration) / YEAR / BASIS_POINT_MULTIPLIER
       / BASIS_POINT_MULTIPLIER / tokenDecimals;
   }
@@ -51,19 +54,19 @@ contract GatewayRegistry {
   function _pushStake(uint256 amount, uint256 duration) internal returns (uint256) {
     uint256 lockedUntil = block.timestamp + duration;
     Stake[] storage _stakes = stakes[msg.sender];
-    uint256 computationUnits = allocatedCUs(amount, duration);
-    uint256 cuPerStd = computationUnits * ADDITIONAL_PRECISION / amount;
+    uint256 _computationUnits = availableCUs(amount, duration);
+    uint256 cuPerStd = _computationUnits * ADDITIONAL_PRECISION / amount;
     _stakes.push();
     for (uint256 i = 0; i < _stakes.length - 1; i++) {
       if (_stakes[i].computationUnits * ADDITIONAL_PRECISION / _stakes[i].amount > cuPerStd) {
         for (uint256 j = _stakes.length - 1; j > i; j--) {
           _stakes[j] = _stakes[j - 1];
         }
-        _stakes[i] = Stake(amount, lockedUntil, computationUnits);
+        _stakes[i] = Stake(amount, lockedUntil, _computationUnits);
         return lockedUntil;
       }
     }
-    _stakes[_stakes.length - 1] = Stake(amount, lockedUntil, computationUnits);
+    _stakes[_stakes.length - 1] = Stake(amount, lockedUntil, _computationUnits);
     return lockedUntil;
   }
 
@@ -76,7 +79,9 @@ contract GatewayRegistry {
         if (_stake.amount <= remaining) {
           remaining -= _stake.amount;
           _stakes[i].amount = 0;
+          _stakes[i].computationUnits = 0;
         } else {
+          _stakes[i].computationUnits -= _stake.computationUnits * remaining / _stake.amount;
           _stakes[i].amount -= remaining;
           remaining = 0;
           break;
@@ -94,6 +99,27 @@ contract GatewayRegistry {
       total += _stakes[i].amount;
     }
     return total;
+  }
+
+  function allocateComputationUnits(uint256[] calldata workerId, uint256[] calldata cus) external {
+    require(workerId.length == cus.length, "Length mismatch");
+    uint256 newlyAllocated = 0;
+    for (uint i = 0; i < workerId.length; i++) {
+      newlyAllocated+=cus[i];
+    }
+    allocatedComputationUnits[msg.sender] += newlyAllocated;
+    require(computationUnits(msg.sender) >= 0, "Not enough computation units");
+
+    emit AllocatedCUs(msg.sender, workerId, cus);
+  }
+
+  function computationUnits(address gateway) public view returns (uint) {
+    uint total = 0;
+    Stake[] memory _stakes = stakes[gateway];
+    for (uint i = 0; i < _stakes.length; i++) {
+      total += _stakes[i].computationUnits;
+    }
+    return total - allocatedComputationUnits[gateway];
   }
 
   function getGateways() external view returns (address[] memory) {

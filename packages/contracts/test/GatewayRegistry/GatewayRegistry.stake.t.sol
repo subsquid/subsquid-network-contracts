@@ -34,6 +34,15 @@ contract GatewayRegistryStakeTest is GatewayRegistryTest {
     assertEq(gatewayRegistry.staked(address(this)), 1100);
   }
 
+  function test_IncreasesComputationalUnits() public {
+    gatewayRegistry.stake(10 ether, 30 days);
+    assertEq(gatewayRegistry.computationUnits(address(this)), 400);
+    gatewayRegistry.stake(5 ether, 180 days);
+    assertEq(gatewayRegistry.computationUnits(address(this)), 2800);
+    gatewayRegistry.stake(1 ether, 90 days);
+    assertEq(gatewayRegistry.computationUnits(address(this)), 2800 + 168);
+  }
+
   function test_EmitsEvent() public {
     vm.expectEmit(address(gatewayRegistry));
     emit Staked(address(this), 100, 200, block.timestamp + 200);
