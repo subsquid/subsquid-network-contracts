@@ -22,7 +22,7 @@ contract DistributedRewardsDistribution is AccessControl, IRewardsDistribution {
   bytes32 public constant REWARDS_TREASURY_ROLE = keccak256("REWARDS_TREASURY_ROLE");
   uint8 internal constant APPROVES_REQUIRED = 3;
 
-  mapping(uint256 workerId => uint256) _claimable;
+  mapping(uint256 workerId => uint256) internal _claimable;
   mapping(uint256 fromBlock => mapping(uint256 toBlock => bytes32)) public commitments;
   mapping(uint256 fromBlock => mapping(uint256 toBlock => uint8)) public approves;
   mapping(bytes32 => mapping(address => bool)) public alreadyApproved;

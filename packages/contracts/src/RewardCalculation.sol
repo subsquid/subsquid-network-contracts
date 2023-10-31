@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.19;
 
+import "@openzeppelin/contracts/utils/Math/SafeCast.sol";
+
 import "./interfaces/IWorkerRegistration.sol";
 import "./interfaces/INetworkController.sol";
 
@@ -23,18 +25,18 @@ contract RewardCalculation {
   /// @dev APY based on target and actual storages
   /// smothed base_apr function from [here](https://github.com/subsquid/subsquid-network-contracts/wiki/Whitepaper#reward-rate)
   function apy(uint256 target, uint256 actual) public pure returns (uint256) {
-    int256 uRate = (int256(target) - int256(actual)) * 10000 / int256(target);
+    int256 uRate = (SafeCast.toInt256(target) - SafeCast.toInt256(actual)) * 10000 / SafeCast.toInt256(target);
     if (uRate >= 9000) {
       return 7000;
     }
     if (uRate >= 0) {
-      return 2500 + uint256(uRate) / 2;
+      return 2500 + SafeCast.toUint256(uRate) / 2;
     }
     int256 resultApy = 2000 + uRate / 20;
     if (resultApy < 0) {
       return 0;
     }
-    return uint256(resultApy);
+    return SafeCast.toUint256(resultApy);
   }
 
   /// @return current APY for a worker with targetGb storage
