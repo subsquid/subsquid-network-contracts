@@ -12,8 +12,6 @@ import "./interfaces/INetworkController.sol";
  * For more info, see https://github.com/subsquid/subsquid-network-contracts/wiki/Whitepaper#appendix-ii----rewards
  */
 contract RewardCalculation {
-  uint256 internal constant year = 365 days;
-
   IWorkerRegistration public immutable workerRegistration;
   INetworkController public immutable networkController;
 
@@ -46,6 +44,6 @@ contract RewardCalculation {
 
   /// @return reword for an epoch that lasted epochLengthInSeconds seconds
   function epochReward(uint256 targetGb, uint256 epochLengthInSeconds) public view returns (uint256) {
-    return currentApy(targetGb) * workerRegistration.effectiveTVL() * epochLengthInSeconds / year / 10000;
+    return currentApy(targetGb) * workerRegistration.effectiveTVL() * epochLengthInSeconds / 365 days / 10000;
   }
 }
