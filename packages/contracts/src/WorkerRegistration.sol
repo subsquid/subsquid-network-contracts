@@ -186,11 +186,13 @@ contract WorkerRegistration is AccessControl, IWorkerRegistration {
   }
 
   /// @dev Returns true if worker is active.
+  /// @notice Worker is considered active if it has been registered and not deregistered yet
   function isWorkerActive(Worker storage worker) internal view returns (bool) {
     return worker.registeredAt <= block.number && (worker.deregisteredAt == 0 || worker.deregisteredAt >= block.number);
   }
 
   /// @dev Returns the number of active workers.
+  /// @notice Worker is considered active if it has been registered and not deregistered yet
   function getActiveWorkerCount() public view returns (uint256) {
     uint256 activeCount = 0;
     for (uint256 i = 0; i < activeWorkerIds.length; i++) {
@@ -203,6 +205,9 @@ contract WorkerRegistration is AccessControl, IWorkerRegistration {
     return activeCount;
   }
 
+  /// @dev Get worker by index
+  /// @param index Index of the worker
+  /// @return Worker under the index
   function getWorkerByIndex(uint256 index) external view returns (Worker memory) {
     require(index < activeWorkerIds.length, "Index out of bounds");
     uint256 workerId = activeWorkerIds[index];
@@ -214,6 +219,7 @@ contract WorkerRegistration is AccessControl, IWorkerRegistration {
     return ownedWorkers[owner].values();
   }
 
+  /// @dev get count of all workers
   function getAllWorkersCount() external view returns (uint256) {
     return activeWorkerIds.length;
   }
@@ -224,18 +230,23 @@ contract WorkerRegistration is AccessControl, IWorkerRegistration {
     return getActiveWorkerCount() * bondAmount() + activeStake();
   }
 
+  /// @dev Returns sum of stakes of all active workers
+  /// @notice Worker is considered active if it has been registered and not deregistered yet
   function activeStake() public view returns (uint256) {
     return staking.activeStake(getActiveWorkerIds());
   }
 
+  /// @dev Get current bond amount
   function bondAmount() public view returns (uint256) {
     return networkController.bondAmount();
   }
 
+  /// @dev Get current epoch length in blocks
   function epochLength() public view returns (uint128) {
     return networkController.epochLength();
   }
 
+  /// @dev Get current lock period for a worker which is equal to one epoch
   function lockPeriod() public view returns (uint128) {
     return networkController.epochLength();
   }

@@ -54,6 +54,11 @@ contract NetworkControllerTest is Test {
     controller.setEpochLength(10);
   }
 
+  function test_RevertsIf_SettingEpochLengthTo1() public {
+    vm.expectRevert("Epoch length too short");
+    controller.setEpochLength(1);
+  }
+
   function test_RevertsIf_SettingBondAmountNotByAdmin() public {
     hoax(address(1));
     vm.expectRevert(
@@ -62,12 +67,27 @@ contract NetworkControllerTest is Test {
     controller.setBondAmount(10);
   }
 
+  function test_RevertsIf_SettingBondAmountTo0() public {
+    vm.expectRevert("Bond cannot be 0");
+    controller.setBondAmount(0);
+  }
+
+  function test_RevertsIf_SettingBondAmountToOver1M() public {
+    vm.expectRevert("Bond too large");
+    controller.setBondAmount(1_000_001 ether);
+  }
+
   function test_RevertsIf_SettingStorageAmountNotByAdmin() public {
     hoax(address(1));
     vm.expectRevert(
       "AccessControl: account 0x0000000000000000000000000000000000000001 is missing role 0x0000000000000000000000000000000000000000000000000000000000000000"
     );
     controller.setStoragePerWorkerInGb(10);
+  }
+
+  function test_RevertsIf_SettingStorageAmountTo0() public {
+    vm.expectRevert("Storage cannot be 0");
+    controller.setStoragePerWorkerInGb(0);
   }
 
   function test_changesBondAmount() public {
