@@ -2,8 +2,11 @@
 pragma solidity 0.8.19;
 
 interface INetworkController {
+  /// @dev Emitted when epoch length is updated
   event EpochLengthUpdated(uint128 epochLength);
+  /// @dev Emitted when bond amount is updated
   event BondAmountUpdated(uint256 bondAmount);
+  /// @dev Emitted when storage per worker is updated
   event StoragePerWorkerInGbUpdated(uint128 storagePerWorkerInGb);
 
   /// @dev Amount of blocks in one epoch

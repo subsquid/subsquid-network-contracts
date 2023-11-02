@@ -31,6 +31,7 @@ contract DistributedRewardsDistribution is AccessControl, IRewardsDistribution {
   IWorkerRegistration public immutable workers;
   EnumerableSet.AddressSet private distributors;
 
+  /// @dev Emitted on new commitment
   event NewCommitment(
     address indexed who,
     uint256 fromBlock,
@@ -39,6 +40,8 @@ contract DistributedRewardsDistribution is AccessControl, IRewardsDistribution {
     uint256[] workerRewards,
     uint256[] stakerRewards
   );
+
+  /// @dev Emitted when commitment is approved
   event Approved(
     address indexed who,
     uint256 fromBlock,
@@ -48,7 +51,9 @@ contract DistributedRewardsDistribution is AccessControl, IRewardsDistribution {
     uint256[] stakerRewards
   );
 
+  /// @dev Emitted when new distributor is added
   event DistributorAdded(address indexed distributor);
+  /// @dev Emitted when distributor is removed
   event DistributorRemoved(address indexed distributor);
 
   constructor(IStaking _staking, IWorkerRegistration _workers) {

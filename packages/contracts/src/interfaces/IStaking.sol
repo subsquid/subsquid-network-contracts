@@ -15,9 +15,13 @@ interface IStaking {
     uint256 totalStaked;
   }
 
+  /// @dev Emitted when rewards where distributed by the distributor
   event Distributed(uint256 epoch);
+  /// @dev Emitted when a staker delegates amount to the worker
   event Deposited(uint256 indexed worker, address indexed staker, uint256 amount);
+  /// @dev Emitted when a staker undelegates amount to the worker
   event Withdrawn(uint256 indexed worker, address indexed staker, uint256 amount);
+  /// @dev Emitted when a staker claims rewards
   event Claimed(address indexed staker, uint256 amount);
 
   /// @dev Deposit amount of tokens in favour of a worker

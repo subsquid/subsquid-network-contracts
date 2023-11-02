@@ -14,7 +14,9 @@ contract RewardTreasury is AccessControl {
   mapping(IRewardsDistribution => bool) public isWhitelistedDistributor;
   IERC20 public immutable rewardToken;
 
+  /// @dev Emitted when rewards are claimed
   event Claimed(address indexed by, address indexed receiver, uint256 amount);
+  /// @dev Emitted when distributor is whitelisted or removed from whitelist
   event WhitelistedDistributorSet(IRewardsDistribution indexed distributor, bool isWhitelisted);
 
   /**
