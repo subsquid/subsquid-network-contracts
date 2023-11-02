@@ -38,7 +38,7 @@ contract WorkerRegistrationTest is Test {
 
   function setUp() public {
     startHoax(creator);
-    networkController = new NetworkController(EPOCH_LENGTH, 100);
+    networkController = new NetworkController(EPOCH_LENGTH, 10 ether);
     uint256[] memory shares = new uint256[](1);
     shares[0] = 100;
     address[] memory holders = new address[](1);

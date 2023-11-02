@@ -17,7 +17,7 @@ contract StakingHelper is Staking {
 
 contract StakersRewardDistributionTest is Test {
   uint256[] workers = [1234];
-  StakingHelper rewards;
+  StakingHelper staking;
   IERC20 token;
   NetworkController network;
 
@@ -30,16 +30,16 @@ contract StakersRewardDistributionTest is Test {
     holders[1] = address(1);
 
     token = new tSQD(holders, shares);
-    network = new NetworkController(1,1);
-    rewards = new StakingHelper(token, network);
-    token.approve(address(rewards), type(uint256).max);
+    network = new NetworkController(1,10 ether);
+    staking = new StakingHelper(token, network);
+    token.approve(address(staking), type(uint256).max);
     hoax(address(1));
-    token.approve(address(rewards), type(uint256).max);
-    rewards.grantRole(rewards.REWARDS_DISTRIBUTOR_ROLE(), address(this));
+    token.approve(address(staking), type(uint256).max);
+    staking.grantRole(staking.REWARDS_DISTRIBUTOR_ROLE(), address(this));
   }
 
   function assertPairClaimable(uint256 rewardA, uint256 rewardB) internal {
-    assertEq(rewards.claimable(address(this)), rewardA);
-    assertEq(rewards.claimable(address(1)), rewardB);
+    assertEq(staking.claimable(address(this)), rewardA);
+    assertEq(staking.claimable(address(1)), rewardB);
   }
 }

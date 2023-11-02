@@ -74,6 +74,8 @@ contract Staking is AccessControl, IStaking {
     require(lastEpochRewarded + 2 >= network.epochNumber() || lastEpochRewarded == 0, "Rewards out of date");
 
     StakerRewards storage _rewards = rewards[worker];
+    require(_rewards.totalStaked + amount <= network.delegationLimit(), "Delegation limit exceeded");
+
     updateCheckpoint(_rewards);
     _rewards.totalStaked += amount;
     _rewards.depositAmount[msg.sender] += amount;
