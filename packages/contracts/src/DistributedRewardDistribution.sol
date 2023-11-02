@@ -47,7 +47,6 @@ contract DistributedRewardsDistribution is AccessControl, IRewardsDistribution {
     uint256[] workerRewards,
     uint256[] stakerRewards
   );
-  event Distributed(uint256 fromBlock, uint256 toBlock);
 
   event DistributorAdded(address indexed distributor);
   event DistributorRemoved(address indexed distributor);
@@ -196,17 +195,19 @@ contract DistributedRewardsDistribution is AccessControl, IRewardsDistribution {
   }
 
   /// @dev Treasury claims rewards for an address
-  function claim(address who) external onlyRole(REWARDS_TREASURY_ROLE) returns (uint256) {
-    uint256 reward = staking.claim(who);
+  /// @notice Can only be called by the treasury
+  /// @notice Claimable amount should drop to 0 after function call
+  function claim(address who) external onlyRole(REWARDS_TREASURY_ROLE) returns (uint256 claimedAmount) {
+    claimedAmount = staking.claim(who);
     uint256[] memory ownedWorkers = workers.getOwnedWorkers(who);
     for (uint256 i = 0; i < ownedWorkers.length; i++) {
       uint256 workerId = ownedWorkers[i];
-      reward += _claimable[workerId];
+      claimedAmount += _claimable[workerId];
       _claimable[workerId] = 0;
     }
 
-    emit Claimed(who, reward);
-    return reward;
+    emit Claimed(who, claimedAmount);
+    return claimedAmount;
   }
 
   /// @return claimable amount for the address
