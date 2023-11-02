@@ -20,7 +20,7 @@ contract StakersRewardDistributionDepositTest is StakersRewardDistributionTest {
 
   function test_RevertsIf_StakingMoreThanLimit() public {
     staking.deposit(workers[0], 10);
-    uint limit = network.delegationLimit();
+    uint256 limit = network.delegationLimit();
     vm.expectRevert("Delegation limit exceeded");
     staking.deposit(workers[0], limit);
   }

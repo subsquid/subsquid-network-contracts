@@ -11,7 +11,7 @@ import "./interfaces/INetworkController.sol";
  * See getters descriptions in interface
  */
 contract NetworkController is AccessControl, INetworkController {
-  uint256 constant internal ONE_BASIS_POINT = 10_000;
+  uint256 internal constant ONE_BASIS_POINT = 10_000;
 
   uint128 public epochLength;
   uint128 public firstEpochBlock;

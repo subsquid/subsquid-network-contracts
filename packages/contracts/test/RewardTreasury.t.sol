@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: Unlicensed
 pragma solidity 0.8.18;
 
-import "forge-std/Test.sol";
 import "../src/RewardTreasury.sol";
 import "../src/testnet/tSQD.sol";
+import "./BaseTest.sol";
 
 contract MockRewardsDistribution is IRewardsDistribution {
   function claimable(address) external pure override returns (uint256) {
@@ -15,7 +15,7 @@ contract MockRewardsDistribution is IRewardsDistribution {
   }
 }
 
-contract RewardTreasuryTest is Test {
+contract RewardTreasuryTest is BaseTest {
   RewardTreasury treasury;
   tSQD token;
   IRewardsDistribution distributor;
@@ -24,14 +24,9 @@ contract RewardTreasuryTest is Test {
   event WhitelistedDistributorSet(IRewardsDistribution indexed distributor, bool isWhitelisted);
 
   function setUp() public {
-    uint256[] memory shares = new uint256[](1);
-    shares[0] = 100;
-    address[] memory holders = new address[](1);
-    holders[0] = address(this);
-
-    token = new tSQD(holders, shares);
-
-    treasury = new RewardTreasury(token);
+    (tSQD _token, Router router) = deployAll();
+    token = _token;
+    treasury = RewardTreasury(router.rewardTreasury());
     token.transfer(address(treasury), 100);
 
     distributor = new MockRewardsDistribution();

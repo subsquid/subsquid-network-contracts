@@ -1,22 +1,20 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity 0.8.18;
 
-import "forge-std/Test.sol";
 import "../../src/WorkerRegistration.sol";
 import "../../src/testnet/tSQD.sol";
 import "../../src/NetworkController.sol";
 import "../../src/Staking.sol";
+import "../BaseTest.sol";
 
-contract WorkerRegistrationTest is Test {
-  uint256 constant creatorPrivateKey = 0xabc123;
-
+contract WorkerRegistrationTest is BaseTest {
   uint128 constant EPOCH_LENGTH = 2;
   WorkerRegistration public workerRegistration;
   NetworkController public networkController;
   Staking public staking;
   IERC20 public token;
 
-  address creator = vm.addr(creatorPrivateKey);
+  address creator = address(this);
   bytes public workerId = "test-peer-id-1";
   bytes public workerId2 = "test-peer-id-2";
 
@@ -37,16 +35,12 @@ contract WorkerRegistrationTest is Test {
   }
 
   function setUp() public {
-    startHoax(creator);
-    networkController = new NetworkController(EPOCH_LENGTH, 10 ether);
-    uint256[] memory shares = new uint256[](1);
-    shares[0] = 100;
-    address[] memory holders = new address[](1);
-    holders[0] = creator;
-
-    token = new tSQD(holders, shares);
-    staking = new Staking(token, networkController);
-    workerRegistration = new WorkerRegistration(token, networkController, staking);
+    (tSQD _token, Router router) = deployAll();
+    token = _token;
+    workerRegistration = WorkerRegistration(address(router.workerRegistration()));
+    networkController = NetworkController(address(router.networkController()));
+    networkController.setEpochLength(EPOCH_LENGTH);
+    staking = Staking(address(router.staking()));
     token.approve(address(workerRegistration), workerRegistration.bondAmount());
   }
 }
