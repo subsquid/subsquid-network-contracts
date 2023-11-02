@@ -36,7 +36,9 @@ contract RewardCalculation {
 
   /// @return current APY for a worker with targetGb storage
   function currentApy(uint256 targetGb) public view returns (uint256) {
-    return apy(targetGb, router.workerRegistration().getActiveWorkerCount() * router.networkController().storagePerWorkerInGb());
+    return apy(
+      targetGb, router.workerRegistration().getActiveWorkerCount() * router.networkController().storagePerWorkerInGb()
+    );
   }
 
   /// @return reword for an epoch that lasted epochLengthInSeconds seconds
