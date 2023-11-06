@@ -1,5 +1,4 @@
 import {
-  alreadyCommitted,
   approveRewards,
   canCommit,
   commitRewards,
@@ -33,14 +32,14 @@ function getEpochStart(blockNumber: number, epochLength: number) {
 
 async function firstRegistrationBlock(registrations: Registrations) {
   return Math.min(
-    ...registrations.map(({ registeredAt }) => Number(registeredAt))
+    ...registrations.map(({ registeredAt }) => Number(registeredAt)),
   );
 }
 
 async function earliestEpoch(registrations: Registrations) {
   const length = await epochLength();
   const firstRegistration = Math.min(
-    ...registrations.map(({ registeredAt }) => Number(registeredAt))
+    ...registrations.map(({ registeredAt }) => Number(registeredAt)),
   );
   const firsRegistrationEpoch = getEpochStart(firstRegistration, length);
   const nextEpoch = Number(await nextEpochStart());
@@ -56,7 +55,7 @@ async function commitIfPossible(walletClient: WalletClient) {
       let _lastRewardedBlock = await lastRewardedBlock();
       if (_lastRewardedBlock === 0) {
         _lastRewardedBlock = await firstRegistrationBlock(
-          await getRegistrations()
+          await getRegistrations(),
         );
       }
       let currentEpochStart = getEpochStart(await getBlockNumber(), epochLen);
@@ -71,13 +70,13 @@ async function commitIfPossible(walletClient: WalletClient) {
       ) {
         const rewards = await epochStats(
           await getBlockTimestamp(fromBlock),
-          await getBlockTimestamp(toBlock)
+          await getBlockTimestamp(toBlock),
         );
         await commitRewards(fromBlock, toBlock, rewards, walletClient);
       }
     }
   } catch (e) {
-    logger.log(e);
+    logger.error(e);
   }
   setTimeout(() => commitIfPossible(walletClient), 300 * 1000);
 }
@@ -112,7 +111,7 @@ export async function startWorker(index: number) {
     if (!fromBlock) return;
     const rewards = await epochStats(
       await getBlockTimestamp(fromBlock),
-      await getBlockTimestamp(toBlock)
+      await getBlockTimestamp(toBlock),
     );
     await approveRewards(fromBlock, toBlock, rewards, walletClient);
   });

@@ -11,7 +11,7 @@ export async function getRegistrations() {
     await publicClient.getLogs({
       address: "0xA7E47a7aE0FB29BeF4485f6CAb2ee1b85c1D38aB", // addresses.workerRegistration,
       event: parseAbiItem(
-        "event WorkerRegistered(uint256 indexed workerId, bytes indexed peerId, address indexed registrar, uint256 registeredAt)"
+        "event WorkerRegistered(uint256 indexed workerId, bytes indexed peerId, address indexed registrar, uint256 registeredAt)",
       ),
       fromBlock: 1n,
     })
@@ -90,15 +90,15 @@ export async function getBlockTimestamp(blockNumber: number) {
         await l1Client.getBlock({
           blockNumber: BigInt(blockNumber),
         })
-      ).timestamp
-    ) * 1000
+      ).timestamp,
+    ) * 1000,
   );
 }
 
 export async function canCommit(walletClient: WalletClient) {
   return isAddressEqual(
     await contracts.rewardsDistribution.read.currentDistributor(),
-    walletClient.account.address
+    walletClient.account.address,
   );
 }
 
@@ -115,7 +115,7 @@ export async function commitRewards(
   fromBlock: number,
   toBlock: number,
   rewards: Rewards,
-  walletClient: WalletClient
+  walletClient: WalletClient,
 ) {
   if (!rewards) {
     logger.log("No rewards to distribute");
@@ -123,7 +123,7 @@ export async function commitRewards(
   }
   const workerPeerIds = Object.keys(rewards ?? {});
   const workerIds = await Promise.all(
-    workerPeerIds.map((peerId) => getWorkerId(peerId))
+    workerPeerIds.map((peerId) => getWorkerId(peerId)),
   );
   const rewardAmounts = workerPeerIds.map((id) => rewards[id].workerReward);
   const stakedAmounts = workerPeerIds.map((id) => rewards[id].stakerReward);
@@ -139,7 +139,7 @@ export async function commitRewards(
         rewardAmounts,
         stakedAmounts,
       ],
-      {}
+      {},
     )
     .catch(logger.log);
   logger.log("Commit rewards", tx);
@@ -149,11 +149,11 @@ export async function approveRewards(
   fromBlock: number,
   toBlock: number,
   rewards: Rewards,
-  walletClient: WalletClient
+  walletClient: WalletClient,
 ) {
   const workerPeerIds = Object.keys(rewards ?? {});
   const workerIds = await Promise.all(
-    workerPeerIds.map((peerId) => getWorkerId(peerId))
+    workerPeerIds.map((peerId) => getWorkerId(peerId)),
   );
   const rewardAmounts = workerPeerIds.map((id) => rewards[id].workerReward);
   const stakedAmounts = workerPeerIds.map((id) => rewards[id].stakerReward);
@@ -181,7 +181,7 @@ export async function approveRewards(
       ],
       {
         gasLimit: 10_000_000,
-      }
+      },
     )
     .catch(logger.log);
   logger.log("Approve rewards", tx);
@@ -193,24 +193,24 @@ export async function watchCommits(onLogs: (logs: any) => void) {
       await publicClient.getLogs({
         address: addresses.rewardsDistribution,
         event: parseAbiItem(
-          `event NewCommitment(address indexed who,uint256 fromBlock,uint256 toBlock,uint256[] recipients,uint256[] workerRewards,uint256[] stakerRewards)`
+          `event NewCommitment(address indexed who,uint256 fromBlock,uint256 toBlock,uint256[] recipients,uint256[] workerRewards,uint256[] stakerRewards)`,
         ),
         fromBlock: 1n,
       })
     ).map(({ args }) => args);
     if (t.length > 0) {
       const latestCommit = t.sort(
-        ({ toBlock: a }, { toBlock: b }) => Number(b) - Number(a)
+        ({ toBlock: a }, { toBlock: b }) => Number(b) - Number(a),
       )[0];
       const latestDistributionBlock = Number(
-        await contracts.rewardsDistribution.read.lastBlockRewarded()
+        await contracts.rewardsDistribution.read.lastBlockRewarded(),
       );
       if (latestDistributionBlock < Number(latestCommit.toBlock)) {
         await onLogs(latestCommit);
       }
     }
   } catch (e) {
-    console.error(e);
+    logger.error(e);
   }
   setTimeout(() => watchCommits(onLogs), 300 * 1000);
 }
@@ -223,14 +223,14 @@ export async function getStakes(workers: Workers) {
         abi: contracts.staking.abi,
         functionName: "activeStake",
         args: [[await getWorkerId(workerId)]],
-      }))
+      })),
     ),
   });
   return Object.fromEntries(
     results.map(
       (result, i) =>
-        [Object.keys(workers)[i], result.result] as [string, bigint]
-    )
+        [Object.keys(workers)[i], result.result] as [string, bigint],
+    ),
   );
 }
 
