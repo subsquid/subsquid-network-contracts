@@ -8,7 +8,7 @@ contract GatewayRegistryAllocateTest is GatewayRegistryTest {
     uint256[] memory cus = new uint256[](n);
     for (uint256 i = 0; i < n; i++) {
       workerIds[i] = i + 1;
-      cus[i] = (i+1) * 10;
+      cus[i] = (i + 1) * 10;
     }
 
     uint256 gasBefore = gasleft();

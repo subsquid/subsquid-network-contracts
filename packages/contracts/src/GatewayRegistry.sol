@@ -24,7 +24,7 @@ contract GatewayRegistry {
   IERC20WithMetadata public immutable token;
   IRouter public immutable router;
   EnumerableSet.AddressSet private gateways;
-  mapping(address gateway => uint) allocatedComputationUnits;
+  mapping(address gateway => uint256) allocatedComputationUnits;
 
   uint256 public baseApyBP = 1200;
   uint256 public cuPerSQD = 4000;
@@ -47,8 +47,8 @@ contract GatewayRegistry {
   }
 
   function availableCUs(uint256 amount, uint256 duration) public view returns (uint256) {
-    return amount * duration * baseApyBP * cuPerSQD * router.rewardCalculation().boostFactor(duration) / YEAR / BASIS_POINT_MULTIPLIER
-      / BASIS_POINT_MULTIPLIER / tokenDecimals;
+    return amount * duration * baseApyBP * cuPerSQD * router.rewardCalculation().boostFactor(duration) / YEAR
+      / BASIS_POINT_MULTIPLIER / BASIS_POINT_MULTIPLIER / tokenDecimals;
   }
 
   function _pushStake(uint256 amount, uint256 duration) internal returns (uint256) {
@@ -104,8 +104,8 @@ contract GatewayRegistry {
   function allocateComputationUnits(uint256[] calldata workerId, uint256[] calldata cus) external {
     require(workerId.length == cus.length, "Length mismatch");
     uint256 newlyAllocated = 0;
-    for (uint i = 0; i < workerId.length; i++) {
-      newlyAllocated+=cus[i];
+    for (uint256 i = 0; i < workerId.length; i++) {
+      newlyAllocated += cus[i];
     }
     allocatedComputationUnits[msg.sender] += newlyAllocated;
     require(computationUnits(msg.sender) >= 0, "Not enough computation units");
@@ -113,10 +113,10 @@ contract GatewayRegistry {
     emit AllocatedCUs(msg.sender, workerId, cus);
   }
 
-  function computationUnits(address gateway) public view returns (uint) {
-    uint total = 0;
+  function computationUnits(address gateway) public view returns (uint256) {
+    uint256 total = 0;
     Stake[] memory _stakes = stakes[gateway];
-    for (uint i = 0; i < _stakes.length; i++) {
+    for (uint256 i = 0; i < _stakes.length; i++) {
       total += _stakes[i].computationUnits;
     }
     return total - allocatedComputationUnits[gateway];

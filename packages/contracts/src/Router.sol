@@ -13,7 +13,6 @@ contract Router is Initializable, AccessControl, IRouter {
   INetworkController public networkController;
   IRewardCalculation public rewardCalculation;
 
-
   event WorkerRegistrationSet(IWorkerRegistration workerRegistration);
   event StakingSet(IStaking staking);
   event RewardTreasurySet(address rewardTreasury);

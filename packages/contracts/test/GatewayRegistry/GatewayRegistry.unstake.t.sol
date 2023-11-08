@@ -23,7 +23,7 @@ contract GatewayRegistryUnStakeTest is GatewayRegistryTest {
   }
 
   function test_ProportionallyDecreasesComputationalUnits() public {
-    uint amount = 100 ether;
+    uint256 amount = 100 ether;
     gatewayRegistry.stake(amount, 30 days);
     vm.warp(block.timestamp + 30 days);
     assertEq(gatewayRegistry.computationUnits(address(this)), 4000);
