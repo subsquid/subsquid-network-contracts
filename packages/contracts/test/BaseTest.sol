@@ -9,6 +9,7 @@ import "../src/NetworkController.sol";
 import "../src/RewardTreasury.sol";
 import "../src/Router.sol";
 import "../src/testnet/tSQD.sol";
+import "../src/RewardCalculation.sol";
 
 contract BaseTest is Test {
   function deployAll() internal returns (tSQD token, Router router) {
@@ -24,6 +25,7 @@ contract BaseTest is Test {
     IStaking staking = new Staking(token, router);
     INetworkController networkController = new NetworkController(5, 10 ether);
     RewardTreasury treasury = new RewardTreasury(token);
-    router.initialize(workerRegistration, staking, address(treasury), networkController);
+    RewardCalculation rewards = new RewardCalculation(router);
+    router.initialize(workerRegistration, staking, address(treasury), networkController, rewards);
   }
 }
