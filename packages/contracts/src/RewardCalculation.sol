@@ -8,7 +8,7 @@ import "./interfaces/IRouter.sol";
  * @dev Contract that calculates rewards for workers and stakers
  * For more info, see https://github.com/subsquid/subsquid-network-contracts/wiki/Whitepaper#appendix-ii----rewards
  */
-contract RewardCalculation {
+contract RewardCalculation is IRewardCalculation {
   uint256 internal constant year = 365 days;
 
   IRouter public immutable router;

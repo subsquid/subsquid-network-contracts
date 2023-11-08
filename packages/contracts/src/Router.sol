@@ -11,17 +11,21 @@ contract Router is Initializable, AccessControl, IRouter {
   IStaking public staking;
   address public rewardTreasury;
   INetworkController public networkController;
+  IRewardCalculation public rewardCalculation;
+
 
   event WorkerRegistrationSet(IWorkerRegistration workerRegistration);
   event StakingSet(IStaking staking);
   event RewardTreasurySet(address rewardTreasury);
   event NetworkControllerSet(INetworkController networkController);
+  event RewardCalculationSet(IRewardCalculation rewardCalculation);
 
   function initialize(
     IWorkerRegistration _workerRegistration,
     IStaking _staking,
     address _rewardTreasury,
-    INetworkController _networkController
+    INetworkController _networkController,
+    IRewardCalculation _rewardCalculation
   ) external initializer {
     _setupRole(DEFAULT_ADMIN_ROLE, msg.sender);
 
@@ -29,6 +33,7 @@ contract Router is Initializable, AccessControl, IRouter {
     staking = _staking;
     rewardTreasury = _rewardTreasury;
     networkController = _networkController;
+    rewardCalculation = _rewardCalculation;
   }
 
   function setWorkerRegistration(IWorkerRegistration _workerRegistration) external onlyRole(DEFAULT_ADMIN_ROLE) {
@@ -53,5 +58,11 @@ contract Router is Initializable, AccessControl, IRouter {
     networkController = _networkController;
 
     emit NetworkControllerSet(_networkController);
+  }
+
+  function setRewardCalculation(IRewardCalculation _rewardCalculation) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    rewardCalculation = _rewardCalculation;
+
+    emit RewardCalculationSet(_rewardCalculation);
   }
 }

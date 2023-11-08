@@ -6,8 +6,9 @@ import "../../src/testnet/tSQD.sol";
 import "../../src/NetworkController.sol";
 import "../../src/WorkerRegistration.sol";
 import "../../src/Staking.sol";
+import "../BaseTest.sol";
 
-contract GatewayRegistryTest is Test {
+contract GatewayRegistryTest is BaseTest {
   GatewayRegistry gatewayRegistry;
   tSQD token;
   RewardCalculation rewardCalc;
@@ -15,16 +16,10 @@ contract GatewayRegistryTest is Test {
   event Staked(address indexed gateway, uint256 amount, uint256 duration, uint256 lockedUntil);
 
   function setUp() public {
-    uint256[] memory shares = new uint256[](1);
-    shares[0] = 100;
-    address[] memory holders = new address[](1);
-    holders[0] = address(this);
-
-    token = new tSQD(holders, shares);
-    NetworkController nc = new NetworkController(2, 100);
-    WorkerRegistration workerRegistration = new WorkerRegistration(token, nc, new Staking(token, nc));
-    rewardCalc = new RewardCalculation(workerRegistration, nc);
-    gatewayRegistry = new GatewayRegistry(IERC20WithMetadata(address(token)), rewardCalc);
+    (tSQD _token, Router router) = deployAll();
+    token = _token;
+    rewardCalc = RewardCalculation(address(router.rewardCalculation()));
+    gatewayRegistry = new GatewayRegistry(IERC20WithMetadata(address(token)), router);
     token.approve(address(gatewayRegistry), type(uint256).max);
   }
 

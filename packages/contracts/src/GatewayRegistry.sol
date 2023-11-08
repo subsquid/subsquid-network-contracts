@@ -22,7 +22,7 @@ contract GatewayRegistry {
 
   mapping(address gateway => Stake[]) public stakes;
   IERC20WithMetadata public immutable token;
-  RewardCalculation public immutable rewards;
+  IRouter public immutable router;
   EnumerableSet.AddressSet private gateways;
   mapping(address gateway => uint) allocatedComputationUnits;
 
@@ -32,9 +32,9 @@ contract GatewayRegistry {
 
   event AllocatedCUs(address indexed gateway, uint256[] workerIds, uint256[] cus);
 
-  constructor(IERC20WithMetadata _token, RewardCalculation _rewardCalculation) {
+  constructor(IERC20WithMetadata _token, IRouter _router) {
     token = _token;
-    rewards = _rewardCalculation;
+    router = _router;
     tokenDecimals = 10 ** _token.decimals();
   }
 
@@ -47,7 +47,7 @@ contract GatewayRegistry {
   }
 
   function availableCUs(uint256 amount, uint256 duration) public view returns (uint256) {
-    return amount * duration * baseApyBP * cuPerSQD * rewards.boostFactor(duration) / YEAR / BASIS_POINT_MULTIPLIER
+    return amount * duration * baseApyBP * cuPerSQD * router.rewardCalculation().boostFactor(duration) / YEAR / BASIS_POINT_MULTIPLIER
       / BASIS_POINT_MULTIPLIER / tokenDecimals;
   }
 
