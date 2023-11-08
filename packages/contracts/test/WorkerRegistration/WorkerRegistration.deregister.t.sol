@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity 0.8.18;
 
-import "./WorkerRegistration.t.sol";
+import "./WorkerRegistration.sol";
 
 contract WorkerRegistrationDeregisterTest is WorkerRegistrationTest {
   function testRevertsIfWorkerIsNotRegistered() public {
@@ -18,7 +18,7 @@ contract WorkerRegistrationDeregisterTest is WorkerRegistrationTest {
   function testRevertsIfNotCalledByCreator() public {
     workerRegistration.register(workerId);
     jumpEpoch();
-    startHoax(address(this));
+    startHoax(address(123));
     vm.expectRevert("Not worker creator");
     workerRegistration.deregister(workerId);
   }

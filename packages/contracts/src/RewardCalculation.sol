@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.18;
 
-import "./interfaces/IWorkerRegistration.sol";
-import "./interfaces/INetworkController.sol";
+import "./interfaces/IRouter.sol";
 
 /**
  * @title Reward Calculation Contract
@@ -12,12 +11,10 @@ import "./interfaces/INetworkController.sol";
 contract RewardCalculation {
   uint256 internal constant year = 365 days;
 
-  IWorkerRegistration public immutable workerRegistration;
-  INetworkController public immutable networkController;
+  IRouter public immutable router;
 
-  constructor(IWorkerRegistration _workerRegistration, INetworkController _networkController) {
-    workerRegistration = _workerRegistration;
-    networkController = _networkController;
+  constructor(IRouter _router) {
+    router = _router;
   }
 
   /// @dev APY based on target and actual storages
@@ -39,12 +36,14 @@ contract RewardCalculation {
 
   /// @return current APY for a worker with targetGb storage
   function currentApy(uint256 targetGb) public view returns (uint256) {
-    return apy(targetGb, workerRegistration.getActiveWorkerCount() * networkController.storagePerWorkerInGb());
+    return apy(
+      targetGb, router.workerRegistration().getActiveWorkerCount() * router.networkController().storagePerWorkerInGb()
+    );
   }
 
   /// @return reword for an epoch that lasted epochLengthInSeconds seconds
   function epochReward(uint256 targetGb, uint256 epochLengthInSeconds) public view returns (uint256) {
-    return currentApy(targetGb) * workerRegistration.effectiveTVL() * epochLengthInSeconds / year / 10000;
+    return currentApy(targetGb) * router.workerRegistration().effectiveTVL() * epochLengthInSeconds / year / 10000;
   }
 
   function boostFactor(uint256 duration) public pure returns (uint256) {

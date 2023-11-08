@@ -1,6 +1,6 @@
 pragma solidity 0.8.18;
 
-import "./RewardsDistribution.t.sol";
+import "./RewardsDistribution.sol";
 
 contract RewardsDistributionDistributeTest is RewardsDistributionTest {
   function gasUsageForNWorkers(uint256 n) internal {

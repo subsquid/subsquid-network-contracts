@@ -1,28 +1,20 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity 0.8.18;
 
-import "forge-std/Test.sol";
 import "../src/RewardCalculation.sol";
 import "../src/WorkerRegistration.sol";
 import "../src/testnet/tSQD.sol";
 import "../src/NetworkController.sol";
 import "../src/Staking.sol";
+import "./BaseTest.sol";
 
-contract RewardCalculationTest is Test {
+contract RewardCalculationTest is BaseTest {
   RewardCalculation rewardCalculation;
   uint256 constant bondAmount = 10 ether;
 
   function setUp() public {
-    uint256[] memory shares = new uint256[](1);
-    shares[0] = 100;
-    address[] memory holders = new address[](1);
-    holders[0] = address(this);
-
-    tSQD token = new tSQD(holders, shares);
-    NetworkController nc = new NetworkController(2, bondAmount);
-    WorkerRegistration workerRegistration = new WorkerRegistration(token, nc, new Staking(token, nc));
-
-    rewardCalculation = new RewardCalculation(workerRegistration, nc);
+    (, Router router) = deployAll();
+    rewardCalculation = new RewardCalculation(router);
   }
 
   function test_Apy() public {
@@ -46,12 +38,12 @@ contract RewardCalculationTest is Test {
 
   function mockWorkersCount(uint256 n) internal {
     vm.mockCall(
-      address(rewardCalculation.workerRegistration()),
+      address(rewardCalculation.router().workerRegistration()),
       abi.encodeWithSelector(WorkerRegistration.getActiveWorkerCount.selector),
       abi.encode(n)
     );
     vm.mockCall(
-      address(rewardCalculation.workerRegistration()),
+      address(rewardCalculation.router().workerRegistration()),
       abi.encodeWithSelector(WorkerRegistration.effectiveTVL.selector),
       abi.encode(n * bondAmount)
     );
