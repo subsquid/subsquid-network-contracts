@@ -44,7 +44,7 @@ contract RewardsDistributionTest is Test {
     holders[1] = workerOwner;
 
     token = new tSQD(holders, shares);
-    NetworkController networkController = new NetworkController(1, 1);
+    NetworkController networkController = new NetworkController(2, 1);
     staking = new Staking(token, networkController);
     workerRegistration = new WorkerRegistration(token, networkController, staking);
     token.approve(address(staking), type(uint256).max);

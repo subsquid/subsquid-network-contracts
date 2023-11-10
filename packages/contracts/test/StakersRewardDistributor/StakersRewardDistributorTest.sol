@@ -30,7 +30,7 @@ contract StakersRewardDistributionTest is Test {
     holders[1] = address(1);
 
     token = new tSQD(holders, shares);
-    network = new NetworkController(1,1);
+    network = new NetworkController(2, 1);
     rewards = new StakingHelper(token, network);
     token.approve(address(rewards), type(uint256).max);
     hoax(address(1));

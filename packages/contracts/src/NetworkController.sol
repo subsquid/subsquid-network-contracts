@@ -18,23 +18,29 @@ contract NetworkController is AccessControl, INetworkController {
   uint128 public storagePerWorkerInGb = 1000;
 
   constructor(uint128 _epochLength, uint256 _bondAmount) {
+    require(_epochLength > 1, "Epoch length too short");
+    require(_epochLength < 100 days, "Epoch length too long");
+
     _setupRole(DEFAULT_ADMIN_ROLE, msg.sender);
     epochLength = _epochLength;
-    bondAmount = _bondAmount;
     firstEpochBlock = nextEpoch();
+    setBondAmount(_bondAmount);
   }
 
   /// @dev Set amount of blocks in one epoch
   function setEpochLength(uint128 _epochLength) external onlyRole(DEFAULT_ADMIN_ROLE) {
     require(_epochLength > 1, "Epoch length too short");
+    require(_epochLength < 100 days, "Epoch length too long");
+
     epochCheckpoint = epochNumber();
     epochLength = _epochLength;
     firstEpochBlock = nextEpoch();
+
     emit EpochLengthUpdated(_epochLength);
   }
 
   /// @dev Set amount of tokens required to register a worker
-  function setBondAmount(uint256 _bondAmount) external onlyRole(DEFAULT_ADMIN_ROLE) {
+  function setBondAmount(uint256 _bondAmount) public onlyRole(DEFAULT_ADMIN_ROLE) {
     require(_bondAmount > 0, "Bond cannot be 0");
     require(_bondAmount < 1_000_000 ether, "Bond too large");
 

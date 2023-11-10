@@ -52,7 +52,7 @@ contract RewardsDistributionClaimTest is RewardsDistributionTest {
     startHoax(workerOwner);
     vm.roll(block.number + 3);
     workerRegistration.deregister(workerId);
-    vm.roll(block.number + 3);
+    vm.roll(block.number + 4);
     workerRegistration.withdraw(workerId);
     startHoax(address(this));
     rewardsDistribution.distributeHelper(1, recipients, workerAmounts, stakerAmounts);

@@ -2,7 +2,6 @@
 pragma solidity 0.8.19;
 
 import "@openzeppelin/contracts/access/AccessControl.sol";
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 import "./interfaces/IWorkerRegistration.sol";
 import "./interfaces/IRewardsDistribution.sol";
@@ -67,7 +66,7 @@ contract DistributedRewardsDistribution is AccessControl, IRewardsDistribution {
    * Only admin can call this function
    */
   function addDistributor(address distributor) external onlyRole(DEFAULT_ADMIN_ROLE) {
-    distributors.add(distributor);
+    require(distributors.add(distributor), "Distributor already added");
     _grantRole(REWARDS_DISTRIBUTOR_ROLE, distributor);
 
     emit DistributorAdded(distributor);
@@ -78,7 +77,7 @@ contract DistributedRewardsDistribution is AccessControl, IRewardsDistribution {
    * Only admin can call this function
    */
   function removeDistributor(address distributor) external onlyRole(DEFAULT_ADMIN_ROLE) {
-    distributors.remove(distributor);
+    require(distributors.remove(distributor), "Distributor does not exist");
     _revokeRole(REWARDS_DISTRIBUTOR_ROLE, distributor);
 
     emit DistributorRemoved(distributor);
