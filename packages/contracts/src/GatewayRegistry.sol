@@ -101,6 +101,9 @@ contract GatewayRegistry {
     return total;
   }
 
+  // TODO
+  // check if the worker is registered
+  // check if cu[i] is not 0
   function allocateComputationUnits(uint256[] calldata workerId, uint256[] calldata cus) external {
     require(workerId.length == cus.length, "Length mismatch");
     uint256 newlyAllocated = 0;
