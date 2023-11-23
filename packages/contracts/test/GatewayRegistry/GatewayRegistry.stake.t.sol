@@ -48,4 +48,10 @@ contract GatewayRegistryStakeTest is GatewayRegistryTest {
     emit Staked(address(this), 100, 200, block.timestamp + 200);
     gatewayRegistry.stake(100, 200);
   }
+
+  function test_RevertsIf_NotRegistered() public {
+    gatewayRegistry.unregister();
+    vm.expectRevert("Gateway not registered");
+    gatewayRegistry.stake(100, 200);
+  }
 }

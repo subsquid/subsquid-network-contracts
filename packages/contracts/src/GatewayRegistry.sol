@@ -23,8 +23,9 @@ contract GatewayRegistry {
   mapping(address gateway => Stake[]) public stakes;
   IERC20WithMetadata public immutable token;
   IRouter public immutable router;
+  mapping(address gateway => bytes) public peerIds;
+  mapping(address gateway => uint256) public allocatedComputationUnits;
   EnumerableSet.AddressSet private gateways;
-  mapping(address gateway => uint256) allocatedComputationUnits;
 
   uint256 public baseApyBP = 1200;
   uint256 public cuPerSQD = 4000;
@@ -38,8 +39,22 @@ contract GatewayRegistry {
     tokenDecimals = 10 ** _token.decimals();
   }
 
-  function stake(uint256 amount, uint256 duration) external {
+  function register(bytes calldata peerId) external {
+    require(peerIds[msg.sender].length == 0, "Gateway already registered");
+    require(peerId.length > 0, "Cannot set empty peerId");
     gateways.add(msg.sender);
+    peerIds[msg.sender] = peerId;
+  }
+
+  function unregister() external {
+    bool removed = gateways.remove(msg.sender);
+    require(removed, "Gateway not registered");
+    delete peerIds[msg.sender];
+  }
+
+  function stake(uint256 amount, uint256 duration) external {
+    require(peerIds[msg.sender].length > 0, "Gateway not registered");
+
     uint256 lockedUntil = _pushStake(amount, duration);
     token.transferFrom(msg.sender, address(this), amount);
 

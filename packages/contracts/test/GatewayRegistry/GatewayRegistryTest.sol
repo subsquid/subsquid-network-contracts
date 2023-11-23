@@ -21,6 +21,7 @@ contract GatewayRegistryTest is BaseTest {
     rewardCalc = RewardCalculation(address(router.rewardCalculation()));
     gatewayRegistry = new GatewayRegistry(IERC20WithMetadata(address(token)), router);
     token.approve(address(gatewayRegistry), type(uint256).max);
+    gatewayRegistry.register("peerId");
   }
 
   function assertStake(uint256 stakeId, uint256 amount, uint256 lockedUntil) internal {
