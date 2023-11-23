@@ -31,7 +31,7 @@ contract GatewayRegistry {
   uint256 public cuPerSQD = 4000;
   uint256 internal tokenDecimals;
 
-  event AllocatedCUs(address indexed gateway, uint256[] workerIds, uint256[] cus);
+  event AllocatedCUs(address indexed gateway, bytes peerId, uint256[] workerIds, uint256[] cus);
 
   constructor(IERC20WithMetadata _token, IRouter _router) {
     token = _token;
@@ -128,7 +128,7 @@ contract GatewayRegistry {
     allocatedComputationUnits[msg.sender] += newlyAllocated;
     require(computationUnits(msg.sender) >= 0, "Not enough computation units");
 
-    emit AllocatedCUs(msg.sender, workerId, cus);
+    emit AllocatedCUs(msg.sender, peerIds[msg.sender], workerId, cus);
   }
 
   function computationUnits(address gateway) public view returns (uint256) {
