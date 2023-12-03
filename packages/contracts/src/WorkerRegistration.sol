@@ -177,7 +177,7 @@ contract WorkerRegistration is AccessControl, IWorkerRegistration {
 
   /// @dev Returns the list of active worker IDs.
   function getActiveWorkerIds() public view returns (uint256[] memory) {
-    uint256[] memory activeWorkers = new uint[](getActiveWorkerCount());
+    uint256[] memory activeWorkers = new uint256[](getActiveWorkerCount());
 
     uint256 activeIndex = 0;
     for (uint256 i = 0; i < activeWorkerIds.length; i++) {
