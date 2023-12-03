@@ -1,7 +1,7 @@
-import { contracts } from "./config";
-import { fromBase58 } from "./utils";
-import { publicClient } from "./client";
-import { getAllWorkers } from "./logs";
+import { contracts } from "./config.js";
+import { fromBase58 } from "./utils.js";
+import { publicClient } from "./client.js";
+import { getAllWorkers } from "./logs.js";
 
 (async () => {
   const workers = await getAllWorkers();

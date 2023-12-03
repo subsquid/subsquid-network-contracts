@@ -1,5 +1,6 @@
 import { formatEther } from "viem";
-import { decode, encode } from "bs58";
+import bs58 from "bs58";
+const { decode, encode } = bs58;
 export function keysToFixed(object: Object) {
   return Object.fromEntries(
     Object.entries(object).map(([key, value]) => [

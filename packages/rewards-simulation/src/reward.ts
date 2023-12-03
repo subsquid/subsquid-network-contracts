@@ -3,7 +3,7 @@ import {
   livenessFactor,
   NetworkStats,
   Workers,
-} from "./logs";
+} from "./logs.js";
 import {
   bond,
   clearUnknownWorkers,
@@ -11,10 +11,10 @@ import {
   getStakes,
   preloadWorkerIds,
   Stakes,
-} from "./chain";
+} from "./chain.js";
 import { parseEther } from "viem";
-import { bigSum, formatSqd, keysToFixed, sum } from "./utils";
-import { logger } from "./logger";
+import { bigSum, formatSqd, keysToFixed, sum } from "./utils.js";
+import { logger } from "./logger.js";
 import dayjs from "dayjs";
 
 const YEAR = 365 * 24 * 60 * 60;

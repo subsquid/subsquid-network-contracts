@@ -13,11 +13,12 @@
     "clickhouse": "^2.6.0",
     "dayjs": "^1.11.10",
     "libp2p": "^1.0.0",
-    "protobufjs": "^7.2.5"
+    "protobufjs": "^7.2.5",
+    "viem": "^1.19.10"
   },
   "scripts": {
     "reward-simulation": "ts-node src/generate-logs.ts && ts-node src/index.ts",
-    "start": "TS_NODE_TRANSPILE_ONLY=true ts-node src/index.ts"
+    "start": "TS_NODE_TRANSPILE_ONLY=true ts-node-esm src/index.ts"
   },
   "devDependencies": {
     "@types/chai": "^4.3.4",
