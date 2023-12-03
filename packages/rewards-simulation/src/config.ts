@@ -3,12 +3,7 @@ import tSQDAbi from "../../contracts/artifacts/tSQD.sol/tSQD.js";
 import rewardCalculationAbi from "../../contracts/artifacts/RewardCalculation.sol/RewardCalculation.js";
 import rewardsDistributionAbi from "../../contracts/artifacts/DistributedRewardDistribution.sol/DistributedRewardsDistribution.js";
 import stakingAbi from "../../contracts/artifacts/Staking.sol/Staking.js";
-import {
-  Address,
-  getContract,
-  GetContractReturnType,
-  WalletClient,
-} from "viem";
+import { Address, getContract, WalletClient } from "viem";
 import { publicClient, walletClient } from "./client.js";
 import tsqdDeployment from "../../contracts/deployments/arbitrum-goerli/tSQD.json" assert { type: "json" };
 import deployments from "../../contracts/deployments/421613.json" assert { type: "json" };
@@ -34,17 +29,13 @@ export const abis = {
 export function contract<T extends ContractName>(
   name: T,
   _walletClient: WalletClient = walletClient,
-): GetContractReturnType<
-  (typeof abis)[T]["abi"],
-  typeof publicClient,
-  typeof walletClient
-> {
+) {
   return getContract({
     address: addresses[name],
-    abi: abis[name].abi as any,
+    abi: abis[name].abi,
     publicClient,
     walletClient: _walletClient,
-  }) as any;
+  });
 }
 
 export const contracts = {
