@@ -1,7 +1,7 @@
 import { ClickHouse } from "clickhouse";
 import dayjs, { Dayjs } from "dayjs";
 import fs from "fs";
-import utc from "dayjs/plugin/utc";
+import utc from "dayjs/plugin/utc.js";
 
 dayjs.extend(utc);
 const clickhouse = new ClickHouse({

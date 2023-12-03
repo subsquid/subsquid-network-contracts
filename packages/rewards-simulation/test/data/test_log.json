@@ -1,0 +1,21 @@
+{
+  "client_id": "12D3KooWRYijvTzQCZ9UHKYPFQgUGpgkyundiB9vuQXy1n6Bu9TA",
+  "worker_id": "12D3KooWMurNpqvfgDKnrHY9B3fiZC1QJiwFrvKJmTV9hyqLNJvc",
+  "query_id": "b5b540bd-5adf-4559-9271-8a61a4e464ce",
+  "dataset": "czM6Ly9tb29uYmVhbS1tYWlubmV0",
+  "query": "{\"fromBlock\":260440,\"toBlock\":261440,\"includeAllBlocks\":true}",
+  "profiling": false,
+  "client_state_json": "{}",
+  "query_hash": "eebc897a617208c343fa98440e8ce7dcc6824c27c96b6ec6787086d3674cbbbe",
+  "exec_time_ms": 20,
+  "result": 1,
+  "num_read_chunks": 1,
+  "output_size": 48140,
+  "output_hash": "b92b90276b3f77bdeb825fb87fb79c38bba29f1a711f217a4c03fe44bc7b70f1",
+  "error_msg": null,
+  "seq_no": 0,
+  "client_signature": "dbc5010d94f0e2c10eacadd29f4ed0fccee3fb654ffc0e7267da36e7840fd8deb2393e130d1cb24bd5d11974f29ef4a1f5a102c01dd5c806cdaca2d059b2150f",
+  "worker_signature": "8e5215c3bd419aa0d8171ff413c99492553eaa386bfa8cf68a192b26d05e531186fdf0d33773d20528f77a2f682114021093d4235348a6968b10a51e78f8300c",
+  "worker_timestamp_ms": 1701095291603,
+  "collector_timestamp_ms": 1701095319862
+}

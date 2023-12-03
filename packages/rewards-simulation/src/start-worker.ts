@@ -10,9 +10,9 @@ import {
   nextEpochStart,
   Registrations,
   watchCommits,
-} from "./chain";
-import { epochStats } from "./reward";
-import { hasNewerPings } from "./logs";
+} from "./chain.js";
+import { epochStats } from "./reward.js";
+import { hasNewerPings } from "./logs.js";
 import {
   createWalletClient,
   fromHex,
@@ -24,7 +24,7 @@ import {
 } from "viem";
 import { arbitrumGoerli } from "viem/chains";
 import { privateKeyToAccount } from "viem/accounts";
-import { logger } from "./logger";
+import { logger } from "./logger.js";
 
 function getEpochStart(blockNumber: number, epochLength: number) {
   return Math.floor(blockNumber / epochLength) * epochLength;

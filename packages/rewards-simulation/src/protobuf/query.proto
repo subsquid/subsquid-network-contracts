@@ -1,0 +1,38 @@
+syntax = "proto3";
+
+message Query {
+  string query_id = 1;
+  string dataset = 2;
+  string query = 3;
+  bool profiling = 4;
+  string client_state_json = 5;
+  bytes signature = 6;
+}
+
+message InputAndOutput {
+  uint32 num_read_chunks = 1;
+  SizeAndHash output = 2;
+}
+
+message SizeAndHash {
+  uint32 size = 1;                  // the db field for this is `output_size`
+  bytes sha3_256 = 2;               // the db field for this is `output_hash`
+}
+
+message QueryExecuted {
+  string client_id = 1;
+  string worker_id = 2;
+
+  Query query = 3;
+  bytes query_hash = 5;
+
+  uint32 exec_time_ms = 6;
+  oneof result {
+    InputAndOutput ok = 7;
+    string bad_request = 8;        // the db field for this is `error_msg`
+    string server_error = 9;       // the db field for this is `error_msg` (yes, the same as above)
+  }
+  uint64 seq_no = 10;
+  uint64 timestamp_ms = 11;        // the db field for this is `worker_timestamp`
+  bytes signature = 12;            // leave this field empty
+}

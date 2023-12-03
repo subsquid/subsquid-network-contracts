@@ -62,7 +62,7 @@ contract RewardsDistributionTest is BaseTest {
   {
     workerAmounts = new uint256[](n);
     stakerAmounts = new uint256[](n);
-    recipients = new uint[](n);
+    recipients = new uint256[](n);
     for (uint160 i = 0; i < n; i++) {
       staking.deposit(i + 1, 1);
       workerAmounts[i] = epochRewardAmount / n;
