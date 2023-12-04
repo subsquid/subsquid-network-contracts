@@ -1,9 +1,12 @@
-// SPDX-License-Identifier: MIT
-pragma solidity 0.8.18;
+// SPDX-License-Identifier: UNLICENSED
+pragma solidity 0.8.19;
 
 interface INetworkController {
+  /// @dev Emitted when epoch length is updated
   event EpochLengthUpdated(uint128 epochLength);
+  /// @dev Emitted when bond amount is updated
   event BondAmountUpdated(uint256 bondAmount);
+  /// @dev Emitted when storage per worker is updated
   event StoragePerWorkerInGbUpdated(uint128 storagePerWorkerInGb);
   event DelegationLimitCoefficientInBPUpdated(uint256 newDelegationLimitCoefficientInBP);
 

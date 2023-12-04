@@ -1,5 +1,5 @@
-// SPDX-License-Identifier: Unlicensed
-pragma solidity 0.8.18;
+// SPDX-License-Identifier: UNLICENSED
+pragma solidity 0.8.19;
 
 import "../src/RewardTreasury.sol";
 import "../src/testnet/tSQD.sol";

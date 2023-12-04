@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity 0.8.18;
+pragma solidity 0.8.19;
 
 import "@openzeppelin/contracts/access/AccessControl.sol";
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 
 import "./interfaces/IRewardsDistribution.sol";
@@ -22,7 +21,7 @@ contract DistributedRewardsDistribution is AccessControl, IRewardsDistribution {
   bytes32 public constant REWARDS_TREASURY_ROLE = keccak256("REWARDS_TREASURY_ROLE");
   uint8 internal constant APPROVES_REQUIRED = 3;
 
-  mapping(uint256 workerId => uint256) _claimable;
+  mapping(uint256 workerId => uint256) internal _claimable;
   mapping(uint256 fromBlock => mapping(uint256 toBlock => bytes32)) public commitments;
   mapping(uint256 fromBlock => mapping(uint256 toBlock => uint8)) public approves;
   mapping(bytes32 => mapping(address => bool)) public alreadyApproved;
@@ -30,6 +29,7 @@ contract DistributedRewardsDistribution is AccessControl, IRewardsDistribution {
   IRouter public immutable router;
   EnumerableSet.AddressSet private distributors;
 
+  /// @dev Emitted on new commitment
   event NewCommitment(
     address indexed who,
     uint256 fromBlock,
@@ -38,6 +38,8 @@ contract DistributedRewardsDistribution is AccessControl, IRewardsDistribution {
     uint256[] workerRewards,
     uint256[] stakerRewards
   );
+
+  /// @dev Emitted when commitment is approved
   event Approved(
     address indexed who,
     uint256 fromBlock,
@@ -46,9 +48,10 @@ contract DistributedRewardsDistribution is AccessControl, IRewardsDistribution {
     uint256[] workerRewards,
     uint256[] stakerRewards
   );
-  event Distributed(uint256 fromBlock, uint256 toBlock);
 
+  /// @dev Emitted when new distributor is added
   event DistributorAdded(address indexed distributor);
+  /// @dev Emitted when distributor is removed
   event DistributorRemoved(address indexed distributor);
 
   constructor(IRouter _router) {
@@ -61,7 +64,7 @@ contract DistributedRewardsDistribution is AccessControl, IRewardsDistribution {
    * Only admin can call this function
    */
   function addDistributor(address distributor) external onlyRole(DEFAULT_ADMIN_ROLE) {
-    distributors.add(distributor);
+    require(distributors.add(distributor), "Distributor already added");
     _grantRole(REWARDS_DISTRIBUTOR_ROLE, distributor);
 
     emit DistributorAdded(distributor);
@@ -72,7 +75,7 @@ contract DistributedRewardsDistribution is AccessControl, IRewardsDistribution {
    * Only admin can call this function
    */
   function removeDistributor(address distributor) external onlyRole(DEFAULT_ADMIN_ROLE) {
-    distributors.remove(distributor);
+    require(distributors.remove(distributor), "Distributor does not exist");
     _revokeRole(REWARDS_DISTRIBUTOR_ROLE, distributor);
 
     emit DistributorRemoved(distributor);
@@ -194,17 +197,19 @@ contract DistributedRewardsDistribution is AccessControl, IRewardsDistribution {
   }
 
   /// @dev Treasury claims rewards for an address
-  function claim(address who) external onlyRole(REWARDS_TREASURY_ROLE) returns (uint256) {
-    uint256 reward = router.staking().claim(who);
+  /// @notice Can only be called by the treasury
+  /// @notice Claimable amount should drop to 0 after function call
+  function claim(address who) external onlyRole(REWARDS_TREASURY_ROLE) returns (uint256 claimedAmount) {
+    claimedAmount = router.staking().claim(who);
     uint256[] memory ownedWorkers = router.workerRegistration().getOwnedWorkers(who);
     for (uint256 i = 0; i < ownedWorkers.length; i++) {
       uint256 workerId = ownedWorkers[i];
-      reward += _claimable[workerId];
+      claimedAmount += _claimable[workerId];
       _claimable[workerId] = 0;
     }
 
-    emit Claimed(who, reward);
-    return reward;
+    emit Claimed(who, claimedAmount);
+    return claimedAmount;
   }
 
   /// @return claimable amount for the address

@@ -1,8 +1,7 @@
-// SPDX-License-Identifier: MIT
-pragma solidity 0.8.18;
+// SPDX-License-Identifier: UNLICENSED
+pragma solidity 0.8.19;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/utils/Counters.sol";
 import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 
@@ -21,11 +20,10 @@ import "./interfaces/IRouter.sol";
  * - Worker bond can be withdrawn after the lock period has passed after the worker has been deregistered
  */
 contract WorkerRegistration is AccessControl, IWorkerRegistration {
-  using Counters for Counters.Counter;
   using EnumerableSet for EnumerableSet.AddressSet;
   using EnumerableSet for EnumerableSet.UintSet;
 
-  Counters.Counter private workerIdTracker;
+  uint256 private workerIdTracker;
 
   struct Worker {
     address creator;
@@ -41,13 +39,6 @@ contract WorkerRegistration is AccessControl, IWorkerRegistration {
   mapping(bytes peerId => uint256 id) public workerIds;
   uint256[] public activeWorkerIds;
   mapping(address creator => EnumerableSet.UintSet) internal ownedWorkers;
-
-  event WorkerRegistered(
-    uint256 indexed workerId, bytes indexed peerId, address indexed registrar, uint256 registeredAt
-  );
-  event WorkerDeregistered(uint256 indexed workerId, address indexed account, uint256 deregistedAt);
-  event WorkerWithdrawn(uint256 indexed workerId, address indexed account);
-  event ExcessiveBondReturned(uint256 indexed workerId, uint256 amount);
 
   /**
    * @param _tSQD tSQD token.
@@ -69,8 +60,8 @@ contract WorkerRegistration is AccessControl, IWorkerRegistration {
     require(peerId.length <= 64, "Peer ID too large");
     require(workerIds[peerId] == 0, "Worker already registered");
 
-    workerIdTracker.increment();
-    uint256 workerId = workerIdTracker.current();
+    workerIdTracker++;
+    uint256 workerId = workerIdTracker;
     uint256 _bondAmount = bondAmount();
 
     workers[workerId] =
@@ -193,11 +184,13 @@ contract WorkerRegistration is AccessControl, IWorkerRegistration {
   }
 
   /// @dev Returns true if worker is active.
+  /// @notice Worker is considered active if it has been registered and not deregistered yet
   function isWorkerActive(Worker storage worker) internal view returns (bool) {
     return worker.registeredAt <= block.number && (worker.deregisteredAt == 0 || worker.deregisteredAt >= block.number);
   }
 
   /// @dev Returns the number of active workers.
+  /// @notice Worker is considered active if it has been registered and not deregistered yet
   function getActiveWorkerCount() public view returns (uint256) {
     uint256 activeCount = 0;
     for (uint256 i = 0; i < activeWorkerIds.length; i++) {
@@ -210,6 +203,9 @@ contract WorkerRegistration is AccessControl, IWorkerRegistration {
     return activeCount;
   }
 
+  /// @dev Get worker by index
+  /// @param index Index of the worker
+  /// @return Worker under the index
   function getWorkerByIndex(uint256 index) external view returns (Worker memory) {
     require(index < activeWorkerIds.length, "Index out of bounds");
     uint256 workerId = activeWorkerIds[index];
@@ -221,6 +217,7 @@ contract WorkerRegistration is AccessControl, IWorkerRegistration {
     return ownedWorkers[owner].values();
   }
 
+  /// @dev get count of all workers
   function getAllWorkersCount() external view returns (uint256) {
     return activeWorkerIds.length;
   }
@@ -231,18 +228,23 @@ contract WorkerRegistration is AccessControl, IWorkerRegistration {
     return getActiveWorkerCount() * bondAmount() + activeStake();
   }
 
+  /// @dev Returns sum of stakes of all active workers
+  /// @notice Worker is considered active if it has been registered and not deregistered yet
   function activeStake() public view returns (uint256) {
     return router.staking().activeStake(getActiveWorkerIds());
   }
 
+  /// @dev Get current bond amount
   function bondAmount() public view returns (uint256) {
     return router.networkController().bondAmount();
   }
 
+  /// @dev Get current epoch length in blocks
   function epochLength() public view returns (uint128) {
     return router.networkController().epochLength();
   }
 
+  /// @dev Get current lock period for a worker which is equal to one epoch
   function lockPeriod() public view returns (uint128) {
     return router.networkController().epochLength();
   }

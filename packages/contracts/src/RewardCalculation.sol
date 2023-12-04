@@ -1,5 +1,7 @@
-// SPDX-License-Identifier: MIT
-pragma solidity 0.8.18;
+// SPDX-License-Identifier: UNLICENSED
+pragma solidity 0.8.19;
+
+import "@openzeppelin/contracts/utils/math/SafeCast.sol";
 
 import "./interfaces/IRouter.sol";
 
@@ -9,7 +11,8 @@ import "./interfaces/IRouter.sol";
  * For more info, see https://github.com/subsquid/subsquid-network-contracts/wiki/Whitepaper#appendix-ii----rewards
  */
 contract RewardCalculation is IRewardCalculation {
-  uint256 internal constant year = 365 days;
+  using SafeCast for uint256;
+  using SafeCast for int256;
 
   IRouter public immutable router;
 
@@ -20,18 +23,18 @@ contract RewardCalculation is IRewardCalculation {
   /// @dev APY based on target and actual storages
   /// smoothed base_apr function from [here](https://github.com/subsquid/subsquid-network-contracts/wiki/Whitepaper#reward-rate)
   function apy(uint256 target, uint256 actual) public pure returns (uint256) {
-    int256 def = (int256(target) - int256(actual)) * 10000 / int256(target);
-    if (def >= 9000) {
+    int256 uRate = (target.toInt256() - actual.toInt256()) * 10000 / target.toInt256();
+    if (uRate >= 9000) {
       return 7000;
     }
-    if (def >= 0) {
-      return 2500 + uint256(def) / 2;
+    if (uRate >= 0) {
+      return 2500 + uRate.toUint256() / 2;
     }
-    int256 resultApy = 2000 + def / 20;
+    int256 resultApy = 2000 + uRate / 20;
     if (resultApy < 0) {
       return 0;
     }
-    return uint256(resultApy);
+    return resultApy.toUint256();
   }
 
   /// @return current APY for a worker with targetGb storage
@@ -43,7 +46,7 @@ contract RewardCalculation is IRewardCalculation {
 
   /// @return reword for an epoch that lasted epochLengthInSeconds seconds
   function epochReward(uint256 targetGb, uint256 epochLengthInSeconds) public view returns (uint256) {
-    return currentApy(targetGb) * router.workerRegistration().effectiveTVL() * epochLengthInSeconds / year / 10000;
+    return currentApy(targetGb) * router.workerRegistration().effectiveTVL() * epochLengthInSeconds / 365 days / 10000;
   }
 
   function boostFactor(uint256 duration) public pure returns (uint256) {

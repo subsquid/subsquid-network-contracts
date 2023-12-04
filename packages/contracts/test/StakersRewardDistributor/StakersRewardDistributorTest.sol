@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity 0.8.18;
+pragma solidity 0.8.19;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "../../src/Staking.sol";
@@ -25,7 +25,7 @@ contract StakersRewardDistributionTest is BaseTest {
     (tSQD _token, Router router) = deployAll();
     token = _token;
     network = NetworkController(address(router.networkController()));
-    network.setEpochLength(1);
+    network.setEpochLength(2);
     staking = new StakingHelper(token, router);
     router.setStaking(staking);
     token.transfer(address(1), token.totalSupply() / 2);

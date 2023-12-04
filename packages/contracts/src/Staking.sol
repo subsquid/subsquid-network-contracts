@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity 0.8.18;
+pragma solidity 0.8.19;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/access/AccessControl.sol";
@@ -162,6 +162,7 @@ contract Staking is AccessControl, IStaking {
     return reward;
   }
 
+  /// @dev Get list of all workers that the staker has staked into
   function delegates(address staker) public view returns (uint256[] memory) {
     return delegatedTo[staker].values();
   }
@@ -176,6 +177,7 @@ contract Staking is AccessControl, IStaking {
     return (amount * (_rewards.cumulatedRewardsPerShare - _rewards.checkpoint[staker])) / PRECISION;
   }
 
+  /// @dev Get the total deposit amount and how much the staker is allowed to withdraw
   function getDeposit(address staker, uint256 worker)
     external
     view

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity 0.8.18;
+pragma solidity 0.8.19;
 
 import "../../src/DistributedRewardDistribution.sol";
 import "../../src/testnet/tSQD.sol";
@@ -42,7 +42,7 @@ contract RewardsDistributionTest is BaseTest {
     workerRegistration = WorkerRegistration(address(router.workerRegistration()));
     treasury = RewardTreasury(router.rewardTreasury());
     token.transfer(workerOwner, token.totalSupply() / 2);
-    NetworkController(address(router.networkController())).setEpochLength(1);
+    NetworkController(address(router.networkController())).setEpochLength(2);
     token.approve(address(staking), type(uint256).max);
     hoax(workerOwner);
     token.approve(address(workerRegistration), type(uint256).max);

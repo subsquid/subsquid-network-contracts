@@ -1,5 +1,5 @@
-// SPDX-License-Identifier: MIT
-pragma solidity 0.8.18;
+// SPDX-License-Identifier: UNLICENSED
+pragma solidity 0.8.19;
 
 import "@openzeppelin/contracts/access/AccessControl.sol";
 import "./interfaces/INetworkController.sol";
@@ -21,25 +21,41 @@ contract NetworkController is AccessControl, INetworkController {
   uint256 public delegationLimitCoefficientInBP = 2_000;
 
   constructor(uint128 _epochLength, uint256 _bondAmount) {
+    require(_epochLength > 1, "Epoch length too short");
+    require(_epochLength < 100 days, "Epoch length too long");
+
     _setupRole(DEFAULT_ADMIN_ROLE, msg.sender);
     epochLength = _epochLength;
-    bondAmount = _bondAmount;
     firstEpochBlock = nextEpoch();
+    setBondAmount(_bondAmount);
   }
 
+  /// @dev Set amount of blocks in one epoch
   function setEpochLength(uint128 _epochLength) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    require(_epochLength > 1, "Epoch length too short");
+    require(_epochLength < 100 days, "Epoch length too long");
+
     epochCheckpoint = epochNumber();
     epochLength = _epochLength;
     firstEpochBlock = nextEpoch();
+
     emit EpochLengthUpdated(_epochLength);
   }
 
-  function setBondAmount(uint256 _bondAmount) external onlyRole(DEFAULT_ADMIN_ROLE) {
+  /// @dev Set amount of tokens required to register a worker
+  function setBondAmount(uint256 _bondAmount) public onlyRole(DEFAULT_ADMIN_ROLE) {
+    require(_bondAmount > 0, "Bond cannot be 0");
+    require(_bondAmount < 1_000_000 ether, "Bond too large");
+
     bondAmount = _bondAmount;
     emit BondAmountUpdated(_bondAmount);
   }
 
+  /// @dev Set amount of storage in Gigabytes each worker is expected to provide
   function setStoragePerWorkerInGb(uint128 _storagePerWorkerInGb) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    require(_storagePerWorkerInGb > 0, "Storage cannot be 0");
+    require(_storagePerWorkerInGb < 1_000_000, "Storage per worker too large");
+
     storagePerWorkerInGb = _storagePerWorkerInGb;
 
     emit StoragePerWorkerInGbUpdated(_storagePerWorkerInGb);
@@ -51,10 +67,12 @@ contract NetworkController is AccessControl, INetworkController {
     emit DelegationLimitCoefficientInBPUpdated(_delegationLimitCoefficientInBP);
   }
 
+  /// @inheritdoc INetworkController
   function nextEpoch() public view returns (uint128) {
     return (uint128(block.number) / epochLength + 1) * epochLength;
   }
 
+  /// @inheritdoc INetworkController
   function epochNumber() public view returns (uint128) {
     uint128 blockNumber = uint128(block.number);
     if (blockNumber < firstEpochBlock) return epochCheckpoint;

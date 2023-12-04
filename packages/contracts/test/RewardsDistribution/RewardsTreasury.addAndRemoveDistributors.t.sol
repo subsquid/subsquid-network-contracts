@@ -1,4 +1,4 @@
-pragma solidity 0.8.18;
+pragma solidity 0.8.19;
 
 import "./RewardsDistribution.sol";
 
@@ -17,6 +17,17 @@ contract RewardsDistributionAddRemoveDistributorsTest is RewardsDistributionTest
     vm.expectRevert(
       "AccessControl: account 0x0000000000000000000000000000000000000001 is missing role 0x0000000000000000000000000000000000000000000000000000000000000000"
     );
+    rewardsDistribution.removeDistributor(address(1));
+  }
+
+  function test_RevertsIf_AddingSameDistributorTwice() public {
+    rewardsDistribution.addDistributor(address(1));
+    vm.expectRevert("Distributor already added");
+    rewardsDistribution.addDistributor(address(1));
+  }
+
+  function test_RevertsIf_RemovingUnknownDistributor() public {
+    vm.expectRevert("Distributor does not exist");
     rewardsDistribution.removeDistributor(address(1));
   }
 }

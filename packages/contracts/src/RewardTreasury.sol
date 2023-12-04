@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity 0.8.18;
+pragma solidity 0.8.19;
 
 import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
@@ -14,7 +14,9 @@ contract RewardTreasury is AccessControl {
   mapping(IRewardsDistribution => bool) public isWhitelistedDistributor;
   IERC20 public immutable rewardToken;
 
+  /// @dev Emitted when rewards are claimed
   event Claimed(address indexed by, address indexed receiver, uint256 amount);
+  /// @dev Emitted when distributor is whitelisted or removed from whitelist
   event WhitelistedDistributorSet(IRewardsDistribution indexed distributor, bool isWhitelisted);
 
   /**
