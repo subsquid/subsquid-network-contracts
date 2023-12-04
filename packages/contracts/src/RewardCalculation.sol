@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity 0.8.19;
 
-import "@openzeppelin/contracts/utils/Math/SafeCast.sol";
+import "@openzeppelin/contracts/utils/math/SafeCast.sol";
 
 import "./interfaces/IRouter.sol";
 
