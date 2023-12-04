@@ -37,7 +37,7 @@ contract WorkerRegistrationDeregisterTest is WorkerRegistrationTest {
     workerRegistration.register(workerId);
     jumpEpoch();
     workerRegistration.deregister(workerId);
-    (,,,, uint128 deregisteredAt) = workerRegistration.workers(1);
+    (,,,, uint128 deregisteredAt,) = workerRegistration.workers(1);
     assertEq(deregisteredAt, nextEpoch());
   }
 

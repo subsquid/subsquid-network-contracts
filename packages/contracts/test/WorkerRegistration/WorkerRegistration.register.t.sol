@@ -40,7 +40,7 @@ contract WorkerRegistrationRegisterTest is WorkerRegistrationTest {
   }
 
   function test_CorrectlyCreatesWorkerStruct() public {
-    workerRegistration.register(workerId);
+    workerRegistration.register(workerId, "metadata");
 
     WorkerRegistration.Worker memory workerStruct = workerRegistration.getWorkerByIndex(0);
     assertEq(workerStruct.creator, creator);
@@ -48,6 +48,8 @@ contract WorkerRegistrationRegisterTest is WorkerRegistrationTest {
     assertEq(workerStruct.bond, workerRegistration.bondAmount());
     assertEq(workerStruct.registeredAt, nextEpoch());
     assertEq(workerStruct.deregisteredAt, 0);
+    assertEq(workerStruct.metadata, "metadata");
+    assertEq(workerRegistration.getMetadata(workerId), "metadata");
   }
 
   function test_RegisteredWorkerAppearsInActiveWorkersAfterNextEpochStart() public {

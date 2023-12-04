@@ -31,6 +31,7 @@ contract WorkerRegistration is AccessControl, IWorkerRegistration {
     uint256 bond;
     uint128 registeredAt;
     uint128 deregisteredAt;
+    string metadata;
   }
 
   IERC20 public immutable tSQD;
@@ -50,13 +51,17 @@ contract WorkerRegistration is AccessControl, IWorkerRegistration {
     router = _router;
   }
 
+  function register(bytes calldata peerId) external {
+    register(peerId, "");
+  }
+
   /**
    * @dev Registers a worker.
    * @param peerId The unique peer ID of the worker.
    * @notice Peer ID is a unique identifier of the worker. It is expected to be a hex representation of the libp2p peer ID of the worker
    * @notice bondAmount of tSQD tokens will be transferred from the caller to this contract
    */
-  function register(bytes calldata peerId) external {
+  function register(bytes calldata peerId, string memory metadata) public {
     require(peerId.length <= 64, "Peer ID too large");
     require(workerIds[peerId] == 0, "Worker already registered");
 
@@ -64,8 +69,14 @@ contract WorkerRegistration is AccessControl, IWorkerRegistration {
     uint256 workerId = workerIdTracker;
     uint256 _bondAmount = bondAmount();
 
-    workers[workerId] =
-      Worker({creator: msg.sender, peerId: peerId, bond: _bondAmount, registeredAt: nextEpoch(), deregisteredAt: 0});
+    workers[workerId] = Worker({
+      creator: msg.sender,
+      peerId: peerId,
+      bond: _bondAmount,
+      registeredAt: nextEpoch(),
+      deregisteredAt: 0,
+      metadata: metadata
+    });
 
     workerIds[peerId] = workerId;
     activeWorkerIds.push(workerId);
@@ -220,6 +231,12 @@ contract WorkerRegistration is AccessControl, IWorkerRegistration {
   /// @dev get count of all workers
   function getAllWorkersCount() external view returns (uint256) {
     return activeWorkerIds.length;
+  }
+
+  function getMetadata(bytes calldata peerId) external view returns (string memory) {
+    uint256 workerId = workerIds[peerId];
+    require(workerId != 0, "Worker not registered");
+    return workers[workerId].metadata;
   }
 
   /// @dev Returns the effective TVL which is as sum of all worker bonds and

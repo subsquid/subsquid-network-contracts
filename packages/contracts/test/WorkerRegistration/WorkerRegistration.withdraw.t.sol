@@ -54,7 +54,7 @@ contract WorkerRegistrationWithdrawTest is WorkerRegistrationTest {
 
   function testDeletesWorker() public {
     withdraw();
-    (address workerAddress,,,,) = workerRegistration.workers(0);
+    (address workerAddress,,,,,) = workerRegistration.workers(0);
     assertEq(workerAddress, address(0));
     assertEq(workerRegistration.getAllWorkersCount(), 0);
     assertEq(workerRegistration.workerIds(workerId), 1);
