@@ -3,9 +3,9 @@ pragma solidity 0.8.19;
 
 import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
-import "./interfaces/IWorkerRegistration.sol";
+
 import "./interfaces/IRewardsDistribution.sol";
-import "./interfaces/IStaking.sol";
+import "./interfaces/IRouter.sol";
 
 /**
  * @title Distributed Rewards Distribution Contract
@@ -26,8 +26,7 @@ contract DistributedRewardsDistribution is AccessControl, IRewardsDistribution {
   mapping(uint256 fromBlock => mapping(uint256 toBlock => uint8)) public approves;
   mapping(bytes32 => mapping(address => bool)) public alreadyApproved;
   uint256 public lastBlockRewarded;
-  IStaking public immutable staking;
-  IWorkerRegistration public immutable workers;
+  IRouter public immutable router;
   EnumerableSet.AddressSet private distributors;
 
   /// @dev Emitted on new commitment
@@ -55,10 +54,9 @@ contract DistributedRewardsDistribution is AccessControl, IRewardsDistribution {
   /// @dev Emitted when distributor is removed
   event DistributorRemoved(address indexed distributor);
 
-  constructor(IStaking _staking, IWorkerRegistration _workers) {
+  constructor(IRouter _router) {
     _setupRole(DEFAULT_ADMIN_ROLE, msg.sender);
-    staking = _staking;
-    workers = _workers;
+    router = _router;
   }
 
   /**
@@ -192,7 +190,7 @@ contract DistributedRewardsDistribution is AccessControl, IRewardsDistribution {
     for (uint256 i = 0; i < recipients.length; i++) {
       _claimable[recipients[i]] += workerRewards[i];
     }
-    staking.distribute(recipients, _stakerRewards);
+    router.staking().distribute(recipients, _stakerRewards);
     lastBlockRewarded = toBlock;
 
     emit Distributed(fromBlock, toBlock);
@@ -202,8 +200,8 @@ contract DistributedRewardsDistribution is AccessControl, IRewardsDistribution {
   /// @notice Can only be called by the treasury
   /// @notice Claimable amount should drop to 0 after function call
   function claim(address who) external onlyRole(REWARDS_TREASURY_ROLE) returns (uint256 claimedAmount) {
-    claimedAmount = staking.claim(who);
-    uint256[] memory ownedWorkers = workers.getOwnedWorkers(who);
+    claimedAmount = router.staking().claim(who);
+    uint256[] memory ownedWorkers = router.workerRegistration().getOwnedWorkers(who);
     for (uint256 i = 0; i < ownedWorkers.length; i++) {
       uint256 workerId = ownedWorkers[i];
       claimedAmount += _claimable[workerId];
@@ -216,8 +214,8 @@ contract DistributedRewardsDistribution is AccessControl, IRewardsDistribution {
 
   /// @return claimable amount for the address
   function claimable(address who) external view returns (uint256) {
-    uint256 reward = staking.claimable(who);
-    uint256[] memory ownedWorkers = workers.getOwnedWorkers(who);
+    uint256 reward = router.staking().claimable(who);
+    uint256[] memory ownedWorkers = router.workerRegistration().getOwnedWorkers(who);
     for (uint256 i = 0; i < ownedWorkers.length; i++) {
       uint256 workerId = ownedWorkers[i];
       reward += _claimable[workerId];

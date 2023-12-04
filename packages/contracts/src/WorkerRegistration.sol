@@ -8,6 +8,7 @@ import "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 import "./interfaces/INetworkController.sol";
 import "./interfaces/IStaking.sol";
 import "./interfaces/IWorkerRegistration.sol";
+import "./interfaces/IRouter.sol";
 
 /**
  * @title Worker Registration Contract
@@ -33,8 +34,7 @@ contract WorkerRegistration is AccessControl, IWorkerRegistration {
   }
 
   IERC20 public immutable tSQD;
-  INetworkController public immutable networkController;
-  IStaking public immutable staking;
+  IRouter public immutable router;
   mapping(uint256 => Worker) public workers;
   mapping(bytes peerId => uint256 id) public workerIds;
   uint256[] public activeWorkerIds;
@@ -42,14 +42,12 @@ contract WorkerRegistration is AccessControl, IWorkerRegistration {
 
   /**
    * @param _tSQD tSQD token.
-   * @param _networkController The network controller contract.
-   * @param _staking The staking contract.
+   * @param _router Countract router
    */
-  constructor(IERC20 _tSQD, INetworkController _networkController, IStaking _staking) {
+  constructor(IERC20 _tSQD, IRouter _router) {
     _setupRole(DEFAULT_ADMIN_ROLE, msg.sender);
     tSQD = _tSQD;
-    networkController = _networkController;
-    staking = _staking;
+    router = _router;
   }
 
   /**
@@ -148,7 +146,7 @@ contract WorkerRegistration is AccessControl, IWorkerRegistration {
 
   /// @dev Next epoch start block number.
   function nextEpoch() public view returns (uint128) {
-    return networkController.nextEpoch();
+    return router.networkController().nextEpoch();
   }
 
   /// @dev Returns the list of active workers.
@@ -170,7 +168,7 @@ contract WorkerRegistration is AccessControl, IWorkerRegistration {
 
   /// @dev Returns the list of active worker IDs.
   function getActiveWorkerIds() public view returns (uint256[] memory) {
-    uint256[] memory activeWorkers = new uint[](getActiveWorkerCount());
+    uint256[] memory activeWorkers = new uint256[](getActiveWorkerCount());
 
     uint256 activeIndex = 0;
     for (uint256 i = 0; i < activeWorkerIds.length; i++) {
@@ -233,21 +231,21 @@ contract WorkerRegistration is AccessControl, IWorkerRegistration {
   /// @dev Returns sum of stakes of all active workers
   /// @notice Worker is considered active if it has been registered and not deregistered yet
   function activeStake() public view returns (uint256) {
-    return staking.activeStake(getActiveWorkerIds());
+    return router.staking().activeStake(getActiveWorkerIds());
   }
 
   /// @dev Get current bond amount
   function bondAmount() public view returns (uint256) {
-    return networkController.bondAmount();
+    return router.networkController().bondAmount();
   }
 
   /// @dev Get current epoch length in blocks
   function epochLength() public view returns (uint128) {
-    return networkController.epochLength();
+    return router.networkController().epochLength();
   }
 
   /// @dev Get current lock period for a worker which is equal to one epoch
   function lockPeriod() public view returns (uint128) {
-    return networkController.epochLength();
+    return router.networkController().epochLength();
   }
 }

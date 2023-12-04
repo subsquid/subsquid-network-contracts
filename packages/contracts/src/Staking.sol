@@ -6,7 +6,7 @@ import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 
 import "./interfaces/IStaking.sol";
-import "./NetworkController.sol";
+import "./interfaces/IRouter.sol";
 
 /**
  * @title Staking Contract
@@ -25,16 +25,16 @@ contract Staking is AccessControl, IStaking {
   bytes32 public constant REWARDS_DISTRIBUTOR_ROLE = keccak256("REWARDS_DISTRIBUTOR_ROLE");
 
   IERC20 public immutable token;
-  INetworkController public immutable network;
+  IRouter public immutable router;
   uint256 public lastEpochRewarded;
   mapping(uint256 worker => StakerRewards) internal rewards;
   mapping(address staker => uint256) internal _claimable;
   mapping(address staker => EnumerableSet.UintSet workers) internal delegatedTo;
 
-  constructor(IERC20 _token, INetworkController _network) {
+  constructor(IERC20 _token, IRouter _router) {
     _setupRole(DEFAULT_ADMIN_ROLE, msg.sender);
     token = _token;
-    network = _network;
+    router = _router;
   }
 
   /**
@@ -48,7 +48,7 @@ contract Staking is AccessControl, IStaking {
     external
     onlyRole(REWARDS_DISTRIBUTOR_ROLE)
   {
-    lastEpochRewarded = network.epochNumber();
+    lastEpochRewarded = router.networkController().epochNumber();
     for (uint256 i = 0; i < workers.length; i++) {
       _distribute(workers[i], amounts[i]);
     }
@@ -71,9 +71,12 @@ contract Staking is AccessControl, IStaking {
    * @notice transfers amount of tSQD from msg.sender to this contract
    */
   function deposit(uint256 worker, uint256 amount) external {
+    INetworkController network = router.networkController();
     require(lastEpochRewarded + 2 >= network.epochNumber() || lastEpochRewarded == 0, "Rewards out of date");
 
     StakerRewards storage _rewards = rewards[worker];
+    require(_rewards.totalStaked + amount <= network.delegationLimit(), "Delegation limit exceeded");
+
     updateCheckpoint(_rewards);
     _rewards.totalStaked += amount;
     _rewards.depositAmount[msg.sender] += amount;

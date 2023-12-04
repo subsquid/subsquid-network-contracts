@@ -11,11 +11,14 @@ import "./interfaces/INetworkController.sol";
  * See getters descriptions in interface
  */
 contract NetworkController is AccessControl, INetworkController {
+  uint256 internal constant ONE_BASIS_POINT = 10_000;
+
   uint128 public epochLength;
   uint128 public firstEpochBlock;
   uint256 public bondAmount;
   uint128 internal epochCheckpoint;
   uint128 public storagePerWorkerInGb = 1000;
+  uint256 public delegationLimitCoefficientInBP = 2_000;
 
   constructor(uint128 _epochLength, uint256 _bondAmount) {
     require(_epochLength > 1, "Epoch length too short");
@@ -58,6 +61,12 @@ contract NetworkController is AccessControl, INetworkController {
     emit StoragePerWorkerInGbUpdated(_storagePerWorkerInGb);
   }
 
+  function setDelegationLimitCoefficient(uint256 _delegationLimitCoefficientInBP) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    delegationLimitCoefficientInBP = _delegationLimitCoefficientInBP;
+
+    emit DelegationLimitCoefficientInBPUpdated(_delegationLimitCoefficientInBP);
+  }
+
   /// @inheritdoc INetworkController
   function nextEpoch() public view returns (uint128) {
     return (uint128(block.number) / epochLength + 1) * epochLength;
@@ -68,5 +77,9 @@ contract NetworkController is AccessControl, INetworkController {
     uint128 blockNumber = uint128(block.number);
     if (blockNumber < firstEpochBlock) return epochCheckpoint;
     return (blockNumber - firstEpochBlock) / epochLength + epochCheckpoint + 1;
+  }
+
+  function delegationLimit() external view returns (uint256) {
+    return delegationLimitCoefficientInBP * bondAmount / ONE_BASIS_POINT;
   }
 }

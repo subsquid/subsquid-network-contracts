@@ -8,7 +8,7 @@ contract NetworkControllerTest is Test {
   NetworkController controller;
 
   function setUp() public {
-    controller = new NetworkController(5, 100);
+    controller = new NetworkController(5, 100 ether);
   }
 
   function test_NextEpoch() public {
@@ -85,13 +85,33 @@ contract NetworkControllerTest is Test {
     controller.setStoragePerWorkerInGb(10);
   }
 
+  function test_RevertsIf_SettingDelegationCoefficientNotByAdmin() public {
+    hoax(address(1));
+    vm.expectRevert(
+      "AccessControl: account 0x0000000000000000000000000000000000000001 is missing role 0x0000000000000000000000000000000000000000000000000000000000000000"
+    );
+    controller.setDelegationLimitCoefficient(10);
+  }
+
+  function test_ChangingDelegationCoefficientChangesMaxDelegation() public {
+    assertEq(controller.delegationLimit(), 20 ether);
+    controller.setDelegationLimitCoefficient(1000);
+    assertEq(controller.delegationLimit(), 10 ether);
+  }
+
+  function test_ChangingBondAmountChangesMaxDelegation() public {
+    assertEq(controller.delegationLimit(), 20 ether);
+    controller.setBondAmount(200 ether);
+    assertEq(controller.delegationLimit(), 40 ether);
+  }
+
   function test_RevertsIf_SettingStorageAmountTo0() public {
     vm.expectRevert("Storage cannot be 0");
     controller.setStoragePerWorkerInGb(0);
   }
 
   function test_changesBondAmount() public {
-    assertEq(controller.bondAmount(), 100);
+    assertEq(controller.bondAmount(), 100 ether);
     controller.setBondAmount(10);
     assertEq(controller.bondAmount(), 10);
   }

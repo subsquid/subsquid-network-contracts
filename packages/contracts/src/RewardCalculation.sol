@@ -3,28 +3,25 @@ pragma solidity 0.8.19;
 
 import "@openzeppelin/contracts/utils/Math/SafeCast.sol";
 
-import "./interfaces/IWorkerRegistration.sol";
-import "./interfaces/INetworkController.sol";
+import "./interfaces/IRouter.sol";
 
 /**
  * @title Reward Calculation Contract
  * @dev Contract that calculates rewards for workers and stakers
  * For more info, see https://github.com/subsquid/subsquid-network-contracts/wiki/Whitepaper#appendix-ii----rewards
  */
-contract RewardCalculation {
+contract RewardCalculation is IRewardCalculation {
   using SafeCast for uint256;
   using SafeCast for int256;
 
-  IWorkerRegistration public immutable workerRegistration;
-  INetworkController public immutable networkController;
+  IRouter public immutable router;
 
-  constructor(IWorkerRegistration _workerRegistration, INetworkController _networkController) {
-    workerRegistration = _workerRegistration;
-    networkController = _networkController;
+  constructor(IRouter _router) {
+    router = _router;
   }
 
   /// @dev APY based on target and actual storages
-  /// smothed base_apr function from [here](https://github.com/subsquid/subsquid-network-contracts/wiki/Whitepaper#reward-rate)
+  /// smoothed base_apr function from [here](https://github.com/subsquid/subsquid-network-contracts/wiki/Whitepaper#reward-rate)
   function apy(uint256 target, uint256 actual) public pure returns (uint256) {
     int256 uRate = (target.toInt256() - actual.toInt256()) * 10000 / target.toInt256();
     if (uRate >= 9000) {
@@ -42,11 +39,29 @@ contract RewardCalculation {
 
   /// @return current APY for a worker with targetGb storage
   function currentApy(uint256 targetGb) public view returns (uint256) {
-    return apy(targetGb, workerRegistration.getActiveWorkerCount() * networkController.storagePerWorkerInGb());
+    return apy(
+      targetGb, router.workerRegistration().getActiveWorkerCount() * router.networkController().storagePerWorkerInGb()
+    );
   }
 
   /// @return reword for an epoch that lasted epochLengthInSeconds seconds
   function epochReward(uint256 targetGb, uint256 epochLengthInSeconds) public view returns (uint256) {
-    return currentApy(targetGb) * workerRegistration.effectiveTVL() * epochLengthInSeconds / 365 days / 10000;
+    return currentApy(targetGb) * router.workerRegistration().effectiveTVL() * epochLengthInSeconds / 365 days / 10000;
+  }
+
+  function boostFactor(uint256 duration) public pure returns (uint256) {
+    if (duration < 60 days) {
+      return 10000;
+    }
+    if (duration < 180 days) {
+      return 10000 + (duration - 30 days) / 30 days * 2000;
+    }
+    if (duration < 360 days) {
+      return 20000;
+    }
+    if (duration < 720 days) {
+      return 25000;
+    }
+    return 30000;
   }
 }

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity 0.8.19;
 
-import "./WorkerRegistration.t.sol";
+import "./WorkerRegistration.sol";
 
 contract WorkerRegistrationRegisterTest is WorkerRegistrationTest {
   function test_RegisterWorkerTransfersToken() public {
