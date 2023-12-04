@@ -25,7 +25,7 @@ contract StakersRewardDistributionTest is BaseTest {
     (tSQD _token, Router router) = deployAll();
     token = _token;
     network = NetworkController(address(router.networkController()));
-    network.setEpochLength(1);
+    network.setEpochLength(2);
     staking = new StakingHelper(token, router);
     router.setStaking(staking);
     token.transfer(address(1), token.totalSupply() / 2);
