@@ -1,7 +1,7 @@
 import { Rewards } from "./useRewards";
 import { Address, useContractReads } from "wagmi";
 import { workerRegistrationContractConfig } from "../config/contracts";
-import { toBase58 } from "@subsquid-network/rewards-simulation/src/utils";
+import { toBase58 } from "@subsquid-network/rewards-calculator/src/utils";
 import { allWorkerIds } from "../utils/allWorkerIds";
 
 export interface Worker {

@@ -16,4 +16,4 @@ pnpm install
 
 ### Packages:
  - [Subsquid Network Contracts](./packages/contracts)
- - [Reward Simulator](./packages/rewards-simulation), process that calculates rewards based on 
+ - [Reward Simulator](./packages/rewards-calculator), process that calculates rewards based on 

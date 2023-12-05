@@ -3,7 +3,7 @@ import {
   populateQueryProto,
   validateSignatures,
   verifySignature,
-} from "../src/signature-verification.js";
+} from "../src/signatureVerification";
 import { expect } from "chai";
 
 describe("Signature verification", () => {
