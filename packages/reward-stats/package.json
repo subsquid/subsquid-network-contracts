@@ -12,7 +12,7 @@
   },
   "dependencies": {
     "@clickhouse/client-web": "^0.2.3",
-    "@subsquid-network/rewards-simulation": "workspace:*",
+    "@subsquid-network/rewards-calculator": "workspace:*",
     "@wagmi/core": "^1.4.3",
     "abitype": "^0.10.1",
     "buffer": "^6.0.3",
