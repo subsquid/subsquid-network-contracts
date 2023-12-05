@@ -13,7 +13,6 @@ import {
   NetworkStatsEntry,
 } from "./clickhouseClient.js";
 import { logger } from "./logger.js";
-import { parseEther } from "viem";
 import dayjs from "dayjs";
 
 const PRECISION = 1_000_000_000n;
@@ -32,7 +31,7 @@ class Worker {
   public workerReward: bigint;
   public stakerReward: bigint;
 
-  constructor(public id: string) {}
+  constructor(public peerId: string) {}
 
   public setContractId(contractId: bigint) {
     this.contractId = contractId;
@@ -42,7 +41,7 @@ class Worker {
     if (this.contractId) {
       return this.contractId;
     }
-    this.contractId = await getWorkerId(this.id);
+    this.contractId = await getWorkerId(this.peerId);
     return this.contractId;
   }
 
@@ -150,7 +149,7 @@ export class Workers {
 
   public async getLiveness() {
     const networkStats = await livenessFactor(this.clickhouseClient);
-    this.map((worker) => worker.calculateLiveness(networkStats[worker.id]));
+    this.map((worker) => worker.calculateLiveness(networkStats[worker.peerId]));
   }
 
   private parseMulticallResult<
@@ -186,33 +185,30 @@ export class Workers {
       dayjs(this.clickhouseClient.from),
       "second",
     );
-
     return (
-      (BigInt((await currentApy()) * 10) *
-        this.totalSupply() *
-        BigInt(duration)) /
+      (BigInt(await currentApy()) * this.totalSupply() * BigInt(duration)) /
       BigInt(YEAR) /
-      10n
+      10_000n
     );
   }
 
   public async logStats() {
-    const stats = this.map((worker) =>
-      keysToFixed({
-        t: worker.t,
-        dTraffic: worker.dTraffic,
-        livenessFactor: worker.networkStats.livenessFactor,
-        dLiveness: worker.livenessCoefficient,
-        workerReward: formatSqd(worker.workerReward),
-        stakerReward: formatSqd(worker.stakerReward),
-      }),
+    const stats = Object.fromEntries(
+      this.map((worker) => [
+        worker.peerId,
+        keysToFixed({
+          t: worker.t,
+          dTraffic: worker.dTraffic,
+          livenessFactor: worker.networkStats.livenessFactor,
+          dLiveness: worker.livenessCoefficient,
+          workerReward: formatSqd(worker.workerReward),
+          stakerReward: formatSqd(worker.stakerReward),
+        }),
+      ]),
     );
     const totalUnlocked = await this.rUnlocked();
     const totalReward = bigSum(
-      Object.values(stats).map(
-        ({ workerReward, stakerReward }) =>
-          parseEther(workerReward) + parseEther(stakerReward),
-      ),
+      this.map(({ workerReward, stakerReward }) => workerReward + stakerReward),
     );
     logger.table(stats);
     logger.log("Total unlocked:", formatSqd(totalUnlocked));
@@ -232,8 +228,8 @@ export class Workers {
 
   public rewards() {
     return Object.fromEntries(
-      this.map(({ id, workerReward, stakerReward }) => [
-        id,
+      this.map(({ peerId, workerReward, stakerReward }) => [
+        peerId,
         { workerReward, stakerReward },
       ]),
     );
