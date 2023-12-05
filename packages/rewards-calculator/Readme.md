@@ -1,4 +1,4 @@
-# Rewards simulator
+# Rewards calculator
 
 This package contains a simulator for the rewards system. It will be used to calculate and distribute rewards on Panthalasa testnet.
 

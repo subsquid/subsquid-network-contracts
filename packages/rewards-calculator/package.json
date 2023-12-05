@@ -1,5 +1,5 @@
 {
-  "name": "@subsquid-network/rewards-simulation",
+  "name": "@subsquid-network/rewards-calculator",
   "version": "0.0.1",
   "type": "module",
   "engines": {

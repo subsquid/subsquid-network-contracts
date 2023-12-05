@@ -3,7 +3,7 @@
     "build": "turbo build",
     "lint": "turbo lint",
     "test": "turbo test",
-    "build-reward-image": "docker build -f packages/rewards-simulation/Dockerfile -t rewards-simulation ."
+    "build-reward-image": "docker build -f packages/rewards-calculator/Dockerfile -t rewards-simulation ."
   },
   "devDependencies": {
     "turbo": "^1.9.9"
