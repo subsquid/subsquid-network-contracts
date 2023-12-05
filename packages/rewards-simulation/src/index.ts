@@ -1,4 +1,4 @@
-import { startWorker } from "./start-worker.js";
+import { startWorker } from "./startWorker.js";
 
 const n: number = Number(process.argv[2]);
 
