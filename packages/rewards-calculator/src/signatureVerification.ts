@@ -22,8 +22,8 @@ export interface QueryLog {
   seq_no: number;
   client_signature: string;
   worker_signature: string;
-  worker_timestamp_ms: number;
-  collector_timestamp_ms: number;
+  worker_timestamp: number;
+  collector_timestamp: number;
 }
 
 async function loadProto(type: "Query" | "QueryExecuted") {
@@ -44,7 +44,7 @@ function queryPayload(queryLog: QueryLog, signature?: string) {
     queryId: queryLog.query_id,
     dataset: queryLog.dataset,
     query: queryLog.query,
-    profiling: queryLog.profiling || undefined,
+    profiling: queryLog.profiling,
     clientStateJson: queryLog.client_state_json,
     signature: signatureInBytes,
   };
@@ -64,7 +64,6 @@ function queryResult(queryLog: QueryLog) {
   if (queryLog.error_msg) {
     return {
       badRequest: queryLog.error_msg,
-      serverError: queryLog.error_msg,
     };
   }
   return {
@@ -84,10 +83,10 @@ function queryExecutedPayload(queryLog: QueryLog, clientSignature: string) {
     workerId: queryLog.worker_id,
     query: queryPayload(queryLog, clientSignature),
     queryHash: Buffer.from(queryLog.query_hash, "hex"),
-    execTimeMs: queryLog.exec_time_ms || undefined,
+    execTimeMs: queryLog.exec_time_ms,
     ...queryResult(queryLog),
-    seqNo: queryLog.seq_no || undefined,
-    timestampMs: queryLog.worker_timestamp_ms || undefined,
+    seqNo: queryLog.seq_no,
+    timestampMs: queryLog.worker_timestamp,
   };
 }
 
@@ -101,7 +100,6 @@ export async function populateQueryExecuted(
   if (err) {
     throw Error(err);
   }
-  console.log(QueryExecuted.fromObject(payload));
   return QueryExecuted.encode(payload).finish();
 }
 

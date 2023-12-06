@@ -3,31 +3,53 @@ import {
   populateQueryProto,
   validateSignatures,
   verifySignature,
-} from "../src/signatureVerification";
+} from "../src/signatureVerification.js";
 import { expect } from "chai";
+
+const [withDefaultValues, withoutDefaultValues] = testLog;
 
 describe("Signature verification", () => {
   it("populateQueryProto returns buffer", async () => {
-    const populated = await populateQueryProto(testLog);
+    const populated = await populateQueryProto(withDefaultValues);
     expect(populated).to.be.instanceOf(Uint8Array);
-    expect(populated.length).to.equal(135);
+    expect(populated.length).to.equal(149);
   });
 
-  it("verifySignature returns true for correct signature", async () => {
-    const message = await populateQueryProto(testLog);
+  it("verifySignature returns true for correct signature in log without default values", async () => {
+    const message = await populateQueryProto(withoutDefaultValues);
     expect(
-      verifySignature(message, testLog.client_signature, testLog.client_id),
+      verifySignature(
+        message,
+        withoutDefaultValues.client_signature,
+        withoutDefaultValues.client_id,
+      ),
+    ).to.be.true;
+  });
+
+  it("verifySignature returns true for correct signature in withDefaultValues", async () => {
+    const message = await populateQueryProto(withDefaultValues);
+    expect(
+      verifySignature(
+        message,
+        withDefaultValues.client_signature,
+        withDefaultValues.client_id,
+      ),
     ).to.be.true;
   });
 
   it("verifySignature returns false for incorrect signature", async () => {
-    const message = await populateQueryProto(testLog);
+    const message = await populateQueryProto(withDefaultValues);
     expect(
-      verifySignature(message, testLog.client_signature, testLog.worker_id),
+      verifySignature(
+        message,
+        withDefaultValues.client_signature,
+        withDefaultValues.worker_id,
+      ),
     ).to.be.false;
   });
 
   it("verifySignatures returns true for correct query object", async () => {
-    expect(await validateSignatures(testLog)).to.be.true;
+    expect(await validateSignatures(withDefaultValues)).to.be.true;
+    expect(await validateSignatures(withoutDefaultValues)).to.be.true;
   });
 });
