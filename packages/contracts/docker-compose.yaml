@@ -14,7 +14,8 @@ services:
     working_dir: /app
     command:
       - |
-        forge script script/Deploy.s.sol --broadcast --verify --json --rpc-url http://anvil:8545
+        forge script script/Deploy.s.sol --broadcast --json --rpc-url http://anvil:8545
+        forge script script/PreparePlayground.s.sol --tc PreparePlayground --broadcast --json --rpc-url http://anvil:8545
         echo "Deployed contract addresses"
         apk add jq --quiet
         jq '[.transactions[] | select(.transactionType == "CREATE")] | map({contractName, contractAddress})' /app/broadcast/Deploy.s.sol/31337/run-latest.json
