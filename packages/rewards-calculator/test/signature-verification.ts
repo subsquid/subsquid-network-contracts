@@ -3,7 +3,7 @@ import {
   populateQueryProto,
   validateSignatures,
   verifySignature,
-} from "../src/signatureVerification.js";
+} from "../src/signatureVerification";
 import { expect } from "chai";
 
 const [withDefaultValues, withoutDefaultValues] = testLog;

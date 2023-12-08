@@ -11,8 +11,8 @@ import {
 } from "viem";
 import { arbitrumGoerli } from "viem/chains";
 import { privateKeyToAccount } from "viem/accounts";
-import { logger } from "./logger.js";
-import { RewardWorker } from "./rewardWorker.js";
+import { logger } from "./logger";
+import { RewardWorker } from "./rewardWorker";
 
 async function transferFundsIfNecessary(
   walletClient: WalletClient & PublicActions,

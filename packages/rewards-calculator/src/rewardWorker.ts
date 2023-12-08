@@ -8,12 +8,12 @@ import {
   getRegistrations,
   lastRewardedBlock,
   Registrations,
-} from "./chain.js";
-import { epochStats } from "./reward.js";
-import { logger } from "./logger.js";
-import { hasNewerPings } from "./clickhouseClient.js";
-import { publicClient } from "./client.js";
-import { addresses, contracts } from "./config.js";
+} from "./chain";
+import { epochStats } from "./reward";
+import { logger } from "./logger";
+import { hasNewerPings } from "./clickhouseClient";
+import { publicClient } from "./client";
+import { addresses, contracts } from "./config";
 import { parseAbiItem, WalletClient } from "viem";
 
 async function firstRegistrationBlock(registrations: Registrations) {
@@ -44,10 +44,7 @@ export class RewardWorker {
           fromBlock < toBlock &&
           (await hasNewerPings(await getBlockTimestamp(toBlock + 1)))
         ) {
-          const rewards = await epochStats(
-            await getBlockTimestamp(fromBlock),
-            await getBlockTimestamp(toBlock),
-          );
+          const rewards = await epochStats(fromBlock, toBlock);
           await commitRewards(fromBlock, toBlock, rewards, this.walletClient);
         }
       }
@@ -61,10 +58,7 @@ export class RewardWorker {
     try {
       const ranges = await approveRanges();
       if (ranges.shouldApprove) {
-        const rewards = await epochStats(
-          await getBlockTimestamp(ranges.fromBlock),
-          await getBlockTimestamp(ranges.toBlock),
-        );
+        const rewards = await epochStats(ranges.fromBlock, ranges.toBlock);
         await approveRewards(
           ranges.fromBlock,
           ranges.toBlock,

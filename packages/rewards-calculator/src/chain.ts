@@ -1,14 +1,14 @@
-import { contract, contracts } from "./config.js";
-import { l1Client, publicClient } from "./client.js";
+import { contract, contracts } from "./config";
+import { l1Client, publicClient } from "./client";
 import {
   ContractFunctionConfig,
   isAddressEqual,
   parseAbiItem,
   WalletClient,
 } from "viem";
-import { logger } from "./logger.js";
-import { fromBase58 } from "./utils.js";
-import { Rewards } from "./reward.js";
+import { logger } from "./logger";
+import { fromBase58 } from "./utils";
+import { Rewards } from "./reward";
 import { Workers } from "./workers";
 
 export async function getRegistrations() {

@@ -1,8 +1,8 @@
 import { ClickHouse } from "clickhouse";
 import dayjs from "dayjs";
-import utc from "dayjs/plugin/utc.js";
+import utc from "dayjs/plugin/utc";
 
-import { Workers } from "./workers.js";
+import { Workers } from "./workers";
 
 dayjs.extend(utc);
 const clickhouse = new ClickHouse({
@@ -40,14 +40,14 @@ export class ClickhouseClient {
     return this.workers;
   }
 
-  public async getPings() {
+  public async getPings(from = this.from, to = this.to) {
     const query = `select workerId, timestamp from testnet.worker_pings where timestamp >= '${formatDate(
-      this.from,
-    )}' and timestamp <= '${formatDate(this.to)}' order by timestamp`;
+      from,
+    )}' and timestamp <= '${formatDate(to)}' order by timestamp`;
     const pings: Record<string, number[]> = {};
     for await (const row of clickhouse.query(query).stream()) {
       if (!pings[row.workerId])
-        pings[row.workerId] = [dayjs(formatDate(this.from)).utc().unix()];
+        pings[row.workerId] = [dayjs(formatDate(from)).utc().unix()];
       pings[row.workerId].push(dayjs(row.timestamp).utc().unix());
     }
     return pings;
@@ -89,15 +89,69 @@ export async function livenessFactor(clickhouseClient: ClickhouseClient) {
   const netwotkStats: Record<string, NetworkStatsEntry> = {};
   for (const workersKey in pings) {
     pings[workersKey].push(dayjs(formatDate(clickhouseClient.to)).utc().unix());
-    const diffs = secondDiffs(pings[workersKey]);
-    const totalTimeOffline = totalOfflineSeconds(diffs);
-    netwotkStats[workersKey] = {
-      totalPings: diffs.length - 1,
-      totalTimeOffline: totalOfflineSeconds(diffs),
-      livenessFactor: 1 - totalTimeOffline / totalPeriodSeconds,
-    };
+    netwotkStats[workersKey] = networkStats(
+      pings[workersKey],
+      totalPeriodSeconds,
+    );
   }
   return netwotkStats;
+}
+
+function networkStats(pingTimestamps: number[], epochLength: number) {
+  const diffs = secondDiffs(pingTimestamps);
+  const totalTimeOffline = totalOfflineSeconds(diffs);
+  return {
+    totalPings: diffs.length - 1,
+    totalTimeOffline: totalTimeOffline,
+    livenessFactor: 1 - totalTimeOffline / epochLength,
+  };
+}
+
+export async function historicalLiveness(
+  clickhouseClient: ClickhouseClient,
+  epochRanges: Date[],
+) {
+  const sortedEpochRanges = epochRanges.sort(
+    (a, b) => a.getTime() - b.getTime(),
+  );
+  const from = sortedEpochRanges[0];
+  const to = sortedEpochRanges.at(-1);
+  const pings = await clickhouseClient.getPings(from, to);
+  const epochRangesTimestamps = sortedEpochRanges.map((date) =>
+    dayjs(formatDate(date)).utc().unix(),
+  );
+  const splittedPings = Object.entries(pings).map(([workerId, timestamps]) => {
+    return [workerId, splitLogs(timestamps, epochRangesTimestamps)] as const;
+  });
+  const _networkStats = splittedPings.map(
+    ([workerId, splits]) =>
+      [
+        workerId,
+        splits.map((split, i) => {
+          return networkStats(
+            split,
+            epochRangesTimestamps[i + 1] - epochRangesTimestamps[i],
+          ).livenessFactor;
+        }),
+      ] as const,
+  );
+  return Object.fromEntries(_networkStats);
+}
+
+function splitLogs(timestamps: number[], epochRanges: number[]) {
+  const sortedTimestamps = timestamps.sort();
+  const splits: number[][] = [[epochRanges[0]]];
+  let index = 1;
+  for (const timestamp of sortedTimestamps) {
+    while (index < epochRanges.length && timestamp > epochRanges[index]) {
+      splits.at(-1).push(epochRanges[index]);
+      splits.push([epochRanges[index]]);
+      index++;
+    }
+    const lastSplit = splits.at(-1);
+    lastSplit.push(timestamp);
+  }
+  return splits;
 }
 
 export type NetworkStatsEntry = {

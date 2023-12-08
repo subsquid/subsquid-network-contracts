@@ -1,10 +1,10 @@
-import workerRegistrationAbi from "../../contracts/artifacts/WorkerRegistration.sol/WorkerRegistration.js";
-import tSQDAbi from "../../contracts/artifacts/tSQD.sol/tSQD.js";
-import rewardCalculationAbi from "../../contracts/artifacts/RewardCalculation.sol/RewardCalculation.js";
-import rewardsDistributionAbi from "../../contracts/artifacts/DistributedRewardDistribution.sol/DistributedRewardsDistribution.js";
-import stakingAbi from "../../contracts/artifacts/Staking.sol/Staking.js";
+import workerRegistrationAbi from "../../contracts/artifacts/WorkerRegistration.sol/WorkerRegistration";
+import tSQDAbi from "../../contracts/artifacts/tSQD.sol/tSQD";
+import rewardCalculationAbi from "../../contracts/artifacts/RewardCalculation.sol/RewardCalculation";
+import rewardsDistributionAbi from "../../contracts/artifacts/DistributedRewardDistribution.sol/DistributedRewardsDistribution";
+import stakingAbi from "../../contracts/artifacts/Staking.sol/Staking";
 import { Address, getContract, WalletClient } from "viem";
-import { publicClient, walletClient } from "./client.js";
+import { publicClient, walletClient } from "./client";
 import tsqdDeployment from "../../contracts/deployments/arbitrum-goerli/tSQD.json" assert { type: "json" };
 import deployments from "../../contracts/deployments/421613.json" assert { type: "json" };
 

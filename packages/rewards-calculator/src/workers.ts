@@ -1,96 +1,24 @@
 import {
   bond,
   currentApy,
+  epochLength,
+  getBlockTimestamp,
   getStakes,
-  getWorkerId,
   MulticallResult,
   preloadWorkerIds,
-} from "./chain.js";
-import { bigSum, formatSqd, keysToFixed, sum } from "./utils.js";
+} from "./chain";
+import { bigSum, formatSqd, keysToFixed, sum } from "./utils";
 import {
   ClickhouseClient,
+  historicalLiveness,
   livenessFactor,
-  NetworkStatsEntry,
-} from "./clickhouseClient.js";
-import { logger } from "./logger.js";
+} from "./clickhouseClient";
+import { logger } from "./logger";
+import { Worker } from "./worker";
 import dayjs from "dayjs";
 
-const PRECISION = 1_000_000_000n;
 const YEAR = 365 * 24 * 60 * 60;
-
-class Worker {
-  private contractId: bigint | undefined;
-  public networkStats: NetworkStatsEntry;
-  public bytesSent = 0;
-  public chunksRead = 0;
-  public t = 0;
-  public dTraffic = 0;
-  public stake = 0n;
-  public livenessCoefficient = 0;
-  public bond = 0n;
-  public workerReward: bigint;
-  public stakerReward: bigint;
-
-  constructor(public peerId: string) {}
-
-  public setContractId(contractId: bigint) {
-    this.contractId = contractId;
-  }
-
-  public async getId() {
-    if (this.contractId) {
-      return this.contractId;
-    }
-    this.contractId = await getWorkerId(this.peerId);
-    return this.contractId;
-  }
-
-  public async calculateT(totalBytesSent: number, totalChunksRead: number) {
-    const { bytesSent, chunksRead } = this.normalizeTraffic(
-      totalBytesSent,
-      totalChunksRead,
-    );
-    this.t = Math.sqrt(bytesSent * chunksRead);
-  }
-
-  public async calculateTTraffic(totalSupply: bigint, totalT: number) {
-    const ALPHA = 0.1;
-
-    const supplyRatio =
-      Number(((this.stake + this.bond) * PRECISION) / totalSupply) /
-      Number(PRECISION);
-    this.dTraffic = Math.min(1, (this.t / totalT / supplyRatio) ** ALPHA);
-  }
-
-  public async calculateLiveness(networkStats: NetworkStatsEntry) {
-    this.networkStats = networkStats;
-    if (!networkStats) return;
-    const { livenessFactor } = networkStats;
-    if (livenessFactor < 0.8) {
-      this.livenessCoefficient = 0;
-    } else if (livenessFactor < 0.9) {
-      this.livenessCoefficient = 9 * livenessFactor - 7.2;
-    } else if (livenessFactor < 0.95) {
-      this.livenessCoefficient = 2 * livenessFactor - 0.9;
-    } else {
-      this.livenessCoefficient = 1;
-    }
-  }
-
-  public async getRewards(rMax: number) {
-    const actualYield = rMax * this.livenessCoefficient * this.dTraffic;
-    const preciseR = BigInt(Math.floor(actualYield * Number(PRECISION)));
-    this.workerReward = (preciseR * (this.bond + this.stake / 2n)) / PRECISION;
-    this.stakerReward = (preciseR * this.stake) / 2n / PRECISION;
-  }
-
-  private normalizeTraffic(totalBytesSent: number, totalChunksRead: number) {
-    return {
-      bytesSent: this.bytesSent / totalBytesSent,
-      chunksRead: this.chunksRead / totalChunksRead,
-    };
-  }
-}
+export const TENURE_EPOCH_COUNT = 10;
 
 export class Workers {
   private workers: Record<string, Worker> = {};
@@ -142,14 +70,40 @@ export class Workers {
     this.map((worker) => worker.calculateT(totalBytesSent, totalChunksRead));
   }
 
-  public getTTrraffic() {
-    const totalT = sum(this.map(({ t }) => t));
-    this.map((worker) => worker.calculateTTraffic(this.totalSupply(), totalT));
+  public getDTrraffic() {
+    const totalTraffic = sum(this.map(({ trafficWeight }) => trafficWeight));
+    this.map((worker) =>
+      worker.calculateDTraffic(this.totalSupply(), totalTraffic),
+    );
   }
 
   public async getLiveness() {
     const networkStats = await livenessFactor(this.clickhouseClient);
     this.map((worker) => worker.calculateLiveness(networkStats[worker.peerId]));
+  }
+
+  public async getDTenure(epochStartBlockNumber: number) {
+    const epochLengthInBlocks = await epochLength();
+    const tenureStart =
+      epochStartBlockNumber - epochLengthInBlocks * TENURE_EPOCH_COUNT;
+    const epochStartBlocks = [...new Array(TENURE_EPOCH_COUNT + 1)].map(
+      (_, i) => tenureStart + i * epochLengthInBlocks,
+    );
+    const epochStartTimestamps = await Promise.all(
+      epochStartBlocks.map(getBlockTimestamp),
+    );
+    const _historicalLiveness = await historicalLiveness(
+      this.clickhouseClient,
+      epochStartTimestamps,
+    );
+    this.map((worker) => {
+      worker.calculateDTenure(_historicalLiveness[worker.peerId]);
+    });
+  }
+
+  public async calculateRewards() {
+    const rMax = ((await currentApy()) * this.count()) / YEAR / 10_000;
+    this.map((worker) => worker.getRewards(rMax));
   }
 
   private parseMulticallResult<
@@ -167,11 +121,6 @@ export class Workers {
 
   private totalChunksRead() {
     return sum(this.map(({ chunksRead }) => chunksRead));
-  }
-
-  public async calculateRewards() {
-    const rMax = ((await currentApy()) * this.count()) / YEAR / 10_000;
-    this.map((worker) => worker.getRewards(rMax));
   }
 
   private totalSupply() {
@@ -197,10 +146,11 @@ export class Workers {
       this.map((worker) => [
         worker.peerId,
         keysToFixed({
-          t: worker.t,
+          t: worker.trafficWeight,
           dTraffic: worker.dTraffic,
           livenessFactor: worker.networkStats.livenessFactor,
           dLiveness: worker.livenessCoefficient,
+          dTenure: worker.dTenure,
           workerReward: formatSqd(worker.workerReward),
           stakerReward: formatSqd(worker.stakerReward),
         }),

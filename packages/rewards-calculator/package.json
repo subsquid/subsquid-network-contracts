@@ -18,7 +18,7 @@
   },
   "scripts": {
     "reward-simulation": "ts-node src/generate-logs.ts && ts-node src/index.ts",
-    "start": "TS_NODE_TRANSPILE_ONLY=true ts-node-esm src/index.ts"
+    "start": "TS_NODE_TRANSPILE_ONLY=true NODE_OPTIONS=\"--loader ts-node/esm\" ts-node src/index.ts"
   },
   "devDependencies": {
     "@types/chai": "^4.3.4",
