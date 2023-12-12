@@ -4,7 +4,7 @@ pragma solidity 0.8.19;
 interface IWorkerRegistration {
   /// @dev Emitted when a worker is registered
   event WorkerRegistered(
-    uint256 indexed workerId, bytes indexed peerId, address indexed registrar, uint256 registeredAt
+    uint256 indexed workerId, bytes peerId, address indexed registrar, uint256 registeredAt
   );
 
   /// @dev Emitted when a worker is deregistered
