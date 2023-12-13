@@ -19,12 +19,16 @@ contract NetworkController is AccessControl, INetworkController {
   uint128 internal epochCheckpoint;
   uint128 public storagePerWorkerInGb = 1000;
   uint256 public delegationLimitCoefficientInBP = 2_000;
+  mapping(address => bool) public isAllowedVestedTarget;
 
-  constructor(uint128 _epochLength, uint256 _bondAmount) {
+  constructor(uint128 _epochLength, uint256 _bondAmount, address[] memory _allowedVestedTargets) {
     require(_epochLength > 1, "Epoch length too short");
     require(_epochLength < 100 days, "Epoch length too long");
 
     _setupRole(DEFAULT_ADMIN_ROLE, msg.sender);
+    for (uint256 i = 0; i < _allowedVestedTargets.length; i++) {
+      setAllowedVestedTarget(_allowedVestedTargets[i], true);
+    }
     epochLength = _epochLength;
     firstEpochBlock = nextEpoch();
     setBondAmount(_bondAmount);
@@ -65,6 +69,12 @@ contract NetworkController is AccessControl, INetworkController {
     delegationLimitCoefficientInBP = _delegationLimitCoefficientInBP;
 
     emit DelegationLimitCoefficientInBPUpdated(_delegationLimitCoefficientInBP);
+  }
+
+  function setAllowedVestedTarget(address target, bool isAllowed) public onlyRole(DEFAULT_ADMIN_ROLE) {
+    isAllowedVestedTarget[target] = isAllowed;
+
+    emit AllowedVestedTargetUpdated(target, isAllowed);
   }
 
   /// @inheritdoc INetworkController

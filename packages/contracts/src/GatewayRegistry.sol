@@ -91,7 +91,7 @@ contract GatewayRegistry {
     for (uint256 i = 0; i < _stakes.length; i++) {
       Stake memory _stake = _stakes[i];
       if (_stake.lockedUntil <= block.timestamp) {
-        if (_stake.amount <= remaining) {
+        if (_stake.amount < remaining) {
           remaining -= _stake.amount;
           _stakes[i].amount = 0;
           _stakes[i].computationUnits = 0;

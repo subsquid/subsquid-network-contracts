@@ -8,7 +8,7 @@ contract NetworkControllerTest is Test {
   NetworkController controller;
 
   function setUp() public {
-    controller = new NetworkController(5, 100 ether);
+    controller = new NetworkController(5, 100 ether, new address[](0));
   }
 
   function test_NextEpoch() public {

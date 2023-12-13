@@ -23,9 +23,12 @@ contract BaseTest is Test {
 
     IWorkerRegistration workerRegistration = new WorkerRegistration(token, router);
     IStaking staking = new Staking(token, router);
-    INetworkController networkController = new NetworkController(5, 10 ether);
     RewardTreasury treasury = new RewardTreasury(token);
     RewardCalculation rewards = new RewardCalculation(router);
+    address[] memory allowedTargets = new address[](2);
+    allowedTargets[0] = address(workerRegistration);
+    allowedTargets[1] = address(staking);
+    INetworkController networkController = new NetworkController(5, 10 ether, allowedTargets);
     router.initialize(workerRegistration, staking, address(treasury), networkController, rewards);
   }
 }

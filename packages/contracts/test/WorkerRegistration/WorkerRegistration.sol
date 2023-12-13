@@ -18,9 +18,7 @@ contract WorkerRegistrationTest is BaseTest {
   bytes public workerId = "test-peer-id-1";
   bytes public workerId2 = "test-peer-id-2";
 
-  event WorkerRegistered(
-    uint256 indexed workerId, bytes indexed peerId, address indexed registrar, uint256 registeredAt
-  );
+  event WorkerRegistered(uint256 indexed workerId, bytes peerId, address indexed registrar, uint256 registeredAt);
   event WorkerDeregistered(uint256 indexed workerId, address indexed account, uint256 deregistedAt);
   event WorkerWithdrawn(uint256 indexed workerId, address indexed account);
   event Delegated(uint256 indexed workerId, address indexed staker, uint256 amount);

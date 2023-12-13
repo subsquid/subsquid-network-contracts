@@ -26,7 +26,7 @@ contract Deploy is Script {
     tSQD token = new tSQD(recipients, amounts);
     Router router = Router(address(new TransparentUpgradeableProxy(address(new Router()), msg.sender, "")));
 
-    NetworkController network = new NetworkController(100, 100000 ether);
+    NetworkController network = new NetworkController(100, 100000 ether, new address[](0));
     Staking staking = new Staking(token, router);
     WorkerRegistration workerRegistration = new WorkerRegistration(token, router);
     RewardTreasury treasury = new RewardTreasury(token);
