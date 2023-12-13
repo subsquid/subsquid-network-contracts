@@ -41,7 +41,7 @@ contract SubsquidVesting is VestingWallet {
     execute(to, data, 0);
   }
 
-  function execute(address to, bytes calldata data, uint256 requiredApprove) public {
+  function execute(address to, bytes calldata data, uint256 requiredApprove) public returns (bytes memory) {
     require(router.networkController().isAllowedVestedTarget(to), "Target is not allowed");
 
     // It's not likely that following addresses will be allowed by network controller, but just in case
@@ -51,6 +51,6 @@ contract SubsquidVesting is VestingWallet {
     if (requiredApprove > 0) {
       tSQD.approve(to, requiredApprove);
     }
-    to.functionCall(data);
+    return to.functionCall(data);
   }
 }
