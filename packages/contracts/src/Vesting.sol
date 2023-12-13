@@ -12,12 +12,19 @@ contract SubsquidVesting is VestingWallet {
 
   IERC20 public tSQD;
   IRouter public router;
+  uint256 public expectedTotalAmount;
 
-  constructor(IERC20 _tSQD, IRouter _router, address beneficiaryAddress, uint64 startTimestamp, uint64 durationSeconds)
-    VestingWallet(beneficiaryAddress, startTimestamp, durationSeconds)
-  {
+  constructor(
+    IERC20 _tSQD,
+    IRouter _router,
+    address beneficiaryAddress,
+    uint64 startTimestamp,
+    uint64 durationSeconds,
+    uint256 _expectedTotalAmount
+  ) VestingWallet(beneficiaryAddress, startTimestamp, durationSeconds) {
     tSQD = _tSQD;
     router = _router;
+    expectedTotalAmount = _expectedTotalAmount;
   }
 
   receive() external payable override {

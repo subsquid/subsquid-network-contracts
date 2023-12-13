@@ -12,7 +12,15 @@ contract SubsquidVestingTest is BaseTest {
 
   function setUp() public {
     (token, router) = deployAll();
-    vesting = new SubsquidVesting(token, router, address(this), uint64(block.timestamp + 6 * month), 30 * month);
+    vesting = new SubsquidVesting(token, router, address(this), uint64(block.timestamp + 6 * month), 30 * month, 123);
+  }
+
+  function test_Constructor() public {
+    assertEq(vesting.beneficiary(), address(this));
+    assertEq(vesting.start(), block.timestamp + 6 * month);
+    assertEq(vesting.duration(), 30 * month);
+    assertEq(vesting.expectedTotalAmount(), 123);
+    assertEq(vesting.released(address(token)), 0);
   }
 
   function test_NothingIsVestedIfNothingWasDeposited() public {
