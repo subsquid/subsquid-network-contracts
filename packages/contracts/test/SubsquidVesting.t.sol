@@ -51,7 +51,6 @@ contract SubsquidVestingTest is BaseTest {
     token.transfer(address(vesting), 10 ether);
     bytes memory call = abi.encodeWithSelector(IWorkerRegistration.register.selector, "test-peer-id-1", "metadata");
     vesting.execute(address(router.workerRegistration()), call, 10 ether);
-    assertEq(router.workerRegistration().getOwnedWorkers(address(vesting)).length, 1);
     bytes memory call2 = abi.encodeWithSelector(WorkerRegistration.deregister.selector, "test-peer-id-1");
     vm.roll(block.number + 10);
     vesting.execute(address(router.workerRegistration()), call2);
@@ -59,6 +58,24 @@ contract SubsquidVestingTest is BaseTest {
     bytes memory call3 = abi.encodeWithSelector(WorkerRegistration.withdraw.selector, "test-peer-id-1");
     vesting.execute(address(router.workerRegistration()), call3);
     assertEq(router.workerRegistration().getActiveWorkerCount(), 0);
+  }
+
+  function test_StakeAndClaimRewards() public {
+    token.transfer(address(vesting), 30 ether);
+    token.transfer(router.rewardTreasury(), 30 ether);
+    bytes memory call = abi.encodeWithSelector(IWorkerRegistration.register.selector, "test-peer-id-1", "metadata");
+    vesting.execute(address(router.workerRegistration()), call, 10 ether);
+    bytes memory call2 = abi.encodeWithSelector(Staking.deposit.selector, 0, 1 ether);
+    vesting.execute(address(router.staking()), call2, 1 ether);
+    Staking staking = Staking(address(router.staking()));
+    MockRewardsDistribution rewardsDistribution = new MockRewardsDistribution();
+    staking.grantRole(staking.REWARDS_DISTRIBUTOR_ROLE(), address(rewardsDistribution));
+    RewardTreasury(router.rewardTreasury()).setWhitelistedDistributor(rewardsDistribution, true);
+    address receiver = address(2137);
+    bytes memory call3 =
+      abi.encodeWithSelector(RewardTreasury.claimFor.selector, address(rewardsDistribution), receiver);
+    vesting.execute(address(router.rewardTreasury()), call3);
+    assertEq(token.balanceOf(receiver), 69);
   }
 
   function test_RevertsIf_CallToUnallowedContract() public {

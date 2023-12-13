@@ -5,16 +5,6 @@ import "../src/RewardTreasury.sol";
 import "../src/testnet/tSQD.sol";
 import "./BaseTest.sol";
 
-contract MockRewardsDistribution is IRewardsDistribution {
-  function claimable(address) external pure override returns (uint256) {
-    return 69;
-  }
-
-  function claim(address) external pure override returns (uint256) {
-    return 69;
-  }
-}
-
 contract RewardTreasuryTest is BaseTest {
   RewardTreasury treasury;
   tSQD token;

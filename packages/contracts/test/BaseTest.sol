@@ -11,6 +11,16 @@ import "../src/Router.sol";
 import "../src/testnet/tSQD.sol";
 import "../src/RewardCalculation.sol";
 
+contract MockRewardsDistribution is IRewardsDistribution {
+  function claimable(address) external pure override returns (uint256) {
+    return 69;
+  }
+
+  function claim(address) external pure override returns (uint256) {
+    return 69;
+  }
+}
+
 contract BaseTest is Test {
   function deployAll() internal returns (tSQD token, Router router) {
     router = Router(address(new TransparentUpgradeableProxy(address(new Router()), address(1234), "")));
@@ -25,9 +35,10 @@ contract BaseTest is Test {
     IStaking staking = new Staking(token, router);
     RewardTreasury treasury = new RewardTreasury(token);
     RewardCalculation rewards = new RewardCalculation(router);
-    address[] memory allowedTargets = new address[](2);
+    address[] memory allowedTargets = new address[](3);
     allowedTargets[0] = address(workerRegistration);
     allowedTargets[1] = address(staking);
+    allowedTargets[2] = address(treasury);
     INetworkController networkController = new NetworkController(5, 10 ether, allowedTargets);
     router.initialize(workerRegistration, staking, address(treasury), networkController, rewards);
   }
