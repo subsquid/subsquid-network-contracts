@@ -83,7 +83,7 @@ contract WorkerRegistration is AccessControl, IWorkerRegistration {
     ownedWorkers[msg.sender].add(workerId);
 
     tSQD.transferFrom(msg.sender, address(this), _bondAmount);
-    emit WorkerRegistered(workerId, peerId, msg.sender, workers[workerId].registeredAt);
+    emit WorkerRegistered(workerId, peerId, msg.sender, workers[workerId].registeredAt, metadata);
   }
 
   /**
