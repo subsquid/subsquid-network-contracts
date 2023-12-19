@@ -16,6 +16,9 @@ interface IWorkerRegistration {
   /// @dev Emitted when a excessive bond is withdrawn
   event ExcessiveBondReturned(uint256 indexed workerId, uint256 amount);
 
+  /// @dev Emitted when metadata is updated
+  event MetadataUpdated(uint256 indexed workerId, string metadata);
+
   function register(bytes calldata peerId, string calldata metadata) external;
 
   /// @return The number of active workers.

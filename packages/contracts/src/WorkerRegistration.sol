@@ -140,6 +140,14 @@ contract WorkerRegistration is AccessControl, IWorkerRegistration {
     emit WorkerWithdrawn(workerId, msg.sender);
   }
 
+  function updateMetadata(bytes calldata peerId, string memory metadata) external {
+    uint256 workerId = workerIds[peerId];
+    require(workers[workerId].creator == msg.sender, "Not worker creator");
+    workers[workerId].metadata = metadata;
+
+    emit MetadataUpdated(workerId, metadata);
+  }
+
   /**
    * @dev Returns the excessive bond of a worker.
    * In case bond has been reduced, the difference can be returned to the worker creator.
