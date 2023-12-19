@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity 0.8.19;
+pragma solidity 0.8.20;
 
 import "@openzeppelin/contracts/access/AccessControl.sol";
 import "./interfaces/INetworkController.sol";
@@ -25,7 +25,7 @@ contract NetworkController is AccessControl, INetworkController {
     require(_epochLength > 1, "Epoch length too short");
     require(_epochLength < 100 days, "Epoch length too long");
 
-    _setupRole(DEFAULT_ADMIN_ROLE, msg.sender);
+    _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
     for (uint256 i = 0; i < _allowedVestedTargets.length; i++) {
       setAllowedVestedTarget(_allowedVestedTargets[i], true);
     }

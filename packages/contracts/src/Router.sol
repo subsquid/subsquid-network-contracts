@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity 0.8.19;
+pragma solidity 0.8.20;
 
 import "@openzeppelin/contracts/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts/access/AccessControl.sol";
@@ -25,7 +25,7 @@ contract Router is Initializable, AccessControl, IRouter {
     INetworkController _networkController,
     IRewardCalculation _rewardCalculation
   ) external initializer {
-    _setupRole(DEFAULT_ADMIN_ROLE, msg.sender);
+    _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
 
     workerRegistration = _workerRegistration;
     staking = _staking;

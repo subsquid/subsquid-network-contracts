@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity 0.8.19;
+pragma solidity 0.8.20;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/access/AccessControl.sol";
@@ -46,7 +46,7 @@ contract WorkerRegistration is AccessControl, IWorkerRegistration {
    * @param _router Countract router
    */
   constructor(IERC20 _tSQD, IRouter _router) {
-    _setupRole(DEFAULT_ADMIN_ROLE, msg.sender);
+    _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
     tSQD = _tSQD;
     router = _router;
   }

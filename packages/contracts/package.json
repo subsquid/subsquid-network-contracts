@@ -6,7 +6,6 @@
     "subsquid-network-register": "packages/contracts/scripts/register-worker.js"
   },
   "dependencies": {
-    "@openzeppelin/contracts": "^4.9.3",
     "bs58": "^5.0.0",
     "dotenv": "^16.0.3",
     "ethers": "^5.7.2",
@@ -18,13 +17,15 @@
     "test": "forge test -vv",
     "lint": "forge fmt --check",
     "lint:fix": "forge fmt",
-    "deploy": "forge script script/Deploy.s.sol --broadcast --verify --json --rpc-url arbitrum-goerli && node scripts/deployment-json.js",
+    "deploy-tokens": "ts-node scripts/deploy-tokens.ts",
+    "deploy": "TOKEN=0x0d3934b08adb5fbe30f48b3a18ba636460655b7e forge script script/Deploy.s.sol --broadcast --verify --json --rpc-url arbitrum-sepolia && node scripts/deployment-json.js",
     "register-worker": "node -r dotenv/config scripts/register-worker.js",
     "list-workers": "node -r dotenv/config scripts/active-workers.js",
     "build": "forge build && npm run build:types",
     "build:types": "find artifacts -name \"*.json\" -exec bash -c \"echo export default \\<const\\> > {}.ts && cat {} >> {}.ts\" \\; && find artifacts -name \"*.json.ts\" -exec bash -c 'mv $0 ${0%???????}ts' {} \\;"
   },
   "devDependencies": {
+    "@arbitrum/sdk": "^3.1.13",
     "@nomiclabs/hardhat-ethers": "^2.2.3",
     "@nomiclabs/hardhat-waffle": "^2.0.5",
     "@types/chai": "^4.3.4",

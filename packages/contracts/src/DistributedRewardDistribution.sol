@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity 0.8.19;
+pragma solidity 0.8.20;
 
 import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
@@ -55,7 +55,7 @@ contract DistributedRewardsDistribution is AccessControl, IRewardsDistribution {
   event DistributorRemoved(address indexed distributor);
 
   constructor(IRouter _router) {
-    _setupRole(DEFAULT_ADMIN_ROLE, msg.sender);
+    _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
     router = _router;
   }
 

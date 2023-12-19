@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity 0.8.19;
+pragma solidity 0.8.20;
 
 import "../src/RewardTreasury.sol";
-import "../src/testnet/tSQD.sol";
+import "../src/tSQD.sol";
 import "./BaseTest.sol";
 
 contract RewardTreasuryTest is BaseTest {
