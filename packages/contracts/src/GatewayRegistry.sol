@@ -2,10 +2,10 @@ pragma solidity 0.8.20;
 
 import "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 import "./interfaces/IERC20WithMetadata.sol";
-import "./RewardCalculation.sol";
-import "forge-std/console2.sol";
+import "./interfaces/IRouter.sol";
+import "./AccessControlledPausable.sol";
 
-contract GatewayRegistry {
+contract GatewayRegistry is AccessControlledPausable {
   using EnumerableSet for EnumerableSet.AddressSet;
 
   struct Stake {
@@ -39,20 +39,20 @@ contract GatewayRegistry {
     tokenDecimals = 10 ** _token.decimals();
   }
 
-  function register(bytes calldata peerId) external {
+  function register(bytes calldata peerId) external whenNotPaused {
     require(peerIds[msg.sender].length == 0, "Gateway already registered");
     require(peerId.length > 0, "Cannot set empty peerId");
     gateways.add(msg.sender);
     peerIds[msg.sender] = peerId;
   }
 
-  function unregister() external {
+  function unregister() external whenNotPaused {
     bool removed = gateways.remove(msg.sender);
     require(removed, "Gateway not registered");
     delete peerIds[msg.sender];
   }
 
-  function stake(uint256 amount, uint256 duration) external {
+  function stake(uint256 amount, uint256 duration) external whenNotPaused {
     require(peerIds[msg.sender].length > 0, "Gateway not registered");
 
     uint256 lockedUntil = _pushStake(amount, duration);
@@ -61,31 +61,7 @@ contract GatewayRegistry {
     emit Staked(msg.sender, amount, duration, lockedUntil);
   }
 
-  function availableCUs(uint256 amount, uint256 duration) public view returns (uint256) {
-    return amount * duration * baseApyBP * cuPerSQD * router.rewardCalculation().boostFactor(duration) / YEAR
-      / BASIS_POINT_MULTIPLIER / BASIS_POINT_MULTIPLIER / tokenDecimals;
-  }
-
-  function _pushStake(uint256 amount, uint256 duration) internal returns (uint256) {
-    uint256 lockedUntil = block.timestamp + duration;
-    Stake[] storage _stakes = stakes[msg.sender];
-    uint256 _computationUnits = availableCUs(amount, duration);
-    uint256 cuPerStd = _computationUnits * ADDITIONAL_PRECISION / amount;
-    _stakes.push();
-    for (uint256 i = 0; i < _stakes.length - 1; i++) {
-      if (_stakes[i].computationUnits * ADDITIONAL_PRECISION / _stakes[i].amount > cuPerStd) {
-        for (uint256 j = _stakes.length - 1; j > i; j--) {
-          _stakes[j] = _stakes[j - 1];
-        }
-        _stakes[i] = Stake(amount, lockedUntil, _computationUnits);
-        return lockedUntil;
-      }
-    }
-    _stakes[_stakes.length - 1] = Stake(amount, lockedUntil, _computationUnits);
-    return lockedUntil;
-  }
-
-  function unstake(uint256 amount) external {
+  function unstake(uint256 amount) external whenNotPaused {
     Stake[] storage _stakes = stakes[msg.sender];
     uint256 remaining = amount;
     for (uint256 i = 0; i < _stakes.length; i++) {
@@ -107,19 +83,10 @@ contract GatewayRegistry {
     token.transfer(msg.sender, amount);
   }
 
-  function staked(address gateway) public view returns (uint256) {
-    Stake[] memory _stakes = stakes[gateway];
-    uint256 total = 0;
-    for (uint256 i = 0; i < _stakes.length; i++) {
-      total += _stakes[i].amount;
-    }
-    return total;
-  }
-
   // TODO
   // check if the worker is registered
   // check if cu[i] is not 0
-  function allocateComputationUnits(uint256[] calldata workerId, uint256[] calldata cus) external {
+  function allocateComputationUnits(uint256[] calldata workerId, uint256[] calldata cus) external whenNotPaused {
     require(workerId.length == cus.length, "Length mismatch");
     uint256 newlyAllocated = 0;
     for (uint256 i = 0; i < workerId.length; i++) {
@@ -140,8 +107,18 @@ contract GatewayRegistry {
     return total - allocatedComputationUnits[gateway];
   }
 
-  function getGateways() external view returns (address[] memory) {
-    return gateways.values();
+  function availableCUs(uint256 amount, uint256 duration) public view returns (uint256) {
+    return amount * duration * baseApyBP * cuPerSQD * router.rewardCalculation().boostFactor(duration) / YEAR
+      / BASIS_POINT_MULTIPLIER / BASIS_POINT_MULTIPLIER / tokenDecimals;
+  }
+
+  function staked(address gateway) public view returns (uint256) {
+    Stake[] memory _stakes = stakes[gateway];
+    uint256 total = 0;
+    for (uint256 i = 0; i < _stakes.length; i++) {
+      total += _stakes[i].amount;
+    }
+    return total;
   }
 
   function unstakeable(address gateway) public view returns (uint256) {
@@ -158,5 +135,28 @@ contract GatewayRegistry {
 
   function getStakes(address user) external view returns (Stake[] memory) {
     return stakes[user];
+  }
+
+  function getGateways() external view returns (address[] memory) {
+    return gateways.values();
+  }
+
+  function _pushStake(uint256 amount, uint256 duration) internal returns (uint256) {
+    uint256 lockedUntil = block.timestamp + duration;
+    Stake[] storage _stakes = stakes[msg.sender];
+    uint256 _computationUnits = availableCUs(amount, duration);
+    uint256 cuPerStd = _computationUnits * ADDITIONAL_PRECISION / amount;
+    _stakes.push();
+    for (uint256 i = 0; i < _stakes.length - 1; i++) {
+      if (_stakes[i].computationUnits * ADDITIONAL_PRECISION / _stakes[i].amount > cuPerStd) {
+        for (uint256 j = _stakes.length - 1; j > i; j--) {
+          _stakes[j] = _stakes[j - 1];
+        }
+        _stakes[i] = Stake(amount, lockedUntil, _computationUnits);
+        return lockedUntil;
+      }
+    }
+    _stakes[_stakes.length - 1] = Stake(amount, lockedUntil, _computationUnits);
+    return lockedUntil;
   }
 }

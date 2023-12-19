@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity 0.8.20;
 
-import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 
 import "./interfaces/IRewardsDistribution.sol";
 import "./interfaces/IRouter.sol";
+import "./AccessControlledPausable.sol";
 
 /**
  * @title Distributed Rewards Distribution Contract
@@ -14,7 +14,7 @@ import "./interfaces/IRouter.sol";
  * Other distributors can approve it
  * After 3 approvals, the distribution is executed
  */
-contract DistributedRewardsDistribution is AccessControl, IRewardsDistribution {
+contract DistributedRewardsDistribution is AccessControlledPausable, IRewardsDistribution {
   using EnumerableSet for EnumerableSet.AddressSet;
 
   bytes32 public constant REWARDS_DISTRIBUTOR_ROLE = keccak256("REWARDS_DISTRIBUTOR_ROLE");
@@ -55,7 +55,6 @@ contract DistributedRewardsDistribution is AccessControl, IRewardsDistribution {
   event DistributorRemoved(address indexed distributor);
 
   constructor(IRouter _router) {
-    _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
     router = _router;
   }
 
@@ -111,7 +110,7 @@ contract DistributedRewardsDistribution is AccessControl, IRewardsDistribution {
     uint256[] calldata recipients,
     uint256[] calldata workerRewards,
     uint256[] calldata _stakerRewards
-  ) external {
+  ) external whenNotPaused {
     require(recipients.length == workerRewards.length, "Recipients and worker amounts length mismatch");
     require(recipients.length == _stakerRewards.length, "Recipients and staker amounts length mismatch");
 
@@ -137,7 +136,7 @@ contract DistributedRewardsDistribution is AccessControl, IRewardsDistribution {
     uint256[] calldata recipients,
     uint256[] calldata workerRewards,
     uint256[] calldata _stakerRewards
-  ) external onlyRole(REWARDS_DISTRIBUTOR_ROLE) {
+  ) external onlyRole(REWARDS_DISTRIBUTOR_ROLE) whenNotPaused {
     require(commitments[fromBlock][toBlock] != 0, "Commitment does not exist");
     bytes32 commitment = keccak256(msg.data[4:]);
     require(commitments[fromBlock][toBlock] == commitment, "Commitment mismatch");
@@ -199,7 +198,7 @@ contract DistributedRewardsDistribution is AccessControl, IRewardsDistribution {
   /// @dev Treasury claims rewards for an address
   /// @notice Can only be called by the treasury
   /// @notice Claimable amount should drop to 0 after function call
-  function claim(address who) external onlyRole(REWARDS_TREASURY_ROLE) returns (uint256 claimedAmount) {
+  function claim(address who) external onlyRole(REWARDS_TREASURY_ROLE) whenNotPaused returns (uint256 claimedAmount) {
     claimedAmount = router.staking().claim(who);
     uint256[] memory ownedWorkers = router.workerRegistration().getOwnedWorkers(who);
     for (uint256 i = 0; i < ownedWorkers.length; i++) {

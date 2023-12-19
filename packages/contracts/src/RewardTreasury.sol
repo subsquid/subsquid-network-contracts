@@ -1,16 +1,16 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity 0.8.20;
 
-import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 import "./interfaces/IRewardsDistribution.sol";
+import "./AccessControlledPausable.sol";
 
 /**
  * @title Reward Treasury Contract
  * @dev Contract that stores rewards for workers and stakers and has a list of whitelisted distributors that it can claim from
  */
-contract RewardTreasury is AccessControl {
+contract RewardTreasury is AccessControlledPausable {
   mapping(IRewardsDistribution => bool) public isWhitelistedDistributor;
   IERC20 public immutable rewardToken;
 
@@ -25,7 +25,6 @@ contract RewardTreasury is AccessControl {
    */
   constructor(IERC20 _rewardToken) {
     rewardToken = _rewardToken;
-    _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
   }
 
   /**
@@ -66,7 +65,7 @@ contract RewardTreasury is AccessControl {
     emit WhitelistedDistributorSet(distributor, isWhitelisted);
   }
 
-  function _claim(IRewardsDistribution rewardDistribution, address receiver) internal {
+  function _claim(IRewardsDistribution rewardDistribution, address receiver) internal whenNotPaused {
     require(isWhitelistedDistributor[rewardDistribution], "Distributor not whitelisted");
     uint256 reward = rewardDistribution.claim(msg.sender);
     rewardToken.transfer(receiver, reward);

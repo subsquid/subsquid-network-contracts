@@ -2,11 +2,11 @@
 pragma solidity 0.8.20;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 
 import "./interfaces/IStaking.sol";
 import "./interfaces/IRouter.sol";
+import "./AccessControlledPausable.sol";
 
 /**
  * @title Staking Contract
@@ -18,7 +18,7 @@ import "./interfaces/IRouter.sol";
  * Which represents how much reward staker is getting per each staked wei
  * So the reward at any point is calculated as difference between current cumulative rewards per share and its value when the user's last action was performed
  */
-contract Staking is AccessControl, IStaking {
+contract Staking is AccessControlledPausable, IStaking {
   using EnumerableSet for EnumerableSet.UintSet;
 
   uint256 internal constant PRECISION = 1e18;
@@ -32,7 +32,6 @@ contract Staking is AccessControl, IStaking {
   mapping(address staker => EnumerableSet.UintSet workers) internal delegatedTo;
 
   constructor(IERC20 _token, IRouter _router) {
-    _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
     token = _token;
     router = _router;
   }
@@ -47,6 +46,7 @@ contract Staking is AccessControl, IStaking {
   function distribute(uint256[] calldata workers, uint256[] calldata amounts)
     external
     onlyRole(REWARDS_DISTRIBUTOR_ROLE)
+    whenNotPaused
   {
     lastEpochRewarded = router.networkController().epochNumber();
     for (uint256 i = 0; i < workers.length; i++) {
@@ -70,7 +70,7 @@ contract Staking is AccessControl, IStaking {
    * Cannot withdraw for at least one full epoch latest deposit
    * @notice transfers amount of tSQD from msg.sender to this contract
    */
-  function deposit(uint256 worker, uint256 amount) external {
+  function deposit(uint256 worker, uint256 amount) external whenNotPaused {
     INetworkController network = router.networkController();
     require(lastEpochRewarded + 2 >= network.epochNumber() || lastEpochRewarded == 0, "Rewards out of date");
 
@@ -94,7 +94,7 @@ contract Staking is AccessControl, IStaking {
    * Can withdraw even if rewards were not distributed for 2 epochs because we cannot lock user's funds
    * @notice transfers amount of tSQD from this contract to msg.sender
    */
-  function withdraw(uint256 worker, uint256 amount) external {
+  function withdraw(uint256 worker, uint256 amount) external whenNotPaused {
     StakerRewards storage _rewards = rewards[worker];
     require(_rewards.depositAmount[msg.sender] >= amount, "Insufficient staked amount");
     require(_rewards.withdrawAllowed[msg.sender] <= block.number, "Too early to withdraw");
@@ -135,7 +135,7 @@ contract Staking is AccessControl, IStaking {
    * Can only be called by rewards distributor
    * @notice should not transfer any tokens
    */
-  function claim(address staker) external onlyRole(REWARDS_DISTRIBUTOR_ROLE) returns (uint256) {
+  function claim(address staker) external onlyRole(REWARDS_DISTRIBUTOR_ROLE) whenNotPaused returns (uint256) {
     uint256[] memory workers = delegates(staker);
     uint256 reward = _claimable[staker];
     for (uint256 i = 0; i < workers.length; i++) {

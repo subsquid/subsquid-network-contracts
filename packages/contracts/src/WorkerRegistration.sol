@@ -2,13 +2,13 @@
 pragma solidity 0.8.20;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 
 import "./interfaces/INetworkController.sol";
 import "./interfaces/IStaking.sol";
 import "./interfaces/IWorkerRegistration.sol";
 import "./interfaces/IRouter.sol";
+import "./AccessControlledPausable.sol";
 
 /**
  * @title Worker Registration Contract
@@ -19,7 +19,7 @@ import "./interfaces/IRouter.sol";
  * - After worker is deregistered, it becomes inactive only after the next epoch has started
  * - Worker bond can be withdrawn after the lock period has passed after the worker has been deregistered
  */
-contract WorkerRegistration is AccessControl, IWorkerRegistration {
+contract WorkerRegistration is AccessControlledPausable, IWorkerRegistration {
   using EnumerableSet for EnumerableSet.AddressSet;
   using EnumerableSet for EnumerableSet.UintSet;
 
@@ -46,7 +46,6 @@ contract WorkerRegistration is AccessControl, IWorkerRegistration {
    * @param _router Countract router
    */
   constructor(IERC20 _tSQD, IRouter _router) {
-    _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
     tSQD = _tSQD;
     router = _router;
   }
@@ -61,7 +60,7 @@ contract WorkerRegistration is AccessControl, IWorkerRegistration {
    * @notice Peer ID is a unique identifier of the worker. It is expected to be a hex representation of the libp2p peer ID of the worker
    * @notice bondAmount of tSQD tokens will be transferred from the caller to this contract
    */
-  function register(bytes calldata peerId, string memory metadata) public {
+  function register(bytes calldata peerId, string memory metadata) public whenNotPaused {
     require(peerId.length <= 64, "Peer ID too large");
     uint256 workerId;
     if (workerIds[peerId] != 0) {
@@ -98,7 +97,7 @@ contract WorkerRegistration is AccessControl, IWorkerRegistration {
    * @notice Worker must be registered by the caller
    * @notice Worker becomes inactive after current epoch ends
    */
-  function deregister(bytes calldata peerId) external {
+  function deregister(bytes calldata peerId) external whenNotPaused {
     uint256 workerId = workerIds[peerId];
     require(workerId != 0, "Worker not registered");
     require(isWorkerActive(workers[workerId]), "Worker not active");
@@ -124,7 +123,7 @@ contract WorkerRegistration is AccessControl, IWorkerRegistration {
    * @notice Worker must be registered by the caller
    * @notice Worker must be deregistered for at least lockPeriod
    */
-  function withdraw(bytes calldata peerId) external {
+  function withdraw(bytes calldata peerId) external whenNotPaused {
     uint256 workerId = workerIds[peerId];
     require(workerId != 0, "Worker not registered");
     Worker storage worker = workers[workerId];
@@ -140,7 +139,7 @@ contract WorkerRegistration is AccessControl, IWorkerRegistration {
     emit WorkerWithdrawn(workerId, msg.sender);
   }
 
-  function updateMetadata(bytes calldata peerId, string memory metadata) external {
+  function updateMetadata(bytes calldata peerId, string memory metadata) external whenNotPaused {
     uint256 workerId = workerIds[peerId];
     require(workers[workerId].creator == msg.sender, "Not worker creator");
     workers[workerId].metadata = metadata;
@@ -154,7 +153,7 @@ contract WorkerRegistration is AccessControl, IWorkerRegistration {
    * @param peerId The unique peer ID of the worker.
    * @notice Worker must be registered by the caller
    */
-  function returnExcessiveBond(bytes calldata peerId) external {
+  function returnExcessiveBond(bytes calldata peerId) external whenNotPaused {
     uint256 workerId = workerIds[peerId];
     require(workerId != 0, "Worker not registered");
     require(workers[workerId].creator == msg.sender, "Not worker creator");
