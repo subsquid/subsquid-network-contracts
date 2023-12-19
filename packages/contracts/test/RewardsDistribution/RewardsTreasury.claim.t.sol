@@ -1,4 +1,4 @@
-pragma solidity 0.8.19;
+pragma solidity 0.8.20;
 
 import "./RewardsDistribution.sol";
 
@@ -41,9 +41,7 @@ contract RewardsDistributionClaimTest is RewardsDistributionTest {
   function testDistributorClaimCannotBeCalledByNotTreasury() public {
     (uint256[] memory recipients, uint256[] memory workerAmounts, uint256[] memory stakerAmounts) = prepareRewards(1);
     rewardsDistribution.distributeHelper(1, recipients, workerAmounts, stakerAmounts);
-    vm.expectRevert(
-      "AccessControl: account 0x7fa9385be102ac3eac297483dd6233d62b3e1496 is missing role 0x1b79d793df9d39a01a8803af5b473fcb035fc3f70eaeb117debd77529e6aefe8"
-    );
+    expectNotRoleRevert(rewardsDistribution.REWARDS_TREASURY_ROLE());
     rewardsDistribution.claim(workerOwner);
   }
 

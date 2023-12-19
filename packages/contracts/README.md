@@ -43,10 +43,30 @@ pnpm run test
 
 ### Deployed contracts
 
+#### Sepolia
+
+| Contract                       | Address                                                                                                                       |
+|--------------------------------|-------------------------------------------------------------------------------------------------------------------------------|
+| tSQD                           | [0x2a5d6A3F9D31c798B1772B0c70Ae8bd69988aD11](https://sepolia.etherscan.io/address/0x2a5d6A3F9D31c798B1772B0c70Ae8bd69988aD11) |
+
+#### Arbitrum-sepolia
+
+| Contract                       | Address                                                                                                                      |
+|--------------------------------|------------------------------------------------------------------------------------------------------------------------------|
+| tSQD                           | [0x0D3934b08AdB5fbe30F48B3A18ba636460655B7E](https://sepolia.arbiscan.io/address/0x0D3934b08AdB5fbe30F48B3A18ba636460655B7E) |
+| WorkerRegistration             | [0x1b188e52CEC575A359B1FAa4649a0739BD4442a4](https://sepolia.arbiscan.io/address/0x1b188e52CEC575A359B1FAa4649a0739BD4442a4) |
+| Staking                        | [0x87BCF96A0f1e898a3434Fd1C588D13e2ac27268c](https://sepolia.arbiscan.io/address/0x87BCF96A0f1e898a3434Fd1C588D13e2ac27268c) |
+| GatewayRegistry                | [0x796426d5266645245476EDcEb63e751cA043304D](https://sepolia.arbiscan.io/address/0x796426d5266645245476EDcEb63e751cA043304D) |
+| Router                         | [0xB441f351a14a520496ec30d91b4DC1D2E54505B5](https://sepolia.arbiscan.io/address/0xB441f351a14a520496ec30d91b4DC1D2E54505B5) |
+| NetworkController              | [0x4e0E874B7FdE824c8C16903E96a1E35bD8b9ba89](https://sepolia.arbiscan.io/address/0x4e0E874B7FdE824c8C16903E96a1E35bD8b9ba89) |
+| RewardTreasury                 | [0x85E8491383a38BE3d266a79F8532fa9d6f34c894](https://sepolia.arbiscan.io/address/0x85E8491383a38BE3d266a79F8532fa9d6f34c894) |
+| DistributedRewardsDistribution | [0x1b4917E9c462CfB36f9A1762f6c0aCb04f5968B8](https://sepolia.arbiscan.io/address/0x1b4917E9c462CfB36f9A1762f6c0aCb04f5968B8) |
+| RewardCalculation              | [0xE7F569CF32453A655071D3736Bf105d90cC4363b](https://sepolia.arbiscan.io/address/0xE7F569CF32453A655071D3736Bf105d90cC4363b) |
+
 #### Arbitrum-goerli
 
-| Contract                       | Address                                                                                   |
-|--------------------------------|-------------------------------------------------------------------------------------------|
+| Contract                       | Address                                                                                                                     |
+|--------------------------------|-----------------------------------------------------------------------------------------------------------------------------|
 | tSQD                           | [0x69f643dCa8B633F97e2fC979E8eBa6cB63B242A9](https://goerli.arbiscan.io/address/0x69f643dCa8B633F97e2fC979E8eBa6cB63B242A9) |
 | DistributedRewardsDistribution | [0x69f643dCa8B633F97e2fC979E8eBa6cB63B242A9](https://goerli.arbiscan.io/address/0x69f643dCa8B633F97e2fC979E8eBa6cB63B242A9) |
 | RewardTreasury                 | [0x87F1B67c10237CBB32019EF33052B96940994149](https://goerli.arbiscan.io/address/0x87F1B67c10237CBB32019EF33052B96940994149) |

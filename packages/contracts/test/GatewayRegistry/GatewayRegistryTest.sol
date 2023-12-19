@@ -1,8 +1,8 @@
-pragma solidity 0.8.19;
+pragma solidity 0.8.20;
 
 import "forge-std/Test.sol";
 import "../../src/GatewayRegistry.sol";
-import "../../src/testnet/tSQD.sol";
+import "../../src/tSQD.sol";
 import "../../src/NetworkController.sol";
 import "../../src/WorkerRegistration.sol";
 import "../../src/Staking.sol";

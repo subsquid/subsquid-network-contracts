@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity 0.8.19;
+pragma solidity 0.8.20;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "../../src/Staking.sol";
-import "../../src/testnet/tSQD.sol";
+import "../../src/tSQD.sol";
 import "../BaseTest.sol";
 
 contract StakingHelper is Staking {

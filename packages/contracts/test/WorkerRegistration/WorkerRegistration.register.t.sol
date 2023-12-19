@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity 0.8.19;
+pragma solidity 0.8.20;
 
 import "./WorkerRegistration.sol";
 
@@ -19,7 +19,7 @@ contract WorkerRegistrationRegisterTest is WorkerRegistrationTest {
 
   function test_RevertsIfSameWorkedRegisteredTwice() public {
     workerRegistration.register(workerId);
-    vm.expectRevert("Worker already registered");
+    vm.expectRevert("Worker already exists");
     workerRegistration.register(workerId);
   }
 

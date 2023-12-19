@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity 0.8.19;
+pragma solidity 0.8.20;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/access/AccessControl.sol";
@@ -32,7 +32,7 @@ contract Staking is AccessControl, IStaking {
   mapping(address staker => EnumerableSet.UintSet workers) internal delegatedTo;
 
   constructor(IERC20 _token, IRouter _router) {
-    _setupRole(DEFAULT_ADMIN_ROLE, msg.sender);
+    _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
     token = _token;
     router = _router;
   }

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity 0.8.19;
+pragma solidity 0.8.20;
 
 import "./WorkerRegistration.sol";
 
@@ -43,6 +43,12 @@ contract WorkerRegistrationWithdrawTest is WorkerRegistrationTest {
     workerRegistration.withdraw(workerId);
   }
 
+  function testRevertsIfCalledTwice() public {
+    withdraw();
+    vm.expectRevert("Not worker creator");
+    workerRegistration.withdraw(workerId);
+  }
+
   function withdraw() internal {
     workerRegistration.register(workerId);
     jumpEpoch();
@@ -58,6 +64,22 @@ contract WorkerRegistrationWithdrawTest is WorkerRegistrationTest {
     assertEq(workerAddress, address(0));
     assertEq(workerRegistration.getAllWorkersCount(), 0);
     assertEq(workerRegistration.workerIds(workerId), 1);
+  }
+
+  function testCanRegisterAgain() public {
+    withdraw();
+    token.approve(address(workerRegistration), workerRegistration.bondAmount());
+    workerRegistration.register(workerId);
+    assertEq(workerRegistration.getAllWorkersCount(), 1);
+    assertEq(workerRegistration.workerIds(workerId), 1);
+  }
+
+  function testRevertsIfReregisteredByDifferentAccount() public {
+    withdraw();
+    token.approve(address(workerRegistration), workerRegistration.bondAmount());
+    startHoax(address(123));
+    vm.expectRevert("Worker already registered by different account");
+    workerRegistration.register(workerId);
   }
 
   function testTransfersBondBack() public {

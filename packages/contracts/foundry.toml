@@ -12,8 +12,11 @@ tab_width = 2
 
 [rpc_endpoints]
 arbitrum-goerli = "https://goerli-rollup.arbitrum.io/rpc"
+arbitrum-sepolia = "https://sepolia-rollup.arbitrum.io/rpc"
 
 [etherscan]
 arbitrum-goerli = { key = "N89QM8KDR8SZ52I7YCSN6Z35QAUFUYBHBV" }
+arbitrum-sepolia = { key = "N89QM8KDR8SZ52I7YCSN6Z35QAUFUYBHBV" }
+sepolia = { key = "MMGCJXPZ3J392VFETA9Y9425IB41A6FWXW" }
 
 # See more config options https://github.com/foundry-rs/foundry/tree/master/config

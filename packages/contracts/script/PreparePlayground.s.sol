@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.19;
+pragma solidity 0.8.20;
 
 import "forge-std/Script.sol";
 
@@ -202,11 +202,6 @@ contract Multicall3 {
   /// @notice Returns the block coinbase
   function getCurrentBlockCoinbase() public view returns (address coinbase) {
     coinbase = block.coinbase;
-  }
-
-  /// @notice Returns the block difficulty
-  function getCurrentBlockDifficulty() public view returns (uint256 difficulty) {
-    difficulty = block.difficulty;
   }
 
   /// @notice Returns the block gas limit

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity 0.8.19;
+pragma solidity 0.8.20;
 
 interface IRewardsDistribution {
   /// @dev Emitted when rewards are distributed for the range [fromBlock, toBlock]

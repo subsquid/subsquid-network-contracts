@@ -10,9 +10,9 @@ importers:
 
   packages/contracts:
     specifiers:
+      '@arbitrum/sdk': ^3.1.13
       '@nomiclabs/hardhat-ethers': ^2.2.3
       '@nomiclabs/hardhat-waffle': ^2.0.5
-      '@openzeppelin/contracts': ^4.9.3
       '@types/chai': ^4.3.4
       '@types/mocha': ^10.0.1
       '@types/node': ^18.15.11
@@ -28,13 +28,13 @@ importers:
       ts-node: ^10.9.1
       typescript: ^5.0.4
     dependencies:
-      '@openzeppelin/contracts': 4.9.3
       bs58: 5.0.0
       dotenv: 16.3.1
       ethers: 5.7.2
       hardhat: 2.17.1_kg5gpyde6u3komamnnl67a6oc4
       peer-id: 0.16.0
     devDependencies:
+      '@arbitrum/sdk': 3.1.13
       '@nomiclabs/hardhat-ethers': 2.2.3_zpakm34qbiadsdqw56avl5mdha
       '@nomiclabs/hardhat-waffle': 2.0.6_jx5zvwluwpr77u63jt2iilkz3e
       '@types/chai': 4.3.5
@@ -114,7 +114,7 @@ importers:
       mocha: ^10.2.0
       protobufjs: ^7.2.5
       ts-node: ^10.9.1
-      typescript: ^5.3.3
+      typescript: ^5.3.2
       viem: ^1.19.10
     dependencies:
       '@clickhouse/client-web': 0.2.6
@@ -156,6 +156,20 @@ packages:
     dependencies:
       '@jridgewell/gen-mapping': 0.3.3
       '@jridgewell/trace-mapping': 0.3.9
+    dev: true
+
+  /@arbitrum/sdk/3.1.13:
+    resolution: {integrity: sha512-oE/j8ThWWEdFfV0helmR8lD0T67/CY1zMCt6RVslaCLrytFdbg3QsrHs/sQE3yiCXgisQlsx3qomCgh8PfBo8Q==}
+    engines: {node: '>=v11', npm: please-use-yarn, yarn: '>= 1.0.0'}
+    dependencies:
+      '@ethersproject/address': 5.7.0
+      '@ethersproject/bignumber': 5.7.0
+      '@ethersproject/bytes': 5.7.0
+      async-mutex: 0.4.0
+      ethers: 5.7.2
+    transitivePeerDependencies:
+      - bufferutil
+      - utf-8-validate
     dev: true
 
   /@babel/code-frame/7.22.13:
@@ -1726,10 +1740,6 @@ packages:
       ethers: 5.7.2
       hardhat: 2.17.1_kg5gpyde6u3komamnnl67a6oc4
     dev: true
-
-  /@openzeppelin/contracts/4.9.3:
-    resolution: {integrity: sha512-He3LieZ1pP2TNt5JbkPA4PNT9WC3gOTOlDcFGJW4Le4QKqwmiNJCRt44APfxMxvq7OugU/cqYuPcSBzOw38DAg==}
-    dev: false
 
   /@protobufjs/aspromise/1.1.2:
     resolution: {integrity: sha512-j+gKExEuLmKwvz3OgROXtrJ2UG2x8Ch2YZUxahh+s1F2HZ+wAceUNLkvy6zKCPVRkU++ZWQrdxsUeQXmcg4uoQ==}
@@ -3322,6 +3332,12 @@ packages:
     dependencies:
       tslib: 2.6.2
     dev: false
+
+  /async-mutex/0.4.0:
+    resolution: {integrity: sha512-eJFZ1YhRR8UN8eBLoNzcDPcy/jqjsg6I1AP+KvWQX80BqOSW1oJPJXDylPUEeMr2ZQvHgnQ//Lp6f3RQ1zI7HA==}
+    dependencies:
+      tslib: 2.6.2
+    dev: true
 
   /async/1.5.2:
     resolution: {integrity: sha512-nSVgobk4rv61R9PUSDtYt7mPVB2olxNR5RWJcAsH676/ef11bUZwvu7+RGYrYauVdDPcO519v68wRhXQtxsV9w==}
@@ -10998,7 +11014,6 @@ packages:
 
   /tslib/2.6.2:
     resolution: {integrity: sha512-AEYxH93jGFPn/a2iVAwW87VuUIkR1FVUKB77NwMF7nBTDkDrrT/Hpt/IrCJ0QXhW27jTBDcf5ZY7w6RiqTMw2Q==}
-    dev: false
 
   /tsort/0.0.1:
     resolution: {integrity: sha512-Tyrf5mxF8Ofs1tNoxA13lFeZ2Zrbd6cKbuH3V+MQ5sb6DtBj5FjrXVsRWT8YvNAQTqNoz66dz1WsbigI22aEnw==}

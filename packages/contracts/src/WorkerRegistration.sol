@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity 0.8.19;
+pragma solidity 0.8.20;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/access/AccessControl.sol";
@@ -46,7 +46,7 @@ contract WorkerRegistration is AccessControl, IWorkerRegistration {
    * @param _router Countract router
    */
   constructor(IERC20 _tSQD, IRouter _router) {
-    _setupRole(DEFAULT_ADMIN_ROLE, msg.sender);
+    _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
     tSQD = _tSQD;
     router = _router;
   }
@@ -63,10 +63,15 @@ contract WorkerRegistration is AccessControl, IWorkerRegistration {
    */
   function register(bytes calldata peerId, string memory metadata) public {
     require(peerId.length <= 64, "Peer ID too large");
-    require(workerIds[peerId] == 0, "Worker already registered");
-
-    workerIdTracker++;
-    uint256 workerId = workerIdTracker;
+    uint256 workerId;
+    if (workerIds[peerId] != 0) {
+      require(workers[workerIds[peerId]].registeredAt == 0, "Worker already exists");
+      require(ownedWorkers[msg.sender].contains(workerIds[peerId]), "Worker already registered by different account");
+      workerId = workerIds[peerId];
+    } else {
+      workerIdTracker++;
+      workerId = workerIdTracker;
+    }
     uint256 _bondAmount = bondAmount();
 
     workers[workerId] = Worker({
@@ -197,7 +202,8 @@ contract WorkerRegistration is AccessControl, IWorkerRegistration {
   /// @dev Returns true if worker is active.
   /// @notice Worker is considered active if it has been registered and not deregistered yet
   function isWorkerActive(Worker storage worker) internal view returns (bool) {
-    return worker.registeredAt <= block.number && (worker.deregisteredAt == 0 || worker.deregisteredAt >= block.number);
+    return worker.registeredAt > 0 && worker.registeredAt <= block.number
+      && (worker.deregisteredAt == 0 || worker.deregisteredAt >= block.number);
   }
 
   /// @dev Returns the number of active workers.

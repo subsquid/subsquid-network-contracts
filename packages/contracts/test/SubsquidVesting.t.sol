@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.19;
+pragma solidity 0.8.20;
 
 import "./BaseTest.sol";
 import "../src/Vesting.sol";
@@ -16,7 +16,7 @@ contract SubsquidVestingTest is BaseTest {
   }
 
   function test_Constructor() public {
-    assertEq(vesting.beneficiary(), address(this));
+    assertEq(vesting.owner(), address(this));
     assertEq(vesting.start(), block.timestamp + 6 * month);
     assertEq(vesting.duration(), 30 * month);
     assertEq(vesting.expectedTotalAmount(), 123);
@@ -97,7 +97,7 @@ contract SubsquidVestingTest is BaseTest {
     pure
     returns (uint256[] memory)
   {
-    uint256[] memory result = new uint[](a.length + b.length + c.length + d.length);
+    uint256[] memory result = new uint256[](a.length + b.length + c.length + d.length);
     uint256 counter = 0;
     for (uint256 i = 0; i < a.length; i++) {
       result[counter] = a[i];
