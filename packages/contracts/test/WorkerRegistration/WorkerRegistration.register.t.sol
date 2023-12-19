@@ -13,8 +13,8 @@ contract WorkerRegistrationRegisterTest is WorkerRegistrationTest {
 
   function test_RegisterWorkerEmitsEvent() public {
     vm.expectEmit(address(workerRegistration));
-    emit WorkerRegistered(1, workerId, creator, nextEpoch());
-    workerRegistration.register(workerId);
+    emit WorkerRegistered(1, workerId, creator, nextEpoch(), "metadata");
+    workerRegistration.register(workerId, "metadata");
   }
 
   function test_RevertsIfSameWorkedRegisteredTwice() public {
