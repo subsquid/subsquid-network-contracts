@@ -88,7 +88,7 @@ contract WorkerRegistration is AccessControl, IWorkerRegistration {
     ownedWorkers[msg.sender].add(workerId);
 
     tSQD.transferFrom(msg.sender, address(this), _bondAmount);
-    emit WorkerRegistered(workerId, peerId, msg.sender, workers[workerId].registeredAt);
+    emit WorkerRegistered(workerId, peerId, msg.sender, workers[workerId].registeredAt, metadata);
   }
 
   /**
@@ -138,6 +138,14 @@ contract WorkerRegistration is AccessControl, IWorkerRegistration {
     tSQD.transfer(msg.sender, bond);
 
     emit WorkerWithdrawn(workerId, msg.sender);
+  }
+
+  function updateMetadata(bytes calldata peerId, string memory metadata) external {
+    uint256 workerId = workerIds[peerId];
+    require(workers[workerId].creator == msg.sender, "Not worker creator");
+    workers[workerId].metadata = metadata;
+
+    emit MetadataUpdated(workerId, metadata);
   }
 
   /**

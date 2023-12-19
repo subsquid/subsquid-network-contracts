@@ -3,7 +3,9 @@ pragma solidity 0.8.20;
 
 interface IWorkerRegistration {
   /// @dev Emitted when a worker is registered
-  event WorkerRegistered(uint256 indexed workerId, bytes peerId, address indexed registrar, uint256 registeredAt);
+  event WorkerRegistered(
+    uint256 indexed workerId, bytes peerId, address indexed registrar, uint256 registeredAt, string metadata
+  );
 
   /// @dev Emitted when a worker is deregistered
   event WorkerDeregistered(uint256 indexed workerId, address indexed account, uint256 deregistedAt);
@@ -13,6 +15,9 @@ interface IWorkerRegistration {
 
   /// @dev Emitted when a excessive bond is withdrawn
   event ExcessiveBondReturned(uint256 indexed workerId, uint256 amount);
+
+  /// @dev Emitted when metadata is updated
+  event MetadataUpdated(uint256 indexed workerId, string metadata);
 
   function register(bytes calldata peerId, string calldata metadata) external;
 
