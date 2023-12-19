@@ -59,8 +59,6 @@ contract BaseTest is Test {
   }
 
   function expectNotRoleRevert(bytes32 role) internal {
-    vm.expectRevert(
-      abi.encodeWithSelector(IAccessControl.AccessControlUnauthorizedAccount.selector, getCaller(), role)
-    );
+    vm.expectRevert(abi.encodeWithSelector(IAccessControl.AccessControlUnauthorizedAccount.selector, getCaller(), role));
   }
 }
