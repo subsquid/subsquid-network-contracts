@@ -13,7 +13,6 @@ importers:
       '@arbitrum/sdk': ^3.1.13
       '@nomiclabs/hardhat-ethers': ^2.2.3
       '@nomiclabs/hardhat-waffle': ^2.0.5
-      '@openzeppelin/contracts': ^4.9.3
       '@types/chai': ^4.3.4
       '@types/mocha': ^10.0.1
       '@types/node': ^18.15.11
@@ -29,7 +28,6 @@ importers:
       ts-node: ^10.9.1
       typescript: ^5.0.4
     dependencies:
-      '@openzeppelin/contracts': 4.9.3
       bs58: 5.0.0
       dotenv: 16.3.1
       ethers: 5.7.2
@@ -116,7 +114,7 @@ importers:
       mocha: ^10.2.0
       protobufjs: ^7.2.5
       ts-node: ^10.9.1
-      typescript: ^5.3.3
+      typescript: ^5.3.2
       viem: ^1.19.10
     dependencies:
       '@clickhouse/client-web': 0.2.6
@@ -1742,10 +1740,6 @@ packages:
       ethers: 5.7.2
       hardhat: 2.17.1_kg5gpyde6u3komamnnl67a6oc4
     dev: true
-
-  /@openzeppelin/contracts/4.9.3:
-    resolution: {integrity: sha512-He3LieZ1pP2TNt5JbkPA4PNT9WC3gOTOlDcFGJW4Le4QKqwmiNJCRt44APfxMxvq7OugU/cqYuPcSBzOw38DAg==}
-    dev: false
 
   /@protobufjs/aspromise/1.1.2:
     resolution: {integrity: sha512-j+gKExEuLmKwvz3OgROXtrJ2UG2x8Ch2YZUxahh+s1F2HZ+wAceUNLkvy6zKCPVRkU++ZWQrdxsUeQXmcg4uoQ==}
