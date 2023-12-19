@@ -72,9 +72,7 @@ contract RewardsDistributionCommitApproveTest is RewardsDistributionTest {
     vm.roll(10);
     rewardsDistribution.commit(1, 4, recipients, workerAmounts, stakerAmounts);
     startHoax(address(1));
-    vm.expectRevert(
-      "AccessControl: account 0x0000000000000000000000000000000000000001 is missing role 0x9df62d436bfc9f3be4953ab398f3aa862316b013d490e2138c80b4b2eadeabd7"
-    );
+    expectNotRoleRevert(rewardsDistribution.REWARDS_DISTRIBUTOR_ROLE());
     rewardsDistribution.approve(1, 4, recipients, workerAmounts, stakerAmounts);
   }
 
