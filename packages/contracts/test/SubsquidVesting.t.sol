@@ -97,7 +97,7 @@ contract SubsquidVestingTest is BaseTest {
     pure
     returns (uint256[] memory)
   {
-    uint256[] memory result = new uint[](a.length + b.length + c.length + d.length);
+    uint256[] memory result = new uint256[](a.length + b.length + c.length + d.length);
     uint256 counter = 0;
     for (uint256 i = 0; i < a.length; i++) {
       result[counter] = a[i];

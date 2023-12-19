@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity 0.8.20;
 
-import "forge-std/Test.sol";
 import "../src/NetworkController.sol";
+import {BaseTest} from "./BaseTest.sol";
 
-contract NetworkControllerTest is Test {
+contract NetworkControllerTest is BaseTest {
   NetworkController controller;
 
   function setUp() public {
@@ -48,9 +48,7 @@ contract NetworkControllerTest is Test {
 
   function test_RevertsIf_SettingEpochLengthNotByAdmin() public {
     hoax(address(1));
-    vm.expectRevert(
-      "AccessControl: account 0x0000000000000000000000000000000000000001 is missing role 0x0000000000000000000000000000000000000000000000000000000000000000"
-    );
+    expectNotAdminRevert();
     controller.setEpochLength(10);
   }
 
@@ -61,9 +59,7 @@ contract NetworkControllerTest is Test {
 
   function test_RevertsIf_SettingBondAmountNotByAdmin() public {
     hoax(address(1));
-    vm.expectRevert(
-      "AccessControl: account 0x0000000000000000000000000000000000000001 is missing role 0x0000000000000000000000000000000000000000000000000000000000000000"
-    );
+    expectNotAdminRevert();
     controller.setBondAmount(10);
   }
 
@@ -79,17 +75,13 @@ contract NetworkControllerTest is Test {
 
   function test_RevertsIf_SettingStorageAmountNotByAdmin() public {
     hoax(address(1));
-    vm.expectRevert(
-      "AccessControl: account 0x0000000000000000000000000000000000000001 is missing role 0x0000000000000000000000000000000000000000000000000000000000000000"
-    );
+    expectNotAdminRevert();
     controller.setStoragePerWorkerInGb(10);
   }
 
   function test_RevertsIf_SettingDelegationCoefficientNotByAdmin() public {
     hoax(address(1));
-    vm.expectRevert(
-      "AccessControl: account 0x0000000000000000000000000000000000000001 is missing role 0x0000000000000000000000000000000000000000000000000000000000000000"
-    );
+    expectNotAdminRevert();
     controller.setDelegationLimitCoefficient(10);
   }
 

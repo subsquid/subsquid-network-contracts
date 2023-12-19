@@ -3,6 +3,7 @@ pragma solidity 0.8.20;
 
 import "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 import "forge-std/Test.sol";
+import "forge-std/Vm.sol";
 import "../src/WorkerRegistration.sol";
 import "../src/Staking.sol";
 import "../src/NetworkController.sol";
@@ -41,5 +42,23 @@ contract BaseTest is Test {
     allowedTargets[2] = address(treasury);
     INetworkController networkController = new NetworkController(5, 10 ether, allowedTargets);
     router.initialize(workerRegistration, staking, address(treasury), networkController, rewards);
+  }
+
+  function getCaller() internal returns (address) {
+    (VmSafe.CallerMode mode, address prank,) = vm.readCallers();
+    if (mode == VmSafe.CallerMode.Prank || mode == VmSafe.CallerMode.RecurrentPrank) {
+      return prank;
+    }
+    return address(this);
+  }
+
+  function expectNotAdminRevert() internal {
+    vm.expectRevert(
+      abi.encodeWithSelector(IAccessControl.AccessControlUnauthorizedAccount.selector, getCaller(), bytes32(0))
+    );
+  }
+
+  function expectNotRoleRevert(bytes32 role) internal {
+    vm.expectRevert(abi.encodeWithSelector(IAccessControl.AccessControlUnauthorizedAccount.selector, getCaller(), role));
   }
 }

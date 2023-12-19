@@ -28,7 +28,12 @@ contract tSQD is ERC20 {
   IL1CustomGateway gateway;
   IGatewayRouter2 router;
 
-  constructor(address[] memory recipients, uint256[] memory percentages, IL1CustomGateway _gateway, IGatewayRouter2 _router) ERC20("tSQD Token", "tSQD") {
+  constructor(
+    address[] memory recipients,
+    uint256[] memory percentages,
+    IL1CustomGateway _gateway,
+    IGatewayRouter2 _router
+  ) ERC20("tSQD Token", "tSQD") {
     gateway = _gateway;
     router = _router;
 
@@ -66,20 +71,12 @@ contract tSQD is ERC20 {
     require(!shouldRegisterGateway, "ALREADY_REGISTERED");
     shouldRegisterGateway = true;
 
-    gateway.registerTokenToL2{ value: valueForGateway }(
-      l2CustomTokenAddress,
-      maxGasForCustomGateway,
-      gasPriceBid,
-      maxSubmissionCostForCustomGateway,
-      creditBackAddress
+    gateway.registerTokenToL2{value: valueForGateway}(
+      l2CustomTokenAddress, maxGasForCustomGateway, gasPriceBid, maxSubmissionCostForCustomGateway, creditBackAddress
     );
 
-    router.setGateway{ value: valueForRouter }(
-      address(gateway),
-      maxGasForRouter,
-      gasPriceBid,
-      maxSubmissionCostForRouter,
-      creditBackAddress
+    router.setGateway{value: valueForRouter}(
+      address(gateway), maxGasForRouter, gasPriceBid, maxSubmissionCostForRouter, creditBackAddress
     );
 
     shouldRegisterGateway = false;
