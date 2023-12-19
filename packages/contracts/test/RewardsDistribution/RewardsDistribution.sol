@@ -58,15 +58,22 @@ contract RewardsDistributionTest is BaseTest {
 
   function prepareRewards(uint256 n)
     internal
-    returns (uint256[] memory recipients, uint256[] memory workerAmounts, uint256[] memory stakerAmounts)
+    returns (
+      uint256[] memory recipients,
+      uint256[] memory workerAmounts,
+      uint256[] memory stakerAmounts,
+      uint256[] memory allocationsUsed
+    )
   {
     workerAmounts = new uint256[](n);
     stakerAmounts = new uint256[](n);
     recipients = new uint256[](n);
+    allocationsUsed = new uint256[](n);
     for (uint160 i = 0; i < n; i++) {
       staking.deposit(i + 1, 1);
       workerAmounts[i] = epochRewardAmount / n;
       stakerAmounts[i] = 1;
+      allocationsUsed[i] = 123;
       recipients[i] = i + 1;
     }
   }

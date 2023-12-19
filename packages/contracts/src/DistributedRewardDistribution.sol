@@ -36,7 +36,8 @@ contract DistributedRewardsDistribution is AccessControlledPausable, IRewardsDis
     uint256 toBlock,
     uint256[] recipients,
     uint256[] workerRewards,
-    uint256[] stakerRewards
+    uint256[] stakerRewards,
+    uint256[] allocationsUsed
   );
 
   /// @dev Emitted when commitment is approved
@@ -46,7 +47,8 @@ contract DistributedRewardsDistribution is AccessControlledPausable, IRewardsDis
     uint256 toBlock,
     uint256[] recipients,
     uint256[] workerRewards,
-    uint256[] stakerRewards
+    uint256[] stakerRewards,
+    uint256[] allocationsUsed
   );
 
   /// @dev Emitted when new distributor is added
@@ -109,7 +111,8 @@ contract DistributedRewardsDistribution is AccessControlledPausable, IRewardsDis
     uint256 toBlock,
     uint256[] calldata recipients,
     uint256[] calldata workerRewards,
-    uint256[] calldata _stakerRewards
+    uint256[] calldata _stakerRewards,
+    uint256[] calldata _allocationsUsed
   ) external whenNotPaused {
     require(recipients.length == workerRewards.length, "Recipients and worker amounts length mismatch");
     require(recipients.length == _stakerRewards.length, "Recipients and staker amounts length mismatch");
@@ -122,7 +125,7 @@ contract DistributedRewardsDistribution is AccessControlledPausable, IRewardsDis
     approves[fromBlock][toBlock] = 1;
     alreadyApproved[commitment][msg.sender] = true;
 
-    emit NewCommitment(msg.sender, fromBlock, toBlock, recipients, workerRewards, _stakerRewards);
+    emit NewCommitment(msg.sender, fromBlock, toBlock, recipients, workerRewards, _stakerRewards, _allocationsUsed);
   }
 
   /**
@@ -135,7 +138,8 @@ contract DistributedRewardsDistribution is AccessControlledPausable, IRewardsDis
     uint256 toBlock,
     uint256[] calldata recipients,
     uint256[] calldata workerRewards,
-    uint256[] calldata _stakerRewards
+    uint256[] calldata _stakerRewards,
+    uint256[] calldata _allocationsUsed
   ) external onlyRole(REWARDS_DISTRIBUTOR_ROLE) whenNotPaused {
     require(commitments[fromBlock][toBlock] != 0, "Commitment does not exist");
     bytes32 commitment = keccak256(msg.data[4:]);
@@ -148,7 +152,7 @@ contract DistributedRewardsDistribution is AccessControlledPausable, IRewardsDis
       distribute(fromBlock, toBlock, recipients, workerRewards, _stakerRewards);
     }
 
-    emit Approved(msg.sender, fromBlock, toBlock, recipients, workerRewards, _stakerRewards);
+    emit Approved(msg.sender, fromBlock, toBlock, recipients, workerRewards, _stakerRewards, _allocationsUsed);
   }
 
   /// @return true if the commitment can be approved by `who`
@@ -158,7 +162,8 @@ contract DistributedRewardsDistribution is AccessControlledPausable, IRewardsDis
     uint256 toBlock,
     uint256[] calldata recipients,
     uint256[] calldata workerRewards,
-    uint256[] calldata _stakerRewards
+    uint256[] calldata _stakerRewards,
+    uint256[] calldata _allocationsUsed
   ) external view returns (bool) {
     if (!hasRole(REWARDS_DISTRIBUTOR_ROLE, who)) {
       return false;
@@ -166,7 +171,8 @@ contract DistributedRewardsDistribution is AccessControlledPausable, IRewardsDis
     if (commitments[fromBlock][toBlock] == 0) {
       return false;
     }
-    bytes32 commitment = keccak256(abi.encode(fromBlock, toBlock, recipients, workerRewards, _stakerRewards));
+    bytes32 commitment =
+      keccak256(abi.encode(fromBlock, toBlock, recipients, workerRewards, _stakerRewards, _allocationsUsed));
     if (commitments[fromBlock][toBlock] != commitment) {
       return false;
     }
