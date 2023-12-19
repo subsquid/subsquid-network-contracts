@@ -39,7 +39,7 @@ contract SubsquidVesting is VestingWallet {
     return token.balanceOf(address(this));
   }
 
-  function release(address token) onlyOwner public override {
+  function release(address token) public override onlyOwner {
     require(token == address(tSQD), "Only tSQD is supported");
     super.release(token);
   }
@@ -48,7 +48,7 @@ contract SubsquidVesting is VestingWallet {
     execute(to, data, 0);
   }
 
-  function execute(address to, bytes calldata data, uint256 requiredApprove) onlyOwner public returns (bytes memory) {
+  function execute(address to, bytes calldata data, uint256 requiredApprove) public onlyOwner returns (bytes memory) {
     require(router.networkController().isAllowedVestedTarget(to), "Target is not allowed");
 
     // It's not likely that following addresses will be allowed by network controller, but just in case

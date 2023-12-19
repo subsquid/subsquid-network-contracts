@@ -63,10 +63,15 @@ contract WorkerRegistration is AccessControl, IWorkerRegistration {
    */
   function register(bytes calldata peerId, string memory metadata) public {
     require(peerId.length <= 64, "Peer ID too large");
-    require(workerIds[peerId] == 0, "Worker already registered");
-
-    workerIdTracker++;
-    uint256 workerId = workerIdTracker;
+    uint256 workerId;
+    if (workerIds[peerId] != 0) {
+      require(workers[workerIds[peerId]].registeredAt == 0, "Worker already exists");
+      require(ownedWorkers[msg.sender].contains(workerIds[peerId]), "Worker already registered by different account");
+      workerId = workerIds[peerId];
+    } else {
+      workerIdTracker++;
+      workerId = workerIdTracker;
+    }
     uint256 _bondAmount = bondAmount();
 
     workers[workerId] = Worker({
@@ -197,7 +202,8 @@ contract WorkerRegistration is AccessControl, IWorkerRegistration {
   /// @dev Returns true if worker is active.
   /// @notice Worker is considered active if it has been registered and not deregistered yet
   function isWorkerActive(Worker storage worker) internal view returns (bool) {
-    return worker.registeredAt <= block.number && (worker.deregisteredAt == 0 || worker.deregisteredAt >= block.number);
+    return worker.registeredAt > 0 && worker.registeredAt <= block.number
+      && (worker.deregisteredAt == 0 || worker.deregisteredAt >= block.number);
   }
 
   /// @dev Returns the number of active workers.

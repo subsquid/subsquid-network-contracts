@@ -18,15 +18,15 @@ contract tSQDArbitrum is ERC20 {
   }
 
   /**
- * @notice should increase token supply by amount, and should only be callable by the L2Gateway.
-     */
+   * @notice should increase token supply by amount, and should only be callable by the L2Gateway.
+   */
   function bridgeMint(address account, uint256 amount) external onlyL2Gateway {
     _mint(account, amount);
   }
 
   /**
    * @notice should decrease token supply by amount, and should only be callable by the L2Gateway.
-     */
+   */
   function bridgeBurn(address account, uint256 amount) external onlyL2Gateway {
     _burn(account, amount);
   }

@@ -42,4 +42,21 @@ contract BaseTest is Test {
     INetworkController networkController = new NetworkController(5, 10 ether, allowedTargets);
     router.initialize(workerRegistration, staking, address(treasury), networkController, rewards);
   }
+
+  function getCaller() internal view returns (address) {
+    (, address prank,) = vm.readCallers();
+    return prank;
+  }
+
+  function expectNotAdminRevert() internal {
+    vm.expectRevert(
+      abi.encodeWithSelector(IAccessControl.AccessControlUnauthorizedAccount.selector, getCaller(), bytes32(0))
+    );
+  }
+
+  function expectNotRoleRevert(bytes32 role) internal {
+    vm.expectRevert(
+      abi.encodeWithSelector(IAccessControl.AccessControlUnauthorizedAccount.selector, getCaller(), role)
+    );
+  }
 }
