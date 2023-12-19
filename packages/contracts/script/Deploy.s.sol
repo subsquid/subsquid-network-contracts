@@ -14,6 +14,7 @@ import "../src/RewardCalculation.sol";
 import "../src/DistributedRewardDistribution.sol";
 import "../src/tSQD.sol";
 import "../src/Router.sol";
+import "../src/GatewayRegistry.sol";
 
 contract Deploy is Script {
   function run() public {
@@ -29,6 +30,7 @@ contract Deploy is Script {
     WorkerRegistration workerRegistration = new WorkerRegistration(token, router);
     RewardTreasury treasury = new RewardTreasury(token);
     DistributedRewardsDistribution distributor = new DistributedRewardsDistribution(router);
+    new GatewayRegistry(IERC20WithMetadata(address(token)), router);
     router.initialize(workerRegistration, staking, address(treasury), network, new RewardCalculation(router));
     staking.grantRole(staking.REWARDS_DISTRIBUTOR_ROLE(), address(distributor));
     treasury.setWhitelistedDistributor(distributor, true);
