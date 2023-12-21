@@ -8,6 +8,7 @@ contract PreparePlayground is Script {
     uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
     vm.startBroadcast(deployerPrivateKey);
     new Multicall3();
+    vm.stopBroadcast();
   }
 }
 

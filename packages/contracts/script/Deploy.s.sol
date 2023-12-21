@@ -22,7 +22,15 @@ contract Deploy is Script {
     uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
     vm.startBroadcast(deployerPrivateKey);
 
-    tSQD token = tSQD(vm.envAddress("TOKEN"));
+    address[] memory recipients = new address[](1);
+    recipients[0] = vm.addr(deployerPrivateKey);
+    uint256[] memory amounts = new uint256[](1);
+    amounts[0] = 100;
+    tSQD token = tSQD(
+      vm.envOr(
+        "TOKEN", address(new tSQD(recipients, amounts, IL1CustomGateway(address(0)), IGatewayRouter2(address(0))))
+      )
+    );
     address proxyAdmin = address(new ProxyAdmin(vm.addr(deployerPrivateKey)));
     Router router = Router(address(new TransparentUpgradeableProxy(address(new Router()), proxyAdmin, "")));
 
