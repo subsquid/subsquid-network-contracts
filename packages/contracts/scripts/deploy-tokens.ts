@@ -6,7 +6,7 @@ import { AdminErc20Bridger } from "@arbitrum/sdk/dist/lib/assetBridger/erc20Brid
 
 const l1provider = ethers.providers.getDefaultProvider("sepolia");
 const l2provider = ethers.providers.getDefaultProvider(
-  "https://sepolia-rollup.arbitrum.io/rpc\t"
+  "https://sepolia-rollup.arbitrum.io/rpc",
 );
 const privateKey = process.env.PRIVATE_KEY;
 const l2Network = await getL2Network(l2provider);
@@ -16,7 +16,7 @@ async function deployL1() {
   const l1TokenFactory = new ethers.ContractFactory(
     tSQDL1.abi,
     tSQDL1.bytecode,
-    signer
+    signer,
   );
   const amounts = [100];
   const addresses = [signer.address];
@@ -24,7 +24,7 @@ async function deployL1() {
     addresses,
     amounts,
     l2Network.tokenBridge.l1CustomGateway,
-    l2Network.tokenBridge.l1GatewayRouter
+    l2Network.tokenBridge.l1GatewayRouter,
   );
   return l1Token.deployed();
 }
@@ -34,11 +34,11 @@ async function deployL2(l1TokenAddress: string) {
   const l2TokenFactory = new ethers.ContractFactory(
     tSQDL2.abi,
     tSQDL2.bytecode,
-    signer
+    signer,
   );
   const l2Token = await l2TokenFactory.deploy(
     l2Network.tokenBridge.l2CustomGateway,
-    l1TokenAddress
+    l1TokenAddress,
   );
   return l2Token.deployed();
 }
@@ -49,18 +49,18 @@ async function registerBridge(l1TokenAddress: string, l2TokenAddress: string) {
     l1TokenAddress,
     l2TokenAddress,
     new ethers.Wallet(privateKey, l1provider),
-    l2provider
+    l2provider,
   );
   const registerTokenRec = await registerTokenTx.wait();
   console.log(
-    `Registering token txn confirmed on L1! 🙌 L1 receipt is: ${registerTokenRec.transactionHash}`
+    `Registering token txn confirmed on L1! 🙌 L1 receipt is: ${registerTokenRec.transactionHash}`,
   );
 
   const l1ToL2Msgs = await registerTokenRec.getL1ToL2Messages(l2provider);
   const setTokenTx = await l1ToL2Msgs[0].waitForStatus();
   const setGateways = await l1ToL2Msgs[1].waitForStatus();
   console.log(
-    "Your custom token is now registered on our custom gateway 🥳  Go ahead and make the deposit!"
+    "Your custom token is now registered on our custom gateway 🥳  Go ahead and make the deposit!",
   );
 }
 
