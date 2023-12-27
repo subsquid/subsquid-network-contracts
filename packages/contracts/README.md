@@ -62,6 +62,7 @@ pnpm run test
 | RewardTreasury                 | [0x85E8491383a38BE3d266a79F8532fa9d6f34c894](https://sepolia.arbiscan.io/address/0x85E8491383a38BE3d266a79F8532fa9d6f34c894) |
 | DistributedRewardsDistribution | [0x1b4917E9c462CfB36f9A1762f6c0aCb04f5968B8](https://sepolia.arbiscan.io/address/0x1b4917E9c462CfB36f9A1762f6c0aCb04f5968B8) |
 | RewardCalculation              | [0xE7F569CF32453A655071D3736Bf105d90cC4363b](https://sepolia.arbiscan.io/address/0xE7F569CF32453A655071D3736Bf105d90cC4363b) |
+| VestingFactory                 | [0x100Fe660683Fa04B5b23aefe7CA71c9196d68e40](https://sepolia.arbiscan.io/address/0x100Fe660683Fa04B5b23aefe7CA71c9196d68e40) |
 
 #### Arbitrum-goerli
 
