@@ -5,7 +5,7 @@ interface IRewardsDistribution {
   /// @dev Emitted when rewards are distributed for the range [fromBlock, toBlock]
   event Distributed(uint256 fromBlock, uint256 toBlock);
   /// @dev Emitted when rewards are claimed
-  event Claimed(address indexed by, uint256 amount);
+  event Claimed(address indexed by, uint256 indexed worker, uint256 amount);
 
   /// @dev claim rewards for worker
   function claim(address worker) external returns (uint256 reward);

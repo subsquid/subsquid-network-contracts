@@ -34,7 +34,7 @@ contract RewardsDistributionClaimTest is RewardsDistributionTest {
     uint256 claimable = rewardsDistribution.claimable(workerOwner);
     hoax(workerOwner);
     vm.expectEmit(address(rewardsDistribution));
-    emit Claimed(workerOwner, claimable);
+    emit Claimed(workerOwner, 1, claimable);
     treasury.claim(rewardsDistribution);
   }
 
