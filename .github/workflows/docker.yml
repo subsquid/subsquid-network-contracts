@@ -25,15 +25,9 @@ jobs:
           username: ${{ secrets.DOCKER_LOGIN }}
           password: ${{ secrets.DOCKER_TOKEN }}
 
-      - name: Build & publish worker registration image
-        uses: docker/build-push-action@v3
-        with:
-          push: true
-          tags: subsquid/worker-registration:${{ inputs.tag }}
-
       - name: Build & publish playground image
         uses: docker/build-push-action@v3
         with:
           push: true
-          file: Dockerfile-playground
+          file: ./Dockerfile-playground
           tags: subsquid/playground:${{ inputs.tag }}
