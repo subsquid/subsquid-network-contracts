@@ -29,5 +29,6 @@ jobs:
         uses: docker/build-push-action@v3
         with:
           push: true
-          file: ./Dockerfile-playground
+          context: packages/contracts
+          file: packages/contracts/Dockerfile-playground
           tags: subsquid/playground:${{ inputs.tag }}
