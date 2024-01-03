@@ -3,11 +3,8 @@ FROM ghcr.io/foundry-rs/foundry:latest
 WORKDIR /usr/src/app
 
 RUN apk add jq
+COPY . .
 
-COPY script ./script
-COPY src ./src
-COPY lib ./lib
-COPY foundry.toml ./foundry.toml
-COPY spinup-testnet.sh ./spinup-testnet.sh
+RUN forge install foundry-rs/forge-std OpenZeppelin/openzeppelin-contracts --no-git
 
 ENTRYPOINT ["sh", "./spinup-testnet.sh"]
