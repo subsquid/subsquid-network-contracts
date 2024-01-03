@@ -27,6 +27,9 @@ export class Workers {
   constructor(private clickhouseClient: ClickhouseClient) {}
 
   public add(workerId: string) {
+    if (this.workers[workerId]) {
+      return this.workers[workerId];
+    }
     this.workers[workerId] = new Worker(workerId);
     return this.workers[workerId];
   }
@@ -97,7 +100,7 @@ export class Workers {
       epochStartTimestamps,
     );
     this.map((worker) => {
-      worker.calculateDTenure(_historicalLiveness[worker.peerId]);
+      worker.calculateDTenure(_historicalLiveness[worker.peerId] ?? []);
     });
   }
 
@@ -176,12 +179,18 @@ export class Workers {
       );
   }
 
-  public rewards() {
+  public async rewards() {
     return Object.fromEntries(
-      this.map(({ peerId, workerReward, stakerReward }) => [
-        peerId,
-        { workerReward, stakerReward },
-      ]),
+      await Promise.all(
+        this.map(async (worker) => [
+          worker.peerId,
+          {
+            workerReward: worker.workerReward,
+            stakerReward: worker.stakerReward,
+            id: await worker.getId(),
+          },
+        ]),
+      ),
     );
   }
 }

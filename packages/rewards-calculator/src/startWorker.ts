@@ -9,7 +9,7 @@ import {
   toHex,
   WalletClient,
 } from "viem";
-import { arbitrumGoerli } from "viem/chains";
+import { arbitrumSepolia } from "viem/chains";
 import { privateKeyToAccount } from "viem/accounts";
 import { logger } from "./logger";
 import { RewardWorker } from "./rewardWorker";
@@ -25,11 +25,11 @@ async function transferFundsIfNecessary(
   if (balance === 0n) {
     logger.log("Funding account");
     await createWalletClient({
-      chain: arbitrumGoerli,
+      chain: arbitrumSepolia,
       transport: http(),
     }).sendTransaction({
       account: from,
-      chain: arbitrumGoerli,
+      chain: arbitrumSepolia,
       to: walletClient.account.address,
       value: parseEther("0.05"),
     });
@@ -40,7 +40,7 @@ export async function startWorker(index: number) {
   const basePrivateKey = process.env.PRIVATE_KEY as `0x${string}`;
   const privateKey = toHex(fromHex(basePrivateKey, "bigint") + BigInt(index));
   const walletClient = createWalletClient({
-    chain: arbitrumGoerli,
+    chain: arbitrumSepolia,
     transport: http(),
     account: privateKeyToAccount(privateKey),
   }).extend(publicActions);

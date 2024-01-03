@@ -5,14 +5,13 @@ import rewardsDistributionAbi from "../../contracts/artifacts/DistributedRewardD
 import stakingAbi from "../../contracts/artifacts/Staking.sol/Staking";
 import { Address, getContract, WalletClient } from "viem";
 import { publicClient, walletClient } from "./client";
-import tsqdDeployment from "../../contracts/deployments/arbitrum-goerli/tSQD.json" assert { type: "json" };
-import deployments from "../../contracts/deployments/421613.json" assert { type: "json" };
+import deployments from "../../contracts/deployments/421614.json" assert { type: "json" };
 
 type ContractName = keyof typeof abis;
 
 export const addresses = {
   workerRegistration: deployments.WorkerRegistration,
-  tSQD: tsqdDeployment.address,
+  tSQD: deployments.tSQDArbitrum,
   rewardCalculation: deployments.RewardCalculation,
   rewardsDistribution: deployments.DistributedRewardsDistribution,
   staking: deployments.Staking,

@@ -6,6 +6,7 @@ import {
   getBlockNumber,
   getBlockTimestamp,
   getRegistrations,
+  isCommitted,
   lastRewardedBlock,
   Registrations,
 } from "./chain";
@@ -38,12 +39,13 @@ export class RewardWorker {
   private async commitIfPossible() {
     try {
       if (await canCommit(this.walletClient)) {
-        logger.log("Can commit", this.walletClient.account.address);
         const { fromBlock, toBlock } = await this.commitRange();
         if (
           fromBlock < toBlock &&
+          !(await isCommitted(fromBlock, toBlock)) &&
           (await hasNewerPings(await getBlockTimestamp(toBlock + 1)))
         ) {
+          logger.log("Can commit", this.walletClient.account.address);
           const rewards = await epochStats(fromBlock, toBlock);
           await commitRewards(fromBlock, toBlock, rewards, this.walletClient);
         }
@@ -74,7 +76,7 @@ export class RewardWorker {
 
   private async commitRange() {
     const epochLen = await epochLength();
-    const maxCommitBlocksCovered = epochLen * 1_000;
+    const maxCommitBlocksCovered = epochLen * 100;
     let _lastRewardedBlock = await lastRewardedBlock();
     if (_lastRewardedBlock === 0) {
       _lastRewardedBlock = await firstRegistrationBlock(
@@ -101,7 +103,7 @@ async function approveRanges(): Promise<
       toBlock: number;
     }
 > {
-  const blocks = (
+  const commitmentBlocks = (
     await publicClient.getLogs({
       address: addresses.rewardsDistribution,
       event: parseAbiItem(
@@ -109,17 +111,18 @@ async function approveRanges(): Promise<
       ),
       fromBlock: 1n,
     })
-  ).map(({ args: { fromBlock, toBlock } }) => ({
+  ).map(({ args: { fromBlock, toBlock }, blockNumber }) => ({
     fromBlock: Number(fromBlock),
     toBlock: Number(toBlock),
+    blockNumber: Number(blockNumber),
   }));
 
-  if (blocks.length === 0) {
+  if (commitmentBlocks.length === 0) {
     return { shouldApprove: false };
   }
 
-  const latestCommit = blocks.sort(
-    ({ toBlock: a }, { toBlock: b }) => Number(b) - Number(a),
+  const latestCommit = commitmentBlocks.sort(
+    ({ blockNumber: a }, { blockNumber: b }) => Number(b) - Number(a),
   )[0];
   const latestDistributionBlock = Number(
     await contracts.rewardsDistribution.read.lastBlockRewarded(),

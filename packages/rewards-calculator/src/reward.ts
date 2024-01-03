@@ -3,7 +3,7 @@ import { logger } from "./logger";
 import { getBlockTimestamp } from "./chain";
 
 export type Rewards = {
-  [key in string]: { workerReward: bigint; stakerReward: bigint };
+  [key in string]: { workerReward: bigint; stakerReward: bigint; id: bigint };
 };
 
 export async function epochStats(
@@ -16,7 +16,7 @@ export async function epochStats(
   const clickhouse = new ClickhouseClient(from, to);
   const workers = await clickhouse.getActiveWorkers();
   if (workers.count() === 0) {
-    return;
+    return {};
   }
   await workers.clearUnknownWorkers();
   await workers.getStakes();

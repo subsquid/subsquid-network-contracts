@@ -3,6 +3,7 @@ import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc";
 
 import { Workers } from "./workers";
+import { logger } from "./logger";
 
 dayjs.extend(utc);
 const clickhouse = new ClickHouse({
@@ -29,17 +30,41 @@ export class ClickhouseClient {
   }
 
   public async getActiveWorkers() {
-    const query = `select workerId, sum(responseBytes), sum(readChunks) from testnet.queries where timestamp >= '${formatDate(
+    const columns = [
+      "client_id",
+      "worker_id",
+      "query_id",
+      "dataset",
+      "query",
+      "profiling",
+      "client_state_json",
+      "lcase(hex(query_hash)) as query_hash",
+      "exec_time_ms",
+      "result",
+      "num_read_chunks",
+      "output_size",
+      "lcase(hex(output_hash)) as output_hash",
+      "error_msg",
+      "seq_no",
+      "lcase(hex(client_signature)) as client_signature",
+      "lcase(hex(worker_signature)) as worker_signature",
+      "toUnixTimestamp64Milli(worker_timestamp) as worker_timestamp",
+      "toUnixTimestamp64Milli(collector_timestamp) as collector_timestamp",
+    ];
+    await this.logTotalQueries();
+    const query = `select ${columns.join(
+      ",",
+    )} from testnet.worker_query_logs where testnet.worker_query_logs.worker_timestamp >= '${formatDate(
       this.from,
-    )}' and timestamp <= '${formatDate(this.to)}' group by workerId`;
+    )}' and testnet.worker_query_logs.worker_timestamp <= '${formatDate(
+      this.to,
+    )}'`;
     for await (const row of clickhouse.query(query).stream()) {
-      const worker = this.workers.add(row.workerId);
-      worker.bytesSent = row["sum(responseBytes)"];
-      worker.chunksRead = row["sum(readChunks)"];
+      const worker = this.workers.add(row.worker_id);
+      await worker.processQuery(row);
     }
     return this.workers;
   }
-
   public async getPings(from = this.from, to = this.to) {
     const query = `select workerId, timestamp from testnet.worker_pings where timestamp >= '${formatDate(
       from,
@@ -51,6 +76,16 @@ export class ClickhouseClient {
       pings[row.workerId].push(dayjs(row.timestamp).utc().unix());
     }
     return pings;
+  }
+
+  private async logTotalQueries() {
+    const count = `select COUNT(*) as total from testnet.worker_query_logs where testnet.worker_query_logs.worker_timestamp >= '${formatDate(
+      this.from,
+    )}' and testnet.worker_query_logs.worker_timestamp <= '${formatDate(
+      this.to,
+    )}'`;
+    const [{ total }] = (await clickhouse.query(count).toPromise()) as any;
+    logger.log("Processing queries:", total);
   }
 }
 

@@ -1,5 +1,6 @@
 import { NetworkStatsEntry } from "./clickhouseClient";
 import { getWorkerId } from "./chain";
+import { QueryLog, validateSignatures } from "./signatureVerification";
 
 const PRECISION = 1_000_000_000n;
 export class Worker {
@@ -20,6 +21,13 @@ export class Worker {
 
   public setContractId(contractId: bigint) {
     this.contractId = contractId;
+  }
+
+  public async processQuery(query: QueryLog) {
+    if (!(await validateSignatures(query))) return false;
+    this.bytesSent += query.output_size;
+    this.chunksRead += query.num_read_chunks;
+    return true;
   }
 
   public async getId() {
