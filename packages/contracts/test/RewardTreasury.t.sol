@@ -74,9 +74,6 @@ contract RewardTreasuryTest is BaseTest {
 
   function test_RevertsIf_SetWhitelistedDistributorNotCalledByAdmin() public {
     hoax(address(2));
-    console2.log(msg.sender);
-    console2.log(tx.origin);
-    console2.log(address(this));
     expectNotAdminRevert();
     treasury.setWhitelistedDistributor(distributor, true);
   }

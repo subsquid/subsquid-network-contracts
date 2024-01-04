@@ -1,18 +1,24 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.20;
 
-import "./BaseTest.sol";
-import "../src/Vesting.sol";
+import "../BaseTest.sol";
+import "forge-std/StdJson.sol";
+import "../../src/Vesting.sol";
+import "../../src/VestingFactory.sol";
 
 contract SubsquidVestingTest is BaseTest {
+  using stdJson for string;
+
   SubsquidVesting vesting;
+  VestingFactory vestingFactory;
   tSQD token;
   Router router;
   uint64 month = 30 days;
 
   function setUp() public {
     (token, router) = deployAll();
-    vesting = new SubsquidVesting(token, router, address(this), uint64(block.timestamp + 6 * month), 30 * month, 123);
+    vestingFactory = new VestingFactory(token, router);
+    vesting = vestingFactory.createVesting(address(this), uint64(block.timestamp + 6 * month), 30 * month, 0, 123);
   }
 
   function test_Constructor() public {
@@ -30,6 +36,83 @@ contract SubsquidVestingTest is BaseTest {
     assertEq(vesting.releasable(address(token)), 0);
   }
 
+  struct Schedule {
+    uint256 cliff;
+    uint256 length;
+    uint256[] months;
+    string name;
+    uint256 release;
+    uint256 total;
+  }
+
+  function readVestingSchedule(uint256 index) internal view returns (Schedule memory) {
+    string memory root = vm.projectRoot();
+    string memory path = string.concat(root, "/test/Vesting/vesting_schedules.json");
+    string memory json = vm.readFile(path);
+    bytes memory raw = json.parseRaw(".schedules");
+    Schedule[] memory schedules = abi.decode(raw, (Schedule[]));
+    return schedules[index];
+  }
+
+  function checkVesting(Schedule memory schedule) internal {
+    SubsquidVesting v = vestingFactory.createVesting(
+      address(this),
+      uint64(block.timestamp + schedule.cliff * month),
+      uint64((schedule.length) * month),
+      schedule.release,
+      schedule.total
+    );
+    token.transfer(address(v), schedule.total);
+    uint256 total = 0;
+    for (uint256 i = 0; i < schedule.months.length; i++) {
+      total += schedule.months[i];
+      assertApproxEqAbs(v.releasable(address(token)), total, 20);
+      vm.warp(block.timestamp + month);
+    }
+    vm.warp(block.timestamp + 100 * month);
+    assertEq(v.releasable(address(token)), schedule.total);
+  }
+
+  function test_PreseedSchedule() public {
+    Schedule memory schedule = readVestingSchedule(0);
+    checkVesting(schedule);
+  }
+
+  function test_SeedSchedule() public {
+    Schedule memory schedule = readVestingSchedule(1);
+    checkVesting(schedule);
+  }
+
+  function test_Strategic1Schedule() public {
+    Schedule memory schedule = readVestingSchedule(2);
+    checkVesting(schedule);
+  }
+
+  function test_Strategic2Schedule() public {
+    Schedule memory schedule = readVestingSchedule(3);
+    checkVesting(schedule);
+  }
+
+  function test_TeamSchedule() public {
+    Schedule memory schedule = readVestingSchedule(4);
+    checkVesting(schedule);
+  }
+
+  function test_TreasurySchedule() public {
+    Schedule memory schedule = readVestingSchedule(5);
+    checkVesting(schedule);
+  }
+
+  function test_CommunitySchedule() public {
+    Schedule memory schedule = readVestingSchedule(6);
+    checkVesting(schedule);
+  }
+
+  function test_NodeOperatorsSchedule() public {
+    Schedule memory schedule = readVestingSchedule(7);
+    checkVesting(schedule);
+  }
+
   uint256 vestedMonthly = 10_000;
   //                 6 months cliff     70k/30 80k*2/30 90k*3/30 100k*4/30
   uint256[] year1 = [0, 0, 0, 0, 0, 0, 0, 2_333, 5_333, 9_000, 13_333, 18_333, 24_000];
@@ -37,7 +120,7 @@ contract SubsquidVestingTest is BaseTest {
   uint256[] year3 = [158333, 173333, 189000, 205333, 222333, 240000, 258333, 277333, 297000, 317333, 338333, 360000];
   uint256[] year4 = [360000, 360000, 360000, 360000, 360000, 360000];
 
-  function test_NormalVestingSchedule() public {
+  function test_VestingWithGradualTransfers() public {
     uint256[] memory vestedAmounts = _concatArrays(year1, year2, year3, year4);
     for (uint256 i = 0; i < vestedAmounts.length; i++) {
       assertEq(vesting.releasable(address(token)), vestedAmounts[i]);

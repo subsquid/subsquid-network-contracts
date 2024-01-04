@@ -22,7 +22,7 @@ interface IStaking {
   /// @dev Emitted when a staker undelegates amount to the worker
   event Withdrawn(uint256 indexed worker, address indexed staker, uint256 amount);
   /// @dev Emitted when a staker claims rewards
-  event Claimed(address indexed staker, uint256 amount);
+  event Claimed(address indexed staker, uint256 indexed workerId, uint256 amount);
 
   /// @dev Deposit amount of tokens in favour of a worker
   /// @param worker workerId in WorkerRegistration contract

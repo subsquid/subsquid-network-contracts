@@ -10,7 +10,7 @@ contract VestingFactory {
   IRouter public immutable router;
 
   event VestingCreated(
-    address indexed vesting,
+    SubsquidVesting indexed vesting,
     address indexed beneficiary,
     uint64 startTimestamp,
     uint64 durationSeconds,
@@ -27,11 +27,10 @@ contract VestingFactory {
     address beneficiaryAddress,
     uint64 startTimestamp,
     uint64 durationSeconds,
+    uint256 immediateReleaseBIP,
     uint256 expectedTotalAmount
-  ) external returns (address) {
-    address vesting = address(
-      new SubsquidVesting(token, router, beneficiaryAddress, startTimestamp, durationSeconds, expectedTotalAmount)
-    );
+  ) external returns (SubsquidVesting) {
+    SubsquidVesting vesting = new SubsquidVesting(token, router, beneficiaryAddress, startTimestamp, durationSeconds, immediateReleaseBIP, expectedTotalAmount);
     emit VestingCreated(vesting, beneficiaryAddress, startTimestamp, durationSeconds, expectedTotalAmount);
     return vesting;
   }

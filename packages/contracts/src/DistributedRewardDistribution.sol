@@ -203,7 +203,7 @@ contract DistributedRewardsDistribution is AccessControlledPausable, IRewardsDis
     uint256[] memory ownedWorkers = router.workerRegistration().getOwnedWorkers(who);
     for (uint256 i = 0; i < ownedWorkers.length; i++) {
       uint256 workerId = ownedWorkers[i];
-      uint claimedFromWorker = _claimable[workerId];
+      uint256 claimedFromWorker = _claimable[workerId];
       claimedAmount += claimedFromWorker;
       _claimable[workerId] = 0;
       emit Claimed(who, workerId, claimedFromWorker);
