@@ -278,4 +278,8 @@ contract WorkerRegistration is AccessControlledPausable, IWorkerRegistration {
   function lockPeriod() public view returns (uint128) {
     return router.networkController().epochLength();
   }
+
+  function nextWorkerId() external view returns (uint256) {
+    return workerIdTracker + 1;
+  }
 }

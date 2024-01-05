@@ -11,6 +11,11 @@ contract GatewayRegistryAllocateTest is GatewayRegistryTest {
       cus[i] = (i + 1) * 10;
     }
 
+    vm.mockCall(
+      address(gatewayRegistry.router().workerRegistration()),
+      abi.encodeWithSelector(WorkerRegistration.nextWorkerId.selector),
+      abi.encode(100000)
+    );
     uint256 gasBefore = gasleft();
     gatewayRegistry.allocateComputationUnits(workerIds, cus);
     uint256 gasAfter = gasleft();

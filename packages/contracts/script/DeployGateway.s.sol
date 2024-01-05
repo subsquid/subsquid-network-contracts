@@ -14,7 +14,6 @@ import "../src/DistributedRewardDistribution.sol";
 import "../src/GatewayRegistry.sol";
 import "../src/Router.sol";
 
-// TODO use Router
 contract Deploy is Script {
   function run() public {
     uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");

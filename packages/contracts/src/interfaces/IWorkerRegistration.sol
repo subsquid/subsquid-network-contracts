@@ -27,4 +27,6 @@ interface IWorkerRegistration {
   function effectiveTVL() external view returns (uint256);
   /// @return The ids of all worker created by the owner account
   function getOwnedWorkers(address who) external view returns (uint256[] memory);
+
+  function nextWorkerId() external view returns (uint256);
 }

@@ -83,13 +83,12 @@ contract GatewayRegistry is AccessControlledPausable {
     token.transfer(msg.sender, amount);
   }
 
-  // TODO
-  // check if the worker is registered
-  // check if cu[i] is not 0
   function allocateComputationUnits(uint256[] calldata workerId, uint256[] calldata cus) external whenNotPaused {
     require(workerId.length == cus.length, "Length mismatch");
     uint256 newlyAllocated = 0;
+    uint256 workerIdCap = router.workerRegistration().nextWorkerId();
     for (uint256 i = 0; i < workerId.length; i++) {
+      require(workerId[i] < workerIdCap, "Worker does not exist");
       newlyAllocated += cus[i];
     }
     allocatedComputationUnits[msg.sender] += newlyAllocated;
