@@ -30,7 +30,9 @@ contract VestingFactory {
     uint256 immediateReleaseBIP,
     uint256 expectedTotalAmount
   ) external returns (SubsquidVesting) {
-    SubsquidVesting vesting = new SubsquidVesting(token, router, beneficiaryAddress, startTimestamp, durationSeconds, immediateReleaseBIP, expectedTotalAmount);
+    SubsquidVesting vesting = new SubsquidVesting(
+      token, router, beneficiaryAddress, startTimestamp, durationSeconds, immediateReleaseBIP, expectedTotalAmount
+    );
     emit VestingCreated(vesting, beneficiaryAddress, startTimestamp, durationSeconds, expectedTotalAmount);
     return vesting;
   }
