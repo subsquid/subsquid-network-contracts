@@ -19,12 +19,12 @@ contract DistributedRewardsDistribution is AccessControlledPausable, IRewardsDis
 
   bytes32 public constant REWARDS_DISTRIBUTOR_ROLE = keccak256("REWARDS_DISTRIBUTOR_ROLE");
   bytes32 public constant REWARDS_TREASURY_ROLE = keccak256("REWARDS_TREASURY_ROLE");
-  uint8 internal constant APPROVES_REQUIRED = 3;
 
   mapping(uint256 workerId => uint256) internal _claimable;
   mapping(uint256 fromBlock => mapping(uint256 toBlock => bytes32)) public commitments;
   mapping(uint256 fromBlock => mapping(uint256 toBlock => uint8)) public approves;
   mapping(bytes32 => mapping(address => bool)) public alreadyApproved;
+  uint8 internal requiredApproves;
   uint256 public lastBlockRewarded;
   IRouter public immutable router;
   EnumerableSet.AddressSet private distributors;
@@ -54,7 +54,11 @@ contract DistributedRewardsDistribution is AccessControlledPausable, IRewardsDis
   /// @dev Emitted when distributor is removed
   event DistributorRemoved(address indexed distributor);
 
+  event ApprovesRequiredChanged(uint8 newApprovesRequired);
+
   constructor(IRouter _router) {
+    _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
+    requiredApproves = 1;
     router = _router;
   }
 
@@ -122,7 +126,12 @@ contract DistributedRewardsDistribution is AccessControlledPausable, IRewardsDis
     approves[fromBlock][toBlock] = 1;
     alreadyApproved[commitment][msg.sender] = true;
 
+    if (requiredApproves == 1) {
+      distribute(fromBlock, toBlock, recipients, workerRewards, _stakerRewards);
+    }
+
     emit NewCommitment(msg.sender, fromBlock, toBlock, recipients, workerRewards, _stakerRewards);
+    emit Approved(msg.sender, fromBlock, toBlock, recipients, workerRewards, _stakerRewards);
   }
 
   /**
@@ -144,7 +153,7 @@ contract DistributedRewardsDistribution is AccessControlledPausable, IRewardsDis
     approves[fromBlock][toBlock]++;
     alreadyApproved[commitment][msg.sender] = true;
 
-    if (approves[fromBlock][toBlock] == APPROVES_REQUIRED) {
+    if (approves[fromBlock][toBlock] == requiredApproves) {
       distribute(fromBlock, toBlock, recipients, workerRewards, _stakerRewards);
     }
 
@@ -221,5 +230,13 @@ contract DistributedRewardsDistribution is AccessControlledPausable, IRewardsDis
       reward += _claimable[workerId];
     }
     return reward;
+  }
+
+  function setApprovesRequired(uint8 _approvesRequired) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    require(_approvesRequired > 0, "Approves required must be greater than 0");
+    require(_approvesRequired <= distributors.length(), "Approves required must be less than distributors count");
+    requiredApproves = _approvesRequired;
+
+    emit ApprovesRequiredChanged(_approvesRequired);
   }
 }

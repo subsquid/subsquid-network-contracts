@@ -1,6 +1,6 @@
 pragma solidity 0.8.20;
 
-import "./RewardsDistribution.sol";
+import "./DistributedRewardsDistribution.sol";
 
 contract RewardsDistributionCommitApproveTest is RewardsDistributionTest {
   function test_CurrentDistributorReturnsThisInTests() public {
@@ -100,6 +100,7 @@ contract RewardsDistributionCommitApproveTest is RewardsDistributionTest {
     (uint256[] memory recipients, uint256[] memory workerAmounts, uint256[] memory stakerAmounts) = prepareRewards(1);
     rewardsDistribution.addDistributor(address(1));
     rewardsDistribution.addDistributor(address(2));
+    rewardsDistribution.setApprovesRequired(3);
     vm.roll(10);
     rewardsDistribution.commit(1, 4, recipients, workerAmounts, stakerAmounts);
     hoax(address(1));

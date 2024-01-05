@@ -1,6 +1,6 @@
 pragma solidity 0.8.20;
 
-import "./RewardsDistribution.sol";
+import "./DistributedRewardsDistribution.sol";
 
 contract RewardsDistributionClaimTest is RewardsDistributionTest {
   function testTransfersClaimableRewardsToSender() public {
