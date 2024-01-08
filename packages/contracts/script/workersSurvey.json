@@ -1,246 +1,197 @@
 [
   {
-    "name": "Testtest",
     "wallet": "0x2b8453f1612f7C19487571E568d2d2BFA0523ea1",
     "workerCount": 5
   },
   {
-    "name": "ibrahim",
     "wallet": "0xC9f911E0eec29E5c78fAc7bb4C4B6AE10EA2F9F5",
     "workerCount": 3
   },
   {
-    "name": "Patrick Hofmeister",
     "wallet": "0x72634673D724e8e8F2B39D16EF1773B444306Ed0",
     "workerCount": 4
   },
   {
-    "name": "klaudiusz.eth",
     "wallet": "0x45F2aBcE86a938Bb4d4633048dfA15bED7A5E310",
     "workerCount": 5
   },
   {
-    "name": "Sie Emmanuel",
     "wallet": "0x1619B05C52BFfCE584733Ed3A95D0d901C67209c",
     "workerCount": 4
   },
   {
-    "name": "genznodes",
     "wallet": "0x5c75e97fD18aD86EBBb562ad5C3569A85a4Dd873",
     "workerCount": 2
   },
   {
-    "name": "Martins",
     "wallet": "0xBAA2Fac30e43031d9d181aB1D45970c1f7Ac1B38",
     "workerCount": 5
   },
   {
-    "name": "kelvin",
     "wallet": "0x9F2E49fAeAda1e985F035ebc3fc7Ae14Af49888e",
     "workerCount": 1
   },
   {
-    "name": "Ivan Merin (Blockscope)",
     "wallet": "0x94cD07B84F1d06611CDad96EEEa8cE164C425685",
     "workerCount": 1
   },
   {
-    "name": "Honor Courage",
     "wallet": "0x26A51BA7cCb38f2CD700fcFCCe3779AdfF74dDD1",
     "workerCount": 1
   },
   {
-    "name": "Zee Prime Labs",
     "wallet": "0x214ad13e1A8c5C0ac0A4b8e651e20b12c9339EB2",
     "workerCount": 5
   },
   {
-    "name": "New Trader",
     "wallet": "0x1Cb4A697Aab5103287f24A045FCd274B38bb54F6",
     "workerCount": 1
   },
   {
-    "name": "Shivam Verma",
     "wallet": "0x3d4AB0559CA73Ef2b71e5eDe11dcF73CE6c5e2d1",
     "workerCount": 3
   },
   {
-    "name": "Tecnodes",
     "wallet": "0xA9C0bCB0e4E0CCb9823574098a82Ba2Ece85a143",
     "workerCount": 5
   },
   {
-    "name": "Andreas Teschner (cardinate)",
     "wallet": "0xE5766003eE2AA90F402c7add7d3b30c6Ea917B73",
-    "workerCount": 5
+    "workerCount": 30
   },
   {
-    "name": "grassets",
     "wallet": "0x56Cb6BB8DEe286E0A2c9EdAB3aE75A16717b90D7",
     "workerCount": 5
   },
   {
-    "name": "Mario Morettoni",
     "wallet": "0x86423Fe293Dd85b36588A080F3adbb01c2fb2eA6",
     "workerCount": 2
   },
   {
-    "name": "5ElementsNodes",
     "wallet": "0x12CD98960eFd967745488B247b88Bde0fe3cfe10",
     "workerCount": 1
   },
   {
-    "name": "Petr Mensik",
     "wallet": "0xa6028e873729cb87bF62167a2F285F90FEef5e45",
     "workerCount": 1
   },
   {
-    "name": "Philip Bollmann",
     "wallet": "0xe7E1D3EF34dF83441215C437Ac6A278618730dBC",
     "workerCount": 5
   },
   {
-    "name": "Alan",
     "wallet": "0xfcD12865282a86124Ac53E9eE9ef5B806C229948",
     "workerCount": 1
   },
   {
-    "name": "Akshit Goel",
     "wallet": "0x069f99C8Aa5189f8508D56d05B8B0153551d1AD0",
     "workerCount": 1
   },
   {
-    "name": "David Leonardi",
     "wallet": "0xAa163c47065c22D17Ed1c47E3E244337D2056c17",
     "workerCount": 5
   },
   {
-    "name": "subham",
     "wallet": "0x000000D5Eb1528A06C83F0b4F2C86F5b48500000",
     "workerCount": 4
   },
   {
-    "name": "Nikita",
     "wallet": "0xA1d865602cd787cDbe3ec138A2E85284423388b2",
     "workerCount": 2
   },
   {
-    "name": "Vasily Istomin",
     "wallet": "0xAd50dD0180F9bd11Ab22e480150f35774162260C",
     "workerCount": 1
   },
   {
-    "name": "YYAGI TEAM",
     "wallet": "0x6c0Fadd48e7e236Bb10f7D69148Be5502a18ca57",
     "workerCount": 5
   },
   {
-    "name": "Indonode",
     "wallet": "0xfaeB48F18d87C82da714e6F986b4B9360c658Faf",
     "workerCount": 1
   },
   {
-    "name": "silent",
     "wallet": "0xFF55A16D30DaC4b08485d4431A7D634c26950099",
     "workerCount": 5
   },
   {
-    "name": "marco torello",
     "wallet": "0x5f5d9c3e1da76dE22978bfB880F518469F3D572B",
     "workerCount": 1
   },
   {
-    "name": "Vladislav",
     "wallet": "0x9B5255E672d7F3D6BD7aA4cE63E3a8A9F3a6EBE0",
     "workerCount": 1
   },
   {
-    "name": "Yevhen Tuzikov",
     "wallet": "0x372042bB33056FC5D878BFE7274d8c7d85Ce9Cc7",
     "workerCount": 5
   },
   {
-    "name": "Stanislau",
     "wallet": "0x9A5A4FBf0C4821637afe4027611ebC998f637924",
     "workerCount": 5
   },
   {
-    "name": "Benjamin",
     "wallet": "0x5C0897B4F2622f15eFe93132b7F4162656238A28",
     "workerCount": 1
   },
   {
-    "name": "Luca Poggi",
     "wallet": "0x0c7118C57Bd3650B7832272CBB32734536a59a36",
     "workerCount": 5
   },
   {
-    "name": "Republic Crypto",
     "wallet": "0x4B09a8efDfd96dC1a7e1b92587D309f916259a28",
     "workerCount": 1
   },
   {
-    "name": "Girish Nuli",
     "wallet": "0x2EaEC141680f711D2B13a7771b1F006392555c00",
     "workerCount": 3
   },
   {
-    "name": "Merlin",
     "wallet": "0x802443053B77dEb415dC2f26BC582258D2D2d456",
     "workerCount": 2
   },
   {
-    "name": "GPvalidator",
     "wallet": "0x815aaB411A45a30A6039d83C8Daf1BA54612C8c2",
     "workerCount": 3
   },
   {
-    "name": "Brightlystake Ltd",
     "wallet": "0x0a88F91265690ae26Aa9999734Ab00533380436b",
     "workerCount": 2
   },
   {
-    "name": "IVAN DIAZ PEREZ",
     "wallet": "0x1cf207A9a92A8C6a087E70f665c2C4E23d377baF",
     "workerCount": 3
   },
   {
-    "name": "Marius Andrei | Ubik Capital",
     "wallet": "0x14Fef5EeFb710498eeA2ADF1E333EF6D732Bd371",
     "workerCount": 1
   },
   {
-    "name": "DAIC GmbH",
     "wallet": "0x3F1E6aA6ebaeeBCF463991Cb545b2186bEABaf3f",
     "workerCount": 5
   },
   {
-    "name": "Genadi buchukuri",
     "wallet": "0xA8AF71AB8Fa965C45A932C65165B064Cf2B51D56",
     "workerCount": 1
   },
   {
-    "name": "Cássio de Lima Gehlen",
     "wallet": "0x24EdA9Bf82fd7CfF98A23e23f6E6DF7Af60B4278",
     "workerCount": 1
   },
   {
-    "name": "David Lopes",
     "wallet": "0xaa15026DE2458c691C7C1Daa836d079B93D31859",
     "workerCount": 1
   },
   {
-    "name": "Lucas Dal Toé",
     "wallet": "0x9547E92E63c428B398B88Be1697f8a9062bc5696",
     "workerCount": 1
   },
   {
-    "name": "Adi",
     "wallet": "0x1b54c1F2ff179af8dFB422576BD7E6AA37E5194D",
     "workerCount": 5
   },
   {
-    "name": "Arnaud GARDIES",
     "wallet": "0x57Cf5c9e4e5B4B41003BB77C6bE0E01973d332c3",
     "workerCount": 2
   }

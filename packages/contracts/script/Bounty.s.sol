@@ -11,7 +11,7 @@ struct WorkerCreator {
   uint workerCount;
 }
 
-uint constant ETHER_AMOUNT = 0.1 ether;
+uint constant ETHER_AMOUNT = 0.005 ether;
 uint constant BOND_AMOUNT = 100_000 ether;
 
 contract Bounty is Script {
@@ -30,7 +30,7 @@ contract Bounty is Script {
     vm.startBroadcast(deployerPrivateKey);
     for (uint i = 0; i<workers.length; i++) {
       token.transfer(workers[i].wallet, BOND_AMOUNT * workers[i].workerCount);
-      workers[i].wallet.transfer(ETHER_AMOUNT);
+      workers[i].wallet.transfer(ETHER_AMOUNT * workers[i].workerCount);
     }
     vm.stopBroadcast();
   }
