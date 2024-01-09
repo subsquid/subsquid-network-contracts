@@ -8,5 +8,9 @@ jq '[.transactions[] | select(.transactionType == "CREATE")] | map({contractName
 
 echo "Register workers"
 
-WORKER_ID=$(python3 b58.py $WORKER1_ID) forge script script/RegisterWorker.s.sol --broadcast --json --rpc-url $RPC_URL
-WORKER_ID=$(python3 b58.py $WORKER2_ID) forge script script/RegisterWorker.s.sol --broadcast --json --rpc-url $RPC_URL
+WORKER_ID=$(python3 b58.py $WORKER1_ID) forge script script/RegisterWorker.s.sol --broadcast --rpc-url $RPC_URL
+WORKER_ID=$(python3 b58.py $WORKER2_ID) forge script script/RegisterWorker.s.sol --broadcast --rpc-url $RPC_URL
+
+echo "Register gateways"
+
+GATEWAY_ID=$(python3 b58.py $GATEWAY_ID) forge script script/RegisterGateway.s.sol --broadcast --rpc-url $RPC_URL
