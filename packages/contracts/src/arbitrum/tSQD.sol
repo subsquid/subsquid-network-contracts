@@ -3,6 +3,12 @@ pragma solidity 0.8.20;
 
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
+/**
+ * @dev
+ * This is a simple ERC20 token implementing the IArbToken interface
+ * See more here https://docs.arbitrum.io/devs-how-tos/bridge-tokens/how-to-bridge-tokens-generic-custom
+ *
+ */
 contract tSQDArbitrum is ERC20 {
   address public immutable l2Gateway;
   address public immutable l1Address;

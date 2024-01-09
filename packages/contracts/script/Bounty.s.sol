@@ -8,11 +8,11 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 struct WorkerCreator {
   string name;
   address payable wallet;
-  uint workerCount;
+  uint256 workerCount;
 }
 
-uint constant ETHER_AMOUNT = 0.005 ether;
-uint constant BOND_AMOUNT = 100_000 ether;
+uint256 constant ETHER_AMOUNT = 0.005 ether;
+uint256 constant BOND_AMOUNT = 100_000 ether;
 
 contract Bounty is Script {
   using stdJson for string;
@@ -28,7 +28,7 @@ contract Bounty is Script {
     bytes memory data = json.parseRaw(".");
     WorkerCreator[] memory workers = abi.decode(data, (WorkerCreator[]));
     vm.startBroadcast(deployerPrivateKey);
-    for (uint i = 0; i<workers.length; i++) {
+    for (uint256 i = 0; i < workers.length; i++) {
       token.transfer(workers[i].wallet, BOND_AMOUNT * workers[i].workerCount);
       workers[i].wallet.transfer(ETHER_AMOUNT * workers[i].workerCount);
     }

@@ -25,12 +25,12 @@ contract MockRewardsDistribution is IRewardsDistribution {
 contract BaseTest is Test {
   function deployAll() internal returns (tSQD token, Router router) {
     router = Router(address(new TransparentUpgradeableProxy(address(new Router()), address(1234), "")));
-    uint256[] memory shares = new uint256[](1);
-    shares[0] = 100;
+    uint256[] memory minted = new uint256[](1);
+    minted[0] = 1_337_000_000 ether;
     address[] memory holders = new address[](1);
     holders[0] = address(this);
 
-    token = new tSQD(holders, shares, IL1CustomGateway(address(0)), IGatewayRouter2(address(0)));
+    token = new tSQD(holders, minted, IL1CustomGateway(address(0)), IGatewayRouter2(address(0)));
 
     IWorkerRegistration workerRegistration = new WorkerRegistration(token, router);
     IStaking staking = new Staking(token, router);

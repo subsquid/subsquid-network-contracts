@@ -49,6 +49,8 @@ contract RewardCalculation is IRewardCalculation {
     return currentApy(targetGb) * router.workerRegistration().effectiveTVL() * epochLengthInSeconds / 365 days / 10000;
   }
 
+  /// @return bonus to allocations for the tokens staked by gateway
+  /// @notice result is in basis points
   function boostFactor(uint256 duration) public pure returns (uint256) {
     if (duration < 60 days) {
       return 10000;

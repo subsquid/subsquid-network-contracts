@@ -5,6 +5,12 @@ import "@openzeppelin/contracts/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts/access/AccessControl.sol";
 import "./interfaces/IRouter.sol";
 
+/**
+ * @title Router Contract
+ * @dev Contract that holds addresses of crucial subsquid contracts
+ * Contract is designed to be upgradeable
+ * All setters can only be called by admin
+ */
 contract Router is Initializable, AccessControl, IRouter {
   IWorkerRegistration public workerRegistration;
   IStaking public staking;

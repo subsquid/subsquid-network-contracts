@@ -4,8 +4,13 @@ pragma solidity 0.8.20;
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "./interfaces/IRouter.sol";
 import "./Vesting.sol";
+import "./AccessControlledPausable.sol";
 
-contract VestingFactory {
+/**
+ * @title Subsquid Vesting Contract Factory
+ * @dev Contract used to deploy vesting contracts
+ */
+contract VestingFactory is AccessControlledPausable {
   IERC20 public immutable token;
   IRouter public immutable router;
 
@@ -22,14 +27,13 @@ contract VestingFactory {
     router = _router;
   }
 
-  // TODO add access control
   function createVesting(
     address beneficiaryAddress,
     uint64 startTimestamp,
     uint64 durationSeconds,
     uint256 immediateReleaseBIP,
     uint256 expectedTotalAmount
-  ) external returns (SubsquidVesting) {
+  ) external onlyRole(DEFAULT_ADMIN_ROLE) whenNotPaused returns (SubsquidVesting) {
     SubsquidVesting vesting = new SubsquidVesting(
       token, router, beneficiaryAddress, startTimestamp, durationSeconds, immediateReleaseBIP, expectedTotalAmount
     );

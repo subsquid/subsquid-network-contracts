@@ -7,6 +7,12 @@ import "@openzeppelin/contracts/utils/Address.sol";
 
 import {IRouter} from "./interfaces/IRouter.sol";
 
+/**
+ * @title Subsquid Vesting Contract
+ * @dev Contract that holds tSQD tokens for a beneficiary
+ * The tokens are unlocked linearly with a cliff according to _vestingSchedule
+ * The beneficiary can execute contracts, allowed by network controller through this contract
+ */
 contract SubsquidVesting is VestingWallet {
   using Address for address;
 

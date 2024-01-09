@@ -29,5 +29,6 @@ interface INetworkController {
   /// @dev Amount of storage in GB each worker is expected to provide
   function storagePerWorkerInGb() external view returns (uint128);
 
+  /// @dev Can the `target` be used as a called by the vesting contract
   function isAllowedVestedTarget(address target) external view returns (bool);
 }

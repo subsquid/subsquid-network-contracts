@@ -65,12 +65,14 @@ contract NetworkController is AccessControl, INetworkController {
     emit StoragePerWorkerInGbUpdated(_storagePerWorkerInGb);
   }
 
+  /// @dev Set delegation limit coefficient in basis points
   function setDelegationLimitCoefficient(uint256 _delegationLimitCoefficientInBP) external onlyRole(DEFAULT_ADMIN_ROLE) {
     delegationLimitCoefficientInBP = _delegationLimitCoefficientInBP;
 
     emit DelegationLimitCoefficientInBPUpdated(_delegationLimitCoefficientInBP);
   }
 
+  /// @dev Set if the `target` can be used as a called by the vesting contract
   function setAllowedVestedTarget(address target, bool isAllowed) public onlyRole(DEFAULT_ADMIN_ROLE) {
     isAllowedVestedTarget[target] = isAllowed;
 
@@ -89,6 +91,7 @@ contract NetworkController is AccessControl, INetworkController {
     return (blockNumber - firstEpochBlock) / epochLength + epochCheckpoint + 1;
   }
 
+  /// @inheritdoc INetworkController
   function delegationLimit() external view returns (uint256) {
     return delegationLimitCoefficientInBP * bondAmount / ONE_BASIS_POINT;
   }

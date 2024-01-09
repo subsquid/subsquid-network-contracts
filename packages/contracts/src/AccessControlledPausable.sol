@@ -1,7 +1,11 @@
+// SPDX-License-Identifier: MIT
+pragma solidity 0.8.20;
+
 import "@openzeppelin/contracts/utils/Pausable.sol";
 import "@openzeppelin/contracts/access/AccessControl.sol";
 
-contract AccessControlledPausable is Pausable, AccessControl {
+/// @dev abstract contract that allows wallets with special pauser role to pause contracts
+abstract contract AccessControlledPausable is Pausable, AccessControl {
   bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
 
   constructor() {

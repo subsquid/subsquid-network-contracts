@@ -23,6 +23,10 @@ interface IGatewayRouter2 {
   ) external payable returns (uint256);
 }
 
+/**
+ * @title tSQD Token
+ * @dev Simple ERC20 token, supports arbitrum bridging
+ */
 contract tSQD is ERC20 {
   bool internal shouldRegisterGateway;
   IL1CustomGateway gateway;
@@ -30,25 +34,24 @@ contract tSQD is ERC20 {
 
   constructor(
     address[] memory recipients,
-    uint256[] memory percentages,
+    uint256[] memory mintedAmounts,
     IL1CustomGateway _gateway,
     IGatewayRouter2 _router
   ) ERC20("tSQD Token", "tSQD") {
     gateway = _gateway;
     router = _router;
 
-    require(recipients.length == percentages.length, "Recipients and percentages arrays must have the same length");
+    require(recipients.length == mintedAmounts.length, "Recipients and minted arrays must have the same length");
 
     uint256 initialSupply = 1337 * (10 ** 6) * (10 ** decimals());
-    uint256 totalPercentage;
+    uint256 totalMinted;
 
     for (uint256 i = 0; i < recipients.length; i++) {
-      uint256 tokenAmount = initialSupply * percentages[i];
-      _mint(recipients[i], tokenAmount);
-      totalPercentage += percentages[i];
+      _mint(recipients[i], mintedAmounts[i]);
+      totalMinted += mintedAmounts[i];
     }
 
-    require(totalPercentage == 100, "Percentages must sum up to 100");
+    require(totalMinted == initialSupply, "Not all tokens were minted");
   }
 
   /// @dev we only set shouldRegisterGateway to true when in `registerTokenOnL2`

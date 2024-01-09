@@ -47,6 +47,12 @@ importers:
       ts-node: 10.9.1_lkf7l5mysobr44ijrojxkni24m
       typescript: 5.1.6
 
+  packages/contracts-cli:
+    specifiers:
+      '@subsquid-network/contracts': workspace:*
+    dependencies:
+      '@subsquid-network/contracts': link:../contracts
+
   packages/reward-stats:
     specifiers:
       '@clickhouse/client-web': ^0.2.3
