@@ -32,7 +32,6 @@ contract RewardsDistributionTest is BaseTest {
   WorkerRegistration workerRegistration;
   IERC20 token;
 
-  event Distributed(uint256 fromBlock, uint256 toBlock);
   event Claimed(address indexed who, uint256 indexed workerId, uint256 amount);
 
   function setUp() public {

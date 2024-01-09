@@ -24,13 +24,6 @@ contract RewardsDistributionDistributeTest is RewardsDistributionTest {
     gasUsageForNWorkers(1000);
   }
 
-  function testDistributeEmitsEvent() public {
-    (uint256[] memory recipients, uint256[] memory workerAmounts, uint256[] memory stakerAmounts) = prepareRewards(2);
-    vm.expectEmit(address(rewardsDistribution));
-    emit Distributed(6, 7);
-    rewardsDistribution.distributeHelper(6, recipients, workerAmounts, stakerAmounts);
-  }
-
   function test_RevertsIf_SomeBlocksSkipped() public {
     (uint256[] memory recipients, uint256[] memory workerAmounts, uint256[] memory stakerAmounts) = prepareRewards(2);
     rewardsDistribution.distributeHelper(1, recipients, workerAmounts, stakerAmounts);

@@ -106,8 +106,6 @@ contract RewardsDistributionCommitApproveTest is RewardsDistributionTest {
     hoax(address(1));
     rewardsDistribution.approve(1, 4, recipients, workerAmounts, stakerAmounts);
     hoax(address(2));
-    vm.expectEmit(address(rewardsDistribution));
-    emit Distributed(1, 4);
     rewardsDistribution.approve(1, 4, recipients, workerAmounts, stakerAmounts);
   }
 

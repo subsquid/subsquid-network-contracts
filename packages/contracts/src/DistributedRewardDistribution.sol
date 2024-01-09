@@ -12,7 +12,7 @@ import "./AccessControlledPausable.sol";
  * @dev Contract has a list of whitelisted distributors
  * Each distributor has a timeframe (256 blocks) to commit a distribution
  * Other distributors can approve it
- * After 3 approvals, the distribution is executed
+ * After N approvals, the distribution is executed
  */
 contract DistributedRewardsDistribution is AccessControlledPausable, IRewardsDistribution {
   using EnumerableSet for EnumerableSet.AddressSet;
@@ -24,37 +24,28 @@ contract DistributedRewardsDistribution is AccessControlledPausable, IRewardsDis
   mapping(uint256 fromBlock => mapping(uint256 toBlock => bytes32)) public commitments;
   mapping(uint256 fromBlock => mapping(uint256 toBlock => uint8)) public approves;
   mapping(bytes32 => mapping(address => bool)) public alreadyApproved;
-  uint8 internal requiredApproves;
+  uint256 public requiredApproves;
   uint256 public lastBlockRewarded;
   IRouter public immutable router;
   EnumerableSet.AddressSet private distributors;
 
   /// @dev Emitted on new commitment
-  event NewCommitment(
-    address indexed who,
-    uint256 fromBlock,
-    uint256 toBlock,
-    uint256[] recipients,
-    uint256[] workerRewards,
-    uint256[] stakerRewards
-  );
+  event NewCommitment(address indexed who, uint256 fromBlock, uint256 toBlock, bytes32 commitment);
 
   /// @dev Emitted when commitment is approved
-  event Approved(
-    address indexed who,
-    uint256 fromBlock,
-    uint256 toBlock,
-    uint256[] recipients,
-    uint256[] workerRewards,
-    uint256[] stakerRewards
+  event Approved(address indexed who, uint256 fromBlock, uint256 toBlock, bytes32 commitment);
+
+  /// @dev Emitted when commitment is approved
+  event Distributed(
+    uint256 fromBlock, uint256 toBlock, uint256[] recipients, uint256[] workerRewards, uint256[] stakerRewards
   );
 
   /// @dev Emitted when new distributor is added
   event DistributorAdded(address indexed distributor);
   /// @dev Emitted when distributor is removed
   event DistributorRemoved(address indexed distributor);
-
-  event ApprovesRequiredChanged(uint8 newApprovesRequired);
+  /// @dev Emitted when required approvals is changed
+  event ApprovesRequiredChanged(uint256 newApprovesRequired);
 
   constructor(IRouter _router) {
     _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
@@ -101,12 +92,13 @@ contract DistributedRewardsDistribution is AccessControlledPausable, IRewardsDis
    * @dev Commit rewards for a worker
    * @param fromBlock block from which the rewards are calculated
    * @param toBlock block to which the rewards are calculated
-   * @param recipients array of recipients of rewards
+   * @param recipients array of workerIds. i-th recipient will receive i-th worker and staker rewards accordingly
    * @param workerRewards array of rewards for workers
    * @param _stakerRewards array of rewards for stakers
    * can only be called by current distributor
    * lengths of recipients, workerRewards and _stakerRewards must be equal
    * can recommit to same toBlock, but this drops approve count back to 1
+   * @notice If only 1 approval is required, the distribution is executed immediately
    */
   function commit(
     uint256 fromBlock,
@@ -130,14 +122,14 @@ contract DistributedRewardsDistribution is AccessControlledPausable, IRewardsDis
       distribute(fromBlock, toBlock, recipients, workerRewards, _stakerRewards);
     }
 
-    emit NewCommitment(msg.sender, fromBlock, toBlock, recipients, workerRewards, _stakerRewards);
-    emit Approved(msg.sender, fromBlock, toBlock, recipients, workerRewards, _stakerRewards);
+    emit NewCommitment(msg.sender, fromBlock, toBlock, commitment);
+    emit Approved(msg.sender, fromBlock, toBlock, commitment);
   }
 
   /**
    * @dev Approve a commitment
    * Same args as for commit
-   * After 3 approvals, the distribution is executed
+   * After `requiredApproves` approvals, the distribution is executed
    */
   function approve(
     uint256 fromBlock,
@@ -153,11 +145,11 @@ contract DistributedRewardsDistribution is AccessControlledPausable, IRewardsDis
     approves[fromBlock][toBlock]++;
     alreadyApproved[commitment][msg.sender] = true;
 
+    emit Approved(msg.sender, fromBlock, toBlock, commitment);
+
     if (approves[fromBlock][toBlock] == requiredApproves) {
       distribute(fromBlock, toBlock, recipients, workerRewards, _stakerRewards);
     }
-
-    emit Approved(msg.sender, fromBlock, toBlock, recipients, workerRewards, _stakerRewards);
   }
 
   /// @return true if the commitment can be approved by `who`
@@ -186,7 +178,7 @@ contract DistributedRewardsDistribution is AccessControlledPausable, IRewardsDis
   }
 
   /// @dev All distributions must be sequential and not blocks can be missed
-  /// E.g, after distribution for blocks [A, B], next one bust be for [B + 1, C]
+  /// E.g. after distribution for blocks [A, B], next one bust be for [B + 1, C]
   function distribute(
     uint256 fromBlock,
     uint256 toBlock,
@@ -201,7 +193,7 @@ contract DistributedRewardsDistribution is AccessControlledPausable, IRewardsDis
     router.staking().distribute(recipients, _stakerRewards);
     lastBlockRewarded = toBlock;
 
-    emit Distributed(fromBlock, toBlock);
+    emit Distributed(fromBlock, toBlock, recipients, workerRewards, _stakerRewards);
   }
 
   /// @dev Treasury claims rewards for an address
@@ -232,6 +224,7 @@ contract DistributedRewardsDistribution is AccessControlledPausable, IRewardsDis
     return reward;
   }
 
+  /// @dev Set required number of approvals
   function setApprovesRequired(uint8 _approvesRequired) external onlyRole(DEFAULT_ADMIN_ROLE) {
     require(_approvesRequired > 0, "Approves required must be greater than 0");
     require(_approvesRequired <= distributors.length(), "Approves required must be less than distributors count");
