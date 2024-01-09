@@ -18,15 +18,6 @@ contract GatewayRegistryStakeTest is GatewayRegistryTest {
     assertStake(1, 1000, block.timestamp + 2000);
   }
 
-  function test_SortsStakesFromLeastOptimalStake() public {
-    gatewayRegistry.stake(10 ether, 30 days);
-    gatewayRegistry.stake(5 ether, 180 days);
-    gatewayRegistry.stake(1 ether, 90 days);
-    assertStake(0, 10 ether, block.timestamp + 30 days);
-    assertStake(1, 1 ether, block.timestamp + 90 days);
-    assertStake(2, 5 ether, block.timestamp + 180 days);
-  }
-
   function test_StakingIncreasesStakedAmount() public {
     gatewayRegistry.stake(100, 200);
     assertEq(gatewayRegistry.staked(address(this)), 100);
@@ -45,7 +36,7 @@ contract GatewayRegistryStakeTest is GatewayRegistryTest {
 
   function test_EmitsEvent() public {
     vm.expectEmit(address(gatewayRegistry));
-    emit Staked(address(this), 100, 200, block.timestamp + 200);
+    emit Staked(address(this), 100, 200, block.timestamp + 200, 0);
     gatewayRegistry.stake(100, 200);
   }
 

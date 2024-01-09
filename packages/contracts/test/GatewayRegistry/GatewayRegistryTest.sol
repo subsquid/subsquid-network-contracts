@@ -13,7 +13,7 @@ contract GatewayRegistryTest is BaseTest {
   tSQD token;
   RewardCalculation rewardCalc;
 
-  event Staked(address indexed gateway, uint256 amount, uint256 duration, uint256 lockedUntil);
+  event Staked(address indexed gateway, uint256 amount, uint256 duration, uint256 lockedUntil, uint256 cus);
 
   function setUp() public {
     (tSQD _token, Router router) = deployAll();
@@ -25,7 +25,7 @@ contract GatewayRegistryTest is BaseTest {
   }
 
   function assertStake(uint256 stakeId, uint256 amount, uint256 lockedUntil) internal {
-    (uint256 _amount, uint256 _lockedUntil,) = gatewayRegistry.stakes(address(this), stakeId);
+    (uint256 _amount, uint256 _lockedUntil) = gatewayRegistry.stakes(address(this), stakeId);
     assertEq(_amount, amount);
     assertEq(_lockedUntil, lockedUntil);
   }

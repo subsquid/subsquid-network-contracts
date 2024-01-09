@@ -9,8 +9,8 @@ contract GatewayRegistryAllocatedCUTest is GatewayRegistryTest {
   }
 
   function test_availableCUs() public {
-    assertEq(gatewayRegistry.availableCUs(100 ether, 360 days), expectedCUs(100, 360 days));
-    assertEq(gatewayRegistry.availableCUs(200 ether, 180 days), expectedCUs(200, 180 days));
-    assertEq(gatewayRegistry.availableCUs(400 ether, 89 days), expectedCUs(400, 89 days));
+    assertEq(gatewayRegistry.computationUnitsAmount(100 ether, 360 days), expectedCUs(100, 360 days));
+    assertEq(gatewayRegistry.computationUnitsAmount(200 ether, 180 days), expectedCUs(200, 180 days));
+    assertEq(gatewayRegistry.computationUnitsAmount(400 ether, 89 days), expectedCUs(400, 89 days));
   }
 }
