@@ -16,9 +16,10 @@ contract DistributionHelper is DistributedRewardsDistribution {
     uint256 fromBlock,
     uint256[] calldata recipients,
     uint256[] calldata workerRewards,
-    uint256[] calldata _stakerRewards
+    uint256[] calldata _stakerRewards,
+    uint256[] calldata usedCUs
   ) public {
-    distribute(fromBlock, fromBlock + 1, recipients, workerRewards, _stakerRewards);
+    distribute(fromBlock, fromBlock + 1, recipients, workerRewards, _stakerRewards, usedCUs);
   }
 }
 
@@ -57,10 +58,11 @@ contract RewardsDistributionTest is BaseTest {
 
   function prepareRewards(uint256 n)
     internal
-    returns (uint256[] memory recipients, uint256[] memory workerAmounts, uint256[] memory stakerAmounts)
+    returns (uint256[] memory recipients, uint256[] memory workerAmounts, uint256[] memory stakerAmounts, uint256[] memory usedCUs)
   {
     workerAmounts = new uint256[](n);
     stakerAmounts = new uint256[](n);
+    usedCUs = new uint256[](n);
     recipients = new uint256[](n);
     for (uint160 i = 0; i < n; i++) {
       staking.deposit(i + 1, 1);

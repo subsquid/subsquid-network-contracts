@@ -139,13 +139,14 @@ contract Staking is AccessControlledPausable, IStaking {
     uint256[] memory workers = delegates(staker);
     uint256 reward = _claimable[staker];
     for (uint256 i = 0; i < workers.length; i++) {
-      uint256 claimed = pendingReward(rewards[workers[i]], staker);
+      StakerRewards storage _rewards = rewards[workers[i]];
+      uint256 claimed = pendingReward(_rewards, staker);
       reward += claimed;
-      rewards[workers[i]].checkpoint[staker] = rewards[workers[i]].cumulatedRewardsPerShare;
-      emit Claimed(staker, workers[i], reward);
+      _rewards.checkpoint[staker] = _rewards.cumulatedRewardsPerShare;
+      emit Rewarded(staker, workers[i], claimed);
     }
     _claimable[staker] = 0;
-
+    emit Claimed(staker, reward);
     return reward;
   }
 
@@ -168,7 +169,8 @@ contract Staking is AccessControlledPausable, IStaking {
   }
 
   function updateCheckpoint(StakerRewards storage _rewards) internal {
-    _claimable[msg.sender] += pendingReward(_rewards, msg.sender);
+    uint rewarded = pendingReward(_rewards, msg.sender);
+    _claimable[msg.sender] += rewarded;
     _rewards.checkpoint[msg.sender] = _rewards.cumulatedRewardsPerShare;
   }
 
