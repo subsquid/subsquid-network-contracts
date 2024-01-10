@@ -18,7 +18,7 @@
     "lint": "forge fmt --check",
     "lint:fix": "forge fmt",
     "deploy-tokens": "ts-node scripts/deploy-tokens.ts",
-    "deploy": "TOKEN=0x0d3934b08adb5fbe30f48b3a18ba636460655b7e forge script script/Deploy.s.sol --broadcast --verify --json --rpc-url arbitrum-sepolia && node scripts/deployment-json.js",
+    "deploy": "TOKEN=0x24f9C46d86c064a6FA2a568F918fe62fC6917B3c forge script script/Deploy.s.sol --broadcast --verify --json --rpc-url arbitrum-sepolia && node scripts/deployment-json.js",
     "register-worker": "node -r dotenv/config scripts/register-worker.js",
     "list-workers": "node -r dotenv/config scripts/active-workers.js",
     "build": "forge build && npm run build:types",

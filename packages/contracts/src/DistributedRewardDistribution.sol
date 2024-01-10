@@ -37,7 +37,12 @@ contract DistributedRewardsDistribution is AccessControlledPausable, IRewardsDis
 
   /// @dev Emitted when commitment is approved
   event Distributed(
-    uint256 fromBlock, uint256 toBlock, uint256[] recipients, uint256[] workerRewards, uint256[] stakerRewards
+    uint256 fromBlock,
+    uint256 toBlock,
+    uint256[] recipients,
+    uint256[] workerRewards,
+    uint256[] stakerRewards,
+    uint256[] computationUnits
   );
 
   /// @dev Emitted when new distributor is added
@@ -105,7 +110,8 @@ contract DistributedRewardsDistribution is AccessControlledPausable, IRewardsDis
     uint256 toBlock,
     uint256[] calldata recipients,
     uint256[] calldata workerRewards,
-    uint256[] calldata _stakerRewards
+    uint256[] calldata _stakerRewards,
+    uint256[] calldata _computationUnits
   ) external whenNotPaused {
     require(recipients.length == workerRewards.length, "Recipients and worker amounts length mismatch");
     require(recipients.length == _stakerRewards.length, "Recipients and staker amounts length mismatch");
@@ -119,7 +125,7 @@ contract DistributedRewardsDistribution is AccessControlledPausable, IRewardsDis
     alreadyApproved[commitment][msg.sender] = true;
 
     if (requiredApproves == 1) {
-      distribute(fromBlock, toBlock, recipients, workerRewards, _stakerRewards);
+      distribute(fromBlock, toBlock, recipients, workerRewards, _stakerRewards, _computationUnits);
     }
 
     emit NewCommitment(msg.sender, fromBlock, toBlock, commitment);
@@ -136,7 +142,8 @@ contract DistributedRewardsDistribution is AccessControlledPausable, IRewardsDis
     uint256 toBlock,
     uint256[] calldata recipients,
     uint256[] calldata workerRewards,
-    uint256[] calldata _stakerRewards
+    uint256[] calldata _stakerRewards,
+    uint256[] calldata _computationUnits
   ) external onlyRole(REWARDS_DISTRIBUTOR_ROLE) whenNotPaused {
     require(commitments[fromBlock][toBlock] != 0, "Commitment does not exist");
     bytes32 commitment = keccak256(msg.data[4:]);
@@ -148,7 +155,7 @@ contract DistributedRewardsDistribution is AccessControlledPausable, IRewardsDis
     emit Approved(msg.sender, fromBlock, toBlock, commitment);
 
     if (approves[fromBlock][toBlock] == requiredApproves) {
-      distribute(fromBlock, toBlock, recipients, workerRewards, _stakerRewards);
+      distribute(fromBlock, toBlock, recipients, workerRewards, _stakerRewards, _computationUnits);
     }
   }
 
@@ -159,7 +166,8 @@ contract DistributedRewardsDistribution is AccessControlledPausable, IRewardsDis
     uint256 toBlock,
     uint256[] calldata recipients,
     uint256[] calldata workerRewards,
-    uint256[] calldata _stakerRewards
+    uint256[] calldata _stakerRewards,
+    uint256[] calldata _computationUnits
   ) external view returns (bool) {
     if (!hasRole(REWARDS_DISTRIBUTOR_ROLE, who)) {
       return false;
@@ -167,7 +175,8 @@ contract DistributedRewardsDistribution is AccessControlledPausable, IRewardsDis
     if (commitments[fromBlock][toBlock] == 0) {
       return false;
     }
-    bytes32 commitment = keccak256(abi.encode(fromBlock, toBlock, recipients, workerRewards, _stakerRewards));
+    bytes32 commitment =
+      keccak256(abi.encode(fromBlock, toBlock, recipients, workerRewards, _stakerRewards, _computationUnits));
     if (commitments[fromBlock][toBlock] != commitment) {
       return false;
     }
@@ -184,7 +193,8 @@ contract DistributedRewardsDistribution is AccessControlledPausable, IRewardsDis
     uint256 toBlock,
     uint256[] calldata recipients,
     uint256[] calldata workerRewards,
-    uint256[] calldata _stakerRewards
+    uint256[] calldata _stakerRewards,
+    uint256[] calldata _computationUnits
   ) internal {
     require(lastBlockRewarded == 0 || fromBlock == lastBlockRewarded + 1, "Not all blocks covered");
     for (uint256 i = 0; i < recipients.length; i++) {
@@ -193,7 +203,7 @@ contract DistributedRewardsDistribution is AccessControlledPausable, IRewardsDis
     router.staking().distribute(recipients, _stakerRewards);
     lastBlockRewarded = toBlock;
 
-    emit Distributed(fromBlock, toBlock, recipients, workerRewards, _stakerRewards);
+    emit Distributed(fromBlock, toBlock, recipients, workerRewards, _stakerRewards, _computationUnits);
   }
 
   /// @dev Treasury claims rewards for an address
