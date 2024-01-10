@@ -11,6 +11,8 @@ import "./AccessControlledPausable.sol";
  * @dev Contract used to deploy vesting contracts
  */
 contract VestingFactory is AccessControlledPausable {
+  bytes32 public constant VESTING_CREATOR_ROLE = keccak256("VESTING_CREATOR_ROLE");
+
   IERC20 public immutable token;
   IRouter public immutable router;
 
@@ -25,6 +27,11 @@ contract VestingFactory is AccessControlledPausable {
   constructor(IERC20 _token, IRouter _router) {
     token = _token;
     router = _router;
+    _grantRole(VESTING_CREATOR_ROLE, msg.sender);
+  }
+
+  function allowVestingCreator(address account) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    _grantRole(VESTING_CREATOR_ROLE, account);
   }
 
   function createVesting(
@@ -33,7 +40,7 @@ contract VestingFactory is AccessControlledPausable {
     uint64 durationSeconds,
     uint256 immediateReleaseBIP,
     uint256 expectedTotalAmount
-  ) external onlyRole(DEFAULT_ADMIN_ROLE) whenNotPaused returns (SubsquidVesting) {
+  ) external onlyRole(VESTING_CREATOR_ROLE) whenNotPaused returns (SubsquidVesting) {
     SubsquidVesting vesting = new SubsquidVesting(
       token, router, beneficiaryAddress, startTimestamp, durationSeconds, immediateReleaseBIP, expectedTotalAmount
     );

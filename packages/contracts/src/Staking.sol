@@ -77,7 +77,7 @@ contract Staking is AccessControlledPausable, IStaking {
     StakerRewards storage _rewards = rewards[worker];
     require(_rewards.totalStaked + amount <= network.delegationLimit(), "Delegation limit exceeded");
 
-    updateCheckpoint(_rewards);
+    updateCheckpoint(_rewards, worker);
     _rewards.totalStaked += amount;
     _rewards.depositAmount[msg.sender] += amount;
     delegatedTo[msg.sender].add(worker);
@@ -98,7 +98,7 @@ contract Staking is AccessControlledPausable, IStaking {
     StakerRewards storage _rewards = rewards[worker];
     require(_rewards.depositAmount[msg.sender] >= amount, "Insufficient staked amount");
     require(_rewards.withdrawAllowed[msg.sender] <= block.number, "Too early to withdraw");
-    updateCheckpoint(_rewards);
+    updateCheckpoint(_rewards, worker);
     _rewards.totalStaked -= amount;
     _rewards.depositAmount[msg.sender] -= amount;
     if (_rewards.depositAmount[msg.sender] == 0) {
@@ -168,10 +168,11 @@ contract Staking is AccessControlledPausable, IStaking {
     return delegatedTo[staker].values();
   }
 
-  function updateCheckpoint(StakerRewards storage _rewards) internal {
+  function updateCheckpoint(StakerRewards storage _rewards, uint workerId) internal {
     uint rewarded = pendingReward(_rewards, msg.sender);
     _claimable[msg.sender] += rewarded;
     _rewards.checkpoint[msg.sender] = _rewards.cumulatedRewardsPerShare;
+    emit Rewarded(msg.sender, workerId, rewarded);
   }
 
   function pendingReward(StakerRewards storage _rewards, address staker) internal view returns (uint256) {
