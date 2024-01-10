@@ -24,7 +24,7 @@ interface IStaking {
   /// @dev Emitted when new claimable reward arrives
   event Rewarded(uint256 indexed workerId, address indexed staker, uint256 amount);
   /// @dev Emitted when a staker claims rewards
-  event Claimed(address indexed staker, uint256 amount);
+  event Claimed(address indexed staker, uint256 amount, uint256[] workerIds);
 
   /// @dev Deposit amount of tokens in favour of a worker
   /// @param worker workerId in WorkerRegistration contract

@@ -146,7 +146,7 @@ contract Staking is AccessControlledPausable, IStaking {
       emit Rewarded(workers[i], staker, claimed);
     }
     _claimable[staker] = 0;
-    emit Claimed(staker, reward);
+    emit Claimed(staker, reward, workers);
     return reward;
   }
 
