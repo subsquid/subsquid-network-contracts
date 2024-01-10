@@ -58,7 +58,12 @@ contract RewardsDistributionTest is BaseTest {
 
   function prepareRewards(uint256 n)
     internal
-    returns (uint256[] memory recipients, uint256[] memory workerAmounts, uint256[] memory stakerAmounts, uint256[] memory usedCUs)
+    returns (
+      uint256[] memory recipients,
+      uint256[] memory workerAmounts,
+      uint256[] memory stakerAmounts,
+      uint256[] memory usedCUs
+    )
   {
     workerAmounts = new uint256[](n);
     stakerAmounts = new uint256[](n);

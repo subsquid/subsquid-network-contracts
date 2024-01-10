@@ -4,7 +4,12 @@ import "./DistributedRewardsDistribution.sol";
 
 contract RewardsDistributionClaimTest is RewardsDistributionTest {
   function testTransfersClaimableRewardsToSender() public {
-    (uint256[] memory recipients, uint256[] memory workerAmounts, uint256[] memory stakerAmounts, uint256[] memory usedCUs) = prepareRewards(4);
+    (
+      uint256[] memory recipients,
+      uint256[] memory workerAmounts,
+      uint256[] memory stakerAmounts,
+      uint256[] memory usedCUs
+    ) = prepareRewards(4);
     rewardsDistribution.distributeHelper(1, recipients, workerAmounts, stakerAmounts, usedCUs);
     uint256 claimable = rewardsDistribution.claimable(workerOwner);
     uint256 balanceBefore = token.balanceOf(workerOwner);
@@ -15,7 +20,12 @@ contract RewardsDistributionClaimTest is RewardsDistributionTest {
   }
 
   function testCannotClaimSameRewardTwice() public {
-    (uint256[] memory recipients, uint256[] memory workerAmounts, uint256[] memory stakerAmounts, uint256[] memory usedCUs) = prepareRewards(4);
+    (
+      uint256[] memory recipients,
+      uint256[] memory workerAmounts,
+      uint256[] memory stakerAmounts,
+      uint256[] memory usedCUs
+    ) = prepareRewards(4);
     rewardsDistribution.distributeHelper(1, recipients, workerAmounts, stakerAmounts, usedCUs);
     uint256 claimable = rewardsDistribution.claimable(workerOwner);
     uint256 balanceBefore = token.balanceOf(workerOwner);
@@ -29,7 +39,12 @@ contract RewardsDistributionClaimTest is RewardsDistributionTest {
   }
 
   function testClaimEmitsEvent() public {
-    (uint256[] memory recipients, uint256[] memory workerAmounts, uint256[] memory stakerAmounts, uint256[] memory usedCUs) = prepareRewards(4);
+    (
+      uint256[] memory recipients,
+      uint256[] memory workerAmounts,
+      uint256[] memory stakerAmounts,
+      uint256[] memory usedCUs
+    ) = prepareRewards(4);
     rewardsDistribution.distributeHelper(1, recipients, workerAmounts, stakerAmounts, usedCUs);
     uint256 claimable = rewardsDistribution.claimable(workerOwner);
     hoax(workerOwner);
@@ -39,14 +54,24 @@ contract RewardsDistributionClaimTest is RewardsDistributionTest {
   }
 
   function testDistributorClaimCannotBeCalledByNotTreasury() public {
-    (uint256[] memory recipients, uint256[] memory workerAmounts, uint256[] memory stakerAmounts, uint256[] memory usedCUs) = prepareRewards(1);
+    (
+      uint256[] memory recipients,
+      uint256[] memory workerAmounts,
+      uint256[] memory stakerAmounts,
+      uint256[] memory usedCUs
+    ) = prepareRewards(1);
     rewardsDistribution.distributeHelper(1, recipients, workerAmounts, stakerAmounts, usedCUs);
     expectNotRoleRevert(rewardsDistribution.REWARDS_TREASURY_ROLE());
     rewardsDistribution.claim(workerOwner);
   }
 
   function test_CanClaimRewardsForWithdrawnWorker() public {
-    (uint256[] memory recipients, uint256[] memory workerAmounts, uint256[] memory stakerAmounts, uint256[] memory usedCUs) = prepareRewards(1);
+    (
+      uint256[] memory recipients,
+      uint256[] memory workerAmounts,
+      uint256[] memory stakerAmounts,
+      uint256[] memory usedCUs
+    ) = prepareRewards(1);
     startHoax(workerOwner);
     vm.roll(block.number + 3);
     workerRegistration.deregister(workerId);
