@@ -1,11 +1,5 @@
-FROM ghcr.io/foundry-rs/foundry:latest
+# syntax = edrevo/dockerfile-plus
 
-WORKDIR /usr/src/app
-
-RUN apk add jq python3 py3-pip
-RUN pip install base58
-COPY . .
-
-RUN forge install foundry-rs/forge-std OpenZeppelin/openzeppelin-contracts --no-git
+INCLUDE+ Dockerfile.common
 
 ENTRYPOINT ["sh", "./spinup-testnet.sh"]

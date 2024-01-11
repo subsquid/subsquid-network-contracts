@@ -32,3 +32,10 @@ jobs:
           context: packages/contracts
           file: packages/contracts/Dockerfile-playground
           tags: subsquid/playground:${{ inputs.tag }}
+      - name: Build & publish contracts image
+        uses: docker/build-push-action@v3
+        with:
+          push: true
+          context: packages/contracts
+          file: packages/contracts/Dockerfile
+          tags: subsquid/contracts:latest

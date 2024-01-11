@@ -1,15 +1,5 @@
-FROM node:18-slim
+# syntax = edrevo/dockerfile-plus
 
-WORKDIR /usr/src/app
+INCLUDE+ Dockerfile.common
 
-COPY package*.json .
-COPY scripts ./scripts
-COPY deployments ./deployments
-
-RUN npm install -g npm
-RUN npm install && npm link
-
-ENV RPC_PROVIDER_URL=https://arbitrum-goerli.public.blastapi.io
-ENV NETWORK_NAME=arbitrum-goerli
-
-ENTRYPOINT ["npx", "subsquid-network-register"]
+ENTRYPOINT ["/bin/sh", "-c"]
