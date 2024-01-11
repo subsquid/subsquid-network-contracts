@@ -72,4 +72,9 @@ contract RewardTreasury is AccessControlledPausable {
 
     emit Claimed(msg.sender, receiver, reward);
   }
+
+  /// @dev Reclaim all funds from the contract in case of emergency
+  function reclaimFunds() external onlyRole(DEFAULT_ADMIN_ROLE) {
+    rewardToken.transfer(msg.sender, rewardToken.balanceOf(address(this)));
+  }
 }
