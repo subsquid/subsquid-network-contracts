@@ -1,6 +1,7 @@
 import { NetworkStatsEntry } from "./clickhouseClient";
 import { getWorkerId } from "./chain";
 import { QueryLog, validateSignatures } from "./signatureVerification";
+import { config } from "./config";
 
 const PRECISION = 1_000_000_000n;
 export class Worker {
@@ -16,6 +17,7 @@ export class Worker {
   public workerReward: bigint;
   public stakerReward: bigint;
   public dTenure: number;
+  public requestsProcessed = 0n;
 
   constructor(public peerId: string) {}
 
@@ -27,6 +29,7 @@ export class Worker {
     if (!(await validateSignatures(query))) return false;
     this.bytesSent += query.output_size;
     this.chunksRead += query.num_read_chunks;
+    this.requestsProcessed++;
     return true;
   }
 
@@ -47,14 +50,12 @@ export class Worker {
   }
 
   public async calculateDTraffic(totalSupply: bigint, totalTraffic: number) {
-    const ALPHA = 0.1;
-
     const supplyRatio =
       Number(((this.stake + this.bond) * PRECISION) / totalSupply) /
       Number(PRECISION);
     this.dTraffic = Math.min(
       1,
-      (this.trafficWeight / totalTraffic / supplyRatio) ** ALPHA,
+      (this.trafficWeight / totalTraffic / supplyRatio) ** config.dTrafficAlpha,
     );
   }
 

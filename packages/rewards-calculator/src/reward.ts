@@ -3,7 +3,12 @@ import { logger } from "./logger";
 import { getBlockTimestamp } from "./chain";
 
 export type Rewards = {
-  [key in string]: { workerReward: bigint; stakerReward: bigint; id: bigint };
+  [key in string]: {
+    workerReward: bigint;
+    stakerReward: bigint;
+    computationUnitsUsed: bigint;
+    id: bigint;
+  };
 };
 
 export async function epochStats(

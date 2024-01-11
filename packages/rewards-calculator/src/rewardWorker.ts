@@ -13,8 +13,7 @@ import {
 import { epochStats } from "./reward";
 import { logger } from "./logger";
 import { hasNewerPings } from "./clickhouseClient";
-import { publicClient } from "./client";
-import { addresses, contracts } from "./config";
+import { addresses, config, contracts, publicClient } from "./config";
 import { parseAbiItem, WalletClient } from "viem";
 
 async function firstRegistrationBlock(registrations: Registrations) {
@@ -26,8 +25,6 @@ async function firstRegistrationBlock(registrations: Registrations) {
 function getEpochStart(blockNumber: number, epochLength: number) {
   return Math.floor(blockNumber / epochLength) * epochLength;
 }
-
-const WORK_TIMEOUT_MS = 300 * 1000;
 
 export class RewardWorker {
   constructor(private walletClient: WalletClient) {}
@@ -53,7 +50,7 @@ export class RewardWorker {
     } catch (e) {
       logger.error(e);
     }
-    setTimeout(() => this.commitIfPossible(), WORK_TIMEOUT_MS);
+    setTimeout(() => this.commitIfPossible(), config.workTimeout);
   }
 
   private async approveIfNecessary() {
@@ -71,12 +68,12 @@ export class RewardWorker {
     } catch (e) {
       logger.error(e);
     }
-    setTimeout(() => this.approveIfNecessary(), WORK_TIMEOUT_MS);
+    setTimeout(() => this.approveIfNecessary(), config.workTimeout);
   }
 
   private async commitRange() {
     const epochLen = await epochLength();
-    const maxCommitBlocksCovered = epochLen * 100;
+    const maxCommitBlocksCovered = epochLen * config.maxEpochsPerCommit;
     let _lastRewardedBlock = await lastRewardedBlock();
     if (_lastRewardedBlock === 0) {
       _lastRewardedBlock = await firstRegistrationBlock(

@@ -1,9 +1,13 @@
-import { contract, contracts } from "./config";
-import { l1Client, publicClient } from "./client";
+import {
+  addresses,
+  config,
+  contract,
+  contracts,
+  l1Client,
+  publicClient,
+} from "./config";
 import {
   ContractFunctionConfig,
-  createPublicClient,
-  http,
   isAddressEqual,
   parseAbiItem,
   WalletClient,
@@ -12,16 +16,11 @@ import { logger } from "./logger";
 import { fromBase58 } from "./utils";
 import { Rewards } from "./reward";
 import { Workers } from "./workers";
-import { arbitrumGoerli } from "viem/chains";
 
-// TODO use sepolia contract
 export async function getRegistrations() {
   return (
-    await createPublicClient({
-      chain: arbitrumGoerli,
-      transport: http(),
-    }).getLogs({
-      address: "0xA7E47a7aE0FB29BeF4485f6CAb2ee1b85c1D38aB", // addresses.workerRegistration,
+    await publicClient.getLogs({
+      address: addresses.workerRegistration,
       event: parseAbiItem(
         "event WorkerRegistered(uint256 indexed workerId, bytes indexed peerId, address indexed registrar, uint256 registeredAt)",
       ),
@@ -32,10 +31,12 @@ export async function getRegistrations() {
 
 export type Registrations = Awaited<ReturnType<typeof getRegistrations>>;
 
-const TARGET_GB = 30_000n;
-
 export async function currentApy() {
-  return Number(await contracts.rewardCalculation.read.currentApy([TARGET_GB]));
+  return Number(
+    await contracts.rewardCalculation.read.currentApy([
+      config.targetCapacityGB,
+    ]),
+  );
 }
 
 export async function epochLength() {
@@ -65,12 +66,9 @@ export async function isCommitted(from: number, to: number) {
 
 export async function preloadWorkerIds(workers: string[]) {
   const workerIds = {} as Record<string, bigint>;
-  const results = await createPublicClient({
-    chain: arbitrumGoerli,
-    transport: http(),
-  }).multicall({
+  const results = await publicClient.multicall({
     contracts: workers.map((workerId) => ({
-      address: "0x6867E96A0259E68A571a368C0b8d733Aa56E3915",
+      address: addresses.workerRegistration,
       abi: contracts.workerRegistration.abi,
       functionName: "workerIds",
       args: [fromBase58(workerId)],
@@ -105,16 +103,25 @@ export async function canCommit(walletClient: WalletClient) {
   );
 }
 
+function rewardsToTxArgs(rewards: Rewards) {
+  const workerPeerIds = Object.keys(rewards ?? {});
+  const workerIds = workerPeerIds.map((id) => rewards[id].id);
+  const rewardAmounts = workerPeerIds.map((id) => rewards[id].workerReward);
+  const stakedAmounts = workerPeerIds.map((id) => rewards[id].stakerReward);
+  const computationUnitsUsed = workerPeerIds.map(
+    (id) => rewards[id].computationUnitsUsed ?? 0n,
+  );
+  return { workerIds, rewardAmounts, stakedAmounts, computationUnitsUsed };
+}
+
 export async function commitRewards(
   fromBlock: number,
   toBlock: number,
   rewards: Rewards,
   walletClient: WalletClient,
 ) {
-  const workerPeerIds = Object.keys(rewards ?? {});
-  const workerIds = workerPeerIds.map((id) => rewards[id].id);
-  const rewardAmounts = workerPeerIds.map((id) => rewards[id].workerReward);
-  const stakedAmounts = workerPeerIds.map((id) => rewards[id].stakerReward);
+  const { workerIds, rewardAmounts, stakedAmounts, computationUnitsUsed } =
+    rewardsToTxArgs(rewards);
   if (!(await canCommit(walletClient))) {
     return;
   }
@@ -125,6 +132,7 @@ export async function commitRewards(
       workerIds,
       rewardAmounts,
       stakedAmounts,
+      computationUnitsUsed,
     ],
     {},
   );
@@ -137,10 +145,8 @@ export async function approveRewards(
   rewards: Rewards,
   walletClient: WalletClient,
 ) {
-  const workerPeerIds = Object.keys(rewards ?? {});
-  const workerIds = workerPeerIds.map((id) => rewards[id].id);
-  const rewardAmounts = workerPeerIds.map((id) => rewards[id].workerReward);
-  const stakedAmounts = workerPeerIds.map((id) => rewards[id].stakerReward);
+  const { workerIds, rewardAmounts, stakedAmounts, computationUnitsUsed } =
+    rewardsToTxArgs(rewards);
   if (
     !(await contracts.rewardsDistribution.read.canApprove([
       walletClient.account.address,
@@ -149,6 +155,7 @@ export async function approveRewards(
       workerIds,
       rewardAmounts,
       stakedAmounts,
+      computationUnitsUsed,
     ]))
   ) {
     logger.log("Cannot approve rewards", walletClient.account.address);
@@ -161,9 +168,10 @@ export async function approveRewards(
       workerIds,
       rewardAmounts,
       stakedAmounts,
+      computationUnitsUsed,
     ],
     {
-      gas: 10_000_000n,
+      gas: config.network.gasLimit,
     },
   );
   logger.log("Approve rewards", tx);

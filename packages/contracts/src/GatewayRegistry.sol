@@ -22,7 +22,6 @@ contract GatewayRegistry is AccessControlledPausable {
   }
 
   uint256 constant BASIS_POINT_MULTIPLIER = 10000;
-  uint256 constant ADDITIONAL_PRECISION = 1e18;
   uint256 constant YEAR = 360 days;
 
   mapping(address gateway => Stake[]) public stakes;

@@ -4,13 +4,15 @@ import utc from "dayjs/plugin/utc";
 
 import { Workers } from "./workers";
 import { logger } from "./logger";
+import { config } from "./config";
+import { sum } from "./utils";
 
 dayjs.extend(utc);
 const clickhouse = new ClickHouse({
-  url: "https://clickhouse.subsquid.io/",
+  url: config.clickhouse.url,
   basicAuth: {
-    username: "sqd_read",
-    password: process.env.CLICKHOUSE_PASSWORD,
+    username: config.clickhouse.username,
+    password: config.clickhouse.password,
   },
   format: "json",
 });
@@ -52,13 +54,13 @@ export class ClickhouseClient {
       "toUnixTimestamp64Milli(collector_timestamp) as collector_timestamp",
     ];
     await this.logTotalQueries();
-    const query = `select ${columns.join(
-      ",",
-    )} from testnet.worker_query_logs where testnet.worker_query_logs.worker_timestamp >= '${formatDate(
-      this.from,
-    )}' and testnet.worker_query_logs.worker_timestamp <= '${formatDate(
-      this.to,
-    )}'`;
+    const query = `select ${columns.join(",")} from ${
+      config.clickhouse.logsTableName
+    } where ${
+      config.clickhouse.logsTableName
+    }.worker_timestamp >= '${formatDate(this.from)}' and ${
+      config.clickhouse.logsTableName
+    }.worker_timestamp <= '${formatDate(this.to)}'`;
     for await (const row of clickhouse.query(query).stream()) {
       const worker = this.workers.add(row.worker_id);
       await worker.processQuery(row);
@@ -66,9 +68,11 @@ export class ClickhouseClient {
     return this.workers;
   }
   public async getPings(from = this.from, to = this.to) {
-    const query = `select workerId, timestamp from testnet.worker_pings where timestamp >= '${formatDate(
-      from,
-    )}' and timestamp <= '${formatDate(to)}' order by timestamp`;
+    const query = `select workerId, timestamp from ${
+      config.clickhouse.pingsTableName
+    } where timestamp >= '${formatDate(from)}' and timestamp <= '${formatDate(
+      to,
+    )}' order by timestamp`;
     const pings: Record<string, number[]> = {};
     for await (const row of clickhouse.query(query).stream()) {
       if (!pings[row.workerId])
@@ -79,11 +83,13 @@ export class ClickhouseClient {
   }
 
   private async logTotalQueries() {
-    const count = `select COUNT(*) as total from testnet.worker_query_logs where testnet.worker_query_logs.worker_timestamp >= '${formatDate(
-      this.from,
-    )}' and testnet.worker_query_logs.worker_timestamp <= '${formatDate(
-      this.to,
-    )}'`;
+    const count = `select COUNT(*) as total from ${
+      config.clickhouse.logsTableName
+    } where ${
+      config.clickhouse.logsTableName
+    }.worker_timestamp >= '${formatDate(this.from)}' and ${
+      config.clickhouse.logsTableName
+    }.worker_timestamp <= '${formatDate(this.to)}'`;
     const [{ total }] = (await clickhouse.query(count).toPromise()) as any;
     logger.log("Processing queries:", total);
   }
@@ -99,16 +105,13 @@ function secondDiffs(dates: number[]) {
 }
 
 function totalOfflineSeconds(diffs: number[]) {
-  const THRESHOLD = 65;
-  return diffs
-    .filter((diff) => diff > THRESHOLD)
-    .reduce((acc, diff) => acc + diff, 0);
+  return sum(diffs.filter((diff) => diff > config.workerOfflineThreshold));
 }
 
 export async function hasNewerPings(from: Date) {
-  const query = `select count() as count from testnet.worker_pings where timestamp >= '${formatDate(
-    from,
-  )}'`;
+  const query = `select count() as count from ${
+    config.clickhouse.pingsTableName
+  } where timestamp >= '${formatDate(from)}'`;
   const [{ count }] = (await clickhouse.query(query).toPromise()) as [
     { count: number },
   ];
@@ -194,5 +197,3 @@ export type NetworkStatsEntry = {
   totalTimeOffline: number;
   livenessFactor: number;
 };
-
-export type NetworkStats = Record<string, NetworkStatsEntry>;

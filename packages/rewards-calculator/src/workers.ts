@@ -16,10 +16,10 @@ import {
 import { logger } from "./logger";
 import { Worker } from "./worker";
 import dayjs from "dayjs";
+import { config } from "./config";
+import { Rewards } from "./reward";
 
 const YEAR = 365 * 24 * 60 * 60;
-export const TENURE_EPOCH_COUNT = 10;
-
 export class Workers {
   private workers: Record<string, Worker> = {};
   private bond = 0n;
@@ -88,8 +88,8 @@ export class Workers {
   public async getDTenure(epochStartBlockNumber: number) {
     const epochLengthInBlocks = await epochLength();
     const tenureStart =
-      epochStartBlockNumber - epochLengthInBlocks * TENURE_EPOCH_COUNT;
-    const epochStartBlocks = [...new Array(TENURE_EPOCH_COUNT + 1)].map(
+      epochStartBlockNumber - epochLengthInBlocks * config.tenureEpochCount;
+    const epochStartBlocks = [...new Array(config.tenureEpochCount + 1)].map(
       (_, i) => tenureStart + i * epochLengthInBlocks,
     );
     const epochStartTimestamps = await Promise.all(
@@ -179,17 +179,22 @@ export class Workers {
       );
   }
 
-  public async rewards() {
+  public async rewards(): Promise<Rewards> {
     return Object.fromEntries(
       await Promise.all(
-        this.map(async (worker) => [
-          worker.peerId,
-          {
-            workerReward: worker.workerReward,
-            stakerReward: worker.stakerReward,
-            id: await worker.getId(),
-          },
-        ]),
+        this.map(
+          async (worker) =>
+            [
+              worker.peerId,
+              {
+                workerReward: worker.workerReward,
+                stakerReward: worker.stakerReward,
+                computationUnitsUsed:
+                  worker.requestsProcessed * config.requestPrice,
+                id: await worker.getId(),
+              },
+            ] as const,
+        ),
       ),
     );
   }
