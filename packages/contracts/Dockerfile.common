@@ -7,4 +7,5 @@ RUN pip install base58
 COPY foundry.toml ./foundry.toml
 RUN forge install foundry-rs/forge-std OpenZeppelin/openzeppelin-contracts --no-git
 COPY . .
+RUN forge build
 
