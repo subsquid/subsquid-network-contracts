@@ -37,5 +37,5 @@ jobs:
         with:
           push: true
           context: packages/contracts
-          file: packages/contracts/Dockerfile
-          tags: subsquid/contracts:latest
+          file: packages/contracts/Dockerfile-registerGateway
+          tags: subsquid/register-gateway:latest
