@@ -1,5 +1,5 @@
 #!/bin/bash
-printenv
+
 if ! [[ "$PRIVATE_KEY" =~ ^0x[0-9a-fA-F]{64}$ ]]; then
   echo "PRIVATE_KEY is not set or invalid"
   exit 1
