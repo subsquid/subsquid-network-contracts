@@ -12,4 +12,4 @@ WORKDIR /usr/src/app/rewards-calculator
 
 RUN yarn
 
-CMD ["yarn", "start", "5"]
+CMD ["yarn", "start", "1"]
