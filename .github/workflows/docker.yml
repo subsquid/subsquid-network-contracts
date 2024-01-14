@@ -37,5 +37,6 @@ jobs:
         with:
           push: true
           context: packages/contracts
+          platforms: linux/amd64,linux/arm64,linux/arm/v7
           file: packages/contracts/Dockerfile-registerGateway
           tags: subsquid/register-gateway:latest
