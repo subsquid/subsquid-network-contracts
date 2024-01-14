@@ -23,6 +23,7 @@ export async function epochStats(
   if (workers.count() === 0) {
     return {};
   }
+  await workers.getNextDistributionStartBlockNumber();
   await workers.clearUnknownWorkers();
   await workers.getStakes();
   workers.getT();

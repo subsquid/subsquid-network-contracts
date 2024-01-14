@@ -30,7 +30,7 @@ export class RewardWorker {
   constructor(private walletClient: WalletClient) {}
   public startWorker() {
     this.commitIfPossible();
-    this.approveIfNecessary();
+    // this.approveIfNecessary();
   }
 
   private async commitIfPossible() {
@@ -104,7 +104,7 @@ async function approveRanges(): Promise<
     await publicClient.getLogs({
       address: addresses.rewardsDistribution,
       event: parseAbiItem(
-        `event NewCommitment(address indexed who,uint256 fromBlock,uint256 toBlock,uint256[] recipients,uint256[] workerRewards,uint256[] stakerRewards)`,
+        `event NewCommitment(address indexed who, uint256 fromBlock, uint256 toBlock, bytes32 commitment)`,
       ),
       fromBlock: 1n,
     })

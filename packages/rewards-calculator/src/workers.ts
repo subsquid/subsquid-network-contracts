@@ -3,6 +3,7 @@ import {
   currentApy,
   epochLength,
   getBlockTimestamp,
+  getLatestDistributionBlock,
   getStakes,
   MulticallResult,
   preloadWorkerIds,
@@ -23,6 +24,7 @@ const YEAR = 365 * 24 * 60 * 60;
 export class Workers {
   private workers: Record<string, Worker> = {};
   private bond = 0n;
+  private nextDistributionStartBlockNumber: bigint;
 
   constructor(private clickhouseClient: ClickhouseClient) {}
 
@@ -42,8 +44,15 @@ export class Workers {
     return Object.keys(this.workers).length;
   }
 
+  public async getNextDistributionStartBlockNumber() {
+    const latestDistributionBlock = await getLatestDistributionBlock();
+    if (latestDistributionBlock) {
+      this.nextDistributionStartBlockNumber = latestDistributionBlock + 1n;
+    }
+  }
+
   public async fetchCurrentBond() {
-    this.bond = await bond();
+    this.bond = await bond(this.nextDistributionStartBlockNumber);
     this.map((worker) => {
       worker.bond = this.bond;
     });
@@ -51,7 +60,10 @@ export class Workers {
   }
 
   public async clearUnknownWorkers() {
-    const workerIds = await preloadWorkerIds(Object.keys(this.workers));
+    const workerIds = await preloadWorkerIds(
+      Object.keys(this.workers),
+      this.nextDistributionStartBlockNumber,
+    );
     for (const workersKey in this.workers) {
       if (workerIds[workersKey] === 0n) {
         delete this.workers[workersKey];
@@ -63,7 +75,7 @@ export class Workers {
   }
 
   public async getStakes() {
-    const stakes = await getStakes(this);
+    const stakes = await getStakes(this, this.nextDistributionStartBlockNumber);
     this.parseMulticallResult("stake", stakes);
   }
 
@@ -105,7 +117,11 @@ export class Workers {
   }
 
   public async calculateRewards() {
-    const rMax = ((await currentApy()) * this.count()) / YEAR / 10_000;
+    const rMax =
+      ((await currentApy(this.nextDistributionStartBlockNumber)) *
+        this.count()) /
+      YEAR /
+      10_000;
     this.map((worker) => worker.getRewards(rMax));
   }
 
@@ -138,7 +154,9 @@ export class Workers {
       "second",
     );
     return (
-      (BigInt(await currentApy()) * this.totalSupply() * BigInt(duration)) /
+      (BigInt(await currentApy(this.nextDistributionStartBlockNumber)) *
+        this.totalSupply() *
+        BigInt(duration)) /
       BigInt(YEAR) /
       10_000n
     );

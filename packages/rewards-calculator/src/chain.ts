@@ -31,21 +31,40 @@ export async function getRegistrations() {
 
 export type Registrations = Awaited<ReturnType<typeof getRegistrations>>;
 
-// TODO add block tags to read calls
-export async function currentApy() {
+export async function getLatestDistributionBlock() {
+  const distributionBlocks = (
+    await publicClient.getLogs({
+      address: addresses.rewardsDistribution,
+      event: parseAbiItem(
+        `event Distributed(uint256 fromBlock, uint256 toBlock, uint256[] recipients, uint256[] workerRewards, uint256[] stakerRewards, uint256[] computationUnits)`,
+      ),
+      fromBlock: 1n,
+    })
+  ).map(({ blockNumber }) => Number(blockNumber));
+  if (distributionBlocks.length === 0) {
+    return undefined;
+  }
+  const maxBlock = Math.max(...distributionBlocks);
+  return BigInt(maxBlock);
+}
+
+export async function currentApy(blockNumber?: bigint) {
   return Number(
-    await contracts.rewardCalculation.read.currentApy([
-      config.targetCapacityGB,
-    ]),
+    await contracts.rewardCalculation.read.currentApy(
+      [config.targetCapacityGB],
+      { blockNumber },
+    ),
   );
 }
 
-export async function epochLength() {
-  return Number(await contracts.workerRegistration.read.epochLength());
+export async function epochLength(blockNumber?: bigint) {
+  return Number(
+    await contracts.workerRegistration.read.epochLength({ blockNumber }),
+  );
 }
 
-export async function bond() {
-  return contracts.workerRegistration.read.bondAmount();
+export async function bond(blockNumber?: bigint) {
+  return contracts.workerRegistration.read.bondAmount({ blockNumber });
 }
 
 export async function getBlockNumber() {
@@ -65,7 +84,10 @@ export async function isCommitted(from: number, to: number) {
   );
 }
 
-export async function preloadWorkerIds(workers: string[]) {
+export async function preloadWorkerIds(
+  workers: string[],
+  blockNumber?: bigint,
+) {
   const workerIds = {} as Record<string, bigint>;
   const results = await publicClient.multicall({
     contracts: workers.map((workerId) => ({
@@ -74,6 +96,7 @@ export async function preloadWorkerIds(workers: string[]) {
       functionName: "workerIds",
       args: [fromBase58(workerId)],
     })),
+    blockNumber,
   });
   workers.forEach((workerId, i) => {
     workerIds[workerId] = results[i].result;
@@ -178,7 +201,7 @@ export async function approveRewards(
   logger.log("Approve rewards", tx);
 }
 
-export async function getStakes(workers: Workers) {
+export async function getStakes(workers: Workers, blockNumber?: bigint) {
   const calls = await Promise.all(
     workers.map(async (worker) => ({
       address: contracts.staking.address,
@@ -191,6 +214,7 @@ export async function getStakes(workers: Workers) {
     ContractFunctionConfig<typeof contracts.staking.abi, "activeStake">[]
   >({
     contracts: calls,
+    blockNumber,
   });
 }
 
