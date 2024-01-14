@@ -21,7 +21,7 @@
     "deploy": "TOKEN=0x24f9C46d86c064a6FA2a568F918fe62fC6917B3c forge script script/Deploy.s.sol --broadcast --verify --json --rpc-url arbitrum-sepolia && node scripts/deployment-json.js",
     "register-worker": "forge script script/RegisterWorker.s.sol --broadcast --json --rpc-url arbitrum-sepolia",
     "list-workers": "node -r dotenv/config scripts/active-workers.js",
-    "build": "forge build && npm run build:types",
+    "build": "forge build --out artifacts && npm run build:types",
     "build:types": "find artifacts -name \"*.json\" -exec bash -c \"echo export default \\<const\\> > {}.ts && cat {} >> {}.ts\" \\; && find artifacts -name \"*.json.ts\" -exec bash -c 'mv $0 ${0%???????}ts' {} \\;",
     "bounty": "docker run -v $PWD:/app ghcr.io/foundry-rs/foundry:latest 'forge script /app/script/Bounty.s.sol  --root /app --rpc-url arbitrum-sepolia --broadcast'"
   },
