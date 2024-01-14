@@ -2,4 +2,4 @@
 
 INCLUDE+ Dockerfile.common
 
-ENTRYPOINT sh ./register-gateway.sh
+ENTRYPOINT ["./scripts/register-gateway.mjs"]
