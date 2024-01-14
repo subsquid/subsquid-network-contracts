@@ -22,7 +22,7 @@ export async function getRegistrations() {
     await publicClient.getLogs({
       address: addresses.workerRegistration,
       event: parseAbiItem(
-        "event WorkerRegistered(uint256 indexed workerId, bytes indexed peerId, address indexed registrar, uint256 registeredAt)",
+        `event WorkerRegistered(uint256 indexed workerId, bytes peerId, address indexed registrar, uint256 registeredAt, string metadata)`,
       ),
       fromBlock: 1n,
     })
@@ -31,6 +31,7 @@ export async function getRegistrations() {
 
 export type Registrations = Awaited<ReturnType<typeof getRegistrations>>;
 
+// TODO add block tags to read calls
 export async function currentApy() {
   return Number(
     await contracts.rewardCalculation.read.currentApy([

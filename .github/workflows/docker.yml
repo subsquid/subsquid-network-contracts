@@ -26,14 +26,14 @@ jobs:
           password: ${{ secrets.DOCKER_TOKEN }}
 
       - name: Build & publish playground image
-        uses: docker/build-push-action@v3
+        uses: docker/build-push-action@v5
         with:
           push: true
           context: packages/contracts
           file: packages/contracts/Dockerfile-playground
           tags: subsquid/playground:${{ inputs.tag }}
       - name: Build & publish contracts image
-        uses: docker/build-push-action@v3
+        uses: docker/build-push-action@v5
         with:
           push: true
           context: packages/contracts
