@@ -23,7 +23,7 @@ jobs:
           username: ${{ secrets.DOCKER_LOGIN }}
           password: ${{ secrets.DOCKER_TOKEN }}
 
-      - name: Build & publish playground image
+      - name: Build & publish calculator image
         uses: docker/build-push-action@v3
         with:
           push: true
