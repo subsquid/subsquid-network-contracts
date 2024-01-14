@@ -13,7 +13,6 @@ WORKDIR /usr/src/app/contracts
 RUN forge install foundry-rs/forge-std OpenZeppelin/openzeppelin-contracts --no-git
 RUN yarn build
 WORKDIR /usr/src/app/
-COPY packages/contracts/artifacts ./contracts/artifacts
 COPY packages/contracts/deployments ./contracts/deployments
 COPY packages/rewards-calculator ./rewards-calculator
 
