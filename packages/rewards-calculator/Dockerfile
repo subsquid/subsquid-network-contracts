@@ -3,6 +3,7 @@ FROM node:20-alpine3.18
 
 COPY --from=foundry /usr/ /usr/
 COPY --from=foundry /lib/ /lib/
+COPY --from=foundry /root/ /root/
 
 WORKDIR /usr/src/app
 
