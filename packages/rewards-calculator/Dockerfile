@@ -4,11 +4,11 @@ WORKDIR /usr/src/app
 
 COPY packages/contracts/artifacts ./contracts/artifacts
 COPY packages/contracts/deployments ./contracts/deployments
-COPY packages/rewards-simulation ./rewards-simulation
+COPY packages/rewards-calculator ./rewards-calculator
 
 RUN ls -la
 
-WORKDIR /usr/src/app/rewards-simulation
+WORKDIR /usr/src/app/rewards-calculator
 
 RUN yarn
 
