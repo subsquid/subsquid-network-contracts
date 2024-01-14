@@ -27,5 +27,6 @@ jobs:
         uses: docker/build-push-action@v3
         with:
           push: true
+          context: .
           file: packages/rewards-calculator/Dockerfile
           tags: subsquid/rewards-calculator:${{ inputs.tag }}
