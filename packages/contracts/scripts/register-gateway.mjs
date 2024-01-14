@@ -10,8 +10,8 @@ if (!process.env.PRIVATE_KEY.match(/^0x[0-9a-fA-F]{64}$/)) {
   process.exit(1);
 }
 if (process.env.CLIENT_KEY_PATH) {
-  const peerId = (await peerIdFromKeys(fs.readFileSync(process.env.CLIENT_KEY_PATH))).toString();
-  console.log(`PeerID from ${process.env.CLIENT_KEY_PATH}: ${peerId}`);
+  const peerId = (await peerIdFromKeys(fs.readFileSync(process.env.GATEWAY_KEY_PATH))).toString();
+  console.log(`PeerID from ${process.env.GATEWAY_KEY_PATH}: ${peerId}`);
   process.env.GATEWAY_ID = peerId;
 }
 if (!process.env.GATEWAY_ID.match(/^(Qm|12D3).*$/)) {
