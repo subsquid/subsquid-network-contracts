@@ -1,7 +1,8 @@
 FROM node:20 as node
 FROM ghcr.io/foundry-rs/foundry:latest
 
-COPY --from=node . .
+COPY --from=node /lib /lib
+COPY --from=node /usr /usr
 
 WORKDIR /usr/src/app
 
