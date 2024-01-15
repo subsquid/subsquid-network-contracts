@@ -8,7 +8,8 @@ contract RegisterWorker is Script {
   function run() public {
     uint256 deployerPrivateKey = vm.envOr("PRIVATE_KEY", uint256(0));
     bytes memory peerId = vm.envOr("WORKER_ID", bytes(""));
-    WorkerRegistration workerRegistration = WorkerRegistration(vm.envOr("WORKER_REGISTRATION", address(0x7Bf0B1ee9767eAc70A857cEbb24b83115093477F)));
+    WorkerRegistration workerRegistration =
+      WorkerRegistration(vm.envOr("WORKER_REGISTRATION", address(0x7Bf0B1ee9767eAc70A857cEbb24b83115093477F)));
     if (deployerPrivateKey == 0) {
       console2.log("PRIVATE_KEY env var is required");
       return;

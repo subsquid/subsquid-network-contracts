@@ -37,11 +37,7 @@ contract DistributedRewardsDistribution is AccessControlledPausable, IRewardsDis
 
   /// @dev Emitted when commitment is approved
   event Distributed(
-    uint256 fromBlock,
-    uint256 toBlock,
-    uint256[] recipients,
-    uint256[] workerRewards,
-    uint256[] stakerRewards
+    uint256 fromBlock, uint256 toBlock, uint256[] recipients, uint256[] workerRewards, uint256[] stakerRewards
   );
 
   /// @dev Emitted when new distributor is added
@@ -171,8 +167,7 @@ contract DistributedRewardsDistribution is AccessControlledPausable, IRewardsDis
     if (commitments[fromBlock][toBlock] == 0) {
       return false;
     }
-    bytes32 commitment =
-      keccak256(abi.encode(fromBlock, toBlock, recipients, workerRewards, _stakerRewards));
+    bytes32 commitment = keccak256(abi.encode(fromBlock, toBlock, recipients, workerRewards, _stakerRewards));
     if (commitments[fromBlock][toBlock] != commitment) {
       return false;
     }

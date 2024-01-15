@@ -55,14 +55,14 @@ pnpm run test
 |------------------------------------|------------------------------------------------------------------------------------------------------------------------------|
 | **tSQDArbitrum**                   | [0x24f9C46d86c064a6FA2a568F918fe62fC6917B3c](https://sepolia.arbiscan.io/token/0x24f9C46d86c064a6FA2a568F918fe62fC6917B3c)   |
 | **Router**                         | [0x6bAc05cDe58D02953496541b4d615f71a5Db57a3](https://sepolia.arbiscan.io/address/0x6bAc05cDe58D02953496541b4d615f71a5Db57a3) |
-| **NetworkController**              | [0x938026fefC5F2b6d7c1bCC7098A3Fd1A81C2AECF](https://sepolia.arbiscan.io/address/0x938026fefC5F2b6d7c1bCC7098A3Fd1A81C2AECF) |
+| **NetworkController**              | [0xa4285F5503D903BB10978AD652D072e79cc92F0a](https://sepolia.arbiscan.io/address/0xa4285F5503D903BB10978AD652D072e79cc92F0a) |
 | **Staking**                        | [0x2B0D385DBC2Eb2946448d1f6be6bfa9Bb53F68C9](https://sepolia.arbiscan.io/address/0x2B0D385DBC2Eb2946448d1f6be6bfa9Bb53F68C9) |
 | **WorkerRegistration**             | [0x7Bf0B1ee9767eAc70A857cEbb24b83115093477F](https://sepolia.arbiscan.io/address/0x7Bf0B1ee9767eAc70A857cEbb24b83115093477F) |
 | **RewardTreasury**                 | [0xBE8518812597C37FA807b1B8A4a3Bb98849E67ab](https://sepolia.arbiscan.io/address/0xBE8518812597C37FA807b1B8A4a3Bb98849E67ab) |
 | **DistributedRewardsDistribution** | [0xcD7560602c6583a1E6dc38df271A3aB5A2023D9b](https://sepolia.arbiscan.io/address/0xcD7560602c6583a1E6dc38df271A3aB5A2023D9b) |
 | **GatewayRegistry**                | [0xC168fD9298141E3a19c624DF5692ABeeb480Fb94](https://sepolia.arbiscan.io/address/0xC168fD9298141E3a19c624DF5692ABeeb480Fb94) |
 | **VestingFactory**                 | [0x0eD5FB811167De1928322a0fa30Ed7F3c8C370Ca](https://sepolia.arbiscan.io/address/0x0eD5FB811167De1928322a0fa30Ed7F3c8C370Ca) |
-| **RewardCalculation**              | [0xA0e9418dB506f8027F4aBbFB6DE5a78511981140](https://sepolia.arbiscan.io/address/0xA0e9418dB506f8027F4aBbFB6DE5a78511981140) |
+| **RewardCalculation**              | [0xA60Ce3598A94AE2a7E381aDe710f3C747A590CFB](https://sepolia.arbiscan.io/address/0xA60Ce3598A94AE2a7E381aDe710f3C747A590CFB) |
 
 #### Arbitrum-goerli
 

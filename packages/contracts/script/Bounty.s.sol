@@ -30,7 +30,7 @@ contract Bounty is Script {
     WorkerCreator[] memory workers = abi.decode(data, (WorkerCreator[]));
     vm.startBroadcast(deployerPrivateKey);
     for (uint256 i = 0; i < workers.length; i++) {
-      uint amount = BOND_AMOUNT * workers[i].workerCount;
+      uint256 amount = BOND_AMOUNT * workers[i].workerCount;
       SubsquidVesting vesting = factory.createVesting(
         workers[i].wallet,
         1705273200, // Jan 15, 2024

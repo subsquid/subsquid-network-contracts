@@ -15,6 +15,7 @@ contract RewardCalculationTest is BaseTest {
   function setUp() public {
     (, Router router) = deployAll();
     rewardCalculation = new RewardCalculation(router);
+    NetworkController(address(rewardCalculation.router().networkController())).setTargetCapacity(1000);
   }
 
   function test_Apy() public {
@@ -51,24 +52,25 @@ contract RewardCalculationTest is BaseTest {
 
   function test_currentApy() public {
     mockWorkersCount(0);
-    assertEq(rewardCalculation.currentApy(1000), 7000);
+    assertEq(rewardCalculation.currentApy(), 7000);
     mockWorkersCount(1);
-    assertEq(rewardCalculation.currentApy(1000), 2500);
+    assertEq(rewardCalculation.currentApy(), 2500);
     mockWorkersCount(2);
-    assertEq(rewardCalculation.currentApy(1000), 1500);
+    assertEq(rewardCalculation.currentApy(), 1500);
     mockWorkersCount(3);
-    assertEq(rewardCalculation.currentApy(1000), 1000);
+    assertEq(rewardCalculation.currentApy(), 1000);
     mockWorkersCount(4);
-    assertEq(rewardCalculation.currentApy(1000), 500);
+    assertEq(rewardCalculation.currentApy(), 500);
     mockWorkersCount(10);
-    assertEq(rewardCalculation.currentApy(1000), 0);
+    assertEq(rewardCalculation.currentApy(), 0);
   }
 
   function test_EpochLengthLinearlyDependsOnEpochTime() public {
     mockWorkersCount(5);
-    assertEq(rewardCalculation.epochReward(5000, 10 * 60) / 1e12, 237);
-    assertEq(rewardCalculation.epochReward(5000, 20 * 60) / 1e12, 475);
-    assertEq(rewardCalculation.epochReward(5000, 40 * 60) / 1e12, 951);
+    NetworkController(address(rewardCalculation.router().networkController())).setTargetCapacity(5000);
+    assertEq(rewardCalculation.epochReward(10 * 60) / 1e12, 237);
+    assertEq(rewardCalculation.epochReward(20 * 60) / 1e12, 475);
+    assertEq(rewardCalculation.epochReward(40 * 60) / 1e12, 951);
   }
 
   function test_BoostFactor() public {

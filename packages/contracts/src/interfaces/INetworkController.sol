@@ -10,6 +10,7 @@ interface INetworkController {
   event StoragePerWorkerInGbUpdated(uint128 storagePerWorkerInGb);
   event DelegationLimitCoefficientInBPUpdated(uint256 newDelegationLimitCoefficientInBP);
   event AllowedVestedTargetUpdated(address target, bool isAllowed);
+  event TargetCapacityUpdated(uint256 target);
 
   /// @dev Amount of blocks in one epoch
   function epochLength() external view returns (uint128);
@@ -25,6 +26,9 @@ interface INetworkController {
 
   /// @dev Number of current epoch (starting from 0 when contract is deployed)
   function epochNumber() external view returns (uint128);
+
+  /// @dev Number of current epoch (starting from 0 when contract is deployed)
+  function targetCapacityGb() external view returns (uint256);
 
   /// @dev Amount of storage in GB each worker is expected to provide
   function storagePerWorkerInGb() external view returns (uint128);

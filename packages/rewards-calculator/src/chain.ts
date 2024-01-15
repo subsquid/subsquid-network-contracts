@@ -50,10 +50,7 @@ export async function getLatestDistributionBlock() {
 
 export async function currentApy(blockNumber?: bigint) {
   return Number(
-    await contracts.rewardCalculation.read.currentApy(
-      [config.targetCapacityGB],
-      { blockNumber },
-    ),
+    await contracts.rewardCalculation.read.currentApy({ blockNumber }),
   );
 }
 

@@ -19,11 +19,12 @@ contract NetworkController is AccessControl, INetworkController {
   uint128 internal epochCheckpoint;
   uint128 public storagePerWorkerInGb = 1000;
   uint256 public delegationLimitCoefficientInBP = 2_000;
+  uint256 public override targetCapacityGb = 100_000;
   mapping(address => bool) public isAllowedVestedTarget;
 
   constructor(uint128 _epochLength, uint256 _bondAmount, address[] memory _allowedVestedTargets) {
     require(_epochLength > 1, "Epoch length too short");
-    require(_epochLength < 100 days, "Epoch length too long");
+    require(_epochLength < 100000, "Epoch length too long");
 
     _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
     for (uint256 i = 0; i < _allowedVestedTargets.length; i++) {
@@ -37,7 +38,7 @@ contract NetworkController is AccessControl, INetworkController {
   /// @dev Set amount of blocks in one epoch
   function setEpochLength(uint128 _epochLength) external onlyRole(DEFAULT_ADMIN_ROLE) {
     require(_epochLength > 1, "Epoch length too short");
-    require(_epochLength < 100 days, "Epoch length too long");
+    require(_epochLength < 100000, "Epoch length too long");
 
     epochCheckpoint = epochNumber();
     epochLength = _epochLength;
@@ -77,6 +78,13 @@ contract NetworkController is AccessControl, INetworkController {
     isAllowedVestedTarget[target] = isAllowed;
 
     emit AllowedVestedTargetUpdated(target, isAllowed);
+  }
+
+  /// @dev Set target capacity in gigabytes
+  function setTargetCapacity(uint256 target) public onlyRole(DEFAULT_ADMIN_ROLE) {
+    targetCapacityGb = target;
+
+    emit TargetCapacityUpdated(target);
   }
 
   /// @inheritdoc INetworkController

@@ -18,7 +18,8 @@ contract RegisterGateway is Script {
     }
     uint256 stakeAmount = vm.envOr("STAKE_AMOUNT", uint256(100)) * 1 ether;
     uint256 duration = vm.envOr("STAKE_DURATION", uint256(180)) * 1 days;
-    GatewayRegistry gatewayReg = GatewayRegistry(vm.envOr("GATEWAY_REGISTRY", address(0xC168fD9298141E3a19c624DF5692ABeeb480Fb94)));
+    GatewayRegistry gatewayReg =
+      GatewayRegistry(vm.envOr("GATEWAY_REGISTRY", address(0xC168fD9298141E3a19c624DF5692ABeeb480Fb94)));
     IERC20 token = gatewayReg.token();
     vm.startBroadcast(deployerPrivateKey);
     if (gatewayReg.peerIds(msg.sender).length == 0) {

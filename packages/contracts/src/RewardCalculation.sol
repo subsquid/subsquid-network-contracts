@@ -38,15 +38,16 @@ contract RewardCalculation is IRewardCalculation {
   }
 
   /// @return current APY for a worker with targetGb storage
-  function currentApy(uint256 targetGb) public view returns (uint256) {
+  function currentApy() public view returns (uint256) {
     return apy(
-      targetGb, router.workerRegistration().getActiveWorkerCount() * router.networkController().storagePerWorkerInGb()
+      router.networkController().targetCapacityGb(),
+      router.workerRegistration().getActiveWorkerCount() * router.networkController().storagePerWorkerInGb()
     );
   }
 
   /// @return reword for an epoch that lasted epochLengthInSeconds seconds
-  function epochReward(uint256 targetGb, uint256 epochLengthInSeconds) public view returns (uint256) {
-    return currentApy(targetGb) * router.workerRegistration().effectiveTVL() * epochLengthInSeconds / 365 days / 10000;
+  function epochReward(uint256 epochLengthInSeconds) public view returns (uint256) {
+    return currentApy() * router.workerRegistration().effectiveTVL() * epochLengthInSeconds / 365 days / 10000;
   }
 
   /// @return bonus to allocations for the tokens staked by gateway
