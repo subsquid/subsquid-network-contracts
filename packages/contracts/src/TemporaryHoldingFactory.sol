@@ -18,33 +18,31 @@ contract TemporaryHoldingFactory is AccessControlledPausable {
 
   event TemporaryHoldingCreated(
     TemporaryHolding indexed vesting,
-    address indexed beneficiary,
-    uint64 startTimestamp,
-    uint64 durationSeconds,
+    address indexed beneficiaryAddress,
+    address indexed admin,
+    uint64 unlockTimestamp,
     uint256 expectedTotalAmount
   );
 
   constructor(IERC20 _token, IRouter _router) {
     token = _token;
     router = _router;
-    _grantRole(VESTING_CREATOR_ROLE, msg.sender);
+    _grantRole(HOLDING_CREATOR_ROLE, msg.sender);
   }
 
   function allowTemporaryHoldingCreator(address account) external onlyRole(DEFAULT_ADMIN_ROLE) {
-    _grantRole(VESTING_CREATOR_ROLE, account);
+    _grantRole(HOLDING_CREATOR_ROLE, account);
   }
 
   function createTemporaryHolding(
     address beneficiaryAddress,
-    uint64 startTimestamp,
-    uint64 durationSeconds,
-    uint256 immediateReleaseBIP,
+    address admin,
+    uint64 unlockTimestamp,
     uint256 expectedTotalAmount
   ) external onlyRole(HOLDING_CREATOR_ROLE) whenNotPaused returns (TemporaryHolding) {
-    TemporaryHolding holding = new TemporaryHolding(
-      token, router, beneficiaryAddress, startTimestamp, durationSeconds, immediateReleaseBIP, expectedTotalAmount
-    );
-    emit TemporaryHoldingCreated(holding, beneficiaryAddress, startTimestamp, durationSeconds, expectedTotalAmount);
-    return vesting;
+    TemporaryHolding holding =
+      new TemporaryHolding(token, router, beneficiaryAddress, admin, unlockTimestamp, expectedTotalAmount);
+    emit TemporaryHoldingCreated(holding, beneficiaryAddress, admin, unlockTimestamp, expectedTotalAmount);
+    return holding;
   }
 }
