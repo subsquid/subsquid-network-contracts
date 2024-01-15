@@ -144,22 +144,17 @@ export async function commitRewards(
   rewards: Rewards,
   walletClient: WalletClient,
 ) {
-  const { workerIds, rewardAmounts, stakedAmounts, computationUnitsUsed } =
-    rewardsToTxArgs(rewards);
+  const { workerIds, rewardAmounts, stakedAmounts } = rewardsToTxArgs(rewards);
   if (!(await canCommit(walletClient))) {
     return;
   }
-  const tx = await contract("rewardsDistribution", walletClient).write.commit(
-    [
-      BigInt(fromBlock),
-      BigInt(toBlock),
-      workerIds,
-      rewardAmounts,
-      stakedAmounts,
-      computationUnitsUsed,
-    ],
-    {},
-  );
+  const tx = await contract("rewardsDistribution", walletClient).write.commit([
+    BigInt(fromBlock),
+    BigInt(toBlock),
+    workerIds,
+    rewardAmounts,
+    stakedAmounts,
+  ]);
   logger.log("Commit rewards", tx);
 }
 
@@ -169,8 +164,7 @@ export async function approveRewards(
   rewards: Rewards,
   walletClient: WalletClient,
 ) {
-  const { workerIds, rewardAmounts, stakedAmounts, computationUnitsUsed } =
-    rewardsToTxArgs(rewards);
+  const { workerIds, rewardAmounts, stakedAmounts } = rewardsToTxArgs(rewards);
   if (
     !(await contracts.rewardsDistribution.read.canApprove([
       walletClient.account.address,
@@ -179,7 +173,6 @@ export async function approveRewards(
       workerIds,
       rewardAmounts,
       stakedAmounts,
-      computationUnitsUsed,
     ]))
   ) {
     logger.log("Cannot approve rewards", walletClient.account.address);
@@ -192,7 +185,6 @@ export async function approveRewards(
       workerIds,
       rewardAmounts,
       stakedAmounts,
-      computationUnitsUsed,
     ],
     {
       gas: config.network.gasLimit,
