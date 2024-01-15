@@ -3,9 +3,9 @@ pragma solidity 0.8.20;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/finance/VestingWallet.sol";
-import "@openzeppelin/contracts/utils/Address.sol";
 
-import {IRouter} from "./interfaces/IRouter.sol";
+import "./interfaces/IRouter.sol";
+import "./Executable.sol";
 
 /**
  * @title Subsquid Vesting Contract
@@ -13,13 +13,9 @@ import {IRouter} from "./interfaces/IRouter.sol";
  * The tokens are unlocked linearly with a cliff according to _vestingSchedule
  * The beneficiary can execute contracts, allowed by network controller through this contract
  */
-contract SubsquidVesting is VestingWallet {
-  using Address for address;
-
-  IERC20 public tSQD;
-  IRouter public router;
-  uint256 public expectedTotalAmount;
-  uint256 public immediateReleaseBIP;
+contract SubsquidVesting is Executable, VestingWallet {
+  uint256 public immutable expectedTotalAmount;
+  uint256 public immutable immediateReleaseBIP;
 
   constructor(
     IERC20 _tSQD,
@@ -53,26 +49,13 @@ contract SubsquidVesting is VestingWallet {
     super.release(token);
   }
 
-  function execute(address to, bytes calldata data) external {
-    execute(to, data, 0);
-  }
-
   function _vestingSchedule(uint256 totalAllocation, uint64 timestamp) internal view virtual override returns (uint256) {
     if (timestamp < start()) return 0;
     uint256 cliff = totalAllocation * immediateReleaseBIP / 10000;
     return cliff + super._vestingSchedule(totalAllocation - cliff, timestamp);
   }
 
-  function execute(address to, bytes calldata data, uint256 requiredApprove) public onlyOwner returns (bytes memory) {
-    require(router.networkController().isAllowedVestedTarget(to), "Target is not allowed");
-
-    // It's not likely that following addresses will be allowed by network controller, but just in case
-    require(to != address(this), "Cannot call self");
-    require(to != address(tSQD), "Cannot call tSQD");
-
-    if (requiredApprove > 0) {
-      tSQD.approve(to, requiredApprove);
-    }
-    return to.functionCall(data);
+  function _canExecute(address executor) internal view override returns (bool) {
+    return executor == owner();
   }
 }
