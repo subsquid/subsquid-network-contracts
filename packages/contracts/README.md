@@ -59,7 +59,7 @@ pnpm run test
 | **Staking**                        | [0x2B0D385DBC2Eb2946448d1f6be6bfa9Bb53F68C9](https://sepolia.arbiscan.io/address/0x2B0D385DBC2Eb2946448d1f6be6bfa9Bb53F68C9) |
 | **WorkerRegistration**             | [0x7Bf0B1ee9767eAc70A857cEbb24b83115093477F](https://sepolia.arbiscan.io/address/0x7Bf0B1ee9767eAc70A857cEbb24b83115093477F) |
 | **RewardTreasury**                 | [0xBE8518812597C37FA807b1B8A4a3Bb98849E67ab](https://sepolia.arbiscan.io/address/0xBE8518812597C37FA807b1B8A4a3Bb98849E67ab) |
-| **DistributedRewardsDistribution** | [0x58496701b8D798ecF78FE046ECb64f881d5389eb](https://sepolia.arbiscan.io/address/0x58496701b8D798ecF78FE046ECb64f881d5389eb) |
+| **DistributedRewardsDistribution** | [0x42369d0a09ba69B2957617E1c75eDbd9fE9f06e0](https://sepolia.arbiscan.io/address/0x42369d0a09ba69B2957617E1c75eDbd9fE9f06e0) |
 | **GatewayRegistry**                | [0xC168fD9298141E3a19c624DF5692ABeeb480Fb94](https://sepolia.arbiscan.io/address/0xC168fD9298141E3a19c624DF5692ABeeb480Fb94) |
 | **VestingFactory**                 | [0x0eD5FB811167De1928322a0fa30Ed7F3c8C370Ca](https://sepolia.arbiscan.io/address/0x0eD5FB811167De1928322a0fa30Ed7F3c8C370Ca) |
 | **RewardCalculation**              | [0xA0e9418dB506f8027F4aBbFB6DE5a78511981140](https://sepolia.arbiscan.io/address/0xA0e9418dB506f8027F4aBbFB6DE5a78511981140) |
