@@ -43,7 +43,8 @@ export class RewardWorker {
           (await hasNewerPings(await getBlockTimestamp(toBlock + 1)))
         ) {
           logger.log("Can commit", this.walletClient.account.address);
-          const rewards = await epochStats(fromBlock, toBlock);
+          const workers = await epochStats(fromBlock, toBlock);
+          const rewards = await workers.rewards();
           await commitRewards(fromBlock, toBlock, rewards, this.walletClient);
         }
       }
@@ -57,7 +58,8 @@ export class RewardWorker {
     try {
       const ranges = await approveRanges();
       if (ranges.shouldApprove) {
-        const rewards = await epochStats(ranges.fromBlock, ranges.toBlock);
+        const workers = await epochStats(ranges.fromBlock, ranges.toBlock);
+        const rewards = await workers.rewards();
         await approveRewards(
           ranges.fromBlock,
           ranges.toBlock,

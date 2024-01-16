@@ -117,9 +117,12 @@ export class Workers {
   }
 
   public async calculateRewards() {
+    const duration = dayjs(this.clickhouseClient.to).diff(
+      dayjs(this.clickhouseClient.from),
+      "second",
+    );
     const rMax =
-      ((await currentApy(this.nextDistributionStartBlockNumber)) *
-        this.count()) /
+      ((await currentApy(this.nextDistributionStartBlockNumber)) * duration) /
       YEAR /
       10_000;
     this.map((worker) => worker.getRewards(rMax));
@@ -153,6 +156,7 @@ export class Workers {
       dayjs(this.clickhouseClient.from),
       "second",
     );
+    console.log(duration);
     return (
       (BigInt(await currentApy(this.nextDistributionStartBlockNumber)) *
         this.totalSupply() *
@@ -167,11 +171,11 @@ export class Workers {
       this.map((worker) => [
         worker.peerId,
         keysToFixed({
-          t: worker.trafficWeight,
-          dTraffic: worker.dTraffic,
-          livenessFactor: worker.networkStats.livenessFactor,
-          dLiveness: worker.livenessCoefficient,
-          dTenure: worker.dTenure,
+          t: worker.trafficWeight * 100,
+          dTraffic: worker.dTraffic * 100,
+          livenessFactor: worker.networkStats.livenessFactor * 100,
+          dLiveness: worker.livenessCoefficient * 100,
+          dTenure: worker.dTenure * 100,
           workerReward: formatSqd(worker.workerReward),
           stakerReward: formatSqd(worker.stakerReward),
         }),
@@ -182,7 +186,7 @@ export class Workers {
       this.map(({ workerReward, stakerReward }) => workerReward + stakerReward),
     );
     logger.table(stats);
-    logger.log("Total unlocked:", formatSqd(totalUnlocked));
+    logger.log("Max unlocked:", formatSqd(totalUnlocked));
     logger.log("Total reward:", formatSqd(totalReward));
     this.logPercentageUnlocked(totalReward, totalUnlocked);
   }
@@ -191,7 +195,7 @@ export class Workers {
     if (!totalUnlocked) logger.log("Percentage unlocked 0 %");
     else
       logger.log(
-        "Percentage unlocked",
+        "Percentage of max unlocked",
         Number((totalReward * 10000n) / totalUnlocked) / 100,
         "%",
       );

@@ -18,6 +18,7 @@ export class Worker {
   public stakerReward: bigint;
   public dTenure: number;
   public requestsProcessed = 0n;
+  public totalRequests = 0;
 
   constructor(public peerId: string) {}
 
@@ -26,6 +27,7 @@ export class Worker {
   }
 
   public async processQuery(query: QueryLog) {
+    this.totalRequests++;
     if (!(await validateSignatures(query))) return false;
     this.bytesSent += query.output_size;
     this.chunksRead += query.num_read_chunks;

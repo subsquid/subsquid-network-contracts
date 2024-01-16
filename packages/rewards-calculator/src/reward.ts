@@ -1,6 +1,7 @@
 import { ClickhouseClient } from "./clickhouseClient";
 import { logger } from "./logger";
 import { getBlockTimestamp } from "./chain";
+import { Workers } from "./workers";
 
 export type Rewards = {
   [key in string]: {
@@ -14,14 +15,14 @@ export type Rewards = {
 export async function epochStats(
   fromBlock: number,
   toBlock: number,
-): Promise<Rewards> {
+): Promise<Workers> {
   const from = await getBlockTimestamp(fromBlock);
   const to = await getBlockTimestamp(toBlock);
   logger.log(from, "-", to);
   const clickhouse = new ClickhouseClient(from, to);
   const workers = await clickhouse.getActiveWorkers();
   if (workers.count() === 0) {
-    return {};
+    return workers;
   }
   await workers.getNextDistributionStartBlockNumber();
   await workers.clearUnknownWorkers();
@@ -33,5 +34,5 @@ export async function epochStats(
   await workers.getDTenure(fromBlock);
   await workers.calculateRewards();
   await workers.logStats();
-  return workers.rewards();
+  return workers;
 }
