@@ -1,4 +1,5 @@
 import { Rewards } from "../hooks/useRewards";
+import { formatSqd } from "@subsquid-network/rewards-calculator/src/utils";
 
 interface RewardLinkProps {
   rewards: Rewards[];
@@ -15,12 +16,13 @@ export const RewardLinks = ({
     {rewards.map((reward, idx) => (
       <div
         key={reward.fromBlock.toString()}
-        className={`w-full cursor-pointer content-center p-2 text-center hover:bg-blue-400 ${
+        className={`w-full cursor-pointer content-center p-2 text-center text-xs hover:bg-blue-400 ${
           selected === idx && "bg-blue-200"
         }`}
         onClick={() => onClick(idx)}
       >
-        {Number(reward.fromBlock)} - {Number(reward.toBlock)}
+        {Number(reward.fromBlock)} - {Number(reward.toBlock)} (Rewarded:{" "}
+        {formatSqd(reward.totalReward)})
       </div>
     ))}
   </>

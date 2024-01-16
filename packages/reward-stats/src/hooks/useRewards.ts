@@ -3,6 +3,7 @@ import { Abi } from "viem";
 import { distributorContractConfig } from "../config/contracts";
 import { Address, UseContractEventConfig, usePublicClient } from "wagmi";
 import { AbiEvent } from "abitype/src/abi";
+import { bigSum } from "@subsquid-network/rewards-calculator/src/utils";
 
 function getEventByName<TAbi extends Abi, TEventName extends string>(
   abi: TAbi,
@@ -20,6 +21,7 @@ export interface Rewards {
   recipients: bigint[];
   workerRewards: bigint[];
   stakerRewards: bigint[];
+  totalReward: bigint;
 }
 
 export const useRewards = () => {
@@ -33,34 +35,12 @@ export const useRewards = () => {
         event: getEventByName(distributorContractConfig.abi, "Distributed"),
         fromBlock: 0n,
       });
-
-      let approvals = await publicClient.getLogs({
-        ...distributorContractConfig,
-        event: getEventByName(distributorContractConfig.abi, "Approved"),
-        fromBlock: 0n,
-      });
-
-      const distributeTxs = new Set(
-        distributions.map(({ transactionHash }) => transactionHash),
-      );
-      const _rewards: any = approvals
-        .filter(({ transactionHash }) => distributeTxs.has(transactionHash))
-        .map((approval) => ({
-          ...approval.args,
-          fromBlock: (
-            distributions.find(
-              ({ transactionHash }) =>
-                transactionHash === approval.transactionHash,
-            )?.args as any
-          )?.fromBlock,
-          toBlock: (
-            distributions.find(
-              ({ transactionHash }) =>
-                transactionHash === approval.transactionHash,
-            )?.args as any
-          )?.toBlock,
+      const _rewards = distributions
+        .map(({ args }: any) => ({
+          ...args,
+          totalReward: bigSum(args.workerRewards) + bigSum(args.stakerRewards),
         }))
-        .reverse();
+        .reverse() as any;
 
       setRewards(_rewards);
     })();

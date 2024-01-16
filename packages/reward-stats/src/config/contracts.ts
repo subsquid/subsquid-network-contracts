@@ -1,5 +1,5 @@
-import { Address, erc20ABI } from "wagmi";
-import Deployments from "../../../contracts/deployments/421613.json";
+import { Address } from "wagmi";
+import Deployments from "../../../contracts/deployments/421614.json";
 import rewardsDistributionAbi from "../../../contracts/artifacts/DistributedRewardDistribution.sol/DistributedRewardsDistribution";
 import workerRegistrationAbi from "../../../contracts/artifacts/WorkerRegistration.sol/WorkerRegistration";
 import stakingAbi from "../../../contracts/artifacts/Staking.sol/Staking";

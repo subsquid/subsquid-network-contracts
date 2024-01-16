@@ -13,7 +13,7 @@
   "dependencies": {
     "@clickhouse/client-web": "^0.2.3",
     "@subsquid-network/rewards-calculator": "workspace:*",
-    "@wagmi/core": "^1.4.3",
+    "@wagmi/core": "^1.4.13",
     "abitype": "^0.10.1",
     "buffer": "^6.0.3",
     "process": "^0.11.10",
@@ -22,7 +22,7 @@
     "recharts": "^2.8.0",
     "util": "^0.12.4",
     "viem": "~0.3.36",
-    "wagmi": "^1.0.6"
+    "wagmi": "^1.4.13"
   },
   "devDependencies": {
     "@types/react": "^18.0.9",

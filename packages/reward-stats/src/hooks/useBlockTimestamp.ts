@@ -1,13 +1,13 @@
 import { useEffect, useState } from "react";
 import { usePublicClient } from "wagmi";
-import { goerli } from "wagmi/chains";
+import { sepolia } from "wagmi/chains";
 
 export function useBlocksTimestamp(
   fromBlock: bigint | undefined,
   toBlock: bigint | undefined,
 ) {
   const publicClient = usePublicClient({
-    chainId: goerli.id,
+    chainId: sepolia.id,
   });
   const [fromTimestamp, setFromTimestamp] = useState(0);
   const [toTimestamp, setToTimestamp] = useState(0);
