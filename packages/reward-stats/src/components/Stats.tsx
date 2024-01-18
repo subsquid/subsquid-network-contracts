@@ -52,8 +52,7 @@ const CommonStats = ({
   const totalWorkersRewarded = reward.workerRewards.filter(
     (reward) => reward > 0,
   ).length;
-
-  const totalBond = bond * BigInt(Object.keys(stakes).length);
+  const totalBond = BigInt(Object.keys(stakes).length) * BigInt(bond);
   const totalStake = bnSum(Object.values(stakes));
   const tvl = totalBond + totalStake;
   const workerReward = bnSum(reward.workerRewards);

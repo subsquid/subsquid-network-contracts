@@ -6,6 +6,6 @@ export function useBond() {
     useContractRead({
       ...workerRegistrationContractConfig,
       functionName: "bondAmount",
-    }).data ?? 0n
+    })?.data ?? 0n
   );
 }
