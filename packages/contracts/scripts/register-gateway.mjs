@@ -3,23 +3,25 @@
 import {peerIdFromKeys} from '@libp2p/peer-id'
 import fs from "fs";
 
-$.verbose = false;
+// $.verbose = false;
 
 if (!process.env.PRIVATE_KEY?.match(/^0x[0-9a-fA-F]{64}$/)) {
   console.log("Please set PRIVATE_KEY env var");
   process.exit(1);
 }
-if (process.env.CLIENT_KEY_PATH) {
-  if (!fs.existsSync(process.env.CLIENT_KEY_PATH)) {
-    console.log(`File not found: ${process.env.CLIENT_KEY_PATH}`);
+if (process.env.GATEWAY_KEY_PATH) {
+  if (!fs.existsSync(process.env.GATEWAY_KEY_PATH)) {
+    console.log(`File not found: ${process.env.GATEWAY_KEY_PATH}`);
     process.exit(1);
   }
+  await $`pwd`
+  await $`ls`
   const peerId = (await peerIdFromKeys(fs.readFileSync(process.env.GATEWAY_KEY_PATH))).toString();
   console.log(`PeerID from ${process.env.GATEWAY_KEY_PATH}: ${peerId}`);
   process.env.GATEWAY_ID = peerId;
 }
 if (!process.env.GATEWAY_ID?.match(/^(Qm|12D3).*$/)) {
-  console.log("Please set GATEWAY_ID or CLIENT_KEY_PATH env var");
+  console.log("Please set GATEWAY_ID or GATEWAY_KEY_PATH env var");
   process.exit(1);
 }
 console.log(`You will stake ${process.env.STAKE_AMOUNT ?? 100} tSQD for ${process.env.STAKE_DURATION ?? 180} days`);
