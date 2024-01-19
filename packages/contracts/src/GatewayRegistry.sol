@@ -88,7 +88,7 @@ contract GatewayRegistry is AccessControlledPausable, IGatewayRegistry {
   /**
    * @dev Stake tokens for a period of time
    * @notice Allocation units are given according to the non-linear formula
-   * baseAPY * cuPerSQD * duration * boostFactor, where boostFactor is specified in reward calculation contract
+   * mana * duration * boostFactor, where boostFactor is specified in reward calculation contract
    * All stakes are stored separately, so that we can track, when funds are unlocked
    */
   function stake(uint256 amount, uint128 durationEpochs) external whenNotPaused {
