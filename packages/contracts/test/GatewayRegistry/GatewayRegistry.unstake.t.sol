@@ -25,11 +25,12 @@ contract GatewayRegistryUnStakeTest is GatewayRegistryTest {
   function test_DoesNotChangeComputationalUnits() public {
     uint256 amount = 100 ether;
     gatewayRegistry.stake(amount, 300);
+    gatewayRegistry.stake(amount, 600);
     vm.roll(block.number + 300 * router.networkController().epochLength());
-    assertEq(gatewayRegistry.computationUnitsAvailable(address(this)), 100_000);
+    assertEq(gatewayRegistry.computationUnitsAvailable(address(this)), 150_000);
     gatewayRegistry.unstake(amount / 3);
-    assertEq(gatewayRegistry.computationUnitsAvailable(address(this)), 100_000);
+    assertEq(gatewayRegistry.computationUnitsAvailable(address(this)), 150_000);
     gatewayRegistry.unstake(amount / 2);
-    assertEq(gatewayRegistry.computationUnitsAvailable(address(this)), 100_000);
+    assertEq(gatewayRegistry.computationUnitsAvailable(address(this)), 150_000);
   }
 }

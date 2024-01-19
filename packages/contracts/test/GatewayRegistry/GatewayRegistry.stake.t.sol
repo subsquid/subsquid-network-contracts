@@ -45,4 +45,21 @@ contract GatewayRegistryStakeTest is GatewayRegistryTest {
     vm.expectRevert("Gateway not registered");
     gatewayRegistry.stake(100, 200);
   }
+
+  function test_computationUnitsExpireAfterStakeUnlocks() public {
+    gatewayRegistry.stake(10 ether, 150);
+    assertEq(gatewayRegistry.computationUnitsAvailable(address(this)), 10_000);
+    gatewayRegistry.stake(20 ether, 200);
+    assertEq(gatewayRegistry.computationUnitsAvailable(address(this)), 30_000);
+    gatewayRegistry.stake(40 ether, 100);
+    assertEq(gatewayRegistry.computationUnitsAvailable(address(this)), 70_000);
+    vm.roll(block.number + 99 * router.networkController().epochLength());
+    assertEq(gatewayRegistry.computationUnitsAvailable(address(this)), 70_000);
+    vm.roll(block.number + router.networkController().epochLength());
+    assertEq(gatewayRegistry.computationUnitsAvailable(address(this)), 30_000);
+    vm.roll(block.number + 50 * router.networkController().epochLength());
+    assertEq(gatewayRegistry.computationUnitsAvailable(address(this)), 20_000);
+    vm.roll(block.number + 50 * router.networkController().epochLength());
+    assertEq(gatewayRegistry.computationUnitsAvailable(address(this)), 0);
+  }
 }

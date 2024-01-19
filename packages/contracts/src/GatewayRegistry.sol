@@ -112,7 +112,7 @@ contract GatewayRegistry is AccessControlledPausable {
     uint256 currentEpoch = uint256(router.networkController().epochNumber());
     for (uint256 i = 0; i < _stakes.length; i++) {
       Stake memory _stake = _stakes[i];
-      if (_stake.lockedUntil >= currentEpoch) {
+      if (_stake.lockedUntil > currentEpoch) {
         total += _stake.unitsPerEpoch;
       }
     }
