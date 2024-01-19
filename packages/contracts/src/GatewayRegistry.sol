@@ -59,6 +59,7 @@ contract GatewayRegistry is AccessControlledPausable, IGatewayRegistry {
     token = _token;
     router = _router;
     tokenDecimals = 10 ** _token.decimals();
+    isStrategyAllowed[address(0)] = true;
   }
 
   /// @dev Register new gateway with given libP2P peerId
@@ -113,12 +114,17 @@ contract GatewayRegistry is AccessControlledPausable, IGatewayRegistry {
     emit Unstaked(msg.sender, amount);
   }
 
+  /// @dev The default strategy used is address(0) which is a manual allocation submitting
   function useStrategy(address strategy) external {
     require(isStrategyAllowed[strategy], "Strategy not allowed");
     require(peerIds[msg.sender].length > 0, "Gateway not registered");
     usedStrategy[msg.sender] = strategy;
 
     emit UsedStrategyChanged(msg.sender, peerIds[msg.sender], strategy);
+  }
+
+  function getUsedStrategy(bytes calldata peerId) external view returns (address) {
+    return usedStrategy[gatewayByPeerId[keccak256(peerId)]];
   }
 
   /// @return Amount of computation units available for the gateway in the current epoch
