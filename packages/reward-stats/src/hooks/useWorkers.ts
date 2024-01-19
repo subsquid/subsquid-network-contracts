@@ -6,6 +6,7 @@ import { allWorkerIds } from "../utils/allWorkerIds";
 
 export interface Worker {
   peerId: string;
+  metadata: any;
   creator: Address;
 }
 
@@ -14,8 +15,9 @@ export interface Workers {
 }
 
 export const useWorkers = (rewards: Rewards[]): Workers | undefined => {
+  const ids = allWorkerIds(rewards);
   const workerIds = useContractReads({
-    contracts: allWorkerIds(rewards).map((id) => ({
+    contracts: ids.map((id) => ({
       ...workerRegistrationContractConfig,
       functionName: "getWorkerByIndex",
       args: [id],
@@ -27,11 +29,12 @@ export const useWorkers = (rewards: Rewards[]): Workers | undefined => {
       ? ({
           ...result,
           peerId: toBase58((result as any).peerId),
+          metadata: JSON.parse((result as any).metadata),
         } as Worker)
       : undefined,
   );
 
   return Object.fromEntries(
-    workersData?.map((worker, idx) => [idx + 1, worker]) ?? [],
+    workersData?.map((worker, idx) => [ids[idx] + 1, worker]) ?? [],
   ) as any;
 };

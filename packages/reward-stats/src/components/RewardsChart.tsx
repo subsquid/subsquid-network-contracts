@@ -48,8 +48,12 @@ export const RewardsChart = ({
     if (active && payload && label) {
       return (
         <div className="bg-white p-3 ">
-          <h2 className="font-bold uppercase">Worker {label}</h2>
+          <h2 className="font-bold uppercase">
+            Worker "{workers?.[label]?.metadata.name}" (#{label})
+          </h2>
           <p>{workers?.[label]?.peerId}</p>
+          <p className="w-30">{workers?.[label]?.metadata.description}</p>
+          <p className="w-30">{workers?.[label]?.metadata.email}</p>
           <p className="text-[#8884d8]">
             Worker reward: {payload[0].payload.workerReward}
             &nbsp;(bond: {formatToken(bond)})
