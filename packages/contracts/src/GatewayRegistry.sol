@@ -18,11 +18,13 @@ contract GatewayRegistry is AccessControlledPausable {
 
   struct Stake {
     uint256 amount;
-    uint256 lockedUntil;
+    uint256 computationUnits;
+    uint128 lockDuration;
+    uint128 lockedUntil;
+    uint256 unitsPerEpoch;
   }
 
   uint256 constant BASIS_POINT_MULTIPLIER = 10000;
-  uint256 constant YEAR = 360 days;
 
   mapping(address gateway => Stake[]) public stakes;
   IERC20WithMetadata public immutable token;
@@ -30,22 +32,20 @@ contract GatewayRegistry is AccessControlledPausable {
   mapping(address gateway => bytes) public peerIds;
   mapping(address gateway => uint256) public totalStaked;
   mapping(address gateway => uint256) public totalUnstaked;
-  mapping(address gateway => uint256) public computationUnits;
   EnumerableSet.AddressSet private gateways;
 
   uint256 internal tokenDecimals;
-  /// @notice base APY is given in basis points
-  uint256 public baseApyBP = 1200;
-  uint256 public cuPerSQD = 4000;
+  /// @dev How much CU is given per epoch for a single SQD, not including boost factor
+  uint256 public mana = 1_000;
 
   event Registered(address indexed gateway, bytes peerId);
   event Staked(
-    address indexed gateway, uint256 amount, uint256 duration, uint256 lockedUntil, uint256 computationUnits
+    address indexed gateway, uint256 amount, uint128 duration, uint128 lockedUntil, uint256 computationUnits
   );
   event Unstaked(address indexed gateway, uint256 amount);
   event Unregistered(address indexed gateway, bytes peerId);
 
-  event AllocatedCUs(address indexed gateway, bytes peerId, uint256[] workerIds, uint256[] cus);
+  event AllocatedCUs(address indexed gateway, bytes peerId, uint256[] workerIds, uint256[] shares);
 
   event BaseApyChanged(uint256 newBaseApyBP);
   event CuPerSQDChanged(uint256 newCuPerSQD);
@@ -82,17 +82,18 @@ contract GatewayRegistry is AccessControlledPausable {
    * baseAPY * cuPerSQD * duration * boostFactor, where boostFactor is specified in reward calculation contract
    * All stakes are stored separately, so that we can track, when funds are unlocked
    */
-  function stake(uint256 amount, uint256 duration) external whenNotPaused {
+  function stake(uint256 amount, uint128 durationEpochs) external whenNotPaused {
     require(peerIds[msg.sender].length > 0, "Gateway not registered");
 
-    uint256 _computationUnits = computationUnitsAmount(amount, duration);
-    computationUnits[msg.sender] += _computationUnits;
-    uint256 lockedUntil = block.timestamp + duration;
-    stakes[msg.sender].push(Stake(amount, lockedUntil));
+    uint256 _computationUnits = computationUnitsAmount(amount, durationEpochs);
+    uint128 lockedUntil = router.networkController().epochNumber() + durationEpochs;
+    stakes[msg.sender].push(
+      Stake(amount, _computationUnits, durationEpochs, lockedUntil, _computationUnits / durationEpochs)
+    );
     totalStaked[msg.sender] += amount;
     token.transferFrom(msg.sender, address(this), amount);
 
-    emit Staked(msg.sender, amount, duration, lockedUntil, _computationUnits);
+    emit Staked(msg.sender, amount, durationEpochs, lockedUntil, _computationUnits);
   }
 
   /// @dev Unstake tokens. Only tokens past the lock period can be unstaked
@@ -102,6 +103,20 @@ contract GatewayRegistry is AccessControlledPausable {
     token.transfer(msg.sender, amount);
 
     emit Unstaked(msg.sender, amount);
+  }
+
+  /// @return Amount of computation units available for the gateway in the current epoch
+  function computationUnitsAvailable(address gateway) external view returns (uint256) {
+    Stake[] memory _stakes = stakes[gateway];
+    uint256 total = 0;
+    uint256 currentEpoch = uint256(router.networkController().epochNumber());
+    for (uint256 i = 0; i < _stakes.length; i++) {
+      Stake memory _stake = _stakes[i];
+      if (_stake.lockedUntil >= currentEpoch) {
+        total += _stake.unitsPerEpoch;
+      }
+    }
+    return total;
   }
 
   /**
@@ -117,16 +132,15 @@ contract GatewayRegistry is AccessControlledPausable {
       require(workerId[i] < workerIdCap, "Worker does not exist");
       newlyAllocated += cus[i];
     }
-    require(computationUnits[msg.sender] >= newlyAllocated, "Not enough computation units");
-    computationUnits[msg.sender] -= newlyAllocated;
+    require(newlyAllocated <= 10000, "Over 100% of CUs allocated");
 
     emit AllocatedCUs(msg.sender, peerIds[msg.sender], workerId, cus);
   }
 
   /// @return How much computation units will be allocated for given staked amount and duration
   function computationUnitsAmount(uint256 amount, uint256 duration) public view returns (uint256) {
-    return amount * duration * baseApyBP * cuPerSQD * router.rewardCalculation().boostFactor(duration) / YEAR
-      / BASIS_POINT_MULTIPLIER / BASIS_POINT_MULTIPLIER / tokenDecimals;
+    return amount * duration * mana * router.rewardCalculation().boostFactor(duration)
+      / (BASIS_POINT_MULTIPLIER * tokenDecimals);
   }
 
   /// @return Amount of tokens staked by the gateway
@@ -137,10 +151,11 @@ contract GatewayRegistry is AccessControlledPausable {
   /// @return Amount of tokens that can be unstaked by the gateway
   function unstakeable(address gateway) public view returns (uint256) {
     Stake[] memory _stakes = stakes[gateway];
+    uint256 currentEpoch = uint256(router.networkController().epochNumber());
     uint256 total = 0;
     for (uint256 i = 0; i < _stakes.length; i++) {
       Stake memory _stake = _stakes[i];
-      if (_stake.lockedUntil <= block.timestamp) {
+      if (_stake.lockedUntil <= currentEpoch) {
         total += _stake.amount;
       }
     }
@@ -157,17 +172,17 @@ contract GatewayRegistry is AccessControlledPausable {
     return gateways.values();
   }
 
-  /// @dev set base APY in basis points. 10000 basis points = 100%
-  function setBaseApyBP(uint256 _baseApyBP) external onlyRole(DEFAULT_ADMIN_ROLE) {
-    baseApyBP = _baseApyBP;
-
-    emit BaseApyChanged(_baseApyBP);
-  }
-
-  /// @dev set amount of how much CUs should be given per SQD without the basis factor
-  function setCuPerSQD(uint256 _cuPerSQD) external onlyRole(DEFAULT_ADMIN_ROLE) {
-    cuPerSQD = _cuPerSQD;
-
-    emit CuPerSQDChanged(_cuPerSQD);
-  }
+  //  /// @dev set base APY in basis points. 10000 basis points = 100%
+  //  function setBaseApyBP(uint256 _baseApyBP) external onlyRole(DEFAULT_ADMIN_ROLE) {
+  //    baseApyBP = _baseApyBP;
+  //
+  //    emit BaseApyChanged(_baseApyBP);
+  //  }
+  //
+  //  /// @dev set amount of how much CUs should be given per SQD without the basis factor
+  //  function setCuPerSQD(uint256 _cuPerSQD) external onlyRole(DEFAULT_ADMIN_ROLE) {
+  //    cuPerSQD = _cuPerSQD;
+  //
+  //    emit CuPerSQDChanged(_cuPerSQD);
+  //  }
 }

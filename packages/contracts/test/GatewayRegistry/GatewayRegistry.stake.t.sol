@@ -13,9 +13,9 @@ contract GatewayRegistryStakeTest is GatewayRegistryTest {
 
   function test_StakingStoresStakedAmountAndUnlockTimestamp() public {
     gatewayRegistry.stake(100, 200);
-    assertStake(0, 100, block.timestamp + 200);
+    assertStake(0, 100, 200);
     gatewayRegistry.stake(1000, 2000);
-    assertStake(1, 1000, block.timestamp + 2000);
+    assertStake(1, 1000, 2000);
   }
 
   function test_StakingIncreasesStakedAmount() public {
@@ -26,17 +26,17 @@ contract GatewayRegistryStakeTest is GatewayRegistryTest {
   }
 
   function test_IncreasesComputationalUnits() public {
-    gatewayRegistry.stake(10 ether, 30 days);
-    assertEq(gatewayRegistry.computationUnits(address(this)), 400);
-    gatewayRegistry.stake(5 ether, 180 days);
-    assertEq(gatewayRegistry.computationUnits(address(this)), 2800);
-    gatewayRegistry.stake(1 ether, 90 days);
-    assertEq(gatewayRegistry.computationUnits(address(this)), 2800 + 168);
+    gatewayRegistry.stake(10 ether, 150);
+    assertEq(gatewayRegistry.computationUnitsAvailable(address(this)), 10_000); // 10 * 150 = 1500 total
+    gatewayRegistry.stake(5 ether, 900);
+    assertEq(gatewayRegistry.computationUnitsAvailable(address(this)), 20_000); // 10 * 900 + 1500 = 10500 total
+    gatewayRegistry.stake(1 ether, 450);
+    assertEq(gatewayRegistry.computationUnitsAvailable(address(this)), 21_250); // 1.250 * 450 + 10500 = 11062.5 total
   }
 
   function test_EmitsEvent() public {
     vm.expectEmit(address(gatewayRegistry));
-    emit Staked(address(this), 100, 200, block.timestamp + 200, 0);
+    emit Staked(address(this), 100, 200, 200, 0);
     gatewayRegistry.stake(100, 200);
   }
 

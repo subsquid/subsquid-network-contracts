@@ -8,7 +8,7 @@ contract GatewayRegistryAllocateTest is GatewayRegistryTest {
     uint256[] memory cus = new uint256[](n);
     for (uint256 i = 0; i < n; i++) {
       workerIds[i] = i + 1;
-      cus[i] = (i + 1) * 10;
+      cus[i] = 10;
     }
 
     vm.mockCall(
@@ -24,7 +24,7 @@ contract GatewayRegistryAllocateTest is GatewayRegistryTest {
   }
 
   function test_AllocateCUsGasUsageFor1000Workers() public {
-    gatewayRegistry.stake(10000 ether, 360 days);
+    gatewayRegistry.stake(10000 ether, 2000);
     gasUsageForNWorkers(1000);
   }
 }
