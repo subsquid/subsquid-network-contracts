@@ -14,6 +14,7 @@ contract GatewayRegistryTest is BaseTest {
   RewardCalculation rewardCalc;
   Router router;
   bytes peerId = "peerId";
+
   event Staked(address indexed gateway, uint256 amount, uint128 duration, uint128 lockedUntil, uint256 cus);
 
   function setUp() public {

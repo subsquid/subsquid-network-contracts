@@ -194,15 +194,15 @@ contract GatewayRegistry is AccessControlledPausable, IGatewayRegistry {
     return gateways.values();
   }
 
-    function setIsStrategyAllowed(address strategy, bool isAllowed) external onlyRole(DEFAULT_ADMIN_ROLE) {
-      isStrategyAllowed[strategy] = isAllowed;
+  function setIsStrategyAllowed(address strategy, bool isAllowed) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    isStrategyAllowed[strategy] = isAllowed;
 
-      emit StrategyAllowed(strategy, isAllowed);
-    }
+    emit StrategyAllowed(strategy, isAllowed);
+  }
 
-    function setMana(uint256 _newMana) external onlyRole(DEFAULT_ADMIN_ROLE) {
-      mana = _newMana;
+  function setMana(uint256 _newMana) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    mana = _newMana;
 
-      emit ManaChanged(_newMana);
-    }
+    emit ManaChanged(_newMana);
+  }
 }
