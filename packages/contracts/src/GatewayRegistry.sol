@@ -4,16 +4,17 @@ import "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 import "./interfaces/IERC20WithMetadata.sol";
 import "./interfaces/IRouter.sol";
 import "./AccessControlledPausable.sol";
+import "./interfaces/IGatewayRegistry.sol";
 
 /**
  * @title Gateway Registry Contract
  * @dev Contract has a list of whitelisted gateways
- * Each gateway can stake tokens for a period of time to receive computetion units (CUs)
+ * Each gateway can stake tokens for a period of time to receive computation units (CUs)
  * Each gateway can allocate CUs to workers
  * Each gateway can unstake tokens
  * Allocation units are used by workers to track, if the gateway can perform queries on them
  */
-contract GatewayRegistry is AccessControlledPausable {
+contract GatewayRegistry is AccessControlledPausable, IGatewayRegistry {
   using EnumerableSet for EnumerableSet.AddressSet;
 
   struct Stake {
@@ -32,6 +33,9 @@ contract GatewayRegistry is AccessControlledPausable {
   mapping(address gateway => bytes) public peerIds;
   mapping(address gateway => uint256) public totalStaked;
   mapping(address gateway => uint256) public totalUnstaked;
+  mapping(address gateway => address) public usedStrategy;
+  mapping(bytes32 => address gateway) public gatewayByPeerId;
+  mapping(address strategy => bool) public isStrategyAllowed;
   EnumerableSet.AddressSet private gateways;
 
   uint256 internal tokenDecimals;
@@ -42,13 +46,14 @@ contract GatewayRegistry is AccessControlledPausable {
   event Staked(
     address indexed gateway, uint256 amount, uint128 duration, uint128 lockedUntil, uint256 computationUnits
   );
+  event UsedStrategyChanged(address indexed gateway, bytes peerId, address strategy);
   event Unstaked(address indexed gateway, uint256 amount);
   event Unregistered(address indexed gateway, bytes peerId);
 
   event AllocatedCUs(address indexed gateway, bytes peerId, uint256[] workerIds, uint256[] shares);
 
-  event BaseApyChanged(uint256 newBaseApyBP);
-  event CuPerSQDChanged(uint256 newCuPerSQD);
+  event StrategyAllowed(address strategy, bool isAllowed);
+  event ManaChanged(uint256 newCuPerSQD);
 
   constructor(IERC20WithMetadata _token, IRouter _router) {
     token = _token;
@@ -61,6 +66,9 @@ contract GatewayRegistry is AccessControlledPausable {
     require(peerIds[msg.sender].length == 0, "Gateway already registered");
     require(peerId.length > 0, "Cannot set empty peerId");
     gateways.add(msg.sender);
+    bytes32 peerIdHash = keccak256(peerId);
+    require(gatewayByPeerId[peerIdHash] == address(0), "PeerId already registered");
+    gatewayByPeerId[peerIdHash] = msg.sender;
     peerIds[msg.sender] = peerId;
 
     emit Registered(msg.sender, peerId);
@@ -105,9 +113,17 @@ contract GatewayRegistry is AccessControlledPausable {
     emit Unstaked(msg.sender, amount);
   }
 
+  function useStrategy(address strategy) external {
+    require(isStrategyAllowed[strategy], "Strategy not allowed");
+    require(peerIds[msg.sender].length > 0, "Gateway not registered");
+    usedStrategy[msg.sender] = strategy;
+
+    emit UsedStrategyChanged(msg.sender, peerIds[msg.sender], strategy);
+  }
+
   /// @return Amount of computation units available for the gateway in the current epoch
-  function computationUnitsAvailable(address gateway) external view returns (uint256) {
-    Stake[] memory _stakes = stakes[gateway];
+  function computationUnitsAvailable(bytes calldata peerId) external view returns (uint256) {
+    Stake[] memory _stakes = stakes[gatewayByPeerId[keccak256(peerId)]];
     uint256 total = 0;
     uint256 currentEpoch = uint256(router.networkController().epochNumber());
     for (uint256 i = 0; i < _stakes.length; i++) {
@@ -172,17 +188,15 @@ contract GatewayRegistry is AccessControlledPausable {
     return gateways.values();
   }
 
-  //  /// @dev set base APY in basis points. 10000 basis points = 100%
-  //  function setBaseApyBP(uint256 _baseApyBP) external onlyRole(DEFAULT_ADMIN_ROLE) {
-  //    baseApyBP = _baseApyBP;
-  //
-  //    emit BaseApyChanged(_baseApyBP);
-  //  }
-  //
-  //  /// @dev set amount of how much CUs should be given per SQD without the basis factor
-  //  function setCuPerSQD(uint256 _cuPerSQD) external onlyRole(DEFAULT_ADMIN_ROLE) {
-  //    cuPerSQD = _cuPerSQD;
-  //
-  //    emit CuPerSQDChanged(_cuPerSQD);
-  //  }
+    function setIsStrategyAllowed(address strategy, bool isAllowed) external onlyRole(DEFAULT_ADMIN_ROLE) {
+      isStrategyAllowed[strategy] = isAllowed;
+
+      emit StrategyAllowed(strategy, isAllowed);
+    }
+
+    function setMana(uint256 _newMana) external onlyRole(DEFAULT_ADMIN_ROLE) {
+      mana = _newMana;
+
+      emit ManaChanged(_newMana);
+    }
 }

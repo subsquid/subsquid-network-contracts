@@ -27,11 +27,11 @@ contract GatewayRegistryStakeTest is GatewayRegistryTest {
 
   function test_IncreasesComputationalUnits() public {
     gatewayRegistry.stake(10 ether, 150);
-    assertEq(gatewayRegistry.computationUnitsAvailable(address(this)), 10_000); // 10 * 150 = 1500 total
+    assertEq(gatewayRegistry.computationUnitsAvailable(peerId), 10_000); // 10 * 150 = 1500 total
     gatewayRegistry.stake(5 ether, 900);
-    assertEq(gatewayRegistry.computationUnitsAvailable(address(this)), 20_000); // 10 * 900 + 1500 = 10500 total
+    assertEq(gatewayRegistry.computationUnitsAvailable(peerId), 20_000); // 10 * 900 + 1500 = 10500 total
     gatewayRegistry.stake(1 ether, 450);
-    assertEq(gatewayRegistry.computationUnitsAvailable(address(this)), 21_250); // 1.250 * 450 + 10500 = 11062.5 total
+    assertEq(gatewayRegistry.computationUnitsAvailable(peerId), 21_250); // 1.250 * 450 + 10500 = 11062.5 total
   }
 
   function test_EmitsEvent() public {
@@ -48,18 +48,18 @@ contract GatewayRegistryStakeTest is GatewayRegistryTest {
 
   function test_computationUnitsExpireAfterStakeUnlocks() public {
     gatewayRegistry.stake(10 ether, 150);
-    assertEq(gatewayRegistry.computationUnitsAvailable(address(this)), 10_000);
+    assertEq(gatewayRegistry.computationUnitsAvailable(peerId), 10_000);
     gatewayRegistry.stake(20 ether, 200);
-    assertEq(gatewayRegistry.computationUnitsAvailable(address(this)), 30_000);
+    assertEq(gatewayRegistry.computationUnitsAvailable(peerId), 30_000);
     gatewayRegistry.stake(40 ether, 100);
-    assertEq(gatewayRegistry.computationUnitsAvailable(address(this)), 70_000);
+    assertEq(gatewayRegistry.computationUnitsAvailable(peerId), 70_000);
     vm.roll(block.number + 99 * router.networkController().epochLength());
-    assertEq(gatewayRegistry.computationUnitsAvailable(address(this)), 70_000);
+    assertEq(gatewayRegistry.computationUnitsAvailable(peerId), 70_000);
     vm.roll(block.number + router.networkController().epochLength());
-    assertEq(gatewayRegistry.computationUnitsAvailable(address(this)), 30_000);
+    assertEq(gatewayRegistry.computationUnitsAvailable(peerId), 30_000);
     vm.roll(block.number + 50 * router.networkController().epochLength());
-    assertEq(gatewayRegistry.computationUnitsAvailable(address(this)), 20_000);
+    assertEq(gatewayRegistry.computationUnitsAvailable(peerId), 20_000);
     vm.roll(block.number + 50 * router.networkController().epochLength());
-    assertEq(gatewayRegistry.computationUnitsAvailable(address(this)), 0);
+    assertEq(gatewayRegistry.computationUnitsAvailable(peerId), 0);
   }
 }

@@ -13,7 +13,7 @@ contract GatewayRegistryTest is BaseTest {
   tSQD token;
   RewardCalculation rewardCalc;
   Router router;
-
+  bytes peerId = "peerId";
   event Staked(address indexed gateway, uint256 amount, uint128 duration, uint128 lockedUntil, uint256 cus);
 
   function setUp() public {
@@ -21,7 +21,7 @@ contract GatewayRegistryTest is BaseTest {
     rewardCalc = RewardCalculation(address(router.rewardCalculation()));
     gatewayRegistry = new GatewayRegistry(IERC20WithMetadata(address(token)), router);
     token.approve(address(gatewayRegistry), type(uint256).max);
-    gatewayRegistry.register("peerId");
+    gatewayRegistry.register(peerId);
   }
 
   function assertStake(uint256 stakeId, uint256 amount, uint256 lockedUntil) internal {

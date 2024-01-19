@@ -27,10 +27,10 @@ contract GatewayRegistryUnStakeTest is GatewayRegistryTest {
     gatewayRegistry.stake(amount, 300);
     gatewayRegistry.stake(amount, 600);
     vm.roll(block.number + 300 * router.networkController().epochLength());
-    assertEq(gatewayRegistry.computationUnitsAvailable(address(this)), 150_000);
+    assertEq(gatewayRegistry.computationUnitsAvailable(peerId), 150_000);
     gatewayRegistry.unstake(amount / 3);
-    assertEq(gatewayRegistry.computationUnitsAvailable(address(this)), 150_000);
+    assertEq(gatewayRegistry.computationUnitsAvailable(peerId), 150_000);
     gatewayRegistry.unstake(amount / 2);
-    assertEq(gatewayRegistry.computationUnitsAvailable(address(this)), 150_000);
+    assertEq(gatewayRegistry.computationUnitsAvailable(peerId), 150_000);
   }
 }
