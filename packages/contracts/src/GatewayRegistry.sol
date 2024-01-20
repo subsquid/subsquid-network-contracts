@@ -31,8 +31,8 @@ contract GatewayRegistry is AccessControlledPausable, IGatewayRegistry {
   IERC20WithMetadata public immutable token;
   IRouter public immutable router;
   mapping(address gateway => bytes) public peerIds;
-  mapping(address gateway => uint256) public totalStaked;
-  mapping(address gateway => uint256) public totalUnstaked;
+  mapping(address gateway => uint256) internal totalStaked;
+  mapping(address gateway => uint256) internal totalUnstaked;
   mapping(address gateway => address) public usedStrategy;
   mapping(bytes32 => address gateway) public gatewayByPeerId;
   mapping(address strategy => bool) public isStrategyAllowed;

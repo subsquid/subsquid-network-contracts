@@ -1,3 +1,5 @@
+pragma solidity 0.8.20;
+
 import "../interfaces/IGatewayStrategy.sol";
 import "../interfaces/IWorkerRegistration.sol";
 import "../interfaces/IGatewayRegistry.sol";
