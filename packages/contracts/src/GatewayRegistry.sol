@@ -91,7 +91,12 @@ contract GatewayRegistry is AccessControlledPausable, IGatewayRegistry {
    * mana * duration * boostFactor, where boostFactor is specified in reward calculation contract
    * All stakes are stored separately, so that we can track, when funds are unlocked
    */
-  function stake(uint256 amount, uint128 durationEpochs) external whenNotPaused {
+  function stake(uint256 amount, uint128 durationEpochs) public whenNotPaused {
+    _stakeWithoutTransfer(amount, durationEpochs);
+    token.transferFrom(msg.sender, address(this), amount);
+  }
+
+  function _stakeWithoutTransfer(uint256 amount, uint128 durationEpochs) internal {
     require(peerIds[msg.sender].length > 0, "Gateway not registered");
 
     uint256 _computationUnits = computationUnitsAmount(amount, durationEpochs);
@@ -100,18 +105,26 @@ contract GatewayRegistry is AccessControlledPausable, IGatewayRegistry {
       Stake(amount, _computationUnits, durationEpochs, lockedUntil, _computationUnits / durationEpochs)
     );
     totalStaked[msg.sender] += amount;
-    token.transferFrom(msg.sender, address(this), amount);
 
     emit Staked(msg.sender, amount, durationEpochs, lockedUntil, _computationUnits);
   }
 
   /// @dev Unstake tokens. Only tokens past the lock period can be unstaked
-  function unstake(uint256 amount) external whenNotPaused {
+  function unstake(uint256 amount) public whenNotPaused {
+    _unstakeWithoutTransfer(amount);
+    token.transfer(msg.sender, amount);
+  }
+
+  function _unstakeWithoutTransfer(uint256 amount) internal {
     require(amount <= unstakeable(msg.sender), "Not enough funds to unstake");
     totalUnstaked[msg.sender] += amount;
-    token.transfer(msg.sender, amount);
 
     emit Unstaked(msg.sender, amount);
+  }
+
+  function extend(uint256 amount, uint128 durationEpochs) external whenNotPaused {
+    _unstakeWithoutTransfer(amount);
+    _stakeWithoutTransfer(amount, durationEpochs);
   }
 
   /// @dev The default strategy used is address(0) which is a manual allocation submitting
