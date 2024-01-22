@@ -22,13 +22,13 @@ contract RegisterGateway is Script {
       GatewayRegistry(vm.envOr("GATEWAY_REGISTRY", address(0xC168fD9298141E3a19c624DF5692ABeeb480Fb94)));
     IERC20 token = gatewayReg.token();
     vm.startBroadcast(deployerPrivateKey);
-    if (gatewayReg.peerIds(msg.sender).length == 0) {
+    if (gatewayReg.getGateway(peerId).operator == address(0)) {
       gatewayReg.register(peerId);
     } else {
       console2.log("Gateway already registered");
     }
     token.approve(address(gatewayReg), stakeAmount);
-    gatewayReg.stake(stakeAmount, duration);
+    gatewayReg.stake(peerId, stakeAmount, duration);
     vm.stopBroadcast();
   }
 }

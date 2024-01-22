@@ -26,8 +26,8 @@ contract GatewayRegistryTest is BaseTest {
   }
 
   function assertStake(uint256 stakeId, uint256 amount, uint256 lockedUntil) internal {
-    (uint256 _amount,,, uint256 _lockedUntil,) = gatewayRegistry.stakes(address(this), stakeId);
-    assertEq(amount, _amount);
-    assertEq(lockedUntil, _lockedUntil);
+    GatewayRegistry.Stake memory stakes = gatewayRegistry.getStakes(peerId, stakeId);
+    assertEq(amount, stakes.amount);
+    assertEq(lockedUntil, stakes.lockedUntil);
   }
 }

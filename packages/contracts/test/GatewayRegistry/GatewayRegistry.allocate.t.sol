@@ -17,14 +17,14 @@ contract GatewayRegistryAllocateTest is GatewayRegistryTest {
       abi.encode(100000)
     );
     uint256 gasBefore = gasleft();
-    gatewayRegistry.allocateComputationUnits(workerIds, cus);
+    gatewayRegistry.allocateComputationUnits(peerId, workerIds, cus);
     uint256 gasAfter = gasleft();
     uint256 gasUsed = gasBefore - gasAfter;
     emit log_named_uint("gasUsed", gasUsed);
   }
 
   function test_AllocateCUsGasUsageFor1000Workers() public {
-    gatewayRegistry.stake(10000 ether, 2000);
+    gatewayRegistry.stake(peerId, 10000 ether, 2000);
     gasUsageForNWorkers(1000);
   }
 }
