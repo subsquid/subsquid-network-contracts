@@ -30,7 +30,6 @@ contract GatewayRegistry is AccessControlledPausable, IGatewayRegistry {
     string metadata;
     uint totalStaked;
     uint totalUnstaked;
-    Stake[] stakes;
   }
 
   uint256 constant BASIS_POINT_MULTIPLIER = 10000;
@@ -38,6 +37,7 @@ contract GatewayRegistry is AccessControlledPausable, IGatewayRegistry {
   IERC20WithMetadata public immutable token;
   IRouter public immutable router;
   mapping(bytes32 gatewayId => Gateway gateway) internal gateways;
+  mapping(bytes32 gatewayId => Stake[]) internal stakes;
   mapping(address => bytes32 gatewayId) public gatewayByAddress;
   mapping(address strategy => bool) public isStrategyAllowed;
   address public defaultStrategy;
@@ -84,7 +84,15 @@ contract GatewayRegistry is AccessControlledPausable, IGatewayRegistry {
       require(gatewayByAddress[gatewayAddress] == bytes32(0), "Gateway address already registered");
       gatewayByAddress[gatewayAddress] = peerIdHash;
     }
-    gateways[peerIdHash] = Gateway(msg.sender, peerId, address(0), gatewayAddress, metadata, 0, 0, new Stake[](0));
+    gateways[peerIdHash] = Gateway({
+      operator: msg.sender,
+      peerId: peerId,
+      strategy: defaultStrategy,
+      ownAddress: gatewayAddress,
+      metadata: metadata,
+      totalStaked: 0,
+      totalUnstaked: 0
+    });
 
     emit Registered(msg.sender, peerIdHash, peerId);
 
@@ -119,7 +127,7 @@ contract GatewayRegistry is AccessControlledPausable, IGatewayRegistry {
 
     uint256 _computationUnits = computationUnitsAmount(amount, durationEpochs);
     uint128 lockedUntil = router.networkController().epochNumber() + durationEpochs;
-    gateway.stakes.push(
+    stakes[peerIdHash].push(
       Stake(amount, _computationUnits, durationEpochs, lockedUntil, _computationUnits / durationEpochs)
     );
     gateway.totalStaked += amount;
@@ -134,7 +142,7 @@ contract GatewayRegistry is AccessControlledPausable, IGatewayRegistry {
   }
 
   function _unstakeWithoutTransfer(bytes calldata peerId, uint256 amount) internal {
-    (Gateway storage gateway, bytes32 peerIdHash) = _getGateway(peerId);
+    (Gateway storage gateway,) = _getGateway(peerId);
     _requireOperator(gateway);
     require(amount <= _unstakeable(gateway), "Not enough funds to unstake");
     gateway.totalUnstaked += amount;
@@ -164,8 +172,7 @@ contract GatewayRegistry is AccessControlledPausable, IGatewayRegistry {
 
   /// @return Amount of computation units available for the gateway in the current epoch
   function computationUnitsAvailable(bytes calldata peerId) external view returns (uint256) {
-    (Gateway storage gateway,) = _getGateway(peerId);
-    Stake[] memory _stakes = gateway.stakes;
+    Stake[] memory _stakes = stakes[keccak256(peerId)];
     uint256 total = 0;
     uint256 currentEpoch = uint256(router.networkController().epochNumber());
     for (uint256 i = 0; i < _stakes.length; i++) {
@@ -216,7 +223,7 @@ contract GatewayRegistry is AccessControlledPausable, IGatewayRegistry {
 
   /// @return Amount of tokens that can be unstaked by the gateway
   function _unstakeable(Gateway storage gateway) internal view returns (uint256) {
-    Stake[] memory _stakes = gateway.stakes;
+    Stake[] memory _stakes = stakes[keccak256(gateway.peerId)];
     uint256 currentEpoch = uint256(router.networkController().epochNumber());
     uint256 total = 0;
     for (uint256 i = 0; i < _stakes.length; i++) {
@@ -228,10 +235,9 @@ contract GatewayRegistry is AccessControlledPausable, IGatewayRegistry {
     return total - gateway.totalUnstaked;
   }
 
-  /// @return List of all stakes made by the gateway
-  function getStakes(bytes calldata peerId, uint index) external view returns (Stake memory) {
-    (Gateway storage gateway,) = _getGateway(peerId);
-    return gateway.stakes[index];
+//  /// @return List of all stakes made by the gateway
+  function getStakes(bytes calldata peerId) external view returns (Stake[] memory) {
+    return stakes[keccak256(peerId)];
   }
 
   function getGateway(bytes calldata peerId) external view returns (Gateway memory) {

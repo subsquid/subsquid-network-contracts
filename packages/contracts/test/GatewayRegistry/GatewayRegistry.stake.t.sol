@@ -36,7 +36,7 @@ contract GatewayRegistryStakeTest is GatewayRegistryTest {
 
   function test_EmitsEvent() public {
     vm.expectEmit(address(gatewayRegistry));
-    emit Staked(address(this), 100, 200, 200, 0);
+    emit Staked(address(this), peerId, 100, 200, 200, 0);
     gatewayRegistry.stake(peerId, 100, 200);
   }
 
