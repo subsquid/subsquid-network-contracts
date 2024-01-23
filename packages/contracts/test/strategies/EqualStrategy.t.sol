@@ -22,7 +22,7 @@ contract EqualStrategyTest is BaseTest {
       abi.encodeWithSelector(IGatewayRegistry.computationUnitsAvailable.selector, peerId),
       abi.encode(300_000)
     );
-    EqualStrategy strategy = new EqualStrategy(gatewayRegistry.router().workerRegistration(), gatewayRegistry);
+    EqualStrategy strategy = new EqualStrategy(gatewayRegistry.router(), gatewayRegistry);
     assertEq(strategy.computationUnitsPerEpoch(peerId, 0), 20_000);
   }
 }

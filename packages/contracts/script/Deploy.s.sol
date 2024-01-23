@@ -16,6 +16,7 @@ import "../src/tSQD.sol";
 import "../src/Router.sol";
 import "../src/GatewayRegistry.sol";
 import "../src/VestingFactory.sol";
+import "../src/gateway-strategies/EqualStrategy.sol";
 
 contract Deploy is Script {
   function run() public {
@@ -38,8 +39,9 @@ contract Deploy is Script {
     WorkerRegistration workerRegistration = new WorkerRegistration(token, router);
     RewardTreasury treasury = new RewardTreasury(token);
     DistributedRewardsDistribution distributor = new DistributedRewardsDistribution(router);
-    new GatewayRegistry(IERC20WithMetadata(address(token)), router);
-    new VestingFactory(token, router);
+    GatewayRegistry gatewayReg = new GatewayRegistry(IERC20WithMetadata(address(token)), router);
+    VestingFactory factory = new VestingFactory(token, router);
+    EqualStrategy strategy = new EqualStrategy(router, gatewayReg);
     router.initialize(workerRegistration, staking, address(treasury), network, new RewardCalculation(router));
     staking.grantRole(staking.REWARDS_DISTRIBUTOR_ROLE(), address(distributor));
     treasury.setWhitelistedDistributor(distributor, true);
@@ -47,6 +49,8 @@ contract Deploy is Script {
 
     network.setAllowedVestedTarget(address(workerRegistration), true);
     network.setAllowedVestedTarget(address(staking), true);
+
+    gatewayReg.setIsStrategyAllowed(address(strategy), true, true);
 
     vm.stopBroadcast();
   }
