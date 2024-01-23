@@ -18,7 +18,7 @@ contract GatewayRegistry is AccessControlledPausable, IGatewayRegistry {
     uint256 amount;
     uint256 computationUnits;
     uint128 lockStart;
-    uint128 lockedUntil;
+    uint128 lockEnd;
   }
 
   struct Gateway {
@@ -52,7 +52,7 @@ contract GatewayRegistry is AccessControlledPausable, IGatewayRegistry {
     bytes peerId,
     uint256 amount,
     uint128 lockStart,
-    uint128 lockedUntil,
+    uint128 lockEnd,
     uint256 computationUnits
   );
   event Unstaked(address indexed gatewayOperator, bytes peerId, uint256 amount);
@@ -133,11 +133,11 @@ contract GatewayRegistry is AccessControlledPausable, IGatewayRegistry {
 
     uint256 _computationUnits = computationUnitsAmount(amount, durationBlocks);
     uint128 lockStart = router.networkController().nextEpoch();
-    uint128 lockedUntil = lockStart + durationBlocks;
-    stakes[peerIdHash].push(Stake(amount, _computationUnits, lockStart, lockedUntil));
+    uint128 lockEnd = lockStart + durationBlocks;
+    stakes[peerIdHash].push(Stake(amount, _computationUnits, lockStart, lockEnd));
     gateway.totalStaked += amount;
 
-    emit Staked(msg.sender, peerId, amount, lockStart, lockedUntil, _computationUnits);
+    emit Staked(msg.sender, peerId, amount, lockStart, lockEnd, _computationUnits);
   }
 
   /// @dev Unstake tokens. Only tokens past the lock period can be unstaked
@@ -183,8 +183,8 @@ contract GatewayRegistry is AccessControlledPausable, IGatewayRegistry {
     uint256 epochLength = uint256(router.networkController().epochLength());
     for (uint256 i = 0; i < _stakes.length; i++) {
       Stake memory _stake = _stakes[i];
-      if (_stake.lockStart <= blockNumber && _stake.lockedUntil > blockNumber) {
-        total += _stake.computationUnits * epochLength / (uint256(_stake.lockedUntil - _stake.lockStart));
+      if (_stake.lockStart <= blockNumber && _stake.lockEnd > blockNumber) {
+        total += _stake.computationUnits * epochLength / (uint256(_stake.lockEnd - _stake.lockStart));
       }
     }
     return total;
@@ -237,7 +237,7 @@ contract GatewayRegistry is AccessControlledPausable, IGatewayRegistry {
     uint256 total = 0;
     for (uint256 i = 0; i < _stakes.length; i++) {
       Stake memory _stake = _stakes[i];
-      if (_stake.lockedUntil <= blockNumber) {
+      if (_stake.lockEnd <= blockNumber) {
         total += _stake.amount;
       }
     }
