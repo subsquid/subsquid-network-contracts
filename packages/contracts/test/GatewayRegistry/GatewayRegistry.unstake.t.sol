@@ -17,7 +17,7 @@ contract GatewayRegistryUnStakeTest is GatewayRegistryTest {
 
   function test_UnstakeDecreasesStakedAmount() public {
     gatewayRegistry.stake(peerId, 100, 200);
-    vm.roll(block.number + 200 * router.networkController().epochLength());
+    vm.roll(block.number + 300);
     gatewayRegistry.unstake(peerId, 50);
     assertEq(gatewayRegistry.staked(peerId), 50);
   }
@@ -26,11 +26,11 @@ contract GatewayRegistryUnStakeTest is GatewayRegistryTest {
     uint256 amount = 100 ether;
     gatewayRegistry.stake(peerId, amount, 300);
     gatewayRegistry.stake(peerId, amount, 600);
-    vm.roll(block.number + 300 * router.networkController().epochLength());
-    assertEq(gatewayRegistry.computationUnitsAvailable(peerId), 150_000);
+    vm.roll(block.number + 400);
+    assertEq(gatewayRegistry.computationUnitsAvailable(peerId), 500);
     gatewayRegistry.unstake(peerId, amount / 3);
-    assertEq(gatewayRegistry.computationUnitsAvailable(peerId), 150_000);
+    assertEq(gatewayRegistry.computationUnitsAvailable(peerId), 500);
     gatewayRegistry.unstake(peerId, amount / 2);
-    assertEq(gatewayRegistry.computationUnitsAvailable(peerId), 150_000);
+    assertEq(gatewayRegistry.computationUnitsAvailable(peerId), 500);
   }
 }

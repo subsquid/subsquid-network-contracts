@@ -53,16 +53,16 @@ contract RewardCalculation is IRewardCalculation {
   /// @return bonus to allocations for the tokens staked by gateway
   /// @notice result is in basis points
   function boostFactor(uint256 duration) public pure returns (uint256) {
-    if (duration < 300) {
+    if (duration < 60 days) {
       return 10000;
     }
-    if (duration < 900) {
-      return 10000 + (duration - 300) * 5000 / 300;
+    if (duration < 180 days) {
+      return 10000 + (duration - 30 days) / 30 days * 2000;
     }
-    if (duration < 1800) {
+    if (duration < 360 days) {
       return 20000;
     }
-    if (duration < 3600) {
+    if (duration < 720 days) {
       return 25000;
     }
     return 30000;

@@ -74,19 +74,17 @@ contract RewardCalculationTest is BaseTest {
   }
 
   function test_BoostFactor() public {
-    assertEq(rewardCalculation.boostFactor(5), 10000);
-    assertEq(rewardCalculation.boostFactor(60), 10000);
-    assertEq(rewardCalculation.boostFactor(120), 10000);
-    assertEq(rewardCalculation.boostFactor(299), 10000);
-    assertEq(rewardCalculation.boostFactor(300), 10000);
-    assertEq(rewardCalculation.boostFactor(450), 12500);
-    assertEq(rewardCalculation.boostFactor(600), 15000);
-    assertEq(rewardCalculation.boostFactor(899), 19983);
-    assertEq(rewardCalculation.boostFactor(900), 20000);
-    assertEq(rewardCalculation.boostFactor(1799), 20000);
-    assertEq(rewardCalculation.boostFactor(1800), 25000);
-    assertEq(rewardCalculation.boostFactor(3599), 25000);
-    assertEq(rewardCalculation.boostFactor(3600), 30000);
-    assertEq(rewardCalculation.boostFactor(3600000), 30000);
+    assertEq(rewardCalculation.boostFactor(1 days), 10000);
+    assertEq(rewardCalculation.boostFactor(59 days), 10000);
+    assertEq(rewardCalculation.boostFactor(60 days), 12000);
+    assertEq(rewardCalculation.boostFactor(89 days), 12000);
+    assertEq(rewardCalculation.boostFactor(90 days), 14000);
+    assertEq(rewardCalculation.boostFactor(179 days), 18000);
+    assertEq(rewardCalculation.boostFactor(180 days), 20000);
+    assertEq(rewardCalculation.boostFactor(359 days), 20000);
+    assertEq(rewardCalculation.boostFactor(360 days), 25000);
+    assertEq(rewardCalculation.boostFactor(719 days), 25000);
+    assertEq(rewardCalculation.boostFactor(720 days), 30000);
+    assertEq(rewardCalculation.boostFactor(10000 days), 30000);
   }
 }

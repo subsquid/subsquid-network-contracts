@@ -4,6 +4,11 @@ import "forge-std/Test.sol";
 import "./GatewayRegistryTest.sol";
 
 contract GatewayRegistryStakeTest is GatewayRegistryTest {
+  function goToNextEpoch() internal {
+    uint128 nextEpoch = router.networkController().nextEpoch();
+    vm.roll(nextEpoch);
+  }
+
   function test_StakingTransfersTokensToContract() public {
     uint256 balanceBefore = token.balanceOf(address(this));
     gatewayRegistry.stake(peerId, 100, 200);
@@ -13,9 +18,9 @@ contract GatewayRegistryStakeTest is GatewayRegistryTest {
 
   function test_StakingStoresStakedAmountAndUnlockTimestamp() public {
     gatewayRegistry.stake(peerId, 100, 200);
-    assertStake(0, 100, 200);
+    assertStake(0, 100, 205);
     gatewayRegistry.stake(peerId, 1000, 2000);
-    assertStake(1, 1000, 2000);
+    assertStake(1, 1000, 2005);
   }
 
   function test_StakingIncreasesStakedAmount() public {
@@ -26,17 +31,21 @@ contract GatewayRegistryStakeTest is GatewayRegistryTest {
   }
 
   function test_IncreasesComputationalUnits() public {
-    gatewayRegistry.stake(peerId, 10 ether, 150);
-    assertEq(gatewayRegistry.computationUnitsAvailable(peerId), 10_000); // 10 * 150 = 1500 total
-    gatewayRegistry.stake(peerId, 5 ether, 900);
-    assertEq(gatewayRegistry.computationUnitsAvailable(peerId), 20_000); // 10 * 900 + 1500 = 10500 total
-    gatewayRegistry.stake(peerId, 1 ether, 450);
-    assertEq(gatewayRegistry.computationUnitsAvailable(peerId), 21_250); // 1.250 * 450 + 10500 = 11062.5 total
+    gatewayRegistry.stake(peerId, 10 ether, 150_000);
+    goToNextEpoch();
+    assertEq(gatewayRegistry.computationUnitsAvailable(peerId), 50);
+    gatewayRegistry.stake(peerId, 5 ether, 900_000);
+    goToNextEpoch();
+    assertEq(gatewayRegistry.computationUnitsAvailable(peerId), 90);
+    gatewayRegistry.stake(peerId, 1 ether, 450_000);
+    goToNextEpoch();
+    assertEq(gatewayRegistry.computationUnitsAvailable(peerId), 96);
   }
 
   function test_EmitsEvent() public {
     vm.expectEmit(address(gatewayRegistry));
-    emit Staked(address(this), peerId, 100, 200, 200, 0);
+    uint128 nextEpoch = router.networkController().nextEpoch();
+    emit Staked(address(this), peerId, 100, nextEpoch, nextEpoch + 200, 0);
     gatewayRegistry.stake(peerId, 100, 200);
   }
 
@@ -47,19 +56,17 @@ contract GatewayRegistryStakeTest is GatewayRegistryTest {
   }
 
   function test_computationUnitsExpireAfterStakeUnlocks() public {
-    gatewayRegistry.stake(peerId, 10 ether, 150);
-    assertEq(gatewayRegistry.computationUnitsAvailable(peerId), 10_000);
-    gatewayRegistry.stake(peerId, 20 ether, 200);
-    assertEq(gatewayRegistry.computationUnitsAvailable(peerId), 30_000);
-    gatewayRegistry.stake(peerId, 40 ether, 100);
-    assertEq(gatewayRegistry.computationUnitsAvailable(peerId), 70_000);
-    vm.roll(block.number + 99 * router.networkController().epochLength());
-    assertEq(gatewayRegistry.computationUnitsAvailable(peerId), 70_000);
-    vm.roll(block.number + router.networkController().epochLength());
-    assertEq(gatewayRegistry.computationUnitsAvailable(peerId), 30_000);
-    vm.roll(block.number + 50 * router.networkController().epochLength());
-    assertEq(gatewayRegistry.computationUnitsAvailable(peerId), 20_000);
-    vm.roll(block.number + 50 * router.networkController().epochLength());
+    gatewayRegistry.stake(peerId, 10 ether, 7500);
+    gatewayRegistry.stake(peerId, 20 ether, 100000);
+    gatewayRegistry.stake(peerId, 40 ether, 200000);
+    uint nextEpochStart = router.networkController().nextEpoch();
+    vm.roll(nextEpochStart + 7500 - 1);
+    assertEq(gatewayRegistry.computationUnitsAvailable(peerId), 350);
+    vm.roll(block.number + 1);
+    assertEq(gatewayRegistry.computationUnitsAvailable(peerId), 300);
+    vm.roll(block.number + 92500);
+    assertEq(gatewayRegistry.computationUnitsAvailable(peerId), 200);
+    vm.roll(block.number + 100000);
     assertEq(gatewayRegistry.computationUnitsAvailable(peerId), 0);
   }
 }
