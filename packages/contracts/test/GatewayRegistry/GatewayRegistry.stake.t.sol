@@ -59,7 +59,7 @@ contract GatewayRegistryStakeTest is GatewayRegistryTest {
     gatewayRegistry.stake(peerId, 10 ether, 7500);
     gatewayRegistry.stake(peerId, 20 ether, 100000);
     gatewayRegistry.stake(peerId, 40 ether, 200000);
-    uint nextEpochStart = router.networkController().nextEpoch();
+    uint256 nextEpochStart = router.networkController().nextEpoch();
     vm.roll(nextEpochStart + 7500 - 1);
     assertEq(gatewayRegistry.computationUnitsAvailable(peerId), 350);
     vm.roll(block.number + 1);
