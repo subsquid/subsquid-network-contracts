@@ -100,6 +100,7 @@ contract GatewayRegistry is AccessControlledPausable, IGatewayRegistry {
     });
 
     emit Registered(msg.sender, peerIdHash, peerId);
+    emit MetadataChanged(msg.sender, peerId, metadata);
 
     setGatewayAddress(peerId, gatewayAddress);
     useStrategy(peerId, defaultStrategy);
