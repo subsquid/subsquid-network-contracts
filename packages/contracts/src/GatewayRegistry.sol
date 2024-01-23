@@ -46,9 +46,9 @@ contract GatewayRegistry is AccessControlledPausable, IGatewayRegistry {
   /// @dev How much CU is given for a single SQD per 1000 blocks, not including boost factor
   uint256 public mana = 1_000;
 
-  event Registered(address indexed gateway, bytes32 indexed id, bytes peerId);
+  event Registered(address indexed gatewayOperator, bytes32 indexed id, bytes peerId);
   event Staked(
-    address indexed gateway,
+    address indexed gatewayOperator,
     bytes peerId,
     uint256 amount,
     uint128 lockStart,
