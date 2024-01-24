@@ -12,21 +12,24 @@ contract GatewayRegistryTest is BaseTest {
   GatewayRegistry gatewayRegistry;
   tSQD token;
   RewardCalculation rewardCalc;
+  Router router;
+  bytes peerId = "peerId";
 
-  event Staked(address indexed gateway, uint256 amount, uint256 duration, uint256 lockedUntil, uint256 cus);
+  event Staked(
+    address indexed gateway, bytes peerId, uint256 amount, uint128 lockStart, uint128 lockedUntil, uint256 cus
+  );
 
   function setUp() public {
-    (tSQD _token, Router router) = deployAll();
-    token = _token;
+    (token, router) = deployAll();
     rewardCalc = RewardCalculation(address(router.rewardCalculation()));
     gatewayRegistry = new GatewayRegistry(IERC20WithMetadata(address(token)), router);
     token.approve(address(gatewayRegistry), type(uint256).max);
-    gatewayRegistry.register("peerId");
+    gatewayRegistry.register(peerId, "", address(this));
   }
 
   function assertStake(uint256 stakeId, uint256 amount, uint256 lockedUntil) internal {
-    (uint256 _amount, uint256 _lockedUntil) = gatewayRegistry.stakes(address(this), stakeId);
-    assertEq(_amount, amount);
-    assertEq(_lockedUntil, lockedUntil);
+    GatewayRegistry.Stake[] memory stakes = gatewayRegistry.getStakes(peerId);
+    assertEq(amount, stakes[stakeId].amount);
+    assertEq(lockedUntil, stakes[stakeId].lockEnd);
   }
 }
