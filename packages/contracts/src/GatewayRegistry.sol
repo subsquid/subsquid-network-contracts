@@ -123,8 +123,8 @@ contract GatewayRegistry is AccessControlledPausable, IGatewayRegistry {
    * mana * duration * boostFactor, where boostFactor is specified in reward calculation contract
    * All stakes are stored separately, so that we can track, when funds are unlocked
    */
-  function stake(bytes calldata peerId, uint256 amount, uint128 durationEpochs) public whenNotPaused {
-    _stakeWithoutTransfer(peerId, amount, durationEpochs);
+  function stake(bytes calldata peerId, uint256 amount, uint128 durationBlocks) public whenNotPaused {
+    _stakeWithoutTransfer(peerId, amount, durationBlocks);
     token.transferFrom(msg.sender, address(this), amount);
   }
 

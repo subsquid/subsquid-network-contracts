@@ -5,8 +5,17 @@ import "./BaseTest.sol";
 import "../src/SoftCap.sol";
 
 contract SoftCapTest is BaseTest {
+  Router router;
+  SoftCap cap;
+  uint256 bond;
+
+  function setUp() public {
+    (, router) = deployAll();
+    cap = new SoftCap(router);
+    bond = router.networkController().bondAmount();
+  }
+
   function test_Cap() public {
-    SoftCap cap = new SoftCap(Router(address(1)));
     for (uint256 i = 0; i <= 100; i++) {
       UD60x18 x = ud(i * 0.01e18);
       UD60x18 y = cap.cap(x) * ud(1e20);
@@ -16,26 +25,21 @@ contract SoftCapTest is BaseTest {
   }
 
   function test_CapedStake() public {
-    (, Router router) = deployAll();
-    SoftCap cap = new SoftCap(router);
-    uint256 bond = router.networkController().bondAmount();
+    assertCapAroundFraction(0, 0);
+    assertCapAroundFraction(bond / 10, 9); // 1/11 ~= 9/100
+    assertCapAroundFraction(bond / 2, 33); // 1/3 ~= 33/100
+    assertCapAroundFraction(bond, 50);
+    assertCapAroundFraction(bond * 2, 66); // 2/3 ~= 66/100
+    assertCapAroundFraction(bond * 10, 100);
+    assertCapAroundFraction(bond * 100000, 100);
+  }
+
+  function assertCapAroundFraction(uint256 mockStake, uint256 fraction) internal {
     uint256[] memory workers = new uint256[](1);
     vm.mockCall(
-      address(router.staking()), abi.encodeWithSelector(IStaking.activeStake.selector, workers), abi.encode(bond / 10)
+      address(router.staking()), abi.encodeWithSelector(IStaking.activeStake.selector, workers), abi.encode(mockStake)
     );
-    assertApproxEqRel(cap.capedStake(0), bond / 10, 1e16);
-    vm.mockCall(
-      address(router.staking()), abi.encodeWithSelector(IStaking.activeStake.selector, workers), abi.encode(bond / 2)
-    );
-    assertApproxEqRel(cap.capedStake(0), bond * 38 / 100, 2e16);
-    vm.mockCall(
-      address(router.staking()), abi.encodeWithSelector(IStaking.activeStake.selector, workers), abi.encode(bond)
-    );
-    assertApproxEqRel(cap.capedStake(0), bond * 61 / 100, 2e16);
-    vm.mockCall(
-      address(router.staking()), abi.encodeWithSelector(IStaking.activeStake.selector, workers), abi.encode(bond * 100)
-    );
-    assertApproxEqRel(cap.capedStake(0), bond * 100 / 3, 1e16);
+    assertApproxEqRel(cap.capedStake(0), bond * precalculated[fraction] / 1e20, 1e16);
   }
 
   // precalculated in excel

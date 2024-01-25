@@ -38,6 +38,6 @@ contract SoftCap {
     uint256 bond = router.networkController().bondAmount();
     uint256 total = stake + bond;
     UD60x18 stakingShare = convert(stake) / convert(total);
-    return uint256(convert(cap(stakingShare) * convert(total)));
+    return uint256(convert(cap(stakingShare) * convert(bond)));
   }
 }
