@@ -9,7 +9,7 @@ COPY packages/contracts/src ./contracts/src
 COPY packages/contracts/package.json ./contracts/package.json
 
 WORKDIR /usr/src/app/contracts
-RUN forge install foundry-rs/forge-std OpenZeppelin/openzeppelin-contracts --no-git
+RUN forge install foundry-rs/forge-std OpenZeppelin/openzeppelin-contracts PaulRBerg/prb-math@release-v4 --no-git
 RUN yarn build
 WORKDIR /usr/src/app
 COPY packages/rewards-calculator ./rewards-calculator
