@@ -32,6 +32,8 @@ contract NetworkController is AccessControl, INetworkController {
     }
     epochLength = _epochLength;
     firstEpochBlock = nextEpoch();
+    emit EpochLengthUpdated(_epochLength);
+
     setBondAmount(_bondAmount);
   }
 
