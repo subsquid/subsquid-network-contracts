@@ -11,16 +11,16 @@ contract WorkerRegistrationConstructorTest is WorkerRegistrationTest {
   }
 
   function test_CorrectlyCountsEpochStart() public {
-    assertEq(workerRegistration.nextEpoch(), 2);
+    assertEq(workerRegistration.nextEpoch(), 7);
     vm.roll(block.number + 1);
-    assertEq(workerRegistration.nextEpoch(), 4);
+    assertEq(workerRegistration.nextEpoch(), 7);
     vm.roll(block.number + 1);
-    assertEq(workerRegistration.nextEpoch(), 4);
+    assertEq(workerRegistration.nextEpoch(), 9);
     vm.roll(block.number + 1);
-    assertEq(workerRegistration.nextEpoch(), 6);
+    assertEq(workerRegistration.nextEpoch(), 9);
     vm.roll(block.number + 1);
-    assertEq(workerRegistration.nextEpoch(), 6);
+    assertEq(workerRegistration.nextEpoch(), 11);
     vm.roll(block.number + 1);
-    assertEq(workerRegistration.nextEpoch(), 8);
+    assertEq(workerRegistration.nextEpoch(), 11);
   }
 }

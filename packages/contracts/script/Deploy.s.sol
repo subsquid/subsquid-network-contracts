@@ -40,7 +40,7 @@ contract Deploy is Script {
     RewardTreasury treasury = new RewardTreasury(token);
     DistributedRewardsDistribution distributor = new DistributedRewardsDistribution(router);
     GatewayRegistry gatewayReg = new GatewayRegistry(IERC20WithMetadata(address(token)), router);
-    VestingFactory factory = new VestingFactory(token, router);
+    new VestingFactory(token, router);
     EqualStrategy strategy = new EqualStrategy(router, gatewayReg);
     router.initialize(workerRegistration, staking, address(treasury), network, new RewardCalculation(router));
     staking.grantRole(staking.REWARDS_DISTRIBUTOR_ROLE(), address(distributor));
