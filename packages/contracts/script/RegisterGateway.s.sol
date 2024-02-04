@@ -28,7 +28,7 @@ contract RegisterGateway is Script {
       console2.log("Gateway already registered");
     }
     token.approve(address(gatewayReg), stakeAmount);
-    gatewayReg.stake(peerId, stakeAmount, duration);
+    gatewayReg.stake(stakeAmount, duration);
     vm.stopBroadcast();
   }
 }
