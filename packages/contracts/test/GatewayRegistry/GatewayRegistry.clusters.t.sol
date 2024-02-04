@@ -1,13 +1,12 @@
 pragma solidity 0.8.20;
 
-import "forge-std/Test.sol";
 import "./GatewayRegistryTest.sol";
 
 contract GatewayRegistryStakeTest is GatewayRegistryTest {
   function compareCluster(bytes memory peerId, bytes[] memory expected) internal {
     bytes[] memory cluster = gatewayRegistry.getCluster(peerId);
     assertEq(cluster.length, expected.length, "Length not equal");
-    for (uint i = 0; i < cluster.length; i++) {
+    for (uint256 i = 0; i < cluster.length; i++) {
       assertEq(cluster[i], expected[i]);
     }
   }
@@ -17,7 +16,7 @@ contract GatewayRegistryStakeTest is GatewayRegistryTest {
     bytes[] memory cluster = gatewayRegistry.getCluster(peerId);
     assertEq(cluster.length - 1, expected.length, "Length not equal");
     assertEq(cluster[0], expectedPrefix);
-    for (uint i = 1; i < cluster.length; i++) {
+    for (uint256 i = 1; i < cluster.length; i++) {
       assertEq(cluster[i], expected[i - 1]);
     }
   }

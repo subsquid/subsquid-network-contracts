@@ -21,9 +21,8 @@ contract GatewayRegistryTest is BaseTest {
   string[] metadatas = ["", "some test metadata", ""];
   address[] addresses = [address(0), address(0), address(1)];
 
-
   event Staked(
-    address indexed gateway, uint256 amount, uint128 lockStart, uint128 lockedUntil, uint256 cus
+    address indexed gateway, uint256 index, uint256 amount, uint128 lockStart, uint128 lockedUntil, uint256 cus
   );
 
   function setUp() public {
@@ -57,10 +56,10 @@ contract GatewayRegistryTest is BaseTest {
 
   function c(bytes[] memory first, bytes[] memory second) internal pure returns (bytes[] memory) {
     bytes[] memory result = new bytes[](first.length + second.length);
-    for (uint i = 0; i < first.length; i++) {
+    for (uint256 i = 0; i < first.length; i++) {
       result[i] = first[i];
     }
-    for (uint i = 0; i < second.length; i++) {
+    for (uint256 i = 0; i < second.length; i++) {
       result[i + first.length] = second[i];
     }
     return result;

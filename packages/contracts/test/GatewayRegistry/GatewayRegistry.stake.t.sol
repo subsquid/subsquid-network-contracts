@@ -45,7 +45,7 @@ contract GatewayRegistryStakeTest is GatewayRegistryTest {
   function test_EmitsEvent() public {
     vm.expectEmit(address(gatewayRegistry));
     uint128 nextEpoch = router.networkController().nextEpoch();
-    emit Staked(address(this), 100, nextEpoch, nextEpoch + 200, 0);
+    emit Staked(address(this), 0, 100, nextEpoch, nextEpoch + 200, 0);
     gatewayRegistry.stake(100, 200);
   }
 

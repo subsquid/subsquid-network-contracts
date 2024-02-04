@@ -25,6 +25,7 @@ contract GatewayRegistry is AccessControlledPausable, IGatewayRegistry {
     uint256 computationUnits;
     uint128 lockStart;
     uint128 lockEnd;
+    uint128 duration;
   }
 
   struct Gateway {
@@ -60,6 +61,7 @@ contract GatewayRegistry is AccessControlledPausable, IGatewayRegistry {
   event Registered(address indexed gatewayOperator, bytes32 indexed id, bytes peerId);
   event Staked(
     address indexed gatewayOperator,
+    uint256 stakeIndex,
     uint256 amount,
     uint128 lockStart,
     uint128 lockEnd,
@@ -77,6 +79,8 @@ contract GatewayRegistry is AccessControlledPausable, IGatewayRegistry {
   event MetadataChanged(address indexed gatewayOperator, bytes peerId, string metadata);
   event GatewayAddressChanged(address indexed gatewayOperator, bytes peerId, address newAddress);
   event UsedStrategyChanged(address indexed gatewayOperator, address strategy);
+  event AutoextensionEnabled(address indexed gatewayOperator, uint256 indexed stakeIndex);
+  event AutoextensionDisabled(address indexed gatewayOperator, uint256 indexed stakeIndex, uint128 lockEnd);
 
   event AverageBlockTimeChanged(uint256 newBlockTime);
 
@@ -111,12 +115,8 @@ contract GatewayRegistry is AccessControlledPausable, IGatewayRegistry {
     if (!operators[msg.sender].previousInteractions) {
       useStrategy(defaultStrategy);
     }
-    gateways[peerIdHash] = Gateway({
-      operator: msg.sender,
-      ownAddress: gatewayAddress,
-      peerId: peerId,
-      metadata: metadata
-    });
+    gateways[peerIdHash] =
+      Gateway({operator: msg.sender, ownAddress: gatewayAddress, peerId: peerId, metadata: metadata});
     operators[msg.sender].ownedGateways.add(peerIdHash);
 
     emit Registered(msg.sender, peerIdHash, peerId);
@@ -148,37 +148,28 @@ contract GatewayRegistry is AccessControlledPausable, IGatewayRegistry {
    * mana * duration * boostFactor, where boostFactor is specified in reward calculation contract
    * All stakes are stored separately, so that we can track, when funds are unlocked
    */
-  function stake(uint256 amount, uint128 durationBlocks) public whenNotPaused {
-    _stakeWithoutTransfer(amount, durationBlocks);
-    token.transferFrom(msg.sender, address(this), amount);
-  }
-
-  function _stakeWithoutTransfer(uint256 amount, uint128 durationBlocks) internal {
+  function stake(uint256 amount, uint128 durationBlocks, bool withAutoExtension) public whenNotPaused {
     uint256 _computationUnits = computationUnitsAmount(amount, durationBlocks);
     uint128 lockStart = router.networkController().nextEpoch();
-    uint128 lockEnd = lockStart + durationBlocks;
-    operators[msg.sender].stakes.push(Stake(amount, _computationUnits, lockStart, lockEnd));
+    uint128 lockEnd = withAutoExtension ? type(uint128).max : lockStart + durationBlocks;
+    operators[msg.sender].stakes.push(Stake(amount, _computationUnits, lockStart, lockEnd, durationBlocks));
     operators[msg.sender].totalStaked += amount;
+    token.transferFrom(msg.sender, address(this), amount);
 
-    emit Staked(msg.sender, amount, lockStart, lockEnd, _computationUnits);
+    emit Staked(msg.sender, operators[msg.sender].stakes.length - 1, amount, lockStart, lockEnd, _computationUnits);
+  }
+
+  function stake(uint256 amount, uint128 durationBlocks) external {
+    stake(amount, durationBlocks, false);
   }
 
   /// @dev Unstake tokens. Only tokens past the lock period can be unstaked
-  function unstake(uint256 amount) public whenNotPaused {
-    _unstakeWithoutTransfer(amount);
-    token.transfer(msg.sender, amount);
-  }
-
-  function _unstakeWithoutTransfer(uint256 amount) internal {
+  function unstake(uint256 amount) external whenNotPaused {
     require(amount <= unstakeable(msg.sender), "Not enough funds to unstake");
     operators[msg.sender].totalUnstaked += amount;
+    token.transfer(msg.sender, amount);
 
     emit Unstaked(msg.sender, amount);
-  }
-
-  function extend(uint256 amount, uint128 durationEpochs) external whenNotPaused {
-    _unstakeWithoutTransfer(amount);
-    _stakeWithoutTransfer(amount, durationEpochs);
   }
 
   /// @dev The default strategy used is address(0) which is a manual allocation submitting
@@ -206,7 +197,7 @@ contract GatewayRegistry is AccessControlledPausable, IGatewayRegistry {
     for (uint256 i = 0; i < _stakes.length; i++) {
       Stake memory _stake = _stakes[i];
       if (_stake.lockStart <= blockNumber && _stake.lockEnd > blockNumber) {
-        total += _stake.computationUnits * epochLength / (uint256(_stake.lockEnd - _stake.lockStart));
+        total += _stake.computationUnits * epochLength / (uint256(_stake.duration));
       }
     }
     return total;
@@ -217,10 +208,7 @@ contract GatewayRegistry is AccessControlledPausable, IGatewayRegistry {
    * Allocates i-th amount of cus to the worker with i-ths workerId
    * Sum of all cus should not exceed the amount of available cus
    */
-  function allocateComputationUnits(uint256[] calldata workerIds, uint256[] calldata cus)
-  external
-  whenNotPaused
-  {
+  function allocateComputationUnits(uint256[] calldata workerIds, uint256[] calldata cus) external whenNotPaused {
     require(workerIds.length == cus.length, "Length mismatch");
     Gateway storage gateway = gateways[gatewayByAddress[msg.sender]];
     uint256 newlyAllocated = 0;
@@ -276,7 +264,7 @@ contract GatewayRegistry is AccessControlledPausable, IGatewayRegistry {
     (Gateway storage gateway,) = _getGateway(peerId);
     bytes32[] memory hashedIds = operators[gateway.operator].ownedGateways.values();
     clusterPeerIds = new bytes[](hashedIds.length);
-    for (uint i = 0; i<hashedIds.length; i++) {
+    for (uint256 i = 0; i < hashedIds.length; i++) {
       clusterPeerIds[i] = gateways[hashedIds[i]].peerId;
     }
     return clusterPeerIds;
@@ -329,6 +317,49 @@ contract GatewayRegistry is AccessControlledPausable, IGatewayRegistry {
     averageBlockTime = _newAverageBlockTime;
 
     emit AverageBlockTimeChanged(_newAverageBlockTime);
+  }
+
+  function _saturatedDiff(uint128 a, uint128 b) internal pure returns (uint128) {
+    if (b >= a) {
+      return 0;
+    }
+    return a - b;
+  }
+
+  function disableAutoExtension(uint256 index) external {
+    Stake storage _stake = operators[msg.sender].stakes[index];
+    require(_stake.lockEnd == type(uint128).max, "AutoExtension disabled");
+    _stake.lockEnd = _stake.lockStart
+      + (_saturatedDiff(uint128(block.number), _stake.lockStart) / _stake.duration + 1) * _stake.duration;
+
+    emit AutoextensionDisabled(msg.sender, index, _stake.lockEnd);
+  }
+
+  function disableAllAutoExtensions() external {
+    Stake[] storage stakes = operators[msg.sender].stakes;
+    uint128 blockNumber = uint128(block.number);
+    for (uint256 i = 0; i < stakes.length; i++) {
+      Stake storage _stake = stakes[i];
+      if (_stake.lockEnd != type(uint128).max) {
+        continue;
+      }
+      _stake.lockEnd =
+        _stake.lockStart + (_saturatedDiff(blockNumber, _stake.lockStart) / _stake.duration + 1) * _stake.duration;
+      emit AutoextensionDisabled(msg.sender, i, _stake.lockEnd);
+    }
+  }
+
+  function enableAutoExtension(uint256 index) external {
+    operators[msg.sender].stakes[index].lockEnd = type(uint128).max;
+    emit AutoextensionEnabled(msg.sender, index);
+  }
+
+  function enableAllAutoExtensions() external {
+    Stake[] storage stakes = operators[msg.sender].stakes;
+    for (uint256 i = 0; i < stakes.length; i++) {
+      stakes[i].lockEnd = type(uint128).max;
+      emit AutoextensionEnabled(msg.sender, i);
+    }
   }
 
   function _getGateway(bytes calldata peerId) internal view returns (Gateway storage gateway, bytes32 peerIdHash) {
