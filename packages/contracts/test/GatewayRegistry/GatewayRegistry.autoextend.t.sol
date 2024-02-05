@@ -4,11 +4,6 @@ import "forge-std/Test.sol";
 import "./GatewayRegistryTest.sol";
 
 contract GatewayRegistryAutoExtensionTest is GatewayRegistryTest {
-  function goToNextEpoch() internal {
-    uint128 nextEpoch = router.networkController().nextEpoch();
-    vm.roll(nextEpoch);
-  }
-
   function test_stakeNeverExpiresWhenAutoextendIsOn() public {
     gatewayRegistry.stake(100 ether, 100, true);
     goToNextEpoch();

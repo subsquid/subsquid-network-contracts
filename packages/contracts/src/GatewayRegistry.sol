@@ -197,7 +197,10 @@ contract GatewayRegistry is AccessControlledPausable, IGatewayRegistry {
     for (uint256 i = 0; i < _stakes.length; i++) {
       Stake memory _stake = _stakes[i];
       if (_stake.lockStart <= blockNumber && _stake.lockEnd > blockNumber) {
-        total += _stake.computationUnits * epochLength / (uint256(_stake.duration));
+        if (_stake.duration <= epochLength) {
+          return _stake.computationUnits;
+        }
+        total += _stake.computationUnits * epochLength / uint256(_stake.duration);
       }
     }
     return total;

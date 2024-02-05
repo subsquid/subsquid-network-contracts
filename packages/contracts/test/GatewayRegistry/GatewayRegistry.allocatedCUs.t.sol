@@ -13,4 +13,11 @@ contract GatewayRegistryAllocatedCUTest is GatewayRegistryTest {
     assertEq(gatewayRegistry.computationUnitsAmount(200 ether, 14500), expectedCUs(200, 14500));
     assertEq(gatewayRegistry.computationUnitsAmount(400 ether, 14000), expectedCUs(400, 14000));
   }
+
+  function test_LockShorterThanEpochNotGreaterThanTotalCUAmount() public {
+    gatewayRegistry.stake(10 ether, 5, true);
+    NetworkController(address(router.networkController())).setEpochLength(150);
+    goToNextEpoch();
+    assertEq(gatewayRegistry.computationUnitsAvailable(peerId), 50);
+  }
 }

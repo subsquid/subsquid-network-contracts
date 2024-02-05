@@ -64,4 +64,9 @@ contract GatewayRegistryTest is BaseTest {
     }
     return result;
   }
+
+  function goToNextEpoch() internal {
+    uint128 nextEpoch = router.networkController().nextEpoch();
+    vm.roll(nextEpoch);
+  }
 }

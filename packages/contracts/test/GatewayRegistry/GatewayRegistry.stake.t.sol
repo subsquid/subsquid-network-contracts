@@ -4,11 +4,6 @@ import "forge-std/Test.sol";
 import "./GatewayRegistryTest.sol";
 
 contract GatewayRegistryStakeTest is GatewayRegistryTest {
-  function goToNextEpoch() internal {
-    uint128 nextEpoch = router.networkController().nextEpoch();
-    vm.roll(nextEpoch);
-  }
-
   function test_StakingTransfersTokensToContract() public {
     uint256 balanceBefore = token.balanceOf(address(this));
     gatewayRegistry.stake(100, 200);
