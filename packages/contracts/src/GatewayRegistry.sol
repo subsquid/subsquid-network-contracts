@@ -187,6 +187,7 @@ contract GatewayRegistry is AccessControlledPausable, IGatewayRegistry {
   function unstake() external whenNotPaused {
     require(operators[msg.sender].stake.lockEnd <= block.number, "Stake is locked");
     uint256 amount = operators[msg.sender].stake.amount;
+    require(amount > 0, "Nothing to unstake");
     delete operators[msg.sender].stake;
 
     token.transfer(msg.sender, amount);
@@ -214,7 +215,7 @@ contract GatewayRegistry is AccessControlledPausable, IGatewayRegistry {
 
     Stake memory _stake = operators[gateway.operator].stake;
     uint256 blockNumber = block.number;
-    if (_stake.lockEnd > blockNumber) {
+    if (_stake.lockEnd <= blockNumber) {
       return 0;
     }
     uint computationUnits = _stake.lockStart > blockNumber ? _stake.oldCUs : _stake.computationUnits;

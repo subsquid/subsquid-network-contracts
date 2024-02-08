@@ -14,14 +14,16 @@ contract GatewayRegistryStakeTest is GatewayRegistryTest {
   function test_StakingStoresStakedAmountAndUnlockTimestamp() public {
     gatewayRegistry.stake(100, 200);
     assertStake(0, 100, 205);
-    gatewayRegistry.stake(1000, 2000);
-    assertStake(1, 1000, 2005);
+    goToNextEpoch();
+    gatewayRegistry.addStake(1000);
+    assertStake(0, 1100, 210);
   }
 
   function test_StakingIncreasesStakedAmount() public {
     gatewayRegistry.stake(100, 200);
     assertEq(gatewayRegistry.staked(address(this)), 100);
-    gatewayRegistry.stake(1000, 2000);
+    goToNextEpoch();
+    gatewayRegistry.addStake(1000);
     assertEq(gatewayRegistry.staked(address(this)), 1100);
   }
 
@@ -29,33 +31,18 @@ contract GatewayRegistryStakeTest is GatewayRegistryTest {
     gatewayRegistry.stake(10 ether, 150_000);
     goToNextEpoch();
     assertEq(gatewayRegistry.computationUnitsAvailable(peerId), 50);
-    gatewayRegistry.stake(5 ether, 900_000);
+    gatewayRegistry.addStake(5 ether);
     goToNextEpoch();
-    assertEq(gatewayRegistry.computationUnitsAvailable(peerId), 90);
-    gatewayRegistry.stake(1 ether, 450_000);
+    assertEq(gatewayRegistry.computationUnitsAvailable(peerId), 75);
+    gatewayRegistry.addStake(1 ether);
     goToNextEpoch();
-    assertEq(gatewayRegistry.computationUnitsAvailable(peerId), 96);
+    assertEq(gatewayRegistry.computationUnitsAvailable(peerId), 80);
   }
 
   function test_EmitsEvent() public {
     vm.expectEmit(address(gatewayRegistry));
     uint128 nextEpoch = router.networkController().nextEpoch();
-    emit Staked(address(this), 0, 100, nextEpoch, nextEpoch + 200, 0);
+    emit Staked(address(this), 100, nextEpoch, nextEpoch + 200, 0);
     gatewayRegistry.stake(100, 200);
-  }
-
-  function test_computationUnitsExpireAfterStakeUnlocks() public {
-    gatewayRegistry.stake(10 ether, 7500);
-    gatewayRegistry.stake(20 ether, 100000);
-    gatewayRegistry.stake(40 ether, 200000);
-    uint256 nextEpochStart = router.networkController().nextEpoch();
-    vm.roll(nextEpochStart + 7500 - 1);
-    assertEq(gatewayRegistry.computationUnitsAvailable(peerId), 350);
-    vm.roll(block.number + 1);
-    assertEq(gatewayRegistry.computationUnitsAvailable(peerId), 300);
-    vm.roll(block.number + 92500);
-    assertEq(gatewayRegistry.computationUnitsAvailable(peerId), 200);
-    vm.roll(block.number + 100000);
-    assertEq(gatewayRegistry.computationUnitsAvailable(peerId), 0);
   }
 }

@@ -22,7 +22,7 @@ contract GatewayRegistryTest is BaseTest {
   address[] addresses = [address(0), address(0), address(1)];
 
   event Staked(
-    address indexed gateway, uint256 index, uint256 amount, uint128 lockStart, uint128 lockedUntil, uint256 cus
+    address indexed gateway, uint256 amount, uint128 lockStart, uint128 lockedUntil, uint256 cus
   );
 
   function setUp() public {
@@ -34,7 +34,7 @@ contract GatewayRegistryTest is BaseTest {
     gatewayRegistry.register(peerId, "", address(this));
   }
 
-  function assertStake(uint256 stakeId, uint256 amount, uint256 lockedUntil) internal {
+  function assertStake(uint256, uint256 amount, uint256 lockedUntil) internal {
     GatewayRegistry.Stake memory stake = gatewayRegistry.getStake(address(this));
     assertEq(amount, stake.amount);
     assertEq(lockedUntil, stake.lockEnd);

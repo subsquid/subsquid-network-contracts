@@ -60,7 +60,7 @@ pnpm run test
 | **WorkerRegistration**             | [0x7Bf0B1ee9767eAc70A857cEbb24b83115093477F](https://sepolia.arbiscan.io/address/0x7Bf0B1ee9767eAc70A857cEbb24b83115093477F) |
 | **RewardTreasury**                 | [0xBE8518812597C37FA807b1B8A4a3Bb98849E67ab](https://sepolia.arbiscan.io/address/0xBE8518812597C37FA807b1B8A4a3Bb98849E67ab) |
 | **DistributedRewardsDistribution** | [0xcD7560602c6583a1E6dc38df271A3aB5A2023D9b](https://sepolia.arbiscan.io/address/0xcD7560602c6583a1E6dc38df271A3aB5A2023D9b) |
-| **GatewayRegistry**                | [0x42B67155a68D3F4092030d2AE15e03Fe6221013d](https://sepolia.arbiscan.io/address/0x42B67155a68D3F4092030d2AE15e03Fe6221013d) |
+| **GatewayRegistry**                | [0x01D7D0CC06cDdD744a9E06C9bc5249DA6da3e848](https://sepolia.arbiscan.io/address/0x01D7D0CC06cDdD744a9E06C9bc5249DA6da3e848) |
 | **VestingFactory**                 | [0x0eD5FB811167De1928322a0fa30Ed7F3c8C370Ca](https://sepolia.arbiscan.io/address/0x0eD5FB811167De1928322a0fa30Ed7F3c8C370Ca) |
 | **RewardCalculation**              | [0xA60Ce3598A94AE2a7E381aDe710f3C747A590CFB](https://sepolia.arbiscan.io/address/0xA60Ce3598A94AE2a7E381aDe710f3C747A590CFB) |
 

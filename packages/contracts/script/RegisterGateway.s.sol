@@ -29,7 +29,7 @@ contract RegisterGateway is Script {
     }
     token.approve(address(gatewayReg), stakeAmount);
     if (gatewayReg.getStake(gatewayReg.getGateway(peerId).operator).amount > 0) {
-      gatewayReg.addStake(stakeAmount, duration);
+      gatewayReg.addStake(stakeAmount);
     } else {
       gatewayReg.stake(stakeAmount, duration);
     }
