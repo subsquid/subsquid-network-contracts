@@ -156,6 +156,12 @@ contract GatewayRegistry is AccessControlledPausable, IGatewayRegistry {
     token.transferFrom(msg.sender, address(this), amount);
 
     emit Staked(msg.sender, amount, lockStart, lockEnd, _computationUnits);
+
+    if (withAutoExtension) {
+      emit AutoextensionEnabled(msg.sender);
+    } else {
+      emit AutoextensionDisabled(msg.sender, lockEnd);
+    }
   }
 
   function stake(uint256 amount, uint128 durationBlocks) external {
@@ -165,6 +171,7 @@ contract GatewayRegistry is AccessControlledPausable, IGatewayRegistry {
   function addStake(uint amount) public whenNotPaused {
     Stake storage _stake = operators[msg.sender].stake;
     require(_stake.amount > 0, "Cannot add stake when nothing was staked");
+    require(_stake.lockStart <= block.number, "Stake is not started");
     uint256 _computationUnits = computationUnitsAmount(amount, _stake.duration);
     _stake.lockStart = router.networkController().nextEpoch();
     _stake.lockEnd = _stake.autoExtension ? type(uint128).max : _stake.lockStart + _stake.duration;
