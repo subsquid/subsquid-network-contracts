@@ -17,6 +17,14 @@ contract WorkerRegistrationRegisterTest is WorkerRegistrationTest {
     workerRegistration.register(workerId, "metadata");
   }
 
+  function test_MakesWorkerActive() public {
+    assertEq(workerRegistration.isWorkerActive(1), false);
+    workerRegistration.register(workerId);
+    assertEq(workerRegistration.isWorkerActive(1), false);
+    jumpEpoch();
+    assertEq(workerRegistration.isWorkerActive(1), true);
+  }
+
   function test_RevertsIfSameWorkedRegisteredTwice() public {
     workerRegistration.register(workerId);
     vm.expectRevert("Worker already exists");

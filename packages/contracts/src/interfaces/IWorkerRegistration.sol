@@ -29,4 +29,6 @@ interface IWorkerRegistration {
   function getOwnedWorkers(address who) external view returns (uint256[] memory);
 
   function nextWorkerId() external view returns (uint256);
+
+  function isWorkerActive(uint256 workerId) external view returns (bool);
 }

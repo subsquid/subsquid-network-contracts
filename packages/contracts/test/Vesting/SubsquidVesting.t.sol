@@ -156,7 +156,8 @@ contract SubsquidVestingTest is BaseTest {
     token.transfer(router.rewardTreasury(), 30 ether);
     bytes memory call = abi.encodeWithSelector(IWorkerRegistration.register.selector, "test-peer-id-1", "metadata");
     vesting.execute(address(router.workerRegistration()), call, 10 ether);
-    bytes memory call2 = abi.encodeWithSelector(Staking.deposit.selector, 0, 1 ether);
+    vm.roll(block.number + 10);
+    bytes memory call2 = abi.encodeWithSelector(Staking.deposit.selector, 1, 1 ether);
     vesting.execute(address(router.staking()), call2, 1 ether);
     Staking staking = Staking(address(router.staking()));
     MockRewardsDistribution rewardsDistribution = new MockRewardsDistribution();

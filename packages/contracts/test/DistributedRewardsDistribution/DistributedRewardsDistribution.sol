@@ -47,6 +47,9 @@ contract RewardsDistributionTest is BaseTest {
     token.approve(address(workerRegistration), type(uint256).max);
     hoax(workerOwner);
     workerRegistration.register(workerId);
+    vm.mockCall(
+      address(workerRegistration), abi.encodeWithSelector(WorkerRegistration.isWorkerActive.selector), abi.encode(true)
+    );
     rewardsDistribution = new DistributionHelper(router);
     staking.grantRole(staking.REWARDS_DISTRIBUTOR_ROLE(), address(rewardsDistribution));
     rewardsDistribution.addDistributor(address(this));
