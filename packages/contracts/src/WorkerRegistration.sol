@@ -105,14 +105,6 @@ contract WorkerRegistration is AccessControlledPausable, IWorkerRegistration {
 
     workers[workerId].deregisteredAt = nextEpoch();
 
-    for (uint256 i = 0; i < activeWorkerIds.length; i++) {
-      if (activeWorkerIds[i] == workerId) {
-        activeWorkerIds[i] = activeWorkerIds[activeWorkerIds.length - 1];
-        activeWorkerIds.pop();
-        break;
-      }
-    }
-
     emit WorkerDeregistered(workerId, msg.sender, workers[workerId].deregisteredAt);
   }
 
@@ -130,6 +122,14 @@ contract WorkerRegistration is AccessControlledPausable, IWorkerRegistration {
     require(!isWorkerActive(worker), "Worker is active");
     require(worker.creator == msg.sender, "Not worker creator");
     require(block.number >= worker.deregisteredAt + lockPeriod(), "Worker is locked");
+
+    for (uint256 i = 0; i < activeWorkerIds.length; i++) {
+      if (activeWorkerIds[i] == workerId) {
+        activeWorkerIds[i] = activeWorkerIds[activeWorkerIds.length - 1];
+        activeWorkerIds.pop();
+        break;
+      }
+    }
 
     uint256 bond = worker.bond;
     delete workers[workerId];
@@ -173,7 +173,7 @@ contract WorkerRegistration is AccessControlledPausable, IWorkerRegistration {
   }
 
   /// @dev Returns the list of active workers.
-  function getActiveWorkers() public view returns (Worker[] memory) {
+  function getActiveWorkers() external view returns (Worker[] memory) {
     Worker[] memory activeWorkers = new Worker[](getActiveWorkerCount());
 
     uint256 activeIndex = 0;

@@ -98,4 +98,28 @@ contract WorkerRegistrationWithdrawTest is WorkerRegistrationTest {
     emit WorkerWithdrawn(1, creator);
     workerRegistration.withdraw(workerId);
   }
+
+  function testRemovesLastWorkerIdFromActiveWorkerIds() public {
+    workerRegistration.register(workerId);
+    jumpEpoch();
+    workerRegistration.deregister(workerId);
+    jumpEpoch();
+    jumpEpoch();
+    workerRegistration.withdraw(workerId);
+    assertEq(workerRegistration.getAllWorkersCount(), 0);
+  }
+
+  function testRemovesNotLastWorkerIdFromActiveWorkerIds() public {
+    token.approve(address(workerRegistration), workerRegistration.bondAmount() * 2);
+
+    workerRegistration.register(workerId);
+    workerRegistration.register(workerId2);
+    jumpEpoch();
+    workerRegistration.deregister(workerId);
+    jumpEpoch();
+    jumpEpoch();
+    workerRegistration.withdraw(workerId);
+    assertEq(workerRegistration.getAllWorkersCount(), 1);
+    assertEq(workerRegistration.getWorkerByIndex(0).peerId, workerId2);
+  }
 }
