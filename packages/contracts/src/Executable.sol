@@ -10,6 +10,7 @@ abstract contract Executable {
 
   IERC20 public tSQD;
   IRouter public router;
+  uint256 public depositedIntoProtocol;
 
   function _canExecute(address executor) internal view virtual returns (bool);
 
@@ -28,6 +29,14 @@ abstract contract Executable {
     if (requiredApprove > 0) {
       tSQD.approve(to, requiredApprove);
     }
-    return to.functionCall(data);
+    depositedIntoProtocol += tSQD.balanceOf(address(this));
+    bytes memory result = to.functionCall(data);
+    uint256 balanceAfter = tSQD.balanceOf(address(this));
+    if (balanceAfter > depositedIntoProtocol) {
+      depositedIntoProtocol = 0;
+    } else {
+      depositedIntoProtocol -= balanceAfter;
+    }
+    return result;
   }
 }
