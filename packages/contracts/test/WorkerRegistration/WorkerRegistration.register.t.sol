@@ -42,7 +42,7 @@ contract WorkerRegistrationRegisterTest is WorkerRegistrationTest {
   function test_CorrectlyCreatesWorkerStruct() public {
     workerRegistration.register(workerId, "metadata");
 
-    WorkerRegistration.Worker memory workerStruct = workerRegistration.getWorkerByIndex(0);
+    WorkerRegistration.Worker memory workerStruct = workerRegistration.getWorker(1);
     assertEq(workerStruct.creator, creator);
     assertEq(workerStruct.peerId, workerId);
     assertEq(workerStruct.bond, workerRegistration.bondAmount());

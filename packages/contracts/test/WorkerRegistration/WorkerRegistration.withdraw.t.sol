@@ -120,6 +120,6 @@ contract WorkerRegistrationWithdrawTest is WorkerRegistrationTest {
     jumpEpoch();
     workerRegistration.withdraw(workerId);
     assertEq(workerRegistration.getAllWorkersCount(), 1);
-    assertEq(workerRegistration.getWorkerByIndex(0).peerId, workerId2);
+    assertEq(workerRegistration.getActiveWorkers()[0].peerId, workerId2);
   }
 }
