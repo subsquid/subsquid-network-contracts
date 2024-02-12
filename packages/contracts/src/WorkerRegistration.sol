@@ -206,6 +206,10 @@ contract WorkerRegistration is AccessControlledPausable, IWorkerRegistration {
     return activeWorkers;
   }
 
+  function isWorkerActive(uint256 workerId) external view returns (bool) {
+    return isWorkerActive(workers[workerId]);
+  }
+
   /// @dev Returns true if worker is active.
   /// @notice Worker is considered active if it has been registered and not deregistered yet
   function isWorkerActive(Worker storage worker) internal view returns (bool) {
