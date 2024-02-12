@@ -113,6 +113,7 @@ contract GatewayRegistry is AccessControlledPausable, IGatewayRegistry {
     require(gateway.totalStaked == gateway.totalUnstaked, "Gateway has staked tokens");
     delete gatewayByAddress[gateway.ownAddress];
     delete gateways[peerIdHash];
+    delete stakes[peerIdHash];
 
     emit Unregistered(msg.sender, peerId);
   }
@@ -185,7 +186,11 @@ contract GatewayRegistry is AccessControlledPausable, IGatewayRegistry {
     for (uint256 i = 0; i < _stakes.length; i++) {
       Stake memory _stake = _stakes[i];
       if (_stake.lockStart <= blockNumber && _stake.lockEnd > blockNumber) {
-        total += _stake.computationUnits * epochLength / (uint256(_stake.lockEnd - _stake.lockStart));
+        if (_stakes[i].lockEnd - _stakes[i].lockStart <= epochLength) {
+          total += _stake.computationUnits;
+        } else {
+          total += _stake.computationUnits * epochLength / (uint256(_stake.lockEnd - _stake.lockStart));
+        }
       }
     }
     return total;
@@ -278,6 +283,7 @@ contract GatewayRegistry is AccessControlledPausable, IGatewayRegistry {
       require(gatewayByAddress[newAddress] == bytes32(0), "Gateway address already registered");
       gatewayByAddress[newAddress] = peerIdHash;
     }
+    gateway.ownAddress = newAddress;
 
     emit GatewayAddressChanged(msg.sender, peerId, newAddress);
   }
