@@ -32,6 +32,8 @@ contract NetworkController is AccessControl, INetworkController {
     }
     epochLength = _epochLength;
     firstEpochBlock = nextEpoch();
+    emit EpochLengthUpdated(_epochLength);
+
     setBondAmount(_bondAmount);
   }
 
@@ -40,9 +42,10 @@ contract NetworkController is AccessControl, INetworkController {
     require(_epochLength > 1, "Epoch length too short");
     require(_epochLength < 100000, "Epoch length too long");
 
+    uint128 nextEpochStart = nextEpoch();
     epochCheckpoint = epochNumber();
+    firstEpochBlock = nextEpochStart;
     epochLength = _epochLength;
-    firstEpochBlock = nextEpoch();
 
     emit EpochLengthUpdated(_epochLength);
   }
@@ -89,7 +92,9 @@ contract NetworkController is AccessControl, INetworkController {
 
   /// @inheritdoc INetworkController
   function nextEpoch() public view returns (uint128) {
-    return (uint128(block.number) / epochLength + 1) * epochLength;
+    uint128 blockNumber = uint128(block.number);
+    if (blockNumber < firstEpochBlock) return firstEpochBlock;
+    return ((blockNumber - firstEpochBlock) / epochLength + 1) * epochLength + firstEpochBlock;
   }
 
   /// @inheritdoc INetworkController

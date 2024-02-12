@@ -27,11 +27,11 @@ contract WorkerRegistrationTest is BaseTest {
   event Unstaked(uint256 indexed workerId, address indexed staker, uint256 amount);
 
   function nextEpoch() internal view returns (uint128) {
-    return (uint128(block.number) / 2 + 1) * 2;
+    return ((uint128(block.number) - 5) / 2 + 1) * 2 + 5;
   }
 
   function jumpEpoch() internal {
-    vm.roll(block.number + 3);
+    vm.roll(block.number + 2);
   }
 
   function setUp() public {
@@ -40,6 +40,7 @@ contract WorkerRegistrationTest is BaseTest {
     workerRegistration = WorkerRegistration(address(router.workerRegistration()));
     networkController = NetworkController(address(router.networkController()));
     networkController.setEpochLength(EPOCH_LENGTH);
+    vm.roll(workerRegistration.nextEpoch());
     staking = Staking(address(router.staking()));
     token.approve(address(workerRegistration), workerRegistration.bondAmount());
   }

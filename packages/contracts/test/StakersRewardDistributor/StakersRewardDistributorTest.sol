@@ -33,6 +33,11 @@ contract StakersRewardDistributionTest is BaseTest {
     hoax(address(1));
     token.approve(address(staking), type(uint256).max);
     staking.grantRole(staking.REWARDS_DISTRIBUTOR_ROLE(), address(this));
+    vm.mockCall(
+      address(router.workerRegistration()),
+      abi.encodeWithSelector(WorkerRegistration.isWorkerActive.selector),
+      abi.encode(true)
+    );
   }
 
   function assertPairClaimable(uint256 rewardA, uint256 rewardB) internal {

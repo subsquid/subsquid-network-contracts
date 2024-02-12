@@ -17,6 +17,14 @@ contract WorkerRegistrationRegisterTest is WorkerRegistrationTest {
     workerRegistration.register(workerId, "metadata");
   }
 
+  function test_MakesWorkerActive() public {
+    assertEq(workerRegistration.isWorkerActive(1), false);
+    workerRegistration.register(workerId);
+    assertEq(workerRegistration.isWorkerActive(1), false);
+    jumpEpoch();
+    assertEq(workerRegistration.isWorkerActive(1), true);
+  }
+
   function test_RevertsIfSameWorkedRegisteredTwice() public {
     workerRegistration.register(workerId);
     vm.expectRevert("Worker already exists");
@@ -42,7 +50,7 @@ contract WorkerRegistrationRegisterTest is WorkerRegistrationTest {
   function test_CorrectlyCreatesWorkerStruct() public {
     workerRegistration.register(workerId, "metadata");
 
-    WorkerRegistration.Worker memory workerStruct = workerRegistration.getWorkerByIndex(0);
+    WorkerRegistration.Worker memory workerStruct = workerRegistration.getWorker(1);
     assertEq(workerStruct.creator, creator);
     assertEq(workerStruct.peerId, workerId);
     assertEq(workerStruct.bond, workerRegistration.bondAmount());
