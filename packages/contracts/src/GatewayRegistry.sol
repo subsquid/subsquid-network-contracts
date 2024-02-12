@@ -137,7 +137,6 @@ contract GatewayRegistry is AccessControlledPausable, IGatewayRegistry {
     require(operators[msg.sender].ownedGateways.remove(peerIdHash), "Gateway not removed from operator");
     delete gatewayByAddress[gateway.ownAddress];
     delete gateways[peerIdHash];
-    delete stakes[peerIdHash];
 
     emit Unregistered(msg.sender, peerId);
   }
