@@ -38,7 +38,7 @@ contract WorkerRegistration is AccessControlledPausable, IWorkerRegistration {
   IRouter public immutable router;
   mapping(uint256 => Worker) public workers;
   mapping(bytes peerId => uint256 id) public workerIds;
-  uint256[] public activeWorkerIds;
+  EnumerableSet.UintSet activeWorkerIds;
   mapping(address creator => EnumerableSet.UintSet) internal ownedWorkers;
 
   /**
@@ -83,7 +83,7 @@ contract WorkerRegistration is AccessControlledPausable, IWorkerRegistration {
     });
 
     workerIds[peerId] = workerId;
-    activeWorkerIds.push(workerId);
+    activeWorkerIds.add(workerId);
     ownedWorkers[msg.sender].add(workerId);
 
     tSQD.transferFrom(msg.sender, address(this), _bondAmount);
@@ -105,14 +105,6 @@ contract WorkerRegistration is AccessControlledPausable, IWorkerRegistration {
 
     workers[workerId].deregisteredAt = nextEpoch();
 
-    for (uint256 i = 0; i < activeWorkerIds.length; i++) {
-      if (activeWorkerIds[i] == workerId) {
-        activeWorkerIds[i] = activeWorkerIds[activeWorkerIds.length - 1];
-        activeWorkerIds.pop();
-        break;
-      }
-    }
-
     emit WorkerDeregistered(workerId, msg.sender, workers[workerId].deregisteredAt);
   }
 
@@ -130,6 +122,8 @@ contract WorkerRegistration is AccessControlledPausable, IWorkerRegistration {
     require(!isWorkerActive(worker), "Worker is active");
     require(worker.creator == msg.sender, "Not worker creator");
     require(worker.deregisteredAt > 0 && block.number >= worker.deregisteredAt + lockPeriod(), "Worker is locked");
+
+    activeWorkerIds.remove(workerId);
 
     uint256 bond = worker.bond;
     delete workers[workerId];
@@ -173,12 +167,13 @@ contract WorkerRegistration is AccessControlledPausable, IWorkerRegistration {
   }
 
   /// @dev Returns the list of active workers.
-  function getActiveWorkers() public view returns (Worker[] memory) {
+  function getActiveWorkers() external view returns (Worker[] memory) {
     Worker[] memory activeWorkers = new Worker[](getActiveWorkerCount());
+    uint256[] memory _activeWorkerIds = activeWorkerIds.values();
 
     uint256 activeIndex = 0;
-    for (uint256 i = 0; i < activeWorkerIds.length; i++) {
-      uint256 workerId = activeWorkerIds[i];
+    for (uint256 i = 0; i < _activeWorkerIds.length; i++) {
+      uint256 workerId = _activeWorkerIds[i];
       Worker storage worker = workers[workerId];
       if (isWorkerActive(worker)) {
         activeWorkers[activeIndex] = worker;
@@ -192,10 +187,11 @@ contract WorkerRegistration is AccessControlledPausable, IWorkerRegistration {
   /// @dev Returns the list of active worker IDs.
   function getActiveWorkerIds() public view returns (uint256[] memory) {
     uint256[] memory activeWorkers = new uint256[](getActiveWorkerCount());
+    uint256[] memory _activeWorkerIds = activeWorkerIds.values();
 
     uint256 activeIndex = 0;
-    for (uint256 i = 0; i < activeWorkerIds.length; i++) {
-      uint256 workerId = activeWorkerIds[i];
+    for (uint256 i = 0; i < _activeWorkerIds.length; i++) {
+      uint256 workerId = _activeWorkerIds[i];
       Worker storage worker = workers[workerId];
       if (isWorkerActive(worker)) {
         activeWorkers[activeIndex] = workerId;
@@ -221,8 +217,9 @@ contract WorkerRegistration is AccessControlledPausable, IWorkerRegistration {
   /// @notice Worker is considered active if it has been registered and not deregistered yet
   function getActiveWorkerCount() public view returns (uint256) {
     uint256 activeCount = 0;
-    for (uint256 i = 0; i < activeWorkerIds.length; i++) {
-      uint256 workerId = activeWorkerIds[i];
+    uint256[] memory _activeWorkerIds = activeWorkerIds.values();
+    for (uint256 i = 0; i < _activeWorkerIds.length; i++) {
+      uint256 workerId = _activeWorkerIds[i];
       Worker storage worker = workers[workerId];
       if (isWorkerActive(worker)) {
         activeCount++;
@@ -232,11 +229,9 @@ contract WorkerRegistration is AccessControlledPausable, IWorkerRegistration {
   }
 
   /// @dev Get worker by index
-  /// @param index Index of the worker
+  /// @param workerId ID of the worker
   /// @return Worker under the index
-  function getWorkerByIndex(uint256 index) external view returns (Worker memory) {
-    require(index < activeWorkerIds.length, "Index out of bounds");
-    uint256 workerId = activeWorkerIds[index];
+  function getWorker(uint256 workerId) external view returns (Worker memory) {
     return workers[workerId];
   }
 
@@ -247,7 +242,7 @@ contract WorkerRegistration is AccessControlledPausable, IWorkerRegistration {
 
   /// @dev get count of all workers
   function getAllWorkersCount() external view returns (uint256) {
-    return activeWorkerIds.length;
+    return activeWorkerIds.length();
   }
 
   function getMetadata(bytes calldata peerId) external view returns (string memory) {
