@@ -129,7 +129,7 @@ contract WorkerRegistration is AccessControlledPausable, IWorkerRegistration {
     Worker storage worker = workers[workerId];
     require(!isWorkerActive(worker), "Worker is active");
     require(worker.creator == msg.sender, "Not worker creator");
-    require(block.number >= worker.deregisteredAt + lockPeriod(), "Worker is locked");
+    require(worker.deregisteredAt > 0 && block.number >= worker.deregisteredAt + lockPeriod(), "Worker is locked");
 
     uint256 bond = worker.bond;
     delete workers[workerId];
@@ -214,7 +214,7 @@ contract WorkerRegistration is AccessControlledPausable, IWorkerRegistration {
   /// @notice Worker is considered active if it has been registered and not deregistered yet
   function isWorkerActive(Worker storage worker) internal view returns (bool) {
     return worker.registeredAt > 0 && worker.registeredAt <= block.number
-      && (worker.deregisteredAt == 0 || worker.deregisteredAt >= block.number);
+      && (worker.deregisteredAt == 0 || worker.deregisteredAt > block.number);
   }
 
   /// @dev Returns the number of active workers.

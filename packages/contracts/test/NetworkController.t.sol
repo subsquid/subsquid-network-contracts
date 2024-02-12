@@ -2,7 +2,7 @@
 pragma solidity 0.8.20;
 
 import "../src/NetworkController.sol";
-import {BaseTest} from "./BaseTest.sol";
+import "./BaseTest.sol";
 
 contract NetworkControllerTest is BaseTest {
   NetworkController controller;
@@ -34,16 +34,20 @@ contract NetworkControllerTest is BaseTest {
   function test_EpochNumberAfterEpochLengthChange() public {
     vm.roll(27);
     assertEq(controller.epochNumber(), 5);
-    controller.setEpochLength(10);
+    assertEq(controller.nextEpoch(), 30);
+    controller.setEpochLength(13);
+    assertEq(controller.nextEpoch(), 30);
     assertEq(controller.epochNumber(), 5);
     vm.roll(29);
     assertEq(controller.epochNumber(), 5);
     vm.roll(30);
     assertEq(controller.epochNumber(), 6);
-    vm.roll(39);
+    assertEq(controller.nextEpoch(), 43);
+    vm.roll(42);
     assertEq(controller.epochNumber(), 6);
-    vm.roll(40);
+    vm.roll(43);
     assertEq(controller.epochNumber(), 7);
+    assertEq(controller.nextEpoch(), 56);
   }
 
   function test_RevertsIf_SettingEpochLengthNotByAdmin() public {
