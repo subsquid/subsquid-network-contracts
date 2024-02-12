@@ -109,11 +109,13 @@ contract DistributedRewardsDistribution is AccessControlledPausable, IRewardsDis
   ) external whenNotPaused {
     require(recipients.length == workerRewards.length, "Recipients and worker amounts length mismatch");
     require(recipients.length == _stakerRewards.length, "Recipients and staker amounts length mismatch");
+    require(toBlock >= fromBlock, "toBlock before fromBlock");
 
     require(currentDistributor() == msg.sender, "Not a distributor");
     require(toBlock < block.number, "Future block");
     bytes32 commitment = keccak256(msg.data[4:]);
     require(!alreadyApproved[commitment][msg.sender], "Already approved");
+    require(commitments[fromBlock][toBlock] != commitment, "Commitment already exists");
     commitments[fromBlock][toBlock] = commitment;
     approves[fromBlock][toBlock] = 1;
     alreadyApproved[commitment][msg.sender] = true;
