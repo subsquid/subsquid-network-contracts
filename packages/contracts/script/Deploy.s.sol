@@ -28,7 +28,7 @@ contract Deploy is Script {
       address[] memory recipients = new address[](1);
       recipients[0] = vm.addr(deployerPrivateKey);
       uint256[] memory amounts = new uint256[](1);
-      amounts[0] = 100;
+      amounts[0] = 1337 * (10 ** 6) * 1 ether;
       token = new tSQD(recipients, amounts, IL1CustomGateway(address(0)), IGatewayRouter2(address(0)));
     }
     address proxyAdmin = address(new ProxyAdmin(vm.addr(deployerPrivateKey)));

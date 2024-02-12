@@ -13,4 +13,5 @@ WORKER_ID=$(python3 b58.py $WORKER2_ID) forge script script/RegisterWorker.s.sol
 
 echo "Register gateways"
 
-GATEWAY_ID=$(python3 b58.py $GATEWAY_ID) forge script script/RegisterGateway.s.sol --broadcast --rpc-url $RPC_URL
+GATEWAY_ID=$(python3 b58.py $GATEWAY1_ID) forge script script/RegisterGateway.s.sol --broadcast --rpc-url $RPC_URL
+GATEWAY_ID=$(python3 b58.py $GATEWAY2_ID) forge script script/RegisterGateway.s.sol --broadcast --rpc-url $RPC_URL

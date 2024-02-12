@@ -173,7 +173,9 @@ contract Staking is AccessControlledPausable, IStaking {
     uint256 rewarded = pendingReward(_rewards, msg.sender);
     _claimable[msg.sender] += rewarded;
     _rewards.checkpoint[msg.sender] = _rewards.cumulatedRewardsPerShare;
-    emit Rewarded(workerId, msg.sender, rewarded);
+    if (rewarded > 0) {
+      emit Rewarded(workerId, msg.sender, rewarded);
+    }
   }
 
   function pendingReward(StakerRewards storage _rewards, address staker) internal view returns (uint256) {

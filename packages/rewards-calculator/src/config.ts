@@ -3,6 +3,7 @@ import tSQDAbi from "../../contracts/artifacts/tSQD.sol/tSQD";
 import rewardCalculationAbi from "../../contracts/artifacts/RewardCalculation.sol/RewardCalculation";
 import rewardsDistributionAbi from "../../contracts/artifacts/DistributedRewardDistribution.sol/DistributedRewardsDistribution";
 import stakingAbi from "../../contracts/artifacts/Staking.sol/Staking";
+import capAbi from "../../contracts/artifacts/SoftCap.sol/SoftCap";
 import deployments from "../../contracts/deployments/421614.json" assert { type: "json" };
 import {
   Address,
@@ -58,6 +59,7 @@ export const addresses = {
   rewardCalculation: deployments.RewardCalculation,
   rewardsDistribution: deployments.DistributedRewardsDistribution,
   staking: deployments.Staking,
+  capedStaking: deployments.SoftCap,
 } as { [key in ContractName]: Address };
 
 export const abis = {
@@ -66,6 +68,7 @@ export const abis = {
   rewardCalculation: rewardCalculationAbi,
   rewardsDistribution: rewardsDistributionAbi,
   staking: stakingAbi,
+  capedStaking: capAbi,
 } as const;
 
 export const publicClient = createPublicClient({
@@ -102,4 +105,5 @@ export const contracts = {
   rewardCalculation: contract("rewardCalculation"),
   rewardsDistribution: contract("rewardsDistribution"),
   staking: contract("staking"),
+  capedStaking: contract("capedStaking"),
 };

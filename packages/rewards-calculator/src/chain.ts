@@ -193,14 +193,14 @@ export async function approveRewards(
 export async function getStakes(workers: Workers, blockNumber?: bigint) {
   const calls = await Promise.all(
     workers.map(async (worker) => ({
-      address: contracts.staking.address,
-      abi: contracts.staking.abi,
-      functionName: "activeStake" as "activeStake",
-      args: [[await worker.getId()]] as const,
+      address: contracts.capedStaking.address,
+      abi: contracts.capedStaking.abi,
+      functionName: "capedStake" as "capedStake",
+      args: [await worker.getId()] as const,
     })),
   );
   return publicClient.multicall<
-    ContractFunctionConfig<typeof contracts.staking.abi, "activeStake">[]
+    ContractFunctionConfig<typeof contracts.capedStaking.abi, "capedStake">[]
   >({
     contracts: calls,
     blockNumber,
