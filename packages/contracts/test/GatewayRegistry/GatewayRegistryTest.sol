@@ -21,9 +21,7 @@ contract GatewayRegistryTest is BaseTest {
   string[] metadatas = ["", "some test metadata", ""];
   address[] addresses = [address(0), address(0), address(1)];
 
-  event Staked(
-    address indexed gateway, uint256 amount, uint128 lockStart, uint128 lockedUntil, uint256 cus
-  );
+  event Staked(address indexed gateway, uint256 amount, uint128 lockStart, uint128 lockedUntil, uint256 cus);
 
   function setUp() public {
     (token, router) = deployAll();
