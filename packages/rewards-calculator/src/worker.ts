@@ -3,7 +3,11 @@ import { getWorkerId } from "./chain";
 import { QueryLog, validateSignatures } from "./signatureVerification";
 import { config } from "./config";
 
+import Decimal from 'decimal.js';
+Decimal.set({ precision: 9 })
+
 const PRECISION = 1_000_000_000n;
+
 export class Worker {
   private contractId: bigint | undefined;
   public networkStats: NetworkStatsEntry;
@@ -14,6 +18,7 @@ export class Worker {
   public stake = 0n;
   public livenessCoefficient = 0;
   public bond = 0n;
+  public actualYield = 0;
   public workerReward: bigint;
   public stakerReward: bigint;
   public dTenure: number;
@@ -85,11 +90,27 @@ export class Worker {
   }
 
   public async getRewards(rMax: number) {
-    const actualYield =
-      rMax * this.livenessCoefficient * this.dTraffic * this.dTenure;
-    const preciseR = BigInt(Math.floor(actualYield * Number(PRECISION)));
+    this.actualYield = rMax * this.livenessCoefficient * this.dTraffic * this.dTenure;
+
+    const preciseR = BigInt(Math.floor(this.actualYield * Number(PRECISION)));
     this.workerReward = (preciseR * (this.bond + this.stake / 2n)) / PRECISION;
     this.stakerReward = (preciseR * this.stake) / 2n / PRECISION;
+  }
+
+  public stakeWeight(stakeSum: bigint) {
+    return Number(stakeSum === 0n ? 0n : this.stake / stakeSum);
+  }
+
+  public apr(epochDuration: number, year: number) {
+    const bond = new Decimal(this.bond.toString());
+    const workerReward = new Decimal(this.workerReward.toString());
+    const stakerReward = new Decimal(this.workerReward.toString());
+    const durtation = new Decimal(year).div(epochDuration);
+
+    return {
+      workerAPR: workerReward.div(bond).mul(durtation).toFixed(9),
+      delegatorAPR: stakerReward.div(bond).mul(durtation).toFixed(9),
+    }
   }
 
   private normalizeTraffic(totalBytesSent: number, totalChunksRead: number) {

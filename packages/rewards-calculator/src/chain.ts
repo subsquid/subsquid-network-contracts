@@ -207,6 +207,19 @@ export async function getStakes(workers: Workers, blockNumber?: bigint) {
   });
 }
 
+export async function targetCapacity(blockNumber?: bigint) {
+  return Number(
+    await contracts.networkController.read.targetCapacityGb({ blockNumber })
+  );
+}
+
+
+export async function storagePerWorkerInGb(blockNumber?: bigint) {
+  return Number(
+    await contracts.networkController.read.storagePerWorkerInGb({ blockNumber })
+  );
+}
+
 export type MulticallResult<T> =
   | {
       error: Error;

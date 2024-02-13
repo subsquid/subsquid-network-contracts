@@ -7,6 +7,8 @@ import {
   getStakes,
   MulticallResult,
   preloadWorkerIds,
+  storagePerWorkerInGb,
+  targetCapacity as getTargetCapacity,
 } from "./chain";
 import { bigSum, formatSqd, keysToFixed, sum } from "./utils";
 import {
@@ -21,10 +23,17 @@ import { config } from "./config";
 import { Rewards } from "./reward";
 
 const YEAR = 365 * 24 * 60 * 60;
+
+
 export class Workers {
   private workers: Record<string, Worker> = {};
   private bond = 0n;
   private nextDistributionStartBlockNumber: bigint;
+
+  baseApr: number = 0;
+  stakeFactor: number = 0;
+  rAPR: number = 0;
+
 
   constructor(private clickhouseClient: ClickhouseClient) {}
 
@@ -121,11 +130,53 @@ export class Workers {
       dayjs(this.clickhouseClient.from),
       "second",
     );
+    this.baseApr = await currentApy(this.nextDistributionStartBlockNumber);
+
+    this.stakeFactor = this.calculateStakeFactor();
+
+    this.rAPR = this.baseApr;
+
     const rMax =
-      ((await currentApy(this.nextDistributionStartBlockNumber)) * duration) /
+      (this.rAPR * duration) /
       YEAR /
       10_000;
     this.map((worker) => worker.getRewards(rMax));
+  }
+
+  public async calcluateLogs() {
+    const targetCapacity = await getTargetCapacity(this.nextDistributionStartBlockNumber);
+    const activeWorkersCount = this.count();
+    const storagePerWorker = await storagePerWorkerInGb(this.nextDistributionStartBlockNumber);
+    const currentCapacity = activeWorkersCount * storagePerWorker;
+
+    const stakeSum =  bigSum(this.map(({ stake }) => stake))
+
+    const duration = dayjs(this.clickhouseClient.to).diff(
+      dayjs(this.clickhouseClient.from),
+      "second",
+    );
+
+    console.log(JSON.stringify({
+      time: new Date(),
+      type: 'rewards_report',
+      targetCapacity,
+      currentCapacity,
+      activeWorkersCount,
+      baseApr: this.baseApr,
+      stakeFactor: this.stakeFactor,
+      rAPR: this.rAPR
+    })),
+    this.map(worker => console.log(
+      JSON.stringify({
+        time: new Date(),
+        type: 'worker_report',
+        workerId: worker.peerId,
+        t_i: worker.trafficWeight,
+        s_i: worker.stakeWeight(stakeSum),
+        r_i: worker.actualYield,
+        ...worker.apr(duration, YEAR),
+      })
+    ));
   }
 
   private parseMulticallResult<
@@ -164,6 +215,10 @@ export class Workers {
       BigInt(YEAR) /
       10_000n
     );
+  }
+
+  private calculateStakeFactor() {
+    return 1;
   }
 
   public async logStats() {
