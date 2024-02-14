@@ -10,7 +10,7 @@ import {
   storagePerWorkerInGb,
   targetCapacity as getTargetCapacity,
 } from "./chain";
-import { bigSum, formatSqd, keysToFixed, sum } from "./utils";
+import { bigIntToDecimal, decimalSum, decimalToBigInt, formatSqd, keysToFixed, sum } from "./utils";
 import {
   ClickhouseClient,
   historicalLiveness,
@@ -22,17 +22,19 @@ import dayjs from "dayjs";
 import { config } from "./config";
 import { Rewards } from "./reward";
 
-const YEAR = 365 * 24 * 60 * 60;
+import Decimal from 'decimal.js';
+Decimal.set({ precision: 18, minE: -9 })
 
+const YEAR = 365 * 24 * 60 * 60;
 
 export class Workers {
   private workers: Record<string, Worker> = {};
-  private bond = 0n;
+  private bond = new Decimal(0);
   private nextDistributionStartBlockNumber: bigint;
 
-  baseApr: number = 0;
-  stakeFactor: number = 0;
-  rAPR: number = 0;
+  baseApr = new Decimal(0);
+  stakeFactor = new Decimal(0);
+  rAPR = new Decimal(0);
 
 
   constructor(private clickhouseClient: ClickhouseClient) {}
@@ -61,7 +63,9 @@ export class Workers {
   }
 
   public async fetchCurrentBond() {
-    this.bond = await bond(this.nextDistributionStartBlockNumber);
+    const bondRaw = await bond(this.nextDistributionStartBlockNumber);
+    this.bond = new Decimal(bondRaw.toString())
+
     this.map((worker) => {
       worker.bond = this.bond;
     });
@@ -85,7 +89,7 @@ export class Workers {
 
   public async getStakes() {
     const stakes = await getStakes(this, this.nextDistributionStartBlockNumber);
-    this.parseMulticallResult("stake", stakes);
+    this.parseMulticallResult("stake", stakes, bigIntToDecimal);
   }
 
   public getT() {
@@ -95,7 +99,7 @@ export class Workers {
   }
 
   public getDTrraffic() {
-    const totalTraffic = sum(this.map(({ trafficWeight }) => trafficWeight));
+    const totalTraffic = decimalSum(this.map(({ trafficWeight }) => trafficWeight));
     this.map((worker) =>
       worker.calculateDTraffic(this.totalSupply(), totalTraffic),
     );
@@ -130,16 +134,15 @@ export class Workers {
       dayjs(this.clickhouseClient.from),
       "second",
     );
-    this.baseApr = await currentApy(this.nextDistributionStartBlockNumber);
+    const baseApr = await currentApy(this.nextDistributionStartBlockNumber);
+    this.baseApr = new Decimal(baseApr.toString());
 
     this.stakeFactor = this.calculateStakeFactor();
 
     this.rAPR = this.baseApr;
 
     const rMax =
-      (this.rAPR * duration) /
-      YEAR /
-      10_000;
+      this.rAPR.mul(duration).div(YEAR).div(10_000);
     this.map((worker) => worker.getRewards(rMax));
   }
 
@@ -149,7 +152,7 @@ export class Workers {
     const storagePerWorker = await storagePerWorkerInGb(this.nextDistributionStartBlockNumber);
     const currentCapacity = activeWorkersCount * storagePerWorker;
 
-    const stakeSum =  bigSum(this.map(({ stake }) => stake))
+    const stakeSum =  decimalSum(this.map(({ stake }) => stake))
 
     const duration = dayjs(this.clickhouseClient.to).diff(
       dayjs(this.clickhouseClient.from),
@@ -162,18 +165,18 @@ export class Workers {
       targetCapacity,
       currentCapacity,
       activeWorkersCount,
-      baseApr: this.baseApr,
-      stakeFactor: this.stakeFactor,
-      rAPR: this.rAPR
+      baseApr: this.baseApr.toFixed(),
+      stakeFactor: this.stakeFactor.toFixed(),
+      rAPR: this.rAPR.toFixed()
     })),
     this.map(worker => console.log(
       JSON.stringify({
         time: new Date(),
         type: 'worker_report',
         workerId: worker.peerId,
-        t_i: worker.trafficWeight,
-        s_i: worker.stakeWeight(stakeSum),
-        r_i: worker.actualYield,
+        t_i: worker.trafficWeight.toFixed(),
+        s_i: worker.stakeWeight(stakeSum).toFixed(),
+        r_i: worker.actualYield.toFixed(),
         ...worker.apr(duration, YEAR),
       })
     ));
@@ -181,10 +184,11 @@ export class Workers {
 
   private parseMulticallResult<
     TKey extends keyof Worker,
+    TResult,
     TValue extends Worker[TKey],
-  >(key: TKey, multicallResult: MulticallResult<TValue>[]) {
+  >(key: TKey, multicallResult: MulticallResult<TResult>[], converter: (v: TResult) => TValue) {
     this.map((worker, i) => {
-      worker[key] = multicallResult[i].result;
+      worker[key] = converter(multicallResult[i].result);
     });
   }
 
@@ -198,7 +202,7 @@ export class Workers {
 
   private totalSupply() {
     return (
-      this.bond * BigInt(this.count()) + bigSum(this.map(({ stake }) => stake))
+      this.bond.mul(this.count()).add(decimalSum(this.map(({ stake }) => stake)))
     );
   }
 
@@ -208,17 +212,12 @@ export class Workers {
       "second",
     );
     console.log(duration);
-    return (
-      (BigInt(await currentApy(this.nextDistributionStartBlockNumber)) *
-        this.totalSupply() *
-        BigInt(duration)) /
-      BigInt(YEAR) /
-      10_000n
-    );
+    const apy = bigIntToDecimal(await currentApy(this.nextDistributionStartBlockNumber));
+    return apy.mul(this.totalSupply()).mul(duration).div(YEAR).div(10_000);
   }
 
   private calculateStakeFactor() {
-    return 1;
+    return new Decimal(1);
   }
 
   public async logStats() {
@@ -226,19 +225,19 @@ export class Workers {
       this.map((worker) => [
         worker.peerId,
         keysToFixed({
-          t: worker.trafficWeight * 100,
-          dTraffic: worker.dTraffic * 100,
+          t: worker.trafficWeight.mul(100),
+          dTraffic: worker.dTraffic.mul(100),
           livenessFactor: worker.networkStats.livenessFactor * 100,
-          dLiveness: worker.livenessCoefficient * 100,
-          dTenure: worker.dTenure * 100,
+          dLiveness: worker.livenessCoefficient.mul(100),
+          dTenure: worker.dTenure.mul(100),
           workerReward: formatSqd(worker.workerReward),
           stakerReward: formatSqd(worker.stakerReward),
         }),
       ]),
     );
     const totalUnlocked = await this.rUnlocked();
-    const totalReward = bigSum(
-      this.map(({ workerReward, stakerReward }) => workerReward + stakerReward),
+    const totalReward = decimalSum(
+      this.map(({ workerReward, stakerReward }) => workerReward.add(stakerReward)),
     );
     logger.table(stats);
     logger.log("Max unlocked:", formatSqd(totalUnlocked));
@@ -246,12 +245,12 @@ export class Workers {
     this.logPercentageUnlocked(totalReward, totalUnlocked);
   }
 
-  private logPercentageUnlocked(totalReward: bigint, totalUnlocked: bigint) {
+  private logPercentageUnlocked(totalReward: Decimal, totalUnlocked: Decimal) {
     if (!totalUnlocked) logger.log("Percentage unlocked 0 %");
     else
       logger.log(
         "Percentage of max unlocked",
-        Number((totalReward * 10000n) / totalUnlocked) / 100,
+        totalReward.mul(10000).div(totalUnlocked).div(100).toFixed(2),
         "%",
       );
   }
@@ -264,8 +263,8 @@ export class Workers {
             [
               worker.peerId,
               {
-                workerReward: worker.workerReward,
-                stakerReward: worker.stakerReward,
+                workerReward: decimalToBigInt(worker.workerReward),
+                stakerReward: decimalToBigInt(worker.stakerReward),
                 computationUnitsUsed:
                   worker.requestsProcessed * config.requestPrice,
                 id: await worker.getId(),

@@ -4,7 +4,7 @@ import { QueryLog, validateSignatures } from "./signatureVerification";
 import { config } from "./config";
 
 import Decimal from 'decimal.js';
-Decimal.set({ precision: 9 })
+Decimal.set({ precision: 18, minE: -9 })
 
 const PRECISION = 1_000_000_000n;
 
@@ -13,15 +13,15 @@ export class Worker {
   public networkStats: NetworkStatsEntry;
   public bytesSent = 0;
   public chunksRead = 0;
-  public trafficWeight = 0;
-  public dTraffic = 0;
-  public stake = 0n;
-  public livenessCoefficient = 0;
-  public bond = 0n;
-  public actualYield = 0;
-  public workerReward: bigint;
-  public stakerReward: bigint;
-  public dTenure: number;
+  public trafficWeight = new Decimal(0);
+  public dTraffic = new Decimal(0);
+  public stake = new Decimal(0);
+  public livenessCoefficient = new Decimal(0);
+  public bond = new Decimal(0);
+  public actualYield = new Decimal(0);
+  public workerReward: Decimal;
+  public stakerReward: Decimal;
+  public dTenure: Decimal;
   public requestsProcessed = 0n;
   public totalRequests = 0;
 
@@ -53,16 +53,14 @@ export class Worker {
       totalBytesSent,
       totalChunksRead,
     );
-    this.trafficWeight = Math.sqrt(bytesSent * chunksRead);
+    this.trafficWeight = Decimal.sqrt(bytesSent.mul(chunksRead));
   }
 
-  public async calculateDTraffic(totalSupply: bigint, totalTraffic: number) {
-    const supplyRatio =
-      Number(((this.stake + this.bond) * PRECISION) / totalSupply) /
-      Number(PRECISION);
-    this.dTraffic = Math.min(
+  public async calculateDTraffic(totalSupply: Decimal, totalTraffic: Decimal) {
+    const supplyRatio = this.stake.add(this.bond).div(totalSupply);
+    this.dTraffic = Decimal.min(
       1,
-      (this.trafficWeight / totalTraffic / supplyRatio) ** config.dTrafficAlpha,
+      (this.trafficWeight.div(totalTraffic).div(supplyRatio)).pow(config.dTrafficAlpha),
     );
   }
 
@@ -71,34 +69,34 @@ export class Worker {
     if (!networkStats) return;
     const { livenessFactor } = networkStats;
     if (livenessFactor < 0.8) {
-      this.livenessCoefficient = 0;
+      this.livenessCoefficient = new Decimal(0);
     } else if (livenessFactor < 0.9) {
-      this.livenessCoefficient = 9 * livenessFactor - 7.2;
+      this.livenessCoefficient = new Decimal(9).mul(livenessFactor).sub(7.2);
     } else if (livenessFactor < 0.95) {
-      this.livenessCoefficient = 2 * livenessFactor - 0.9;
+      this.livenessCoefficient = new Decimal(2).mul(livenessFactor).sub(0.9);
     } else {
-      this.livenessCoefficient = 1;
+      this.livenessCoefficient = new Decimal(1);
     }
   }
 
   public async calculateDTenure(historicalLiveness: number[]) {
     const LIVENESS_THRESHOLD = 0.9;
-    const liveEpochs = historicalLiveness.filter(
+    const liveEpochs = new Decimal(historicalLiveness.filter(
       (liveness) => liveness >= LIVENESS_THRESHOLD,
-    ).length;
-    this.dTenure = 0.5 + Math.floor(liveEpochs / 2 + 0.05) * 0.1;
+    ).length);
+    this.dTenure = new Decimal(0.5).add(Decimal.floor(liveEpochs.div(2).add(0.05)).mul(0.1));
   }
 
-  public async getRewards(rMax: number) {
-    this.actualYield = rMax * this.livenessCoefficient * this.dTraffic * this.dTenure;
+  public async getRewards(rMax: Decimal) {
+    this.actualYield = rMax.mul(this.livenessCoefficient).mul(this.dTraffic).mul(this.dTenure);
 
-    const preciseR = BigInt(Math.floor(this.actualYield * Number(PRECISION)));
-    this.workerReward = (preciseR * (this.bond + this.stake / 2n)) / PRECISION;
-    this.stakerReward = (preciseR * this.stake) / 2n / PRECISION;
+    this.workerReward = this.actualYield.mul(this.bond.add(this.stake.mul(2)));
+
+    this.stakerReward = this.actualYield.mul(this.stake).div(2);
   }
 
-  public stakeWeight(stakeSum: bigint) {
-    return Number(stakeSum === 0n ? 0n : this.stake / stakeSum);
+  public stakeWeight(stakeSum: Decimal) {
+    return stakeSum.eq(0) ? new Decimal(0) : this.stake.div(stakeSum);
   }
 
   public apr(epochDuration: number, year: number) {
@@ -108,15 +106,15 @@ export class Worker {
     const durtation = new Decimal(year).div(epochDuration);
 
     return {
-      workerAPR: workerReward.div(bond).mul(durtation).toFixed(9),
-      delegatorAPR: stakerReward.div(bond).mul(durtation).toFixed(9),
+      workerAPR: workerReward.div(bond).mul(durtation).toFixed(),
+      delegatorAPR: stakerReward.div(bond).mul(durtation).toFixed(),
     }
   }
 
   private normalizeTraffic(totalBytesSent: number, totalChunksRead: number) {
     return {
-      bytesSent: this.bytesSent / totalBytesSent,
-      chunksRead: this.chunksRead / totalChunksRead,
+      bytesSent: new Decimal(this.bytesSent).div(totalBytesSent),
+      chunksRead: new Decimal(this.chunksRead).div(totalChunksRead),
     };
   }
 }

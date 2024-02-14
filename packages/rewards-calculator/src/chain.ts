@@ -49,9 +49,7 @@ export async function getLatestDistributionBlock() {
 }
 
 export async function currentApy(blockNumber?: bigint) {
-  return Number(
-    await contracts.rewardCalculation.read.currentApy({ blockNumber }),
-  );
+  return await contracts.rewardCalculation.read.currentApy({ blockNumber });
 }
 
 export async function epochLength(blockNumber?: bigint) {
