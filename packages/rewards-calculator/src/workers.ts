@@ -89,7 +89,7 @@ export class Workers {
 
   public async getStakes() {
     const stakes = await getStakes(this, this.nextDistributionStartBlockNumber);
-    this.parseMulticallResult("stake", stakes, bigIntToDecimal);
+    this.parseMulticallResult("stake", this.mapMulticallResult(stakes, bigIntToDecimal));
   }
 
   public getT() {
@@ -184,12 +184,19 @@ export class Workers {
 
   private parseMulticallResult<
     TKey extends keyof Worker,
-    TResult,
     TValue extends Worker[TKey],
-  >(key: TKey, multicallResult: MulticallResult<TResult>[], converter: (v: TResult) => TValue) {
+  >(key: TKey, multicallResult: MulticallResult<TValue>[]) {
     this.map((worker, i) => {
-      worker[key] = converter(multicallResult[i].result);
+      worker[key] = multicallResult[i].result;
     });
+  }
+
+  private mapMulticallResult<S, T>(multicallResult: MulticallResult<S>[], mapper: (v: S) => T): MulticallResult<T>[] {
+    return multicallResult.map(({ status, error, result }) =>
+      status === 'success' ?
+        { status, error, result: mapper(result) } :
+        { status, error, result }
+      )
   }
 
   private totalBytesSent() {

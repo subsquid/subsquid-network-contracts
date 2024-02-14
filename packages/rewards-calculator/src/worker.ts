@@ -103,11 +103,11 @@ export class Worker {
     const bond = new Decimal(this.bond.toString());
     const workerReward = new Decimal(this.workerReward.toString());
     const stakerReward = new Decimal(this.workerReward.toString());
-    const durtation = new Decimal(year).div(epochDuration);
+    const duration = new Decimal(year).div(epochDuration);
 
     return {
-      workerAPR: workerReward.div(bond).mul(durtation).toFixed(),
-      delegatorAPR: stakerReward.div(bond).mul(durtation).toFixed(),
+      workerAPR: workerReward.div(bond).mul(duration).toFixed(),
+      delegatorAPR: stakerReward.div(this.stake).mul(duration).toFixed(),
     }
   }
 
