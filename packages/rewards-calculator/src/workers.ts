@@ -147,10 +147,10 @@ export class Workers {
   }
 
   public async calcluateLogs() {
-    const targetCapacity = await getTargetCapacity(this.nextDistributionStartBlockNumber);
-    const activeWorkersCount = this.count();
+    const target_capacity = await getTargetCapacity(this.nextDistributionStartBlockNumber);
+    const active_workers_count = this.count();
     const storagePerWorker = await storagePerWorkerInGb(this.nextDistributionStartBlockNumber);
-    const currentCapacity = activeWorkersCount * storagePerWorker;
+    const current_capacity = active_workers_count * storagePerWorker;
 
     const stakeSum =  decimalSum(this.map(({ stake }) => stake))
 
@@ -162,18 +162,18 @@ export class Workers {
     console.log(JSON.stringify({
       time: new Date(),
       type: 'rewards_report',
-      targetCapacity,
-      currentCapacity,
-      activeWorkersCount,
-      baseApr: this.baseApr.toFixed(),
-      stakeFactor: this.stakeFactor.toFixed(),
-      rAPR: this.rAPR.toFixed()
+      target_capacity,
+      current_capacity,
+      active_workers_count,
+      base_apr: this.baseApr.toFixed(),
+      stake_factor: this.stakeFactor.toFixed(),
+      r_apr: this.rAPR.toFixed()
     })),
     this.map(worker => console.log(
       JSON.stringify({
         time: new Date(),
         type: 'worker_report',
-        workerId: worker.peerId,
+        worker_id: worker.peerId,
         t_i: worker.trafficWeight.toFixed(),
         s_i: worker.stakeWeight(stakeSum).toFixed(),
         r_i: worker.actualYield.toFixed(),

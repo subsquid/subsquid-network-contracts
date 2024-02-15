@@ -106,8 +106,8 @@ export class Worker {
     const duration = new Decimal(year).div(epochDuration);
 
     return {
-      workerAPR: workerReward.div(bond).mul(duration).toFixed(),
-      delegatorAPR: stakerReward.div(this.stake).mul(duration).toFixed(),
+      worker_apr: workerReward.div(bond).mul(duration).toFixed(),
+      delegator_apr: stakerReward.div(this.stake).mul(duration).toFixed(),
     }
   }
 
