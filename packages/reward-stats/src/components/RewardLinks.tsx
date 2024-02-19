@@ -1,5 +1,5 @@
 import { Rewards } from "../hooks/useRewards";
-import { formatSqd } from "@subsquid-network/rewards-calculator/src/utils";
+import { formatSqd, bigIntToDecimal } from "@subsquid-network/rewards-calculator/src/utils";
 
 interface RewardLinkProps {
   rewards: Rewards[];
@@ -22,7 +22,7 @@ export const RewardLinks = ({
         onClick={() => onClick(idx)}
       >
         {Number(reward.fromBlock)} - {Number(reward.toBlock)} (Rewarded:{" "}
-        {formatSqd(reward.totalReward)})
+        {formatSqd(bigIntToDecimal(reward.totalReward))})
       </div>
     ))}
   </>

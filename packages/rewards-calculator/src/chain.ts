@@ -49,9 +49,7 @@ export async function getLatestDistributionBlock() {
 }
 
 export async function currentApy(blockNumber?: bigint) {
-  return Number(
-    await contracts.rewardCalculation.read.currentApy({ blockNumber }),
-  );
+  return await contracts.rewardCalculation.read.currentApy({ blockNumber });
 }
 
 export async function epochLength(blockNumber?: bigint) {
@@ -205,6 +203,19 @@ export async function getStakes(workers: Workers, blockNumber?: bigint) {
     contracts: calls,
     blockNumber,
   });
+}
+
+export async function targetCapacity(blockNumber?: bigint) {
+  return Number(
+    await contracts.networkController.read.targetCapacityGb({ blockNumber })
+  );
+}
+
+
+export async function storagePerWorkerInGb(blockNumber?: bigint) {
+  return Number(
+    await contracts.networkController.read.storagePerWorkerInGb({ blockNumber })
+  );
 }
 
 export type MulticallResult<T> =

@@ -33,6 +33,7 @@ export async function epochStats(
   await workers.getLiveness();
   await workers.getDTenure(fromBlock);
   await workers.calculateRewards();
+  await workers.calcluateLogs();
   await workers.logStats();
   return workers;
 }
