@@ -41,25 +41,6 @@ contract WorkerRegistrationDeregisterTest is WorkerRegistrationTest {
     assertEq(deregisteredAt, nextEpoch());
   }
 
-  function testRemovesLastWorkerIdFromActiveWorkerIds() public {
-    workerRegistration.register(workerId);
-    jumpEpoch();
-    workerRegistration.deregister(workerId);
-    assertEq(workerRegistration.getAllWorkersCount(), 0);
-  }
-
-  function testRemovesNotLastWorkerIdFromActiveWorkerIds() public {
-    token.approve(address(workerRegistration), workerRegistration.bondAmount() * 2);
-
-    workerRegistration.register(workerId);
-    workerRegistration.register(workerId2);
-    jumpEpoch();
-    workerRegistration.deregister(workerId);
-
-    assertEq(workerRegistration.getAllWorkersCount(), 1);
-    assertEq(workerRegistration.getWorkerByIndex(0).peerId, workerId2);
-  }
-
   function testExcludesInactiveWorkerStakeFromTVLAndActiveStake() public {
     token.approve(address(workerRegistration), workerRegistration.bondAmount() * 2 + 300);
 
@@ -73,9 +54,15 @@ contract WorkerRegistrationDeregisterTest is WorkerRegistrationTest {
     assertEq(workerRegistration.effectiveTVL(), workerRegistration.bondAmount() * 2 + 300);
 
     workerRegistration.deregister(workerId);
+    // hasn't changed before new epoch started
+    assertEq(workerRegistration.effectiveTVL(), workerRegistration.bondAmount() * 2 + 300);
+    assertEq(workerRegistration.activeStake(), 300);
+
+    jumpEpoch();
     assertEq(workerRegistration.effectiveTVL(), workerRegistration.bondAmount() + 200);
     assertEq(workerRegistration.activeStake(), 200);
     workerRegistration.deregister(workerId2);
+    jumpEpoch();
     assertEq(workerRegistration.activeStake(), 0);
     assertEq(workerRegistration.effectiveTVL(), 0);
   }

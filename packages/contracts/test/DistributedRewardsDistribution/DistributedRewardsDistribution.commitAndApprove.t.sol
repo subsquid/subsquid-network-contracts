@@ -32,6 +32,13 @@ contract RewardsDistributionCommitApproveTest is RewardsDistributionTest {
     rewardsDistribution.commit(1, 11, recipients, workerAmounts, stakerAmounts);
   }
 
+  function test_RevertsIf_RangeInWrongOrder() public {
+    (uint256[] memory recipients, uint256[] memory workerAmounts, uint256[] memory stakerAmounts) = prepareRewards(1);
+    vm.roll(10);
+    vm.expectRevert("toBlock before fromBlock");
+    rewardsDistribution.commit(2, 1, recipients, workerAmounts, stakerAmounts);
+  }
+
   function test_RevertsIf_CommittingSameDataTwice() public {
     (uint256[] memory recipients, uint256[] memory workerAmounts, uint256[] memory stakerAmounts) = prepareRewards(1);
     vm.roll(10);

@@ -78,18 +78,18 @@ contract StakersRewardDistributionWithdrawTest is StakersRewardDistributionTest 
 
   function test_CannotWithdrawBeforeFullEpochEnds() public {
     network.setEpochLength(50);
-    assertEq(network.nextEpoch(), 50);
+    assertEq(network.nextEpoch(), 5);
     staking.deposit(workers[0], 100);
     (, uint256 whenCanWithdraw) = staking.getDeposit(address(this), workers[0]);
-    assertEq(whenCanWithdraw, 100);
+    assertEq(whenCanWithdraw, 55);
     staking.distribute(workers[0], 50);
     vm.expectRevert("Too early to withdraw");
     staking.withdraw(workers[0], 50);
     jumpToMomentWhenCanWithdraw(address(this));
     staking.withdraw(workers[0], 50);
     staking.deposit(workers[0], 100);
-    assertEq(network.nextEpoch(), 150);
+    assertEq(network.nextEpoch(), 105);
     (, whenCanWithdraw) = staking.getDeposit(address(this), workers[0]);
-    assertEq(whenCanWithdraw, 200);
+    assertEq(whenCanWithdraw, 155);
   }
 }

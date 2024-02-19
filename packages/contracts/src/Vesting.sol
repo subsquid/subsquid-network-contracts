@@ -49,10 +49,19 @@ contract SubsquidVesting is Executable, VestingWallet {
     super.release(token);
   }
 
+  function releasable(address token) public view override returns (uint256) {
+    uint256 _releasable = super.releasable(token);
+    uint256 currentBalance = balanceOf(IERC20(token));
+    if (currentBalance < _releasable) {
+      return currentBalance;
+    }
+    return _releasable;
+  }
+
   function _vestingSchedule(uint256 totalAllocation, uint64 timestamp) internal view virtual override returns (uint256) {
     if (timestamp < start()) return 0;
     uint256 cliff = totalAllocation * immediateReleaseBIP / 10000;
-    return cliff + super._vestingSchedule(totalAllocation - cliff, timestamp);
+    return cliff + super._vestingSchedule(totalAllocation - cliff + depositedIntoProtocol, timestamp);
   }
 
   function _canExecute(address executor) internal view override returns (bool) {

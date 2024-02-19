@@ -48,7 +48,7 @@ contract RewardsDistributionClaimTest is RewardsDistributionTest {
   function test_CanClaimRewardsForWithdrawnWorker() public {
     (uint256[] memory recipients, uint256[] memory workerAmounts, uint256[] memory stakerAmounts) = prepareRewards(1);
     startHoax(workerOwner);
-    vm.roll(block.number + 3);
+    vm.roll(block.number + 5);
     workerRegistration.deregister(workerId);
     vm.roll(block.number + 4);
     workerRegistration.withdraw(workerId);

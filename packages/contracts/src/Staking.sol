@@ -73,6 +73,7 @@ contract Staking is AccessControlledPausable, IStaking {
   function deposit(uint256 worker, uint256 amount) external whenNotPaused {
     INetworkController network = router.networkController();
     require(lastEpochRewarded + 2 >= network.epochNumber() || lastEpochRewarded == 0, "Rewards out of date");
+    require(router.workerRegistration().isWorkerActive(worker), "Worker not active");
 
     StakerRewards storage _rewards = rewards[worker];
     require(_rewards.totalStaked + amount <= network.delegationLimit(), "Delegation limit exceeded");

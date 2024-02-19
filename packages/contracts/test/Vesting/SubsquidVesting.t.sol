@@ -6,6 +6,22 @@ import "forge-std/StdJson.sol";
 import "../../src/Vesting.sol";
 import "../../src/VestingFactory.sol";
 
+contract MockRewardsDistribution2 is IRewardsDistribution {
+  uint256 reward;
+
+  constructor(uint256 _reward) {
+    reward = _reward;
+  }
+
+  function claimable(address) external view override returns (uint256) {
+    return reward;
+  }
+
+  function claim(address) external view override returns (uint256) {
+    return reward;
+  }
+}
+
 contract SubsquidVestingTest is BaseTest {
   using stdJson for string;
 
@@ -17,6 +33,12 @@ contract SubsquidVestingTest is BaseTest {
 
   function setUp() public {
     (token, router) = deployAll();
+    vm.mockCall(
+      address(router.workerRegistration()),
+      abi.encodeWithSelector(WorkerRegistration.isWorkerActive.selector),
+      abi.encode(true)
+    );
+
     vestingFactory = new VestingFactory(token, router);
     vesting = vestingFactory.createVesting(address(this), uint64(block.timestamp + 6 * month), 30 * month, 0, 123);
   }
@@ -156,7 +178,8 @@ contract SubsquidVestingTest is BaseTest {
     token.transfer(router.rewardTreasury(), 30 ether);
     bytes memory call = abi.encodeWithSelector(IWorkerRegistration.register.selector, "test-peer-id-1", "metadata");
     vesting.execute(address(router.workerRegistration()), call, 10 ether);
-    bytes memory call2 = abi.encodeWithSelector(Staking.deposit.selector, 0, 1 ether);
+    vm.roll(block.number + 10);
+    bytes memory call2 = abi.encodeWithSelector(Staking.deposit.selector, 1, 1 ether);
     vesting.execute(address(router.staking()), call2, 1 ether);
     Staking staking = Staking(address(router.staking()));
     MockRewardsDistribution rewardsDistribution = new MockRewardsDistribution();
@@ -167,6 +190,90 @@ contract SubsquidVestingTest is BaseTest {
       abi.encodeWithSelector(RewardTreasury.claimFor.selector, address(rewardsDistribution), receiver);
     vesting.execute(address(router.rewardTreasury()), call3);
     assertEq(token.balanceOf(receiver), 69);
+  }
+
+  function test_ReleasePossibleAfterSomeFundsWereStaked() public {
+    NetworkController(address(router.networkController())).setBondAmount(100 ether);
+    token.transfer(address(vesting), 10 ether);
+    vm.warp(block.timestamp + 6 * month);
+    vm.warp(block.timestamp + 15 * month);
+    assertEq(vesting.releasable(address(token)), 5 ether);
+    vesting.release(address(token));
+    assertEq(vesting.releasable(address(token)), 0);
+    bytes memory call = abi.encodeWithSelector(Staking.deposit.selector, 1, 4 ether);
+    vesting.execute(address(router.staking()), call, 4 ether);
+    vm.warp(block.timestamp + 6 * month);
+    assertEq(vesting.releasable(address(token)), 1 ether);
+    vesting.release(address(token));
+    bytes memory call2 = abi.encodeWithSelector(Staking.withdraw.selector, 1, 4 ether);
+    vm.roll(block.number + 100);
+    vesting.execute(address(router.staking()), call2);
+    assertEq(vesting.releasable(address(token)), 1 ether);
+    vesting.release(address(token));
+    assertEq(vesting.releasable(address(token)), 0 ether);
+  }
+
+  function test_ReceivingRewardsShouldNotBreakSchedule() public {
+    NetworkController(address(router.networkController())).setBondAmount(100 ether);
+    token.transfer(router.rewardTreasury(), 10 ether);
+    token.transfer(address(vesting), 10 ether);
+    vm.warp(block.timestamp + 6 * month);
+    vm.warp(block.timestamp + 15 * month);
+    assertEq(vesting.releasable(address(token)), 5 ether);
+    vesting.release(address(token));
+    assertEq(vesting.releasable(address(token)), 0);
+    bytes memory call = abi.encodeWithSelector(Staking.deposit.selector, 1, 4 ether);
+    vesting.execute(address(router.staking()), call, 4 ether);
+
+    Staking staking = Staking(address(router.staking()));
+    MockRewardsDistribution rewardsDistribution = new MockRewardsDistribution();
+    staking.grantRole(staking.REWARDS_DISTRIBUTOR_ROLE(), address(rewardsDistribution));
+    RewardTreasury(router.rewardTreasury()).setWhitelistedDistributor(rewardsDistribution, true);
+
+    bytes memory call3 = abi.encodeWithSelector(RewardTreasury.claim.selector, address(rewardsDistribution));
+    vesting.execute(address(router.rewardTreasury()), call3);
+
+    vm.warp(block.timestamp + 3 * month);
+    assertEq(vesting.releasable(address(token)), 1 ether);
+    vm.warp(block.timestamp + 3 * month);
+    assertEq(vesting.releasable(address(token)), 1 ether + 69);
+
+    bytes memory call2 = abi.encodeWithSelector(Staking.withdraw.selector, 1, 4 ether);
+    vm.roll(block.number + 100);
+    vesting.execute(address(router.staking()), call2);
+    assertEq(vesting.releasable(address(token)), 2 ether + 48);
+  }
+
+  function test_ReceivingHugeRewardShouldNotBreakSchedule() public {
+    NetworkController(address(router.networkController())).setBondAmount(100 ether);
+    token.transfer(router.rewardTreasury(), 10 ether);
+    token.transfer(address(vesting), 10 ether);
+    vm.warp(block.timestamp + 6 * month);
+    vm.warp(block.timestamp + 15 * month);
+    assertEq(vesting.releasable(address(token)), 5 ether);
+    vesting.release(address(token));
+    assertEq(vesting.releasable(address(token)), 0);
+    bytes memory call = abi.encodeWithSelector(Staking.deposit.selector, 1, 4 ether);
+    vesting.execute(address(router.staking()), call, 4 ether);
+
+    Staking staking = Staking(address(router.staking()));
+    MockRewardsDistribution2 rewardsDistribution = new MockRewardsDistribution2(4 ether);
+    staking.grantRole(staking.REWARDS_DISTRIBUTOR_ROLE(), address(rewardsDistribution));
+    RewardTreasury(router.rewardTreasury()).setWhitelistedDistributor(rewardsDistribution, true);
+
+    bytes memory call3 = abi.encodeWithSelector(RewardTreasury.claim.selector, address(rewardsDistribution));
+    vesting.execute(address(router.rewardTreasury()), call3);
+
+    vm.warp(block.timestamp + 3 * month);
+    assertEq(vesting.releasable(address(token)), 1 ether);
+    vm.warp(block.timestamp + 3 * month);
+    assertEq(vesting.releasable(address(token)), 2 ether);
+
+    bytes memory call2 = abi.encodeWithSelector(Staking.withdraw.selector, 1, 4 ether);
+    vm.roll(block.number + 100);
+    vesting.execute(address(router.staking()), call2);
+    assertEq(vesting.releasable(address(token)), 4.8 ether); // (10 + 4) * 21 / 30   - 5
+      //                                                         total  month passed  released
   }
 
   function test_RevertsIf_CallToUnallowedContract() public {

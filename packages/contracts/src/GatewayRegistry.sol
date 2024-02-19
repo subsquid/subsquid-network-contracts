@@ -27,7 +27,7 @@ contract GatewayRegistry is AccessControlledPausable, IGatewayRegistry {
     uint128 lockEnd;
     uint128 duration;
     bool autoExtension;
-    uint oldCUs;
+    uint256 oldCUs;
   }
 
   struct Gateway {
@@ -60,11 +60,7 @@ contract GatewayRegistry is AccessControlledPausable, IGatewayRegistry {
 
   event Registered(address indexed gatewayOperator, bytes32 indexed id, bytes peerId);
   event Staked(
-    address indexed gatewayOperator,
-    uint256 amount,
-    uint128 lockStart,
-    uint128 lockEnd,
-    uint256 computationUnits
+    address indexed gatewayOperator, uint256 amount, uint128 lockStart, uint128 lockEnd, uint256 computationUnits
   );
   event Unstaked(address indexed gatewayOperator, uint256 amount);
   event Unregistered(address indexed gatewayOperator, bytes peerId);
@@ -152,7 +148,8 @@ contract GatewayRegistry is AccessControlledPausable, IGatewayRegistry {
     uint256 _computationUnits = computationUnitsAmount(amount, durationBlocks);
     uint128 lockStart = router.networkController().nextEpoch();
     uint128 lockEnd = withAutoExtension ? type(uint128).max : lockStart + durationBlocks;
-    operators[msg.sender].stake = Stake(amount, _computationUnits, lockStart, lockEnd, durationBlocks, withAutoExtension, 0);
+    operators[msg.sender].stake =
+      Stake(amount, _computationUnits, lockStart, lockEnd, durationBlocks, withAutoExtension, 0);
     token.transferFrom(msg.sender, address(this), amount);
 
     emit Staked(msg.sender, amount, lockStart, lockEnd, _computationUnits);
@@ -168,7 +165,7 @@ contract GatewayRegistry is AccessControlledPausable, IGatewayRegistry {
     stake(amount, durationBlocks, false);
   }
 
-  function addStake(uint amount) public whenNotPaused {
+  function addStake(uint256 amount) public whenNotPaused {
     Stake storage _stake = operators[msg.sender].stake;
     require(_stake.amount > 0, "Cannot add stake when nothing was staked");
     require(_stake.lockStart <= block.number, "Stake is not started");
@@ -218,7 +215,7 @@ contract GatewayRegistry is AccessControlledPausable, IGatewayRegistry {
     if (_stake.lockEnd <= blockNumber) {
       return 0;
     }
-    uint computationUnits = _stake.lockStart > blockNumber ? _stake.oldCUs : _stake.computationUnits;
+    uint256 computationUnits = _stake.lockStart > blockNumber ? _stake.oldCUs : _stake.computationUnits;
     uint256 epochLength = uint256(router.networkController().epochLength());
     if (_stake.duration <= epochLength) {
       return computationUnits;
