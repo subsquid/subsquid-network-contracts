@@ -21,6 +21,14 @@ contract StakersRewardDistributionWithdrawTest is StakersRewardDistributionTest 
     staking.withdraw(workers[0], 200);
   }
 
+  function test_CanClaimAfterWithdrawAll() public {
+    staking.deposit(workers[0], 100);
+    staking.distribute(workers[0], 100);
+    jumpToMomentWhenCanWithdraw(address(this));
+    staking.withdraw(workers[0], 100);
+    assertEq(staking.claimable(address(this)), 100);
+  }
+
   function test_SingleStakerWithdrawsAll() public {
     staking.deposit(workers[0], 100);
     staking.distribute(workers[0], 100);
