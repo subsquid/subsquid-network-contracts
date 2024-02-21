@@ -189,7 +189,7 @@ export async function approveRewards(
 }
 
 export async function getStakes(workers: Workers, blockNumber?: bigint) {
-  const calls = await Promise.all(
+  const capedStakeCalls = await Promise.all(
     workers.map(async (worker) => ({
       address: contracts.capedStaking.address,
       abi: contracts.capedStaking.abi,
@@ -197,24 +197,41 @@ export async function getStakes(workers: Workers, blockNumber?: bigint) {
       args: [await worker.getId()] as const,
     })),
   );
-  return publicClient.multicall<
-    ContractFunctionConfig<typeof contracts.capedStaking.abi, "capedStake">[]
-  >({
-    contracts: calls,
-    blockNumber,
-  });
+  const totalStakeCalls = await Promise.all(
+    workers.map(async (worker) => ({
+      address: contracts.staking.address,
+      abi: contracts.staking.abi,
+      functionName: "activeStake" as "activeStake",
+      args: [[await worker.getId()]] as const,
+    })),
+  );
+  return [
+    await publicClient.multicall<
+      ContractFunctionConfig<typeof contracts.capedStaking.abi, "capedStake">[]
+    >({
+      contracts: capedStakeCalls,
+      blockNumber,
+    }),
+    await publicClient.multicall<
+      ContractFunctionConfig<typeof contracts.staking.abi, "activeStake">[]
+    >({
+      contracts: totalStakeCalls,
+      blockNumber,
+    }),
+  ];
 }
 
 export async function targetCapacity(blockNumber?: bigint) {
   return Number(
-    await contracts.networkController.read.targetCapacityGb({ blockNumber })
+    await contracts.networkController.read.targetCapacityGb({ blockNumber }),
   );
 }
 
-
 export async function storagePerWorkerInGb(blockNumber?: bigint) {
   return Number(
-    await contracts.networkController.read.storagePerWorkerInGb({ blockNumber })
+    await contracts.networkController.read.storagePerWorkerInGb({
+      blockNumber,
+    }),
   );
 }
 

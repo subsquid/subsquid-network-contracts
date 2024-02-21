@@ -10,7 +10,14 @@ import {
   storagePerWorkerInGb,
   targetCapacity as getTargetCapacity,
 } from "./chain";
-import { bigIntToDecimal, decimalSum, decimalToBigInt, formatSqd, keysToFixed, sum } from "./utils";
+import {
+  bigIntToDecimal,
+  decimalSum,
+  decimalToBigInt,
+  formatSqd,
+  keysToFixed,
+  sum,
+} from "./utils";
 import {
   ClickhouseClient,
   historicalLiveness,
@@ -22,8 +29,8 @@ import dayjs from "dayjs";
 import { config } from "./config";
 import { Rewards } from "./reward";
 
-import Decimal from 'decimal.js';
-Decimal.set({ precision: 18, minE: -9 })
+import Decimal from "decimal.js";
+Decimal.set({ precision: 18, minE: -9 });
 
 const YEAR = 365 * 24 * 60 * 60;
 
@@ -35,7 +42,6 @@ export class Workers {
   baseApr = new Decimal(0);
   stakeFactor = new Decimal(0);
   rAPR = new Decimal(0);
-
 
   constructor(private clickhouseClient: ClickhouseClient) {}
 
@@ -64,7 +70,7 @@ export class Workers {
 
   public async fetchCurrentBond() {
     const bondRaw = await bond(this.nextDistributionStartBlockNumber);
-    this.bond = new Decimal(bondRaw.toString())
+    this.bond = new Decimal(bondRaw.toString());
 
     this.map((worker) => {
       worker.bond = this.bond;
@@ -88,8 +94,18 @@ export class Workers {
   }
 
   public async getStakes() {
-    const stakes = await getStakes(this, this.nextDistributionStartBlockNumber);
-    this.parseMulticallResult("stake", this.mapMulticallResult(stakes, bigIntToDecimal));
+    const [capedStakes, totalStakes] = await getStakes(
+      this,
+      this.nextDistributionStartBlockNumber,
+    );
+    this.parseMulticallResult(
+      "stake",
+      this.mapMulticallResult(capedStakes, bigIntToDecimal),
+    );
+    this.parseMulticallResult(
+      "totalStake",
+      this.mapMulticallResult(totalStakes, bigIntToDecimal),
+    );
   }
 
   public getT() {
@@ -99,7 +115,9 @@ export class Workers {
   }
 
   public getDTrraffic() {
-    const totalTraffic = decimalSum(this.map(({ trafficWeight }) => trafficWeight));
+    const totalTraffic = decimalSum(
+      this.map(({ trafficWeight }) => trafficWeight),
+    );
     this.map((worker) =>
       worker.calculateDTraffic(this.totalSupply(), totalTraffic),
     );
@@ -141,45 +159,52 @@ export class Workers {
 
     this.rAPR = this.baseApr;
 
-    const rMax =
-      this.rAPR.mul(duration).div(YEAR).div(10_000);
+    const rMax = this.rAPR.mul(duration).div(YEAR).div(10_000);
     this.map((worker) => worker.getRewards(rMax));
   }
 
   public async calcluateLogs() {
-    const target_capacity = await getTargetCapacity(this.nextDistributionStartBlockNumber);
+    const target_capacity = await getTargetCapacity(
+      this.nextDistributionStartBlockNumber,
+    );
     const active_workers_count = this.count();
-    const storagePerWorker = await storagePerWorkerInGb(this.nextDistributionStartBlockNumber);
+    const storagePerWorker = await storagePerWorkerInGb(
+      this.nextDistributionStartBlockNumber,
+    );
     const current_capacity = active_workers_count * storagePerWorker;
 
-    const stakeSum =  decimalSum(this.map(({ stake }) => stake))
+    const stakeSum = decimalSum(this.map(({ stake }) => stake));
 
     const duration = dayjs(this.clickhouseClient.to).diff(
       dayjs(this.clickhouseClient.from),
       "second",
     );
 
-    console.log(JSON.stringify({
-      time: new Date(),
-      type: 'rewards_report',
-      target_capacity,
-      current_capacity,
-      active_workers_count,
-      base_apr: this.baseApr.toFixed(),
-      stake_factor: this.stakeFactor.toFixed(),
-      r_apr: this.rAPR.toFixed()
-    })),
-    this.map(worker => console.log(
+    console.log(
       JSON.stringify({
         time: new Date(),
-        type: 'worker_report',
-        worker_id: worker.peerId,
-        t_i: worker.trafficWeight.toFixed(),
-        s_i: worker.stakeWeight(stakeSum).toFixed(),
-        r_i: worker.actualYield.toFixed(),
-        ...worker.apr(duration, YEAR),
-      })
-    ));
+        type: "rewards_report",
+        target_capacity,
+        current_capacity,
+        active_workers_count,
+        base_apr: this.baseApr.toFixed(),
+        stake_factor: this.stakeFactor.toFixed(),
+        r_apr: this.rAPR.toFixed(),
+      }),
+    ),
+      this.map((worker) =>
+        console.log(
+          JSON.stringify({
+            time: new Date(),
+            type: "worker_report",
+            worker_id: worker.peerId,
+            t_i: worker.trafficWeight.toFixed(),
+            s_i: worker.stakeWeight(stakeSum).toFixed(),
+            r_i: worker.actualYield.toFixed(),
+            ...worker.apr(duration, YEAR),
+          }),
+        ),
+      );
   }
 
   private parseMulticallResult<
@@ -191,12 +216,15 @@ export class Workers {
     });
   }
 
-  private mapMulticallResult<S, T>(multicallResult: MulticallResult<S>[], mapper: (v: S) => T): MulticallResult<T>[] {
+  private mapMulticallResult<S, T>(
+    multicallResult: MulticallResult<S>[],
+    mapper: (v: S) => T,
+  ): MulticallResult<T>[] {
     return multicallResult.map(({ status, error, result }) =>
-      status === 'success' ?
-        { status, error, result: mapper(result) } :
-        { status, error, result }
-      )
+      status === "success"
+        ? { status, error, result: mapper(result) }
+        : { status, error, result },
+    );
   }
 
   private totalBytesSent() {
@@ -208,9 +236,9 @@ export class Workers {
   }
 
   private totalSupply() {
-    return (
-      this.bond.mul(this.count()).add(decimalSum(this.map(({ stake }) => stake)))
-    );
+    return this.bond
+      .mul(this.count())
+      .add(decimalSum(this.map(({ stake }) => stake)));
   }
 
   private async rUnlocked() {
@@ -218,8 +246,9 @@ export class Workers {
       dayjs(this.clickhouseClient.from),
       "second",
     );
-    console.log(duration);
-    const apy = bigIntToDecimal(await currentApy(this.nextDistributionStartBlockNumber));
+    const apy = bigIntToDecimal(
+      await currentApy(this.nextDistributionStartBlockNumber),
+    );
     return apy.mul(this.totalSupply()).mul(duration).div(YEAR).div(10_000);
   }
 
@@ -244,7 +273,9 @@ export class Workers {
     );
     const totalUnlocked = await this.rUnlocked();
     const totalReward = decimalSum(
-      this.map(({ workerReward, stakerReward }) => workerReward.add(stakerReward)),
+      this.map(({ workerReward, stakerReward }) =>
+        workerReward.add(stakerReward),
+      ),
     );
     logger.table(stats);
     logger.log("Max unlocked:", formatSqd(totalUnlocked));

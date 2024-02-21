@@ -3,8 +3,8 @@ import { getWorkerId } from "./chain";
 import { QueryLog, validateSignatures } from "./signatureVerification";
 import { config } from "./config";
 
-import Decimal from 'decimal.js';
-Decimal.set({ precision: 18, minE: -9 })
+import Decimal from "decimal.js";
+Decimal.set({ precision: 18, minE: -9 });
 
 const PRECISION = 1_000_000_000n;
 
@@ -16,6 +16,7 @@ export class Worker {
   public trafficWeight = new Decimal(0);
   public dTraffic = new Decimal(0);
   public stake = new Decimal(0);
+  public totalStake = new Decimal(0);
   public livenessCoefficient = new Decimal(0);
   public bond = new Decimal(0);
   public actualYield = new Decimal(0);
@@ -60,7 +61,10 @@ export class Worker {
     const supplyRatio = this.stake.add(this.bond).div(totalSupply);
     this.dTraffic = Decimal.min(
       1,
-      (this.trafficWeight.div(totalTraffic).div(supplyRatio)).pow(config.dTrafficAlpha),
+      this.trafficWeight
+        .div(totalTraffic)
+        .div(supplyRatio)
+        .pow(config.dTrafficAlpha),
     );
   }
 
@@ -81,14 +85,21 @@ export class Worker {
 
   public async calculateDTenure(historicalLiveness: number[]) {
     const LIVENESS_THRESHOLD = 0.9;
-    const liveEpochs = new Decimal(historicalLiveness.filter(
-      (liveness) => liveness >= LIVENESS_THRESHOLD,
-    ).length);
-    this.dTenure = new Decimal(0.5).add(Decimal.floor(liveEpochs.div(2).add(0.05)).mul(0.1));
+    const liveEpochs = new Decimal(
+      historicalLiveness.filter(
+        (liveness) => liveness >= LIVENESS_THRESHOLD,
+      ).length,
+    );
+    this.dTenure = new Decimal(0.5).add(
+      Decimal.floor(liveEpochs.div(2).add(0.05)).mul(0.1),
+    );
   }
 
   public async getRewards(rMax: Decimal) {
-    this.actualYield = rMax.mul(this.livenessCoefficient).mul(this.dTraffic).mul(this.dTenure);
+    this.actualYield = rMax
+      .mul(this.livenessCoefficient)
+      .mul(this.dTraffic)
+      .mul(this.dTenure);
 
     this.workerReward = this.actualYield.mul(this.bond.add(this.stake.mul(2)));
 
@@ -102,13 +113,13 @@ export class Worker {
   public apr(epochDuration: number, year: number) {
     const bond = new Decimal(this.bond.toString());
     const workerReward = new Decimal(this.workerReward.toString());
-    const stakerReward = new Decimal(this.workerReward.toString());
+    const stakerReward = new Decimal(this.stakerReward.toString());
     const duration = new Decimal(year).div(epochDuration);
 
     return {
       worker_apr: workerReward.div(bond).mul(duration).toFixed(),
-      delegator_apr: stakerReward.div(this.stake).mul(duration).toFixed(),
-    }
+      delegator_apr: stakerReward.div(this.totalStake).mul(duration).toFixed(),
+    };
   }
 
   private normalizeTraffic(totalBytesSent: number, totalChunksRead: number) {
