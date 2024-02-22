@@ -34,6 +34,7 @@ export const config = {
   requestPrice: BigInt(env("REQUEST_PRICE", 1n)),
   tenureEpochCount: Number(env("TENURE_EPOCH_COUNT", 10)),
   workTimeout: Number(env("WORK_TIMEOUT_SECONDS", 300)) * 1000,
+  epochConfirmationTime: Number(env("EPOCH_CONFIRMATION_SECONDS", 900)) * 1000,
   maxEpochsPerCommit: Number(env("MAX_EPOCHS_PER_COMMIT", 10)),
   clickhouse: {
     username: env("CLICKHOUSE_USERNAME", "sqd_read"),
@@ -71,7 +72,7 @@ export const abis = {
   rewardsDistribution: rewardsDistributionAbi,
   staking: stakingAbi,
   capedStaking: capAbi,
-  networkController: networkControllerAbi
+  networkController: networkControllerAbi,
 } as const;
 
 export const publicClient = createPublicClient({
@@ -109,5 +110,5 @@ export const contracts = {
   rewardsDistribution: contract("rewardsDistribution"),
   staking: contract("staking"),
   capedStaking: contract("capedStaking"),
-  networkController: contract('networkController')
+  networkController: contract("networkController"),
 };

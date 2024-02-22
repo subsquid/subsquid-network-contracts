@@ -108,16 +108,6 @@ function totalOfflineSeconds(diffs: number[]) {
   return sum(diffs.filter((diff) => diff > config.workerOfflineThreshold));
 }
 
-export async function hasNewerPings(from: Date) {
-  const query = `select count() as count from ${
-    config.clickhouse.pingsTableName
-  } where timestamp >= '${formatDate(from)}'`;
-  const [{ count }] = (await clickhouse.query(query).toPromise()) as [
-    { count: number },
-  ];
-  return count > 0;
-}
-
 export async function livenessFactor(clickhouseClient: ClickhouseClient) {
   const pings = await clickhouseClient.getPings();
   const totalPeriodSeconds = dayjs(clickhouseClient.to).diff(

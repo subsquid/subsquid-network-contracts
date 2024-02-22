@@ -12,7 +12,6 @@ import {
 } from "./chain";
 import { epochStats } from "./reward";
 import { logger } from "./logger";
-import { hasNewerPings } from "./clickhouseClient";
 import { addresses, config, contracts, publicClient } from "./config";
 import { parseAbiItem, WalletClient } from "viem";
 
@@ -24,6 +23,12 @@ async function firstRegistrationBlock(registrations: Registrations) {
 
 function getEpochStart(blockNumber: number, epochLength: number) {
   return Math.floor(blockNumber / epochLength) * epochLength;
+}
+
+export function isEpochConfirmed(epochEnd: Date) {
+  return (
+    new Date().valueOf() - epochEnd.valueOf() > config.epochConfirmationTime
+  );
 }
 
 export class RewardWorker {
@@ -39,8 +44,8 @@ export class RewardWorker {
         const { fromBlock, toBlock } = await this.commitRange();
         if (
           fromBlock < toBlock &&
-          !(await isCommitted(fromBlock, toBlock)) &&
-          (await hasNewerPings(await getBlockTimestamp(toBlock + 1)))
+          isEpochConfirmed(await getBlockTimestamp(toBlock)) &&
+          !(await isCommitted(fromBlock, toBlock))
         ) {
           logger.log("Can commit", this.walletClient.account.address);
           const workers = await epochStats(fromBlock, toBlock);
