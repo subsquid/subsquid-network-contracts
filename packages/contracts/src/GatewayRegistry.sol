@@ -22,7 +22,6 @@ contract GatewayRegistry is AccessControlledPausable, IGatewayRegistry {
 
   struct Stake {
     uint256 amount;
-    uint256 computationUnits;
     uint128 lockStart;
     uint128 lockEnd;
     uint128 duration;
@@ -148,8 +147,7 @@ contract GatewayRegistry is AccessControlledPausable, IGatewayRegistry {
     uint256 _computationUnits = computationUnitsAmount(amount, durationBlocks);
     uint128 lockStart = router.networkController().nextEpoch();
     uint128 lockEnd = withAutoExtension ? type(uint128).max : lockStart + durationBlocks;
-    operators[msg.sender].stake =
-      Stake(amount, _computationUnits, lockStart, lockEnd, durationBlocks, withAutoExtension, 0);
+    operators[msg.sender].stake = Stake(amount, lockStart, lockEnd, durationBlocks, withAutoExtension, 0);
     token.transferFrom(msg.sender, address(this), amount);
 
     emit Staked(msg.sender, amount, lockStart, lockEnd, _computationUnits);
@@ -169,15 +167,15 @@ contract GatewayRegistry is AccessControlledPausable, IGatewayRegistry {
     Stake storage _stake = operators[msg.sender].stake;
     require(_stake.amount > 0, "Cannot add stake when nothing was staked");
     require(_stake.lockStart <= block.number, "Stake is not started");
-    uint256 _computationUnits = computationUnitsAmount(amount, _stake.duration);
+    uint256 _computationUnitsReceived = computationUnitsAmount(amount, _stake.duration);
+    uint256 _oldComputationUnits = computationUnitsAmount(_stake.amount, _stake.duration);
     _stake.lockStart = router.networkController().nextEpoch();
     _stake.lockEnd = _stake.autoExtension ? type(uint128).max : _stake.lockStart + _stake.duration;
-    _stake.oldCUs = _stake.computationUnits;
-    _stake.computationUnits += _computationUnits;
+    _stake.oldCUs = _oldComputationUnits;
     _stake.amount += amount;
     token.transferFrom(msg.sender, address(this), amount);
 
-    emit Staked(msg.sender, amount, _stake.lockStart, _stake.lockEnd, _computationUnits);
+    emit Staked(msg.sender, amount, _stake.lockStart, _stake.lockEnd, _computationUnitsReceived);
   }
 
   /// @dev Unstake tokens. Only tokens past the lock period can be unstaked
@@ -215,7 +213,8 @@ contract GatewayRegistry is AccessControlledPausable, IGatewayRegistry {
     if (_stake.lockEnd <= blockNumber) {
       return 0;
     }
-    uint256 computationUnits = _stake.lockStart > blockNumber ? _stake.oldCUs : _stake.computationUnits;
+    uint256 computationUnits =
+      _stake.lockStart > blockNumber ? _stake.oldCUs : computationUnitsAmount(_stake.amount, _stake.duration);
     uint256 epochLength = uint256(router.networkController().epochLength());
     if (_stake.duration <= epochLength) {
       return computationUnits;
