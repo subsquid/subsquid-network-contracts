@@ -263,7 +263,7 @@ export class Workers {
         keysToFixed({
           t: worker.trafficWeight.mul(100),
           dTraffic: worker.dTraffic.mul(100),
-          livenessFactor: worker.networkStats.livenessFactor * 100,
+          livenessFactor: (worker.networkStats?.livenessFactor ?? 0) * 100,
           dLiveness: worker.livenessCoefficient.mul(100),
           dTenure: worker.dTenure.mul(100),
           workerReward: formatSqd(worker.workerReward),

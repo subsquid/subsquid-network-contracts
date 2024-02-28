@@ -10,6 +10,7 @@ import { sum } from "./utils";
 dayjs.extend(utc);
 const clickhouse = new ClickHouse({
   url: config.clickhouse.url,
+  port: config.clickhouse.port,
   basicAuth: {
     username: config.clickhouse.username,
     password: config.clickhouse.password,

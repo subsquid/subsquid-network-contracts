@@ -40,6 +40,8 @@ export const config = {
     username: env("CLICKHOUSE_USERNAME", "sqd_read"),
     password: env("CLICKHOUSE_PASSWORD"),
     url: env("CLICKHOUSE_URL", "https://clickhouse.subsquid.io/"),
+    port: Number(env("CLICKHOUSE_PORT", null)),
+    debug: Boolean(env("CLICKHOUSE_DEBUG", false)),
     logsTableName: env("CLICKHOUSE_LOGS_TABLE", "testnet.worker_query_logs"),
     pingsTableName: env("CLICKHOUSE_PINGS_TABLE", "testnet.worker_pings"),
   },
