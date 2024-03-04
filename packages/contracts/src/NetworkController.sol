@@ -16,6 +16,7 @@ contract NetworkController is AccessControl, INetworkController {
   uint128 public epochLength;
   uint128 public firstEpochBlock;
   uint256 public bondAmount;
+  uint256 public stakingDeadlock = 2;
   uint128 internal epochCheckpoint;
   uint128 public storagePerWorkerInGb = 1000;
   uint256 public delegationLimitCoefficientInBP = 2_000;
@@ -74,6 +75,14 @@ contract NetworkController is AccessControl, INetworkController {
     delegationLimitCoefficientInBP = _delegationLimitCoefficientInBP;
 
     emit DelegationLimitCoefficientInBPUpdated(_delegationLimitCoefficientInBP);
+  }
+
+  /// @dev Set delegation limit coefficient in basis points
+  function setStakingDeadlock(uint256 _newDeadlock) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    require(_newDeadlock > 1, "Deadlock should be more than 1 epoch");
+    stakingDeadlock = _newDeadlock;
+
+    emit StakingDeadlockUpdated(_newDeadlock);
   }
 
   /// @dev Set if the `target` can be used as a called by the vesting contract

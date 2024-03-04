@@ -9,6 +9,7 @@ interface INetworkController {
   /// @dev Emitted when storage per worker is updated
   event StoragePerWorkerInGbUpdated(uint128 storagePerWorkerInGb);
   event DelegationLimitCoefficientInBPUpdated(uint256 newDelegationLimitCoefficientInBP);
+  event StakingDeadlockUpdated(uint256 stakingDeadlock);
   event AllowedVestedTargetUpdated(address target, bool isAllowed);
   event TargetCapacityUpdated(uint256 target);
 
@@ -26,6 +27,9 @@ interface INetworkController {
 
   /// @dev Number of current epoch (starting from 0 when contract is deployed)
   function epochNumber() external view returns (uint128);
+
+  /// @dev Number of unrewarded epochs after which staking will be blocked
+  function stakingDeadlock() external view returns (uint256);
 
   /// @dev Number of current epoch (starting from 0 when contract is deployed)
   function targetCapacityGb() external view returns (uint256);
