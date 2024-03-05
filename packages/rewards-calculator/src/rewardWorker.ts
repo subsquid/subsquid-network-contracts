@@ -8,6 +8,7 @@ import {
   getRegistrations,
   isCommitted,
   lastRewardedBlock,
+  nextEpoch,
   Registrations,
 } from "./chain";
 import { epochStats } from "./reward";
@@ -87,8 +88,8 @@ export class RewardWorker {
         await getRegistrations(),
       );
     }
-    let currentEpochStart = getEpochStart(await getBlockNumber(), epochLen);
-    if (currentEpochStart - _lastRewardedBlock > maxCommitBlocksCovered) {
+    let currentEpochStart = (await nextEpoch()) - epochLen;
+    if (currentEpochStart - _lastRewardedBlock - 1 > maxCommitBlocksCovered) {
       currentEpochStart = _lastRewardedBlock + maxCommitBlocksCovered;
     }
     const fromBlock = _lastRewardedBlock + 1;

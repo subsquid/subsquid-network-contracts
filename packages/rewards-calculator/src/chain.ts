@@ -58,6 +58,12 @@ export async function epochLength(blockNumber?: bigint) {
   );
 }
 
+export async function nextEpoch(blockNumber?: bigint) {
+  return Number(
+    await contracts.networkController.read.nextEpoch({ blockNumber }),
+  );
+}
+
 export async function bond(blockNumber?: bigint) {
   return contracts.workerRegistration.read.bondAmount({ blockNumber });
 }
