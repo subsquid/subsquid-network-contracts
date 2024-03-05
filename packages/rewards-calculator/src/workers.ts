@@ -7,6 +7,7 @@ import {
   getStakes,
   MulticallResult,
   preloadWorkerIds,
+  registeredWorkersCount,
   storagePerWorkerInGb,
   targetCapacity as getTargetCapacity,
 } from "./chain";
@@ -167,7 +168,7 @@ export class Workers {
     const target_capacity = await getTargetCapacity(
       this.nextDistributionStartBlockNumber,
     );
-    const active_workers_count = this.count();
+    const active_workers_count = await registeredWorkersCount();
     const storagePerWorker = await storagePerWorkerInGb(
       this.nextDistributionStartBlockNumber,
     );

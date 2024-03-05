@@ -235,6 +235,14 @@ export async function storagePerWorkerInGb(blockNumber?: bigint) {
   );
 }
 
+export async function registeredWorkersCount(blockNumber?: bigint) {
+  return Number(
+    await contracts.workerRegistration.read.getActiveWorkerCount({
+      blockNumber,
+    }),
+  );
+}
+
 export type MulticallResult<T> =
   | {
       error: Error;
