@@ -318,4 +318,3 @@ export class Workers {
   }
 }
 
-new Decimal('1000000000555000000').add('1234');
