@@ -2,7 +2,7 @@ import { formatEther } from "viem";
 import bs58 from "bs58";
 
 import Decimal from 'decimal.js';
-Decimal.set({ precision: 18, minE: -9 })
+Decimal.set({ precision: 28, minE: -9 })
 
 const { decode, encode } = bs58;
 export function keysToFixed(object: Object) {
