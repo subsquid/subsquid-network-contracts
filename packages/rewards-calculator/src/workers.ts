@@ -31,7 +31,7 @@ import { config } from "./config";
 import { Rewards } from "./reward";
 
 import Decimal from "decimal.js";
-Decimal.set({ precision: 27, minE: -9 });
+Decimal.set({ precision: 28, minE: -9 });
 
 const YEAR = 365 * 24 * 60 * 60;
 

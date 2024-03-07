@@ -4,7 +4,7 @@ import { QueryLog, validateSignatures } from "./signatureVerification";
 import { config } from "./config";
 
 import Decimal from "decimal.js";
-Decimal.set({ precision: 27, minE: -9 });
+Decimal.set({ precision: 28, minE: -9 });
 
 const PRECISION = 1_000_000_000n;
 
