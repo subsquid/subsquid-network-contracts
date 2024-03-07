@@ -181,6 +181,8 @@ export class Workers {
       "second",
     );
 
+    const total_reward = decimalSum(this.map(w => w.workerReward.add(w.stakerReward)));
+
     console.log(
       JSON.stringify({
         time: new Date(),
@@ -191,6 +193,7 @@ export class Workers {
         base_apr: this.baseApr.toFixed(),
         stake_factor: this.stakeFactor.toFixed(),
         r_apr: this.rAPR.toFixed(),
+        total_reward: total_reward.toFixed(),
       }),
     ),
       this.map((worker) =>
