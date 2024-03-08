@@ -6,8 +6,6 @@ import { config } from "./config";
 import Decimal from "decimal.js";
 Decimal.set({ precision: 28, minE: -9 });
 
-const PRECISION = 1_000_000_000n;
-
 export class Worker {
   private contractId: bigint | undefined;
   public networkStats: NetworkStatsEntry;
@@ -57,14 +55,11 @@ export class Worker {
     this.trafficWeight = Decimal.sqrt(bytesSent.mul(chunksRead));
   }
 
-  public async calculateDTraffic(totalSupply: Decimal, totalTraffic: Decimal) {
+  public async calculateDTraffic(totalSupply: Decimal) {
     const supplyRatio = this.stake.add(this.bond).div(totalSupply);
     this.dTraffic = Decimal.min(
-      1,
-      this.trafficWeight
-        .div(totalTraffic)
-        .div(supplyRatio)
-        .pow(config.dTrafficAlpha),
+      new Decimal(1),
+      this.trafficWeight.div(supplyRatio).pow(config.dTrafficAlpha),
     );
   }
 
@@ -101,7 +96,7 @@ export class Worker {
       .mul(this.dTraffic)
       .mul(this.dTenure);
 
-    this.workerReward = this.actualYield.mul(this.bond.add(this.stake.mul(2)));
+    this.workerReward = this.actualYield.mul(this.bond.add(this.stake.div(2)));
 
     this.stakerReward = this.actualYield.mul(this.stake).div(2);
   }

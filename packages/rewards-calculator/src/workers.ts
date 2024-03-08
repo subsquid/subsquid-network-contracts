@@ -116,12 +116,8 @@ export class Workers {
   }
 
   public getDTrraffic() {
-    const totalTraffic = decimalSum(
-      this.map(({ trafficWeight }) => trafficWeight),
-    );
-    this.map((worker) =>
-      worker.calculateDTraffic(this.totalSupply(), totalTraffic),
-    );
+    const totalSupply_ = this.totalSupply();
+    this.map((worker) => worker.calculateDTraffic(totalSupply_));
   }
 
   public async getLiveness() {
@@ -181,7 +177,9 @@ export class Workers {
       "second",
     );
 
-    const total_reward = decimalSum(this.map(w => w.workerReward.add(w.stakerReward)));
+    const total_reward = decimalSum(
+      this.map((w) => w.workerReward.add(w.stakerReward)),
+    );
 
     console.log(
       JSON.stringify({
@@ -317,4 +315,3 @@ export class Workers {
     );
   }
 }
-
