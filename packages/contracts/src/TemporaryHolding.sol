@@ -7,7 +7,7 @@ import "./interfaces/IRouter.sol";
 
 /**
  * @title Temporary Holding Contract
- * @dev Contract that holds tSQD tokens for a beneficiary to interact with the network
+ * @dev Contract that holds SQD tokens for a beneficiary to interact with the network
  * The tokens are unlocked after lockedUntil timestamp
  * The beneficiary can execute contracts, allowed by network controller through this contract
  */
@@ -18,14 +18,14 @@ contract TemporaryHolding is Executable {
   uint256 public immutable expectedAmount;
 
   constructor(
-    IERC20 _tSQD,
+    IERC20 _SQD,
     IRouter _router,
     address _beneficiary,
     address _admin,
     uint256 _lockedUntil,
     uint256 _expectedAmount
   ) {
-    tSQD = _tSQD;
+    SQD = _SQD;
     router = _router;
     beneficiary = _beneficiary;
     admin = _admin;
@@ -35,11 +35,11 @@ contract TemporaryHolding is Executable {
 
   function release() external {
     require(block.timestamp >= lockedUntil, "Funds are locked");
-    tSQD.transfer(admin, balanceOf());
+    SQD.transfer(admin, balanceOf());
   }
 
   function balanceOf() public view returns (uint256) {
-    return tSQD.balanceOf(address(this));
+    return SQD.balanceOf(address(this));
   }
 
   function _canExecute(address executor) internal view override returns (bool) {

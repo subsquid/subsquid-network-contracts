@@ -3,7 +3,7 @@ pragma solidity 0.8.20;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "../../src/Staking.sol";
-import "../../src/tSQD.sol";
+import "../../src/SQD.sol";
 import "../BaseTest.sol";
 
 contract StakingHelper is Staking {
@@ -22,7 +22,7 @@ contract StakersRewardDistributionTest is BaseTest {
   NetworkController network;
 
   function setUp() public {
-    (tSQD _token, Router router) = deployAll();
+    (SQD _token, Router router) = deployAll();
     token = _token;
     network = NetworkController(address(router.networkController()));
     network.setEpochLength(2);

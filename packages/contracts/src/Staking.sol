@@ -10,7 +10,7 @@ import "./AccessControlledPausable.sol";
 
 /**
  * @title Staking Contract
- * @dev Stake tSQD tokens to earn rewards for the staked worker
+ * @dev Stake SQD tokens to earn rewards for the staked worker
  * Stakes and rewards are calculated per each worker separately
  * Distributions are expected to be called by the RewardsDistributor contract on each epoch, but this is not enforced
  * Rewards are shared between all stakers of a worker proportionally to their stake
@@ -68,7 +68,7 @@ contract Staking is AccessControlledPausable, IStaking {
    * Will remember claimable rewards and update checkpoint for the staker
    * Cannot deposit if rewards were not distributed for 2 epochs (this means something is broken)
    * Cannot withdraw for at least one full epoch latest deposit
-   * @notice transfers amount of tSQD from msg.sender to this contract
+   * @notice transfers amount of SQD from msg.sender to this contract
    */
   function deposit(uint256 worker, uint256 amount) external whenNotPaused {
     INetworkController network = router.networkController();
@@ -96,7 +96,7 @@ contract Staking is AccessControlledPausable, IStaking {
    * @dev Withdraw amount of tokens staked in favour of a worker
    * Will remember claimable rewards and update checkpoint for the staker
    * Can withdraw even if rewards were not distributed for 2 epochs because we cannot lock user's funds
-   * @notice transfers amount of tSQD from this contract to msg.sender
+   * @notice transfers amount of SQD from this contract to msg.sender
    */
   function withdraw(uint256 worker, uint256 amount) external whenNotPaused {
     StakerRewards storage _rewards = rewards[worker];

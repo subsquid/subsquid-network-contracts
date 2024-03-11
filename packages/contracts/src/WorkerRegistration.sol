@@ -34,7 +34,7 @@ contract WorkerRegistration is AccessControlledPausable, IWorkerRegistration {
     string metadata;
   }
 
-  IERC20 public immutable tSQD;
+  IERC20 public immutable SQD;
   IRouter public immutable router;
   mapping(uint256 => Worker) public workers;
   mapping(bytes peerId => uint256 id) public workerIds;
@@ -42,11 +42,11 @@ contract WorkerRegistration is AccessControlledPausable, IWorkerRegistration {
   mapping(address creator => EnumerableSet.UintSet) internal ownedWorkers;
 
   /**
-   * @param _tSQD tSQD token.
+   * @param _SQD SQD token.
    * @param _router Countract router
    */
-  constructor(IERC20 _tSQD, IRouter _router) {
-    tSQD = _tSQD;
+  constructor(IERC20 _SQD, IRouter _router) {
+    SQD = _SQD;
     router = _router;
   }
 
@@ -58,7 +58,7 @@ contract WorkerRegistration is AccessControlledPausable, IWorkerRegistration {
    * @dev Registers a worker.
    * @param peerId The unique peer ID of the worker.
    * @notice Peer ID is a unique identifier of the worker. It is expected to be a hex representation of the libp2p peer ID of the worker
-   * @notice bondAmount of tSQD tokens will be transferred from the caller to this contract
+   * @notice bondAmount of SQD tokens will be transferred from the caller to this contract
    */
   function register(bytes calldata peerId, string memory metadata) public whenNotPaused {
     require(peerId.length <= 64, "Peer ID too large");
@@ -86,7 +86,7 @@ contract WorkerRegistration is AccessControlledPausable, IWorkerRegistration {
     activeWorkerIds.add(workerId);
     ownedWorkers[msg.sender].add(workerId);
 
-    tSQD.transferFrom(msg.sender, address(this), _bondAmount);
+    SQD.transferFrom(msg.sender, address(this), _bondAmount);
     emit WorkerRegistered(workerId, peerId, msg.sender, workers[workerId].registeredAt, metadata);
   }
 
@@ -128,7 +128,7 @@ contract WorkerRegistration is AccessControlledPausable, IWorkerRegistration {
     uint256 bond = worker.bond;
     delete workers[workerId];
 
-    tSQD.transfer(msg.sender, bond);
+    SQD.transfer(msg.sender, bond);
 
     emit WorkerWithdrawn(workerId, msg.sender);
   }
@@ -156,7 +156,7 @@ contract WorkerRegistration is AccessControlledPausable, IWorkerRegistration {
     uint256 excessiveBond = workers[workerId].bond - _bondAmount;
     workers[workerId].bond = _bondAmount;
 
-    tSQD.transfer(msg.sender, excessiveBond);
+    SQD.transfer(msg.sender, excessiveBond);
 
     emit ExcessiveBondReturned(workerId, excessiveBond);
   }

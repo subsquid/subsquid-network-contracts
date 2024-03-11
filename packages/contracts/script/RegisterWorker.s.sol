@@ -18,7 +18,7 @@ contract RegisterWorker is Script {
       console2.log("WORKER_ID env var is required");
       return;
     }
-    IERC20 token = workerRegistration.tSQD();
+    IERC20 token = workerRegistration.SQD();
     vm.startBroadcast(deployerPrivateKey);
     token.approve(address(workerRegistration), workerRegistration.bondAmount());
     workerRegistration.register(peerId);

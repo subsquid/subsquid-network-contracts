@@ -21,7 +21,7 @@ contract RewardTreasury is AccessControlledPausable {
 
   /**
    * @dev Constructor
-   * @param _rewardToken address of the tSQD token
+   * @param _rewardToken address of the SQD token
    */
   constructor(IERC20 _rewardToken) {
     rewardToken = _rewardToken;

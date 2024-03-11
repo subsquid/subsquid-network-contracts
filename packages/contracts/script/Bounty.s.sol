@@ -22,7 +22,7 @@ contract Bounty is Script {
     address sender = vm.addr(deployerPrivateKey);
     IERC20 token = IERC20(address(0x24f9C46d86c064a6FA2a568F918fe62fC6917B3c));
     VestingFactory factory = VestingFactory(address(0x0eD5FB811167De1928322a0fa30Ed7F3c8C370Ca));
-    require(token.balanceOf(sender) > 0, "No tSQD for the sender");
+    require(token.balanceOf(sender) > 0, "No SQD for the sender");
     string memory root = vm.projectRoot();
     string memory path = string.concat(root, "/script/workersSurvey.json");
     string memory json = vm.readFile(path);

@@ -9,7 +9,7 @@ import "./Executable.sol";
 
 /**
  * @title Subsquid Vesting Contract
- * @dev Contract that holds tSQD tokens for a beneficiary
+ * @dev Contract that holds SQD tokens for a beneficiary
  * The tokens are unlocked linearly with a cliff according to _vestingSchedule
  * The beneficiary can execute contracts, allowed by network controller through this contract
  */
@@ -18,7 +18,7 @@ contract SubsquidVesting is Executable, VestingWallet {
   uint256 public immutable immediateReleaseBIP;
 
   constructor(
-    IERC20 _tSQD,
+    IERC20 _SQD,
     IRouter _router,
     address beneficiaryAddress,
     uint64 startTimestamp,
@@ -26,7 +26,7 @@ contract SubsquidVesting is Executable, VestingWallet {
     uint256 _immediateReleaseBIP,
     uint256 _expectedTotalAmount
   ) VestingWallet(beneficiaryAddress, startTimestamp, durationSeconds) {
-    tSQD = _tSQD;
+    SQD = _SQD;
     router = _router;
     expectedTotalAmount = _expectedTotalAmount;
     immediateReleaseBIP = _immediateReleaseBIP;
@@ -37,7 +37,7 @@ contract SubsquidVesting is Executable, VestingWallet {
   }
 
   function release() public override {
-    release(address(tSQD));
+    release(address(SQD));
   }
 
   function balanceOf(IERC20 token) public view returns (uint256) {
@@ -45,7 +45,7 @@ contract SubsquidVesting is Executable, VestingWallet {
   }
 
   function release(address token) public override onlyOwner {
-    require(token == address(tSQD), "Only tSQD is supported");
+    require(token == address(SQD), "Only SQD is supported");
     super.release(token);
   }
 

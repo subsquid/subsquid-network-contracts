@@ -3,7 +3,7 @@ pragma solidity 0.8.20;
 
 import "../src/RewardCalculation.sol";
 import "../src/WorkerRegistration.sol";
-import "../src/tSQD.sol";
+import "../src/SQD.sol";
 import "../src/NetworkController.sol";
 import "../src/Staking.sol";
 import "./BaseTest.sol";
@@ -93,7 +93,7 @@ contract RewardCalculationTest is BaseTest {
 
     mockWorkersCount(10000);
     assertApproxEqRel(
-      rewardCalculation.epochReward(365 days), rewardCalculation.INITIAL_POOL_SIZE() * 3 / 10, 0.01 ether
+      rewardCalculation.epochReward(365 days), rewardCalculation.INITIAL_REWARD_POOL_SIZE() * 3 / 10, 0.01 ether
     );
   }
 

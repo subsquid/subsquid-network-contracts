@@ -9,7 +9,7 @@ import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
  * See more here https://docs.arbitrum.io/devs-how-tos/bridge-tokens/how-to-bridge-tokens-generic-custom
  *
  */
-contract tSQDArbitrum is ERC20 {
+contract SQDArbitrum is ERC20 {
   address public immutable l2Gateway;
   address public immutable l1Address;
 
@@ -18,7 +18,7 @@ contract tSQDArbitrum is ERC20 {
     _;
   }
 
-  constructor(address _l2Gateway, address _l1TokenAddress) ERC20("tSQD Token", "tSQD") {
+  constructor(address _l2Gateway, address _l1TokenAddress) ERC20("SQD Token", "SQD") {
     l2Gateway = _l2Gateway;
     l1Address = _l1TokenAddress;
   }

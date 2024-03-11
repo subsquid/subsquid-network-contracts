@@ -24,10 +24,10 @@ interface IGatewayRouter2 {
 }
 
 /**
- * @title tSQD Token
+ * @title SQD Token
  * @dev Simple ERC20 token, supports arbitrum bridging
  */
-contract tSQD is ERC20 {
+contract SQD is ERC20 {
   bool internal shouldRegisterGateway;
   IL1CustomGateway gateway;
   IGatewayRouter2 router;
@@ -37,7 +37,7 @@ contract tSQD is ERC20 {
     uint256[] memory mintedAmounts,
     IL1CustomGateway _gateway,
     IGatewayRouter2 _router
-  ) ERC20("tSQD Token", "tSQD") {
+  ) ERC20("SQD Token", "SQD") {
     gateway = _gateway;
     router = _router;
 

@@ -2,7 +2,7 @@
 pragma solidity 0.8.20;
 
 import "../../src/DistributedRewardDistribution.sol";
-import "../../src/tSQD.sol";
+import "../../src/SQD.sol";
 import "../../src/RewardTreasury.sol";
 import "../../src/NetworkController.sol";
 import "../../src/Staking.sol";
@@ -35,7 +35,7 @@ contract RewardsDistributionTest is BaseTest {
   event Claimed(address indexed who, uint256 indexed workerId, uint256 amount);
 
   function setUp() public {
-    (tSQD _token, Router router) = deployAll();
+    (SQD _token, Router router) = deployAll();
     token = _token;
     staking = Staking(address(router.staking()));
     workerRegistration = WorkerRegistration(address(router.workerRegistration()));

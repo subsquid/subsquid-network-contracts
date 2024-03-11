@@ -27,7 +27,7 @@ contract SubsquidVestingTest is BaseTest {
 
   SubsquidVesting vesting;
   VestingFactory vestingFactory;
-  tSQD token;
+  SQD token;
   Router router;
   uint64 month = 30 days;
 

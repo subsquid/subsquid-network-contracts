@@ -76,7 +76,9 @@ contract DistributedRewardsDistribution is AccessControlledPausable, IRewardsDis
   }
 
   /**
+   * @dev Get an index of the distribuor which can currently commit a distribution
    * @notice Distributor has 256 blocks to commit a distribution
+   * @notice blockhash can be manipulated by miners, but all distributors are expected to be aligned to us anyway
    */
   function distributorIndex() public view returns (uint256) {
     uint256 slotStart = block.number / 256 * 256;

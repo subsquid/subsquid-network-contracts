@@ -5,7 +5,7 @@ import "./WorkerRegistration.sol";
 
 contract WorkerRegistrationConstructorTest is WorkerRegistrationTest {
   function testConstructor() public {
-    assertEq(address(workerRegistration.tSQD()), address(token));
+    assertEq(address(workerRegistration.SQD()), address(token));
     assertEq(workerRegistration.epochLength(), EPOCH_LENGTH);
     assertEq(workerRegistration.lockPeriod(), EPOCH_LENGTH);
   }

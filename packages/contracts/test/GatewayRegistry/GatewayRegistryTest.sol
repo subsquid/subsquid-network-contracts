@@ -2,7 +2,7 @@ pragma solidity 0.8.20;
 
 import "forge-std/Test.sol";
 import "../../src/GatewayRegistry.sol";
-import "../../src/tSQD.sol";
+import "../../src/SQD.sol";
 import "../../src/NetworkController.sol";
 import "../../src/WorkerRegistration.sol";
 import "../../src/Staking.sol";
@@ -10,7 +10,7 @@ import "../BaseTest.sol";
 
 contract GatewayRegistryTest is BaseTest {
   GatewayRegistry gatewayRegistry;
-  tSQD token;
+  SQD token;
   RewardCalculation rewardCalc;
   Router router;
   bytes peerId = "peerId";

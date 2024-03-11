@@ -2,7 +2,7 @@
 pragma solidity 0.8.20;
 
 import "../../src/WorkerRegistration.sol";
-import "../../src/tSQD.sol";
+import "../../src/SQD.sol";
 import "../../src/NetworkController.sol";
 import "../../src/Staking.sol";
 import "../BaseTest.sol";
@@ -35,7 +35,7 @@ contract WorkerRegistrationTest is BaseTest {
   }
 
   function setUp() public {
-    (tSQD _token, Router router) = deployAll();
+    (SQD _token, Router router) = deployAll();
     token = _token;
     workerRegistration = WorkerRegistration(address(router.workerRegistration()));
     networkController = NetworkController(address(router.networkController()));

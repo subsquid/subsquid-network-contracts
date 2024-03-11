@@ -10,6 +10,7 @@ import "./SoftCap.sol";
  * @title Reward Calculation Contract
  * @dev Contract that calculates rewards for workers and stakers
  * For more info, see https://github.com/subsquid/subsquid-network-contracts/wiki/Whitepaper#appendix-ii----rewards
+ * @notice Functions in the contract are expected to be used by view functions as effectiveTVL is a heavy operation
  */
 contract RewardCalculation is IRewardCalculation {
   using SafeCast for uint256;
@@ -17,7 +18,7 @@ contract RewardCalculation is IRewardCalculation {
 
   IRouter public immutable router;
   SoftCap public immutable stakeCap;
-  uint256 public constant INITIAL_POOL_SIZE = 120_330_000 ether;
+  uint256 public constant INITIAL_REWARD_POOL_SIZE = 120_330_000 ether;
 
   constructor(IRouter _router, SoftCap _stakeCap) {
     router = _router;
@@ -46,7 +47,7 @@ contract RewardCalculation is IRewardCalculation {
     if (tvl == 0) {
       return 10000;
     }
-    return router.networkController().yearlyRewardCapCoefficient() * INITIAL_POOL_SIZE / effectiveTVL();
+    return router.networkController().yearlyRewardCapCoefficient() * INITIAL_REWARD_POOL_SIZE / effectiveTVL();
   }
 
   function apy(uint256 target, uint256 actual) public view returns (uint256) {

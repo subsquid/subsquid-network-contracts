@@ -2,19 +2,19 @@
 pragma solidity 0.8.20;
 
 import "../src/RewardTreasury.sol";
-import "../src/tSQD.sol";
+import "../src/SQD.sol";
 import "./BaseTest.sol";
 
 contract RewardTreasuryTest is BaseTest {
   RewardTreasury treasury;
-  tSQD token;
+  SQD token;
   IRewardsDistribution distributor;
 
   event Claimed(address indexed by, address indexed receiver, uint256 amount);
   event WhitelistedDistributorSet(IRewardsDistribution indexed distributor, bool isWhitelisted);
 
   function setUp() public {
-    (tSQD _token, Router router) = deployAll();
+    (SQD _token, Router router) = deployAll();
     token = _token;
     treasury = RewardTreasury(router.rewardTreasury());
     token.transfer(address(treasury), 100);

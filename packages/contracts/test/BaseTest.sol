@@ -9,7 +9,7 @@ import "../src/Staking.sol";
 import "../src/NetworkController.sol";
 import "../src/RewardTreasury.sol";
 import "../src/Router.sol";
-import "../src/tSQD.sol";
+import "../src/SQD.sol";
 import "../src/RewardCalculation.sol";
 
 contract MockRewardsDistribution is IRewardsDistribution {
@@ -25,14 +25,14 @@ contract MockRewardsDistribution is IRewardsDistribution {
 contract BaseTest is Test {
   SoftCap cap;
 
-  function deployAll() internal returns (tSQD token, Router router) {
+  function deployAll() internal returns (SQD token, Router router) {
     router = Router(address(new TransparentUpgradeableProxy(address(new Router()), address(1234), "")));
     uint256[] memory minted = new uint256[](1);
     minted[0] = 1_337_000_000 ether;
     address[] memory holders = new address[](1);
     holders[0] = address(this);
 
-    token = new tSQD(holders, minted, IL1CustomGateway(address(0)), IGatewayRouter2(address(0)));
+    token = new SQD(holders, minted, IL1CustomGateway(address(0)), IGatewayRouter2(address(0)));
 
     IWorkerRegistration workerRegistration = new WorkerRegistration(token, router);
     IStaking staking = new Staking(token, router);

@@ -10,31 +10,16 @@ import "./interfaces/IGatewayRegistry.sol";
 /**
  * @title Gateway Registry Contract
  * @dev Contract has a list of whitelisted gateways
- * Each gateway can stake tokens for a period of time to receive computation units (CUs)
- * Each gateway can allocate CUs to workers
- * Each gateway can unstake tokens
+ * Gateway operators can stake tokens for a period of time to receive computation units (CUs)
  * Allocation units are used by workers to track, if the gateway can perform queries on them
+ * Allocation units are distributed between workers either by strategy contract, of if strategy is not set,
+ * manually by calling `allocateComputationUnits` function
+ * We call a set of gateways created by single wallet a cluster
  */
 contract GatewayRegistry is AccessControlledPausable, IGatewayRegistry {
   using EnumerableSet for EnumerableSet.Bytes32Set;
 
   uint256 constant BASIS_POINT_MULTIPLIER = 10000;
-
-  struct Stake {
-    uint256 amount;
-    uint128 lockStart;
-    uint128 lockEnd;
-    uint128 duration;
-    bool autoExtension;
-    uint256 oldCUs;
-  }
-
-  struct Gateway {
-    address operator;
-    address ownAddress;
-    bytes peerId;
-    string metadata;
-  }
 
   struct GatewayOperator {
     bool previousInteractions;
@@ -53,30 +38,10 @@ contract GatewayRegistry is AccessControlledPausable, IGatewayRegistry {
   address public defaultStrategy;
 
   uint256 internal tokenDecimals;
+  /// @notice Depends on the network
   uint256 public averageBlockTime = 12 seconds;
   /// @dev How much CU is given for a single SQD per 1000 blocks, not including boost factor
   uint256 public mana = 1_000;
-
-  event Registered(address indexed gatewayOperator, bytes32 indexed id, bytes peerId);
-  event Staked(
-    address indexed gatewayOperator, uint256 amount, uint128 lockStart, uint128 lockEnd, uint256 computationUnits
-  );
-  event Unstaked(address indexed gatewayOperator, uint256 amount);
-  event Unregistered(address indexed gatewayOperator, bytes peerId);
-
-  event AllocatedCUs(address indexed gateway, bytes peerId, uint256[] workerIds, uint256[] shares);
-
-  event StrategyAllowed(address indexed strategy, bool isAllowed);
-  event DefaultStrategyChanged(address indexed strategy);
-  event ManaChanged(uint256 newCuPerSQD);
-
-  event MetadataChanged(address indexed gatewayOperator, bytes peerId, string metadata);
-  event GatewayAddressChanged(address indexed gatewayOperator, bytes peerId, address newAddress);
-  event UsedStrategyChanged(address indexed gatewayOperator, address strategy);
-  event AutoextensionEnabled(address indexed gatewayOperator);
-  event AutoextensionDisabled(address indexed gatewayOperator, uint128 lockEnd);
-
-  event AverageBlockTimeChanged(uint256 newBlockTime);
 
   constructor(IERC20WithMetadata _token, IRouter _router) {
     token = _token;
@@ -93,6 +58,10 @@ contract GatewayRegistry is AccessControlledPausable, IGatewayRegistry {
     register(peerId, metadata, address(0));
   }
 
+  /**
+  * @dev Register a list of gateways
+  * See register function for more info
+  */
   function register(bytes[] calldata peerId, string[] calldata metadata, address[] calldata gatewayAddress) external {
     require(peerId.length == metadata.length, "Length mismatch");
     require(peerId.length == gatewayAddress.length, "Length mismatch");
@@ -101,7 +70,11 @@ contract GatewayRegistry is AccessControlledPausable, IGatewayRegistry {
     }
   }
 
-  /// @dev Register new gateway with given libP2P peerId
+  /**
+  * @dev Register new gateway with given libP2P peerId
+  * If gateway address is given, the gateway can call `allocateComputationUnits` function from this address
+  * If this is the first gateway for the gateway operator, the default strategy will be used
+  */
   function register(bytes calldata peerId, string memory metadata, address gatewayAddress) public whenNotPaused {
     require(peerId.length > 0, "Cannot set empty peerId");
     bytes32 peerIdHash = keccak256(peerId);
@@ -137,10 +110,10 @@ contract GatewayRegistry is AccessControlledPausable, IGatewayRegistry {
   }
 
   /**
-   * @dev Stake tokens for a period of time
+   * @dev Stake tokens for a period of time for the first time
    * @notice Allocation units are given according to the non-linear formula
+   * Allocations are given to all gateways in the cluster
    * mana * duration * boostFactor, where boostFactor is specified in reward calculation contract
-   * All stakes are stored separately, so that we can track, when funds are unlocked
    */
   function stake(uint256 amount, uint128 durationBlocks, bool withAutoExtension) public whenNotPaused {
     require(operators[msg.sender].stake.amount == 0, "Stake already exists, call addStake instead");
@@ -163,6 +136,7 @@ contract GatewayRegistry is AccessControlledPausable, IGatewayRegistry {
     stake(amount, durationBlocks, false);
   }
 
+  /// @dev Add more stake to the existing one
   function addStake(uint256 amount) public whenNotPaused {
     Stake storage _stake = operators[msg.sender].stake;
     require(_stake.amount > 0, "Cannot add stake when nothing was staked");
@@ -190,7 +164,8 @@ contract GatewayRegistry is AccessControlledPausable, IGatewayRegistry {
     emit Unstaked(msg.sender, amount);
   }
 
-  /// @dev The default strategy used is address(0) which is a manual allocation submitting
+  /// @dev set strategy contract
+  /// address(0) is a manual allocation submitting
   function useStrategy(address strategy) public {
     require(isStrategyAllowed[strategy], "Strategy not allowed");
     operators[msg.sender].strategy = strategy;
@@ -270,6 +245,7 @@ contract GatewayRegistry is AccessControlledPausable, IGatewayRegistry {
     return gateways[keccak256(peerId)].metadata;
   }
 
+  /// @dev Get all gateways created by the same wallet as the given gateway
   function getCluster(bytes calldata peerId) external view returns (bytes[] memory clusterPeerIds) {
     (Gateway storage gateway,) = _getGateway(peerId);
     bytes32[] memory hashedIds = operators[gateway.operator].ownedGateways.values();
@@ -288,6 +264,7 @@ contract GatewayRegistry is AccessControlledPausable, IGatewayRegistry {
     emit MetadataChanged(msg.sender, peerId, metadata);
   }
 
+  /// @dev Change gateway address. No two gateways should share address. Address can be set to address(0)
   function setGatewayAddress(bytes calldata peerId, address newAddress) public {
     (Gateway storage gateway, bytes32 peerIdHash) = _getGateway(peerId);
     _requireOperator(gateway);
@@ -305,6 +282,8 @@ contract GatewayRegistry is AccessControlledPausable, IGatewayRegistry {
     emit GatewayAddressChanged(msg.sender, peerId, newAddress);
   }
 
+  /// @dev Allow/ban contract to be used by strategy
+  /// @notice if isDefault is true, the strategy will be used for all new gateway operators
   function setIsStrategyAllowed(address strategy, bool isAllowed, bool isDefault) external onlyRole(DEFAULT_ADMIN_ROLE) {
     if (!isAllowed && (isDefault || defaultStrategy == strategy)) {
       revert("Cannot set disallowed strategy as default");
@@ -336,6 +315,22 @@ contract GatewayRegistry is AccessControlledPausable, IGatewayRegistry {
     return a - b;
   }
 
+  /**
+  * @dev Enable auto extension of the stake
+  * If autoextension is enabled, funds would be restaked for the same duration
+  */
+  function enableAutoExtension() external {
+    Stake storage _stake = operators[msg.sender].stake;
+    require(!_stake.autoExtension, "AutoExtension enabled");
+    _stake.autoExtension = true;
+    _stake.lockEnd = type(uint128).max;
+    emit AutoextensionEnabled(msg.sender);
+  }
+
+  /**
+  * @dev Disable auto extension of the stake
+  * Tokens will get unlocked after the current lock period ends
+  */
   function disableAutoExtension() external {
     Stake storage _stake = operators[msg.sender].stake;
     require(_stake.autoExtension, "AutoExtension disabled");
@@ -344,14 +339,6 @@ contract GatewayRegistry is AccessControlledPausable, IGatewayRegistry {
       + (_saturatedDiff(uint128(block.number), _stake.lockStart) / _stake.duration + 1) * _stake.duration;
 
     emit AutoextensionDisabled(msg.sender, _stake.lockEnd);
-  }
-
-  function enableAutoExtension() external {
-    Stake storage _stake = operators[msg.sender].stake;
-    require(!_stake.autoExtension, "AutoExtension enabled");
-    _stake.autoExtension = true;
-    _stake.lockEnd = type(uint128).max;
-    emit AutoextensionEnabled(msg.sender);
   }
 
   function _getGateway(bytes calldata peerId) internal view returns (Gateway storage gateway, bytes32 peerIdHash) {
