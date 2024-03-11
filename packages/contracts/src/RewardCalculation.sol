@@ -46,7 +46,7 @@ contract RewardCalculation is IRewardCalculation {
     if (tvl == 0) {
       return 10000;
     }
-    return 3000 * INITIAL_POOL_SIZE / effectiveTVL();
+    return router.networkController().yearlyRewardCapCoefficient() * INITIAL_POOL_SIZE / effectiveTVL();
   }
 
   function apy(uint256 target, uint256 actual) public view returns (uint256) {
