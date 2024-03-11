@@ -29,6 +29,7 @@ interface IGatewayRegistry {
   event StrategyAllowed(address indexed strategy, bool isAllowed);
   event DefaultStrategyChanged(address indexed strategy);
   event ManaChanged(uint256 newCuPerSQD);
+  event MaxGatewaysPerClusterChanged(uint256 newAmount);
 
   event MetadataChanged(address indexed gatewayOperator, bytes peerId, string metadata);
   event GatewayAddressChanged(address indexed gatewayOperator, bytes peerId, address newAddress);

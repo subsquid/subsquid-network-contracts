@@ -42,6 +42,8 @@ contract GatewayRegistry is AccessControlledPausable, IGatewayRegistry {
   uint256 public averageBlockTime = 12 seconds;
   /// @dev How much CU is given for a single SQD per 1000 blocks, not including boost factor
   uint256 public mana = 1_000;
+  /// @dev How many gateways can be operated by a single wallet
+  uint256 public maxGatewaysPerCluster = 10;
 
   constructor(IERC20WithMetadata _token, IRouter _router) {
     token = _token;
@@ -59,9 +61,9 @@ contract GatewayRegistry is AccessControlledPausable, IGatewayRegistry {
   }
 
   /**
-  * @dev Register a list of gateways
-  * See register function for more info
-  */
+   * @dev Register a list of gateways
+   * See register function for more info
+   */
   function register(bytes[] calldata peerId, string[] calldata metadata, address[] calldata gatewayAddress) external {
     require(peerId.length == metadata.length, "Length mismatch");
     require(peerId.length == gatewayAddress.length, "Length mismatch");
@@ -71,14 +73,16 @@ contract GatewayRegistry is AccessControlledPausable, IGatewayRegistry {
   }
 
   /**
-  * @dev Register new gateway with given libP2P peerId
-  * If gateway address is given, the gateway can call `allocateComputationUnits` function from this address
-  * If this is the first gateway for the gateway operator, the default strategy will be used
-  */
+   * @dev Register new gateway with given libP2P peerId
+   * If gateway address is given, the gateway can call `allocateComputationUnits` function from this address
+   * If this is the first gateway for the gateway operator, the default strategy will be used
+   */
   function register(bytes calldata peerId, string memory metadata, address gatewayAddress) public whenNotPaused {
     require(peerId.length > 0, "Cannot set empty peerId");
     bytes32 peerIdHash = keccak256(peerId);
     require(gateways[peerIdHash].operator == address(0), "PeerId already registered");
+    require(operators[msg.sender].ownedGateways.count < maxGatewaysPerCluster, "Too many gateways in the cluster");
+
     if (!operators[msg.sender].previousInteractions) {
       useStrategy(defaultStrategy);
     }
@@ -308,6 +312,12 @@ contract GatewayRegistry is AccessControlledPausable, IGatewayRegistry {
     emit AverageBlockTimeChanged(_newAverageBlockTime);
   }
 
+  function setMaxGatewaysPerCluster(uint256 _maxGatewaysPerCluster) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    maxGatewaysPerCluster = _maxGatewaysPerCluster;
+
+    emit MaxGatewaysPerClusterChanged(_maxGatewaysPerCluster);
+  }
+
   function _saturatedDiff(uint128 a, uint128 b) internal pure returns (uint128) {
     if (b >= a) {
       return 0;
@@ -316,9 +326,9 @@ contract GatewayRegistry is AccessControlledPausable, IGatewayRegistry {
   }
 
   /**
-  * @dev Enable auto extension of the stake
-  * If autoextension is enabled, funds would be restaked for the same duration
-  */
+   * @dev Enable auto extension of the stake
+   * If autoextension is enabled, funds would be restaked for the same duration
+   */
   function enableAutoExtension() external {
     Stake storage _stake = operators[msg.sender].stake;
     require(!_stake.autoExtension, "AutoExtension enabled");
@@ -328,9 +338,9 @@ contract GatewayRegistry is AccessControlledPausable, IGatewayRegistry {
   }
 
   /**
-  * @dev Disable auto extension of the stake
-  * Tokens will get unlocked after the current lock period ends
-  */
+   * @dev Disable auto extension of the stake
+   * Tokens will get unlocked after the current lock period ends
+   */
   function disableAutoExtension() external {
     Stake storage _stake = operators[msg.sender].stake;
     require(_stake.autoExtension, "AutoExtension disabled");
