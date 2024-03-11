@@ -14,7 +14,7 @@ contract RewardCalculationTest is BaseTest {
 
   function setUp() public {
     (, Router router) = deployAll();
-    rewardCalculation = new RewardCalculation(router);
+    rewardCalculation = new RewardCalculation(router, cap);
     NetworkController(address(rewardCalculation.router().networkController())).setTargetCapacity(1000);
   }
 
@@ -37,17 +37,16 @@ contract RewardCalculationTest is BaseTest {
     assertEq(rewardCalculation.apy(1000, 30000), 0);
   }
 
-  function mockWorkersCount(uint256 n) internal {
-    vm.mockCall(
-      address(rewardCalculation.router().workerRegistration()),
-      abi.encodeWithSelector(WorkerRegistration.getActiveWorkerCount.selector),
-      abi.encode(n)
-    );
-    vm.mockCall(
-      address(rewardCalculation.router().workerRegistration()),
-      abi.encodeWithSelector(WorkerRegistration.effectiveTVL.selector),
-      abi.encode(n * bondAmount)
-    );
+  function test_apyIsCapedByRewardPoolSize() public {
+    NetworkController(address(rewardCalculation.router().networkController())).setBondAmount(100_000 ether);
+
+    mockWorkersCount(1000);
+    assertGt(rewardCalculation.apyCap(), 2500);
+    assertEq(rewardCalculation.apy(1000, 1000), 2500);
+
+    mockWorkersCount(2000);
+    assertLt(rewardCalculation.apyCap(), 2500);
+    assertEq(rewardCalculation.apy(1000, 1000), rewardCalculation.apyCap());
   }
 
   function test_currentApy() public {
@@ -86,5 +85,23 @@ contract RewardCalculationTest is BaseTest {
     assertEq(rewardCalculation.boostFactor(719 days), 25000);
     assertEq(rewardCalculation.boostFactor(720 days), 30000);
     assertEq(rewardCalculation.boostFactor(10000 days), 30000);
+  }
+
+  function test_rewardsReleasePaceShouldNeverExceedRewardPool() public {
+    NetworkController(address(rewardCalculation.router().networkController())).setBondAmount(100_000 ether);
+    NetworkController(address(rewardCalculation.router().networkController())).setTargetCapacity(600001000);
+
+    mockWorkersCount(10000);
+    assertApproxEqRel(
+      rewardCalculation.epochReward(365 days), rewardCalculation.INITIAL_POOL_SIZE() * 3 / 10, 0.01 ether
+    );
+  }
+
+  function mockWorkersCount(uint256 n) internal {
+    vm.mockCall(
+      address(rewardCalculation.router().workerRegistration()),
+      abi.encodeWithSelector(WorkerRegistration.getActiveWorkerCount.selector),
+      abi.encode(n)
+    );
   }
 }

@@ -6,12 +6,10 @@ import "../src/SoftCap.sol";
 
 contract SoftCapTest is BaseTest {
   Router router;
-  SoftCap cap;
   uint256 bond;
 
   function setUp() public {
     (, router) = deployAll();
-    cap = new SoftCap(router);
     bond = router.networkController().bondAmount();
   }
 

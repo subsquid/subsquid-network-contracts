@@ -23,6 +23,7 @@ interface IWorkerRegistration {
 
   /// @return The number of active workers.
   function getActiveWorkerCount() external view returns (uint256);
+  function getActiveWorkerIds() external view returns (uint256[] memory);
   /// @return The effective TVL
   function effectiveTVL() external view returns (uint256);
   /// @return The ids of all worker created by the owner account

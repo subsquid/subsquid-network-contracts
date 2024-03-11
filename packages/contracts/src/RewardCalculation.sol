@@ -4,6 +4,7 @@ pragma solidity 0.8.20;
 import "@openzeppelin/contracts/utils/math/SafeCast.sol";
 
 import "./interfaces/IRouter.sol";
+import "./SoftCap.sol";
 
 /**
  * @title Reward Calculation Contract
@@ -15,14 +16,17 @@ contract RewardCalculation is IRewardCalculation {
   using SafeCast for int256;
 
   IRouter public immutable router;
+  SoftCap public immutable stakeCap;
+  uint256 public constant INITIAL_POOL_SIZE = 120_330_000 ether;
 
-  constructor(IRouter _router) {
+  constructor(IRouter _router, SoftCap _stakeCap) {
     router = _router;
+    stakeCap = _stakeCap;
   }
 
   /// @dev APY based on target and actual storages
   /// smoothed base_apr function from [here](https://github.com/subsquid/subsquid-network-contracts/wiki/Whitepaper#reward-rate)
-  function apy(uint256 target, uint256 actual) public pure returns (uint256) {
+  function baseApr(uint256 target, uint256 actual) public pure returns (uint256) {
     int256 uRate = (target.toInt256() - actual.toInt256()) * 10000 / target.toInt256();
     if (uRate >= 9000) {
       return 7000;
@@ -37,6 +41,35 @@ contract RewardCalculation is IRewardCalculation {
     return resultApy.toUint256();
   }
 
+  function apyCap() public view returns (uint256) {
+    uint256 tvl = effectiveTVL();
+    if (tvl == 0) {
+      return 10000;
+    }
+    return 3000 * INITIAL_POOL_SIZE / effectiveTVL();
+  }
+
+  function apy(uint256 target, uint256 actual) public view returns (uint256) {
+    uint256 base = baseApr(target, actual);
+    uint256 maxApy = apyCap();
+    if (base > maxApy) {
+      return maxApy;
+    }
+    return base;
+  }
+
+  function effectiveTVL() public view returns (uint256) {
+    uint256 workerCount = router.workerRegistration().getActiveWorkerCount();
+    uint256 bond = router.networkController().bondAmount();
+    uint256 bondStaked = workerCount * bond;
+    uint256 effectiveStake = 0;
+    uint256[] memory activeWorkers = router.workerRegistration().getActiveWorkerIds();
+    for (uint256 i = 0; i < activeWorkers.length; i++) {
+      effectiveStake += stakeCap.capedStake(activeWorkers[i]);
+    }
+    return effectiveStake + bondStaked;
+  }
+
   /// @return current APY for a worker with targetGb storage
   function currentApy() public view returns (uint256) {
     return apy(
@@ -47,7 +80,7 @@ contract RewardCalculation is IRewardCalculation {
 
   /// @return reword for an epoch that lasted epochLengthInSeconds seconds
   function epochReward(uint256 epochLengthInSeconds) public view returns (uint256) {
-    return currentApy() * router.workerRegistration().effectiveTVL() * epochLengthInSeconds / 365 days / 10000;
+    return currentApy() * effectiveTVL() * epochLengthInSeconds / 365 days / 10000;
   }
 
   /// @return bonus to allocations for the tokens staked by gateway

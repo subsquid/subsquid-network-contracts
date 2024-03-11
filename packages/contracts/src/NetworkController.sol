@@ -21,6 +21,7 @@ contract NetworkController is AccessControl, INetworkController {
   uint128 public storagePerWorkerInGb = 1000;
   uint256 public delegationLimitCoefficientInBP = 2_000;
   uint256 public override targetCapacityGb = 100_000;
+  uint256 public override yearlyRewardCapCoefficient = 3000;
   mapping(address => bool) public isAllowedVestedTarget;
 
   constructor(uint128 _epochLength, uint256 _bondAmount, address[] memory _allowedVestedTargets) {
@@ -97,6 +98,13 @@ contract NetworkController is AccessControl, INetworkController {
     targetCapacityGb = target;
 
     emit TargetCapacityUpdated(target);
+  }
+
+  /// @dev Set yearly reward cap coefficient
+  function setYearlyRewardCapCoefficient(uint256 coefficient) public onlyRole(DEFAULT_ADMIN_ROLE) {
+    yearlyRewardCapCoefficient = coefficient;
+
+    emit RewardCoefficientUpdated(coefficient);
   }
 
   /// @inheritdoc INetworkController

@@ -16,6 +16,7 @@ import "../src/tSQD.sol";
 import "../src/Router.sol";
 import "../src/GatewayRegistry.sol";
 import "../src/VestingFactory.sol";
+import "../src/SoftCap.sol";
 import "../src/gateway-strategies/EqualStrategy.sol";
 
 contract Deploy is Script {
@@ -42,7 +43,9 @@ contract Deploy is Script {
     GatewayRegistry gatewayReg = new GatewayRegistry(IERC20WithMetadata(address(token)), router);
     VestingFactory factory = new VestingFactory(token, router);
     EqualStrategy strategy = new EqualStrategy(router, gatewayReg);
-    router.initialize(workerRegistration, staking, address(treasury), network, new RewardCalculation(router));
+    SoftCap cap = new SoftCap(router);
+    RewardCalculation rewardCalc = new RewardCalculation(router, cap);
+    router.initialize(workerRegistration, staking, address(treasury), network, rewardCalc);
     staking.grantRole(staking.REWARDS_DISTRIBUTOR_ROLE(), address(distributor));
     treasury.setWhitelistedDistributor(distributor, true);
     distributor.grantRole(distributor.REWARDS_TREASURY_ROLE(), address(treasury));

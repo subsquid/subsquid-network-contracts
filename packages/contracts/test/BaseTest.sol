@@ -23,6 +23,8 @@ contract MockRewardsDistribution is IRewardsDistribution {
 }
 
 contract BaseTest is Test {
+  SoftCap cap;
+
   function deployAll() internal returns (tSQD token, Router router) {
     router = Router(address(new TransparentUpgradeableProxy(address(new Router()), address(1234), "")));
     uint256[] memory minted = new uint256[](1);
@@ -35,7 +37,8 @@ contract BaseTest is Test {
     IWorkerRegistration workerRegistration = new WorkerRegistration(token, router);
     IStaking staking = new Staking(token, router);
     RewardTreasury treasury = new RewardTreasury(token);
-    RewardCalculation rewards = new RewardCalculation(router);
+    cap = new SoftCap(router);
+    RewardCalculation rewards = new RewardCalculation(router, cap);
     address[] memory allowedTargets = new address[](3);
     allowedTargets[0] = address(workerRegistration);
     allowedTargets[1] = address(staking);
