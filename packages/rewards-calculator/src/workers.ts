@@ -204,6 +204,9 @@ export class Workers {
             s_i: worker.stakeWeight(stakeSum).toFixed(),
             r_i: worker.actualYield.toFixed(),
             ...worker.apr(duration, YEAR),
+            worker_reward: worker.workerReward,
+            staker_reward: worker.stakerReward,
+            stake: worker.stake
           }),
         ),
       );
