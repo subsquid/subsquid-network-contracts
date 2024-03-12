@@ -81,7 +81,7 @@ contract GatewayRegistry is AccessControlledPausable, IGatewayRegistry {
     require(peerId.length > 0, "Cannot set empty peerId");
     bytes32 peerIdHash = keccak256(peerId);
     require(gateways[peerIdHash].operator == address(0), "PeerId already registered");
-    require(operators[msg.sender].ownedGateways.count < maxGatewaysPerCluster, "Too many gateways in the cluster");
+    require(operators[msg.sender].ownedGateways.length() < maxGatewaysPerCluster, "Too many gateways in the cluster");
 
     if (!operators[msg.sender].previousInteractions) {
       useStrategy(defaultStrategy);
