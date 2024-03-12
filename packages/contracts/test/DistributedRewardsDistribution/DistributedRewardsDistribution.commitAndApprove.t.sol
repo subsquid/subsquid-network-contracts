@@ -60,7 +60,7 @@ contract RewardsDistributionCommitApproveTest is RewardsDistributionTest {
   function test_RevertsIs_ApprovingWithWrongParams() public {
     (uint256[] memory recipients, uint256[] memory workerAmounts, uint256[] memory stakerAmounts) = prepareRewards(1);
     rewardsDistribution.addDistributor(address(1));
-    vm.roll(10);
+    waitUntilDistributor();
     rewardsDistribution.commit(1, 4, recipients, workerAmounts, stakerAmounts);
     startHoax(address(1));
     vm.expectRevert("Commitment does not exist");
@@ -86,7 +86,7 @@ contract RewardsDistributionCommitApproveTest is RewardsDistributionTest {
   function test_RevertsIf_ApprovingTwice() public {
     (uint256[] memory recipients, uint256[] memory workerAmounts, uint256[] memory stakerAmounts) = prepareRewards(1);
     rewardsDistribution.addDistributor(address(1));
-    vm.roll(10);
+    waitUntilDistributor();
     rewardsDistribution.commit(1, 4, recipients, workerAmounts, stakerAmounts);
     startHoax(address(1));
     rewardsDistribution.approve(1, 4, recipients, workerAmounts, stakerAmounts);
@@ -97,7 +97,7 @@ contract RewardsDistributionCommitApproveTest is RewardsDistributionTest {
   function test_RevertsIf_ApprovingByCommitter() public {
     (uint256[] memory recipients, uint256[] memory workerAmounts, uint256[] memory stakerAmounts) = prepareRewards(1);
     rewardsDistribution.addDistributor(address(1));
-    vm.roll(10);
+    waitUntilDistributor();
     rewardsDistribution.commit(1, 4, recipients, workerAmounts, stakerAmounts);
     vm.expectRevert("Already approved");
     rewardsDistribution.approve(1, 4, recipients, workerAmounts, stakerAmounts);
@@ -108,7 +108,7 @@ contract RewardsDistributionCommitApproveTest is RewardsDistributionTest {
     rewardsDistribution.addDistributor(address(1));
     rewardsDistribution.addDistributor(address(2));
     rewardsDistribution.setApprovesRequired(3);
-    vm.roll(10);
+    waitUntilDistributor();
     rewardsDistribution.commit(1, 4, recipients, workerAmounts, stakerAmounts);
     hoax(address(1));
     rewardsDistribution.approve(1, 4, recipients, workerAmounts, stakerAmounts);
@@ -119,7 +119,7 @@ contract RewardsDistributionCommitApproveTest is RewardsDistributionTest {
   function test_canApproveReturnsTrueIfCanApprove() public {
     (uint256[] memory recipients, uint256[] memory workerAmounts, uint256[] memory stakerAmounts) = prepareRewards(1);
     rewardsDistribution.addDistributor(address(1));
-    vm.roll(10);
+    waitUntilDistributor();
     rewardsDistribution.commit(1, 4, recipients, workerAmounts, stakerAmounts);
     assertEq(rewardsDistribution.canApprove(address(1), 1, 4, recipients, workerAmounts, stakerAmounts), true);
   }
@@ -133,7 +133,7 @@ contract RewardsDistributionCommitApproveTest is RewardsDistributionTest {
   function test_canApproveReturnsFalseIfAlreadyApproved() public {
     (uint256[] memory recipients, uint256[] memory workerAmounts, uint256[] memory stakerAmounts) = prepareRewards(2);
     rewardsDistribution.addDistributor(address(1));
-    vm.roll(10);
+    waitUntilDistributor();
     rewardsDistribution.commit(1, 4, recipients, workerAmounts, stakerAmounts);
     hoax(address(1));
     rewardsDistribution.approve(1, 4, recipients, workerAmounts, stakerAmounts);
@@ -143,7 +143,7 @@ contract RewardsDistributionCommitApproveTest is RewardsDistributionTest {
   function test_canApproveReturnsFalseIfCommitmentMismatch() public {
     (uint256[] memory recipients, uint256[] memory workerAmounts, uint256[] memory stakerAmounts) = prepareRewards(2);
     rewardsDistribution.addDistributor(address(1));
-    vm.roll(10);
+    waitUntilDistributor();
     rewardsDistribution.commit(1, 4, recipients, workerAmounts, stakerAmounts);
     assertEq(rewardsDistribution.canApprove(address(1), 2, 4, recipients, workerAmounts, stakerAmounts), false);
   }
@@ -153,5 +153,11 @@ contract RewardsDistributionCommitApproveTest is RewardsDistributionTest {
     vm.roll(10);
     rewardsDistribution.commit(1, 4, recipients, workerAmounts, stakerAmounts);
     assertEq(rewardsDistribution.canApprove(address(1), 1, 4, recipients, workerAmounts, stakerAmounts), false);
+  }
+
+  function waitUntilDistributor() internal {
+    while (rewardsDistribution.currentDistributor() != address(this)) {
+      vm.roll(256);
+    }
   }
 }
