@@ -193,23 +193,26 @@ export class Workers {
         r_apr: this.rAPR.toFixed(),
         total_reward: total_reward.toFixed(),
       }),
-    ),
-      this.map((worker) =>
-        console.log(
-          JSON.stringify({
-            time: new Date(),
-            type: "worker_report",
-            worker_id: worker.peerId,
-            t_i: worker.trafficWeight.toFixed(),
-            s_i: worker.stakeWeight(stakeSum).toFixed(),
-            r_i: worker.actualYield.toFixed(),
-            ...worker.apr(duration, YEAR),
-            worker_reward: worker.workerReward.toFixed(),
-            staker_reward: worker.stakerReward.toFixed(),
-            stake: worker.stake.toFixed(),
-          }),
-        ),
-      );
+    );
+
+    this.map((worker) =>
+      console.log(
+        JSON.stringify({
+          time: new Date(),
+          type: "worker_report",
+          worker_id: worker.peerId,
+          t_i: worker.trafficWeight.toFixed(),
+          s_i: worker.stakeWeight(stakeSum).toFixed(),
+          r_i: worker.actualYield.toFixed(),
+          ...worker.apr(duration, YEAR),
+          worker_reward: worker.workerReward.toFixed(),
+          staker_reward: worker.stakerReward.toFixed(),
+          stake: worker.stake.toFixed(),
+          bytes_sent: worker.bytesSent,
+          chunks_read: worker.chunksRead,
+        }),
+      ),
+    );
   }
 
   private parseMulticallResult<
