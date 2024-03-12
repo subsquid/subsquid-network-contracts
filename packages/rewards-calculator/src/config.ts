@@ -1,5 +1,5 @@
 import workerRegistrationAbi from "../../contracts/artifacts/WorkerRegistration.sol/WorkerRegistration";
-import tSQDAbi from "../../contracts/artifacts/tSQD.sol/tSQD";
+import SQDAbi from "../../contracts/artifacts/SQD.sol/SQD";
 import rewardCalculationAbi from "../../contracts/artifacts/RewardCalculation.sol/RewardCalculation";
 import rewardsDistributionAbi from "../../contracts/artifacts/DistributedRewardDistribution.sol/DistributedRewardsDistribution";
 import stakingAbi from "../../contracts/artifacts/Staking.sol/Staking";
@@ -57,7 +57,7 @@ export type ContractName = keyof typeof abis;
 
 export const addresses = {
   workerRegistration: deployments.WorkerRegistration,
-  tSQD: deployments.tSQDArbitrum,
+  SQD: deployments.tSQDArbitrum,
   rewardCalculation: deployments.RewardCalculation,
   rewardsDistribution: deployments.DistributedRewardsDistribution,
   staking: deployments.Staking,
@@ -67,7 +67,7 @@ export const addresses = {
 
 export const abis = {
   workerRegistration: workerRegistrationAbi,
-  tSQD: tSQDAbi,
+  SQD: SQDAbi,
   rewardCalculation: rewardCalculationAbi,
   rewardsDistribution: rewardsDistributionAbi,
   staking: stakingAbi,
@@ -105,7 +105,7 @@ export function contract<T extends ContractName>(
 
 export const contracts = {
   workerRegistration: contract("workerRegistration"),
-  tSQD: contract("tSQD"),
+  SQD: contract("SQD"),
   rewardCalculation: contract("rewardCalculation"),
   rewardsDistribution: contract("rewardsDistribution"),
   staking: contract("staking"),
