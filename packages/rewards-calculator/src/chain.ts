@@ -157,6 +157,7 @@ export async function commitRewards(
     stakedAmounts,
   ]);
   logger.log("Commit rewards", tx);
+  return tx;
 }
 
 export async function approveRewards(

@@ -31,6 +31,7 @@ import { config } from "./config";
 import { Rewards } from "./reward";
 
 import Decimal from "decimal.js";
+import { Hex } from "viem";
 Decimal.set({ precision: 28, minE: -9 });
 
 const YEAR = 365 * 24 * 60 * 60;
@@ -43,6 +44,8 @@ export class Workers {
   baseApr = new Decimal(0);
   stakeFactor = new Decimal(0);
   rAPR = new Decimal(0);
+  commitmentTxHash: string;
+  commitmentError: string;
 
   constructor(private clickhouseClient: ClickhouseClient) {}
 
@@ -160,7 +163,15 @@ export class Workers {
     this.map((worker) => worker.getRewards(rMax));
   }
 
-  public async calcluateLogs() {
+  public noteSuccessfulCommit(txHash: Hex) {
+    this.commitmentTxHash = txHash;
+  }
+
+  public noteFailedCommit(error: Error) {
+    this.commitmentError = error.toString();
+  }
+
+  public async printLogs() {
     const target_capacity = await getTargetCapacity(
       this.nextDistributionStartBlockNumber,
     );
@@ -185,6 +196,9 @@ export class Workers {
       JSON.stringify({
         time: new Date(),
         type: "rewards_report",
+        is_commit_success: !!this.commitmentTxHash,
+        commit_tx_hash: this.commitmentTxHash ?? "",
+        commit_error_message: this.commitmentError ?? "",
         target_capacity,
         current_capacity,
         active_workers_count,

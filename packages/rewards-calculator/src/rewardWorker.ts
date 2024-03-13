@@ -3,7 +3,6 @@ import {
   canCommit,
   commitRewards,
   epochLength,
-  getBlockNumber,
   getBlockTimestamp,
   getRegistrations,
   isCommitted,
@@ -15,6 +14,7 @@ import { epochStats } from "./reward";
 import { logger } from "./logger";
 import { addresses, config, contracts, publicClient } from "./config";
 import { parseAbiItem, WalletClient } from "viem";
+import type { Workers } from "./workers";
 
 async function firstRegistrationBlock(registrations: Registrations) {
   return Math.min(
@@ -43,21 +43,45 @@ export class RewardWorker {
     try {
       if (await canCommit(this.walletClient)) {
         const { fromBlock, toBlock } = await this.commitRange();
-        if (
-          fromBlock < toBlock &&
-          isEpochConfirmed(await getBlockTimestamp(toBlock)) &&
-          !(await isCommitted(fromBlock, toBlock))
-        ) {
+        if (await this.canCommit(fromBlock, toBlock)) {
           logger.log("Can commit", this.walletClient.account.address);
           const workers = await epochStats(fromBlock, toBlock);
-          const rewards = await workers.rewards();
-          await commitRewards(fromBlock, toBlock, rewards, this.walletClient);
+          await this.tryToCommit(fromBlock, toBlock, workers);
         }
       }
     } catch (e) {
       logger.error(e);
     }
     setTimeout(() => this.commitIfPossible(), config.workTimeout);
+  }
+
+  private async canCommit(fromBlock: number, toBlock: number) {
+    return (
+      fromBlock < toBlock &&
+      isEpochConfirmed(await getBlockTimestamp(toBlock)) &&
+      !(await isCommitted(fromBlock, toBlock))
+    );
+  }
+
+  private async tryToCommit(
+    fromBlock: number,
+    toBlock: number,
+    workers: Workers,
+  ) {
+    const rewards = await workers.rewards();
+    try {
+      const tx = await commitRewards(
+        fromBlock,
+        toBlock,
+        rewards,
+        this.walletClient,
+      );
+      workers.noteSuccessfulCommit(tx);
+    } catch (e) {
+      workers.noteFailedCommit(e);
+      logger.error(e);
+    }
+    await workers.printLogs();
   }
 
   private async approveIfNecessary() {
