@@ -18,6 +18,7 @@ import "./interfaces/IGatewayRegistry.sol";
  */
 contract GatewayRegistry is AccessControlledPausable, IGatewayRegistry {
   using EnumerableSet for EnumerableSet.Bytes32Set;
+  using EnumerableSet for EnumerableSet.AddressSet;
 
   uint256 constant BASIS_POINT_MULTIPLIER = 10000;
 
@@ -33,6 +34,8 @@ contract GatewayRegistry is AccessControlledPausable, IGatewayRegistry {
   mapping(bytes32 gatewayId => Gateway gateway) gateways;
   mapping(address operator => GatewayOperator) internal operators;
   mapping(address => bytes32 gatewayId) public gatewayByAddress;
+  /// @dev A set of all operators that have funds locked
+  EnumerableSet.Bytes32Set internal activeGateways;
 
   mapping(address strategy => bool) public isStrategyAllowed;
   address public defaultStrategy;
@@ -89,6 +92,9 @@ contract GatewayRegistry is AccessControlledPausable, IGatewayRegistry {
     gateways[peerIdHash] =
       Gateway({operator: msg.sender, ownAddress: gatewayAddress, peerId: peerId, metadata: metadata});
     operators[msg.sender].ownedGateways.add(peerIdHash);
+    if (operators[msg.sender].stake.amount > 0) {
+      activeGateways.add(peerIdHash);
+    }
 
     emit Registered(msg.sender, peerIdHash, peerId);
     emit MetadataChanged(msg.sender, peerId, metadata);
@@ -107,6 +113,7 @@ contract GatewayRegistry is AccessControlledPausable, IGatewayRegistry {
     (Gateway storage gateway, bytes32 peerIdHash) = _getGateway(peerId);
     _requireOperator(gateway);
     require(operators[msg.sender].ownedGateways.remove(peerIdHash), "Gateway not removed from operator");
+    activeGateways.remove(peerIdHash);
     delete gatewayByAddress[gateway.ownAddress];
     delete gateways[peerIdHash];
 
@@ -125,6 +132,10 @@ contract GatewayRegistry is AccessControlledPausable, IGatewayRegistry {
     uint128 lockStart = router.networkController().nextEpoch();
     uint128 lockEnd = withAutoExtension ? type(uint128).max : lockStart + durationBlocks;
     operators[msg.sender].stake = Stake(amount, lockStart, lockEnd, durationBlocks, withAutoExtension, 0);
+    bytes32[] memory cluster = operators[msg.sender].ownedGateways.values();
+    for (uint256 i = 0; i < cluster.length; i++) {
+      activeGateways.add(cluster[i]);
+    }
     token.transferFrom(msg.sender, address(this), amount);
 
     emit Staked(msg.sender, amount, lockStart, lockEnd, _computationUnits);
@@ -157,10 +168,15 @@ contract GatewayRegistry is AccessControlledPausable, IGatewayRegistry {
   }
 
   /// @dev Unstake tokens. Only tokens past the lock period can be unstaked
+  /// All gateways in the cluster will be marked as inactive
   function unstake() external whenNotPaused {
     require(operators[msg.sender].stake.lockEnd <= block.number, "Stake is locked");
     uint256 amount = operators[msg.sender].stake.amount;
     require(amount > 0, "Nothing to unstake");
+    bytes32[] memory cluster = operators[msg.sender].ownedGateways.values();
+    for (uint256 i = 0; i < cluster.length; i++) {
+      activeGateways.remove(cluster[i]);
+    }
     delete operators[msg.sender].stake;
 
     token.transfer(msg.sender, amount);
@@ -349,6 +365,36 @@ contract GatewayRegistry is AccessControlledPausable, IGatewayRegistry {
       + (_saturatedDiff(uint128(block.number), _stake.lockStart) / _stake.duration + 1) * _stake.duration;
 
     emit AutoextensionDisabled(msg.sender, _stake.lockEnd);
+  }
+
+  function getMyGateways(address operator) external view returns (bytes[] memory) {
+    bytes32[] memory ids = operators[operator].ownedGateways.values();
+    bytes[] memory peerIds = new bytes[](ids.length);
+    for (uint256 i = 0; i < ids.length; i++) {
+      peerIds[i] = gateways[ids[i]].peerId;
+    }
+    return peerIds;
+  }
+
+  function getActiveGatewaysCount() external view returns (uint256) {
+    return activeGateways.length();
+  }
+
+  function getActiveGateways(uint256 pageNumber, uint256 perPage) external view returns (bytes[] memory) {
+    bytes32[] memory gatewayIds = activeGateways.values();
+    uint256 start = perPage * pageNumber;
+    if (start > gatewayIds.length) {
+      return new bytes[](0);
+    }
+    uint256 end = start + perPage;
+    if (end > gatewayIds.length) {
+      end = gatewayIds.length;
+    }
+    bytes[] memory peerIds = new bytes[](end - start);
+    for (uint256 i = start; i < end; i++) {
+      peerIds[i - start] = gateways[gatewayIds[i]].peerId;
+    }
+    return peerIds;
   }
 
   function _getGateway(bytes calldata peerId) internal view returns (Gateway storage gateway, bytes32 peerIdHash) {
