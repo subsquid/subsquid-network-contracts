@@ -30,3 +30,12 @@ jobs:
           context: .
           file: packages/rewards-calculator/Dockerfile
           tags: subsquid/rewards-calculator:${{ inputs.tag }}
+
+      - name: Notify on failure
+        if: failure()
+        run: echo 'Docker build or push failed' # Replace with actual notification mechanism
+
+      - name: Security scanning
+        uses: anchore/scan-action@v3
+        with:
+          image-reference: subsquid/rewards-calculator:${{ inputs.tag }}
