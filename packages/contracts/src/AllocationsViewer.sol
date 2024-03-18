@@ -13,7 +13,7 @@ contract AllocationsViewer {
 
   struct Allocation {
     bytes gatewayId;
-    uint256 share;
+    uint256 allocated;
     address operator;
   }
 
