@@ -34,4 +34,8 @@ contract AllocationsViewer {
     }
     return allocs;
   }
+
+  function getGatewayCount() external view returns (uint256) {
+    return gatewayRegistry.getActiveGatewaysCount();
+  }
 }
