@@ -5,12 +5,10 @@ import "../../src/GatewayRegistry.sol";
 import "../../src/gateway-strategies/EqualStrategy.sol";
 
 contract EqualStrategyTest is BaseTest {
-  GatewayRegistry gatewayRegistry;
   bytes peerId = "gateway-peerId";
 
   function test_EquallyDividesComputationUnits() public {
     (IERC20 token, Router router) = deployAll();
-    gatewayRegistry = new GatewayRegistry(IERC20WithMetadata(address(token)), router);
 
     vm.mockCall(
       address(gatewayRegistry.router().workerRegistration()),

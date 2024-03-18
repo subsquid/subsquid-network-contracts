@@ -17,7 +17,11 @@ contract AllocationsViewer {
     address operator;
   }
 
-  function getAllocations(uint256 workerId, uint256 pageNumber, uint256 perPage) external view returns (Allocation[] memory) {
+  function getAllocations(uint256 workerId, uint256 pageNumber, uint256 perPage)
+    external
+    view
+    returns (Allocation[] memory)
+  {
     bytes[] memory gateways = gatewayRegistry.getActiveGateways(pageNumber, perPage);
     Allocation[] memory allocs = new Allocation[](gateways.length);
     for (uint256 i = 0; i < gateways.length; i++) {

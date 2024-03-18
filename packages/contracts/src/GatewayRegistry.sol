@@ -1,11 +1,30 @@
 pragma solidity 0.8.20;
 
 import "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
+import {PausableUpgradeable} from "openzeppelin-contracts-upgradeable/contracts/utils/PausableUpgradeable.sol";
+import {AccessControlUpgradeable} from
+  "openzeppelin-contracts-upgradeable/contracts/access/AccessControlUpgradeable.sol";
 
 import "./interfaces/IERC20WithMetadata.sol";
 import "./interfaces/IRouter.sol";
-import "./AccessControlledPausable.sol";
 import "./interfaces/IGatewayRegistry.sol";
+
+contract AccessControlledPausableUpgradeable is PausableUpgradeable, AccessControlUpgradeable {
+  bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
+
+  function initialize() internal onlyInitializing {
+    _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
+    _grantRole(PAUSER_ROLE, msg.sender);
+  }
+
+  function pause() public virtual onlyRole(PAUSER_ROLE) {
+    _pause();
+  }
+
+  function unpause() public virtual onlyRole(PAUSER_ROLE) {
+    _unpause();
+  }
+}
 
 /**
  * @title Gateway Registry Contract
@@ -16,7 +35,7 @@ import "./interfaces/IGatewayRegistry.sol";
  * manually by calling `allocateComputationUnits` function
  * We call a set of gateways created by single wallet a cluster
  */
-contract GatewayRegistry is AccessControlledPausable, IGatewayRegistry {
+contract GatewayRegistry is AccessControlledPausableUpgradeable, IGatewayRegistry {
   using EnumerableSet for EnumerableSet.Bytes32Set;
   using EnumerableSet for EnumerableSet.AddressSet;
 
@@ -29,8 +48,8 @@ contract GatewayRegistry is AccessControlledPausable, IGatewayRegistry {
     EnumerableSet.Bytes32Set ownedGateways;
   }
 
-  IERC20WithMetadata public immutable token;
-  IRouter public immutable router;
+  IERC20WithMetadata public token;
+  IRouter public router;
   mapping(bytes32 gatewayId => Gateway gateway) gateways;
   mapping(address operator => GatewayOperator) internal operators;
   mapping(address => bytes32 gatewayId) public gatewayByAddress;
@@ -42,17 +61,26 @@ contract GatewayRegistry is AccessControlledPausable, IGatewayRegistry {
 
   uint256 internal tokenDecimals;
   /// @notice Depends on the network
-  uint256 public averageBlockTime = 12 seconds;
+  uint256 public averageBlockTime;
   /// @dev How much CU is given for a single SQD per 1000 blocks, not including boost factor
-  uint256 public mana = 1_000;
+  uint256 public mana;
   /// @dev How many gateways can be operated by a single wallet
-  uint256 public maxGatewaysPerCluster = 10;
+  uint256 public maxGatewaysPerCluster;
 
-  constructor(IERC20WithMetadata _token, IRouter _router) {
+  constructor() {
+    _disableInitializers();
+  }
+
+  function initialize(IERC20WithMetadata _token, IRouter _router) external initializer {
+    AccessControlledPausableUpgradeable.initialize();
     token = _token;
     router = _router;
     tokenDecimals = 10 ** _token.decimals();
+
     isStrategyAllowed[address(0)] = true;
+    averageBlockTime = 12 seconds;
+    mana = 1_000;
+    maxGatewaysPerCluster = 10;
   }
 
   function register(bytes calldata peerId) external {
