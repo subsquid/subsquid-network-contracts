@@ -18,13 +18,13 @@ The rewards are allocated from the rewards pool. Each epoch, the rewards pool un
 
 ### Rewards pool
 
-The `SQD` supply is fixed for the initial, and the rewards are distributed are from a pool, to which `10%` of the supply is allocated at TGE. The reward pool has a protective mechanism, called health factor, which halves the effective rewards rate if the reward pool supply drops below 6-month average reward.
+The `SQD` supply is fixed for the initial, and the rewards are distributed from a pool, to which `10%` of the supply is allocated at TGE. The reward pool has a protective mechanism, called the health factor, which halves the effective reward rate if the reward pool supply drops below the 6-month average reward.
 
 After the initial bootstrapping phase a governance should decide on the target inflation rate to replenish the rewards pool with freshly minted tokens based on the already distributed rewards and participation rate.
 
 ### Reward rate
 
-The reward rate depends on the two factors: how much the network is utilized and how much of the supply is staked. The network utilization rate is defined as
+The reward rate depends on two factors: how much the network is utilized and how much of the supply is staked. The network utilization rate is defined as
 
 ```
 u_rate = (target_capacity - actual_capacity)/target_capacity
