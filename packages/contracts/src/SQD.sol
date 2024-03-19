@@ -29,8 +29,8 @@ interface IGatewayRouter2 {
  */
 contract SQD is ERC20 {
   bool internal shouldRegisterGateway;
-  IL1CustomGateway gateway;
-  IGatewayRouter2 router;
+  IL1CustomGateway immutable gateway;
+  IGatewayRouter2 immutable router;
 
   constructor(
     address[] memory recipients,
