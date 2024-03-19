@@ -9,7 +9,6 @@ import "../../src/Staking.sol";
 import "../BaseTest.sol";
 
 contract GatewayRegistryTest is BaseTest {
-  GatewayRegistry gatewayRegistry;
   SQD token;
   RewardCalculation rewardCalc;
   Router router;
@@ -26,7 +25,6 @@ contract GatewayRegistryTest is BaseTest {
   function setUp() public {
     (token, router) = deployAll();
     rewardCalc = RewardCalculation(address(router.rewardCalculation()));
-    gatewayRegistry = new GatewayRegistry(IERC20WithMetadata(address(token)), router);
     gatewayRegistry.setIsStrategyAllowed(defaultStrategy, true, true);
     token.approve(address(gatewayRegistry), type(uint256).max);
     gatewayRegistry.register(peerId, "", address(this));

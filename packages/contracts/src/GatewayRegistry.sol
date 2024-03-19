@@ -1,11 +1,30 @@
 pragma solidity 0.8.20;
 
 import "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
+import {PausableUpgradeable} from "openzeppelin-contracts-upgradeable/contracts/utils/PausableUpgradeable.sol";
+import {AccessControlUpgradeable} from
+  "openzeppelin-contracts-upgradeable/contracts/access/AccessControlUpgradeable.sol";
 
 import "./interfaces/IERC20WithMetadata.sol";
 import "./interfaces/IRouter.sol";
-import "./AccessControlledPausable.sol";
 import "./interfaces/IGatewayRegistry.sol";
+
+contract AccessControlledPausableUpgradeable is PausableUpgradeable, AccessControlUpgradeable {
+  bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
+
+  function initialize() internal onlyInitializing {
+    _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
+    _grantRole(PAUSER_ROLE, msg.sender);
+  }
+
+  function pause() public virtual onlyRole(PAUSER_ROLE) {
+    _pause();
+  }
+
+  function unpause() public virtual onlyRole(PAUSER_ROLE) {
+    _unpause();
+  }
+}
 
 /**
  * @title Gateway Registry Contract
@@ -16,8 +35,9 @@ import "./interfaces/IGatewayRegistry.sol";
  * manually by calling `allocateComputationUnits` function
  * We call a set of gateways created by single wallet a cluster
  */
-contract GatewayRegistry is AccessControlledPausable, IGatewayRegistry {
+contract GatewayRegistry is AccessControlledPausableUpgradeable, IGatewayRegistry {
   using EnumerableSet for EnumerableSet.Bytes32Set;
+  using EnumerableSet for EnumerableSet.AddressSet;
 
   uint256 constant BASIS_POINT_MULTIPLIER = 10000;
 
@@ -28,28 +48,39 @@ contract GatewayRegistry is AccessControlledPausable, IGatewayRegistry {
     EnumerableSet.Bytes32Set ownedGateways;
   }
 
-  IERC20WithMetadata public immutable token;
-  IRouter public immutable router;
+  IERC20WithMetadata public token;
+  IRouter public router;
   mapping(bytes32 gatewayId => Gateway gateway) gateways;
   mapping(address operator => GatewayOperator) internal operators;
   mapping(address => bytes32 gatewayId) public gatewayByAddress;
+  /// @dev A set of all operators that have funds locked
+  EnumerableSet.Bytes32Set internal activeGateways;
 
   mapping(address strategy => bool) public isStrategyAllowed;
   address public defaultStrategy;
 
   uint256 internal tokenDecimals;
   /// @notice Depends on the network
-  uint256 public averageBlockTime = 12 seconds;
+  uint256 public averageBlockTime;
   /// @dev How much CU is given for a single SQD per 1000 blocks, not including boost factor
-  uint256 public mana = 1_000;
+  uint256 public mana;
   /// @dev How many gateways can be operated by a single wallet
-  uint256 public maxGatewaysPerCluster = 10;
+  uint256 public maxGatewaysPerCluster;
 
-  constructor(IERC20WithMetadata _token, IRouter _router) {
+  constructor() {
+    _disableInitializers();
+  }
+
+  function initialize(IERC20WithMetadata _token, IRouter _router) external initializer {
+    AccessControlledPausableUpgradeable.initialize();
     token = _token;
     router = _router;
     tokenDecimals = 10 ** _token.decimals();
+
     isStrategyAllowed[address(0)] = true;
+    averageBlockTime = 12 seconds;
+    mana = 1_000;
+    maxGatewaysPerCluster = 10;
   }
 
   function register(bytes calldata peerId) external {
@@ -89,6 +120,9 @@ contract GatewayRegistry is AccessControlledPausable, IGatewayRegistry {
     gateways[peerIdHash] =
       Gateway({operator: msg.sender, ownAddress: gatewayAddress, peerId: peerId, metadata: metadata});
     operators[msg.sender].ownedGateways.add(peerIdHash);
+    if (operators[msg.sender].stake.amount > 0) {
+      activeGateways.add(peerIdHash);
+    }
 
     emit Registered(msg.sender, peerIdHash, peerId);
     emit MetadataChanged(msg.sender, peerId, metadata);
@@ -107,6 +141,7 @@ contract GatewayRegistry is AccessControlledPausable, IGatewayRegistry {
     (Gateway storage gateway, bytes32 peerIdHash) = _getGateway(peerId);
     _requireOperator(gateway);
     require(operators[msg.sender].ownedGateways.remove(peerIdHash), "Gateway not removed from operator");
+    activeGateways.remove(peerIdHash);
     delete gatewayByAddress[gateway.ownAddress];
     delete gateways[peerIdHash];
 
@@ -125,6 +160,10 @@ contract GatewayRegistry is AccessControlledPausable, IGatewayRegistry {
     uint128 lockStart = router.networkController().nextEpoch();
     uint128 lockEnd = withAutoExtension ? type(uint128).max : lockStart + durationBlocks;
     operators[msg.sender].stake = Stake(amount, lockStart, lockEnd, durationBlocks, withAutoExtension, 0);
+    bytes32[] memory cluster = operators[msg.sender].ownedGateways.values();
+    for (uint256 i = 0; i < cluster.length; i++) {
+      activeGateways.add(cluster[i]);
+    }
     token.transferFrom(msg.sender, address(this), amount);
 
     emit Staked(msg.sender, amount, lockStart, lockEnd, _computationUnits);
@@ -157,10 +196,15 @@ contract GatewayRegistry is AccessControlledPausable, IGatewayRegistry {
   }
 
   /// @dev Unstake tokens. Only tokens past the lock period can be unstaked
+  /// All gateways in the cluster will be marked as inactive
   function unstake() external whenNotPaused {
     require(operators[msg.sender].stake.lockEnd <= block.number, "Stake is locked");
     uint256 amount = operators[msg.sender].stake.amount;
     require(amount > 0, "Nothing to unstake");
+    bytes32[] memory cluster = operators[msg.sender].ownedGateways.values();
+    for (uint256 i = 0; i < cluster.length; i++) {
+      activeGateways.remove(cluster[i]);
+    }
     delete operators[msg.sender].stake;
 
     token.transfer(msg.sender, amount);
@@ -349,6 +393,36 @@ contract GatewayRegistry is AccessControlledPausable, IGatewayRegistry {
       + (_saturatedDiff(uint128(block.number), _stake.lockStart) / _stake.duration + 1) * _stake.duration;
 
     emit AutoextensionDisabled(msg.sender, _stake.lockEnd);
+  }
+
+  function getMyGateways(address operator) external view returns (bytes[] memory) {
+    bytes32[] memory ids = operators[operator].ownedGateways.values();
+    bytes[] memory peerIds = new bytes[](ids.length);
+    for (uint256 i = 0; i < ids.length; i++) {
+      peerIds[i] = gateways[ids[i]].peerId;
+    }
+    return peerIds;
+  }
+
+  function getActiveGatewaysCount() external view returns (uint256) {
+    return activeGateways.length();
+  }
+
+  function getActiveGateways(uint256 pageNumber, uint256 perPage) external view returns (bytes[] memory) {
+    bytes32[] memory gatewayIds = activeGateways.values();
+    uint256 start = perPage * pageNumber;
+    if (start > gatewayIds.length) {
+      return new bytes[](0);
+    }
+    uint256 end = start + perPage;
+    if (end > gatewayIds.length) {
+      end = gatewayIds.length;
+    }
+    bytes[] memory peerIds = new bytes[](end - start);
+    for (uint256 i = start; i < end; i++) {
+      peerIds[i - start] = gateways[gatewayIds[i]].peerId;
+    }
+    return peerIds;
   }
 
   function _getGateway(bytes calldata peerId) internal view returns (Gateway storage gateway, bytes32 peerIdHash) {
