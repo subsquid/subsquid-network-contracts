@@ -33,7 +33,7 @@ export function isEpochConfirmed(epochEnd: Date) {
 }
 
 export class RewardWorker {
-  constructor(private walletClient: WalletClient) {}
+  constructor(private walletClient: WalletClient, private index: number) {}
   public startWorker() {
     this.commitIfPossible();
     // this.approveIfNecessary();
@@ -81,7 +81,11 @@ export class RewardWorker {
       workers.noteFailedCommit(e);
       logger.error(e);
     }
-    await workers.printLogs();
+
+    await workers.printLogs({
+      walletAddress: this.walletClient.account.address,
+      index: this.index
+    });
   }
 
   private async approveIfNecessary() {

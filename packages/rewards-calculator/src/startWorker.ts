@@ -49,6 +49,6 @@ export async function startWorker(index: number) {
     walletClient,
     privateKeyToAccount(basePrivateKey),
   );
-  const worker = new RewardWorker(walletClient);
+  const worker = new RewardWorker(walletClient, index);
   worker.startWorker();
 }
