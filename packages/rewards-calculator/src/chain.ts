@@ -193,6 +193,7 @@ export async function approveRewards(
     },
   );
   logger.log("Approve rewards", tx);
+  return tx;
 }
 
 export async function getStakes(workers: Workers, blockNumber?: bigint) {

@@ -33,10 +33,13 @@ export function isEpochConfirmed(epochEnd: Date) {
 }
 
 export class RewardWorker {
-  constructor(private walletClient: WalletClient, private index: number) {}
+  constructor(
+    private walletClient: WalletClient,
+    private index: number,
+  ) {}
   public startWorker() {
     this.commitIfPossible();
-    // this.approveIfNecessary();
+    this.approveIfNecessary();
   }
 
   private async commitIfPossible() {
@@ -84,7 +87,7 @@ export class RewardWorker {
 
     await workers.printLogs({
       walletAddress: this.walletClient.account.address,
-      index: this.index
+      index: this.index,
     });
   }
 
@@ -94,11 +97,21 @@ export class RewardWorker {
       if (ranges.shouldApprove) {
         const workers = await epochStats(ranges.fromBlock, ranges.toBlock);
         const rewards = await workers.rewards();
-        await approveRewards(
+        const tx = await approveRewards(
           ranges.fromBlock,
           ranges.toBlock,
           rewards,
           this.walletClient,
+        );
+        console.log(
+          JSON.stringify({
+            time: new Date(),
+            type: "rewards_approved",
+            bot_wallet: this.walletClient.account.address,
+            tx_hash: tx,
+            from_block: ranges.fromBlock,
+            to_block: ranges.toBlock,
+          }),
         );
       }
     } catch (e) {
