@@ -171,7 +171,7 @@ export class Workers {
     this.commitmentError = error.toString();
   }
 
-  public async printLogs() {
+  public async printLogs({ walletAddress, index }: { walletAddress: string, index: number }) {
     const target_capacity = await getTargetCapacity(
       this.nextDistributionStartBlockNumber,
     );
@@ -192,11 +192,17 @@ export class Workers {
       this.map((w) => w.workerReward.add(w.stakerReward)),
     );
 
+    const address = walletAddress.toLowerCase()
+    const botId = `${process.env.BOT_NAME || 'bot'}-${index}`;
+    const isCommitSuccess = !!this.commitmentTxHash;
+
     console.log(
       JSON.stringify({
         time: new Date(),
         type: "rewards_report",
-        is_commit_success: !!this.commitmentTxHash,
+        bot_id: botId,
+        bot_wallet: address,
+        is_commit_success: isCommitSuccess,
         commit_tx_hash: this.commitmentTxHash ?? "",
         commit_error_message: this.commitmentError ?? "",
         target_capacity,
@@ -209,11 +215,18 @@ export class Workers {
       }),
     );
 
+    // If commit is not successful, don't print worker report
+    if(!isCommitSuccess) {
+      return
+    }
+
     this.map((worker) =>
       console.log(
         JSON.stringify({
           time: new Date(),
           type: "worker_report",
+          bot_id: botId,
+          bot_wallet: address,
           worker_id: worker.peerId,
           t_i: worker.trafficWeight.toFixed(),
           s_i: worker.stakeWeight(stakeSum).toFixed(),
