@@ -193,7 +193,7 @@ export class Workers {
     );
 
     const address = walletAddress.toLowerCase()
-    const botId = `${process.env.BOT_NAME || 'bot'}-${index}`;
+    const botId = process.env.BOT_NAME || `bot-${index}`;
     const isCommitSuccess = !!this.commitmentTxHash;
 
     console.log(
