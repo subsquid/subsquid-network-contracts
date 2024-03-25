@@ -41,7 +41,8 @@ contract Deploy is Script {
     WorkerRegistration workerRegistration = new WorkerRegistration(token, router);
     RewardTreasury treasury = new RewardTreasury(token);
     DistributedRewardsDistribution distributor = new DistributedRewardsDistribution(router);
-    GatewayRegistry gatewayReg = GatewayRegistry(address(new TransparentUpgradeableProxy(address(new GatewayRegistry()), proxyAdmin, "")));
+    GatewayRegistry gatewayReg =
+      GatewayRegistry(address(new TransparentUpgradeableProxy(address(new GatewayRegistry()), proxyAdmin, "")));
     gatewayReg.initialize(IERC20WithMetadata(address(token)), router);
     VestingFactory factory = new VestingFactory(token, router);
     EqualStrategy strategy = new EqualStrategy(router, gatewayReg);
