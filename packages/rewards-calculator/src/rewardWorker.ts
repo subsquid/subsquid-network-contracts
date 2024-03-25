@@ -81,6 +81,9 @@ export class RewardWorker {
       );
       workers.noteSuccessfulCommit(tx);
     } catch (e) {
+      if (e.message?.includes("Already approved")) {
+        return;
+      }
       workers.noteFailedCommit(e);
       logger.error(e);
     }
