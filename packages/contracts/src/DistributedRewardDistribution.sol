@@ -69,6 +69,7 @@ contract DistributedRewardsDistribution is AccessControlledPausable, IRewardsDis
    * Only admin can call this function
    */
   function removeDistributor(address distributor) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    require(distributors.length() > requiredApproves, "Not enough distributors to approve distribution");
     require(distributors.remove(distributor), "Distributor does not exist");
     _revokeRole(REWARDS_DISTRIBUTOR_ROLE, distributor);
 
