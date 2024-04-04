@@ -26,6 +26,8 @@ interface IStaking {
   /// @dev Emitted when a staker claims rewards
   event Claimed(address indexed staker, uint256 amount, uint256[] workerIds);
 
+  event MaxDelegationsChanged(uint256 maxDelegations);
+
   /// @dev Deposit amount of tokens in favour of a worker
   /// @param worker workerId in WorkerRegistration contract
   /// @param amount amount of tokens to deposit

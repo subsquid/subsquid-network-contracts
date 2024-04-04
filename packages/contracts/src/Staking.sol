@@ -27,6 +27,7 @@ contract Staking is AccessControlledPausable, IStaking {
   IERC20 public immutable token;
   IRouter public immutable router;
   uint256 public lastEpochRewarded;
+  uint256 public maxDelegations = 100;
   mapping(uint256 worker => StakerRewards) internal rewards;
   mapping(address staker => uint256) internal _claimable;
   mapping(address staker => EnumerableSet.UintSet workers) internal delegatedTo;
@@ -77,7 +78,6 @@ contract Staking is AccessControlledPausable, IStaking {
       "Rewards out of date"
     );
     require(router.workerRegistration().isWorkerActive(worker), "Worker not active");
-
     StakerRewards storage _rewards = rewards[worker];
     require(_rewards.totalStaked + amount <= network.delegationLimit(), "Delegation limit exceeded");
 
@@ -85,6 +85,7 @@ contract Staking is AccessControlledPausable, IStaking {
     _rewards.totalStaked += amount;
     _rewards.depositAmount[msg.sender] += amount;
     delegatedTo[msg.sender].add(worker);
+    require(delegatedTo[msg.sender].length() <= maxDelegations, "Max delegations reached");
     rewards[worker].withdrawAllowed[msg.sender] = network.nextEpoch() + network.epochLength();
 
     token.transferFrom(msg.sender, address(this), amount);
@@ -193,5 +194,11 @@ contract Staking is AccessControlledPausable, IStaking {
     returns (uint256 depositAmount, uint256 withdrawAllowed)
   {
     return (rewards[worker].depositAmount[staker], rewards[worker].withdrawAllowed[staker]);
+  }
+
+  function setMaxDelegations(uint256 _maxDelegations) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    maxDelegations = _maxDelegations;
+
+    emit MaxDelegationsChanged(_maxDelegations);
   }
 }

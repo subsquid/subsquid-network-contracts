@@ -4,6 +4,7 @@ import "./DistributedRewardsDistribution.sol";
 
 contract RewardsDistributionDistributeTest is RewardsDistributionTest {
   function gasUsageForNWorkers(uint256 n) internal {
+    staking.setMaxDelegations(1000);
     (uint256[] memory recipients, uint256[] memory workerAmounts, uint256[] memory stakerAmounts) = prepareRewards(n);
     uint256 gasBefore = gasleft();
     rewardsDistribution.distributeHelper(1, recipients, workerAmounts, stakerAmounts);
