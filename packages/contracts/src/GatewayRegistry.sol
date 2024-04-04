@@ -120,6 +120,7 @@ contract GatewayRegistry is AccessControlledPausable, IGatewayRegistry {
    * mana * duration * boostFactor, where boostFactor is specified in reward calculation contract
    */
   function stake(uint256 amount, uint128 durationBlocks, bool withAutoExtension) public whenNotPaused {
+    require(amount > 0, "Cannot stake 0 tokens");
     require(operators[msg.sender].stake.amount == 0, "Stake already exists, call addStake instead");
     uint256 _computationUnits = computationUnitsAmount(amount, durationBlocks);
     uint128 lockStart = router.networkController().nextEpoch();
