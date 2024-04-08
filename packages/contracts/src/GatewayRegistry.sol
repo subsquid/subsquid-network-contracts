@@ -44,6 +44,7 @@ contract GatewayRegistry is AccessControlledPausable, IGatewayRegistry {
   uint256 public mana = 1_000;
   /// @dev How many gateways can be operated by a single wallet
   uint256 public maxGatewaysPerCluster = 10;
+  uint256 public minStake = 1;
 
   constructor(IERC20WithMetadata _token, IRouter _router) {
     token = _token;
@@ -120,6 +121,7 @@ contract GatewayRegistry is AccessControlledPausable, IGatewayRegistry {
    * mana * duration * boostFactor, where boostFactor is specified in reward calculation contract
    */
   function stake(uint256 amount, uint128 durationBlocks, bool withAutoExtension) public whenNotPaused {
+    require(amount >= minStake, "Cannot stake below minStake");
     require(operators[msg.sender].stake.amount == 0, "Stake already exists, call addStake instead");
     uint256 _computationUnits = computationUnitsAmount(amount, durationBlocks);
     uint128 lockStart = router.networkController().nextEpoch();
@@ -316,6 +318,13 @@ contract GatewayRegistry is AccessControlledPausable, IGatewayRegistry {
     maxGatewaysPerCluster = _maxGatewaysPerCluster;
 
     emit MaxGatewaysPerClusterChanged(_maxGatewaysPerCluster);
+  }
+
+  function setMinStake(uint256 _minStake) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    require(_minStake > 0, "Min stake should not be 0");
+    minStake = _minStake;
+
+    emit MinStakeChanged(_minStake);
   }
 
   function _saturatedDiff(uint128 a, uint128 b) internal pure returns (uint128) {
