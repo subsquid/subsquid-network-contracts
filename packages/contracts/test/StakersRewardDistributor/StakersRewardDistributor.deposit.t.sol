@@ -4,8 +4,8 @@ pragma solidity 0.8.20;
 import "./StakersRewardDistributorTest.sol";
 
 contract StakersRewardDistributionDepositTest is StakersRewardDistributionTest {
-  function test_RevertsWhen_NothingWasStakedInEpoch() public {
-    vm.expectRevert("Nothing staked");
+  function test_NothingWasStakedInEpoch() public {
+    // should not revert
     staking.distribute(workers[0], 100);
   }
 

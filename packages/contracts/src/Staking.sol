@@ -59,7 +59,9 @@ contract Staking is AccessControlledPausable, IStaking {
   function _distribute(uint256 worker, uint256 amount) internal {
     if (amount == 0) return;
     uint256 totalStaked = rewards[worker].totalStaked;
-    require(totalStaked > 0, "Nothing staked");
+    if (totalStaked == 0) {
+      return;
+    }
     rewards[worker].cumulatedRewardsPerShare += amount * PRECISION / totalStaked;
   }
 
