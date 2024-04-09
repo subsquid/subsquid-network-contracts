@@ -48,7 +48,6 @@ contract DistributedRewardsDistribution is AccessControlledPausable, IRewardsDis
   event ApprovesRequiredChanged(uint256 newApprovesRequired);
 
   constructor(IRouter _router) {
-    _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
     requiredApproves = 1;
     router = _router;
   }
