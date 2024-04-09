@@ -149,7 +149,9 @@ contract Staking is AccessControlledPausable, IStaking {
       uint256 claimed = pendingReward(_rewards, staker);
       reward += claimed;
       _rewards.checkpoint[staker] = _rewards.cumulatedRewardsPerShare;
-      emit Rewarded(workers[i], staker, claimed);
+      if (claimed > 0) {
+        emit Rewarded(workers[i], staker, claimed);
+      }
     }
     _claimable[staker] = 0;
     emit Claimed(staker, reward, workers);
