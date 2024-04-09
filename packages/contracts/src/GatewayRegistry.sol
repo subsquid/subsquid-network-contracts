@@ -123,6 +123,7 @@ contract GatewayRegistry is AccessControlledPausable, IGatewayRegistry {
    */
   function stake(uint256 amount, uint128 durationBlocks, bool withAutoExtension) public whenNotPaused {
     require(amount >= minStake, "Cannot stake below minStake");
+    require(durationBlocks >= router.networkController().epochLength(), "Cannot stake for less than an epoch");
     require(durationBlocks * averageBlockTime <= MAX_LOCK_DURATION, "Lock duration too long");
     require(operators[msg.sender].stake.amount == 0, "Stake already exists, call addStake instead");
     uint256 _computationUnits = computationUnitsAmount(amount, durationBlocks);
@@ -145,6 +146,7 @@ contract GatewayRegistry is AccessControlledPausable, IGatewayRegistry {
   }
 
   /// @dev Add more stake to the existing one
+  /// If called with amount=0, extends stake by another lock period
   function addStake(uint256 amount) public whenNotPaused {
     Stake storage _stake = operators[msg.sender].stake;
     require(_stake.amount > 0, "Cannot add stake when nothing was staked");
