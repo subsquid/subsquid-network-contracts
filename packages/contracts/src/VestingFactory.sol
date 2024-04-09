@@ -30,10 +30,6 @@ contract VestingFactory is AccessControlledPausable {
     _grantRole(VESTING_CREATOR_ROLE, msg.sender);
   }
 
-  function allowVestingCreator(address account) external onlyRole(DEFAULT_ADMIN_ROLE) {
-    _grantRole(VESTING_CREATOR_ROLE, account);
-  }
-
   function createVesting(
     address beneficiaryAddress,
     uint64 startTimestamp,
