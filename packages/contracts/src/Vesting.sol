@@ -67,4 +67,9 @@ contract SubsquidVesting is Executable, VestingWallet {
   function _canExecute(address executor) internal view override returns (bool) {
     return executor == owner();
   }
+
+  function _transferOwnership(address newOwner) internal override {
+    require(owner() == address(0), "Ownership transfer is not allowed");
+    super._transferOwnership(newOwner);
+  }
 }
