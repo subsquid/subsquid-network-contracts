@@ -20,6 +20,7 @@ contract GatewayRegistry is AccessControlledPausable, IGatewayRegistry {
   using EnumerableSet for EnumerableSet.Bytes32Set;
 
   uint256 constant BASIS_POINT_MULTIPLIER = 10000;
+  uint256 MAX_LOCK_DURATION = 3 * 360 days;
 
   struct GatewayOperator {
     bool previousInteractions;
@@ -122,6 +123,7 @@ contract GatewayRegistry is AccessControlledPausable, IGatewayRegistry {
    */
   function stake(uint256 amount, uint128 durationBlocks, bool withAutoExtension) public whenNotPaused {
     require(amount >= minStake, "Cannot stake below minStake");
+    require(durationBlocks * averageBlockTime <= MAX_LOCK_DURATION, "Lock duration too long");
     require(operators[msg.sender].stake.amount == 0, "Stake already exists, call addStake instead");
     uint256 _computationUnits = computationUnitsAmount(amount, durationBlocks);
     uint128 lockStart = router.networkController().nextEpoch();
