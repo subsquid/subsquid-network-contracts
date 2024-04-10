@@ -25,6 +25,8 @@ interface IStaking {
   event Rewarded(uint256 indexed workerId, address indexed staker, uint256 amount);
   /// @dev Emitted when a staker claims rewards
   event Claimed(address indexed staker, uint256 amount, uint256[] workerIds);
+  /// @dev Emitted when max delegations is changed
+  event EpochsLockChanged(uint128 epochsLock);
 
   event MaxDelegationsChanged(uint256 maxDelegations);
 
