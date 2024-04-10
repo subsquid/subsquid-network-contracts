@@ -282,6 +282,13 @@ contract SubsquidVestingTest is BaseTest {
     vesting.execute(address(token), call);
   }
 
+  function test_RevertsIf_OwnershipIsTransferred() public {
+    vm.expectRevert("Ownership transfer is not allowed");
+    vesting.transferOwnership(address(1));
+    vm.expectRevert("Ownership transfer is not allowed");
+    vesting.renounceOwnership();
+  }
+
   function _concatArrays(uint256[] memory a, uint256[] memory b, uint256[] memory c, uint256[] memory d)
     internal
     pure

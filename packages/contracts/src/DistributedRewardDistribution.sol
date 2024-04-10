@@ -10,7 +10,8 @@ import "./AccessControlledPausable.sol";
 /**
  * @title Distributed Rewards Distribution Contract
  * @dev Contract has a list of whitelisted distributors
- * Each distributor has a timeframe (256 blocks) to commit a distribution
+ * Each `roundRobinBlocks` blocks, a new subset of distributors are nominated as committers
+ * One of them can then commit a distribution
  * Other distributors can approve it
  * After N approvals, the distribution is executed
  */
@@ -23,9 +24,14 @@ contract DistributedRewardsDistribution is AccessControlledPausable, IRewardsDis
   mapping(uint256 workerId => uint256) internal _claimable;
   mapping(uint256 fromBlock => mapping(uint256 toBlock => bytes32)) public commitments;
   mapping(uint256 fromBlock => mapping(uint256 toBlock => uint8)) public approves;
-  mapping(bytes32 => mapping(address => bool)) public alreadyApproved;
+  mapping(bytes32 commitment => mapping(address distributor => bool)) public alreadyApproved;
   uint256 public requiredApproves;
   uint256 public lastBlockRewarded;
+  // How often the current committers set is changed
+  uint256 public roundRobinBlocks = 256;
+  // Number of distributors which can commit a distribution at the same time
+  uint256 public windowSize = 1;
+
   IRouter public immutable router;
   EnumerableSet.AddressSet private distributors;
 
@@ -46,9 +52,12 @@ contract DistributedRewardsDistribution is AccessControlledPausable, IRewardsDis
   event DistributorRemoved(address indexed distributor);
   /// @dev Emitted when required approvals is changed
   event ApprovesRequiredChanged(uint256 newApprovesRequired);
+  /// @dev Emitted when window size is changed
+  event WindowSizeChanged(uint256 newWindowSize);
+  /// @dev Emitted when round robin blocks is changed
+  event RoundRobinBlocksChanged(uint256 newRoundRobinBlocks);
 
   constructor(IRouter _router) {
-    _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
     requiredApproves = 1;
     router = _router;
   }
@@ -76,18 +85,21 @@ contract DistributedRewardsDistribution is AccessControlledPausable, IRewardsDis
   }
 
   /**
-   * @dev Get an index of the distribuor which can currently commit a distribution
-   * @notice Distributor has 256 blocks to commit a distribution
-   * @notice blockhash can be manipulated by miners, but all distributors are expected to be aligned to us anyway
+   * @dev Get an index of the first distribuor which can currently commit a distribution
    */
-  function distributorIndex() public view returns (uint256) {
-    uint256 slotStart = block.number / 256 * 256;
-    return uint256(blockhash(slotStart)) % distributors.length();
+  function distributorIndex() internal view returns (uint256) {
+    return (block.number / roundRobinBlocks * roundRobinBlocks) % distributors.length();
   }
 
-  /// @return the distributor which can currently commit rewards
-  function currentDistributor() public view returns (address) {
-    return distributors.at(distributorIndex());
+  function canCommit(address who) public view returns (bool) {
+    uint256 firstIndex = distributorIndex();
+    uint256 distributorsCount = distributors.length();
+    for (uint256 i = 0; i < windowSize; i++) {
+      if (distributors.at((firstIndex + i) % distributorsCount) == who) {
+        return true;
+      }
+    }
+    return false;
   }
 
   /**
@@ -113,21 +125,19 @@ contract DistributedRewardsDistribution is AccessControlledPausable, IRewardsDis
     require(recipients.length == _stakerRewards.length, "Recipients and staker amounts length mismatch");
     require(toBlock >= fromBlock, "toBlock before fromBlock");
 
-    require(currentDistributor() == msg.sender, "Not a distributor");
+    require(canCommit(msg.sender), "Not a committer");
     require(toBlock < block.number, "Future block");
     bytes32 commitment = keccak256(msg.data[4:]);
     require(!alreadyApproved[commitment][msg.sender], "Already approved");
-    require(commitments[fromBlock][toBlock] != commitment, "Commitment already exists");
+    if (commitments[fromBlock][toBlock] == commitment) {
+      _approve(commitment, fromBlock, toBlock, recipients, workerRewards, _stakerRewards);
+    }
+
     commitments[fromBlock][toBlock] = commitment;
-    approves[fromBlock][toBlock] = 1;
-    alreadyApproved[commitment][msg.sender] = true;
+    approves[fromBlock][toBlock] = 0;
 
     emit NewCommitment(msg.sender, fromBlock, toBlock, commitment);
-    emit Approved(msg.sender, fromBlock, toBlock, commitment);
-
-    if (requiredApproves == 1) {
-      distribute(fromBlock, toBlock, recipients, workerRewards, _stakerRewards);
-    }
+    _approve(commitment, fromBlock, toBlock, recipients, workerRewards, _stakerRewards);
   }
 
   /**
@@ -146,6 +156,18 @@ contract DistributedRewardsDistribution is AccessControlledPausable, IRewardsDis
     bytes32 commitment = keccak256(msg.data[4:]);
     require(commitments[fromBlock][toBlock] == commitment, "Commitment mismatch");
     require(!alreadyApproved[commitment][msg.sender], "Already approved");
+
+    _approve(commitment, fromBlock, toBlock, recipients, workerRewards, _stakerRewards);
+  }
+
+  function _approve(
+    bytes32 commitment,
+    uint256 fromBlock,
+    uint256 toBlock,
+    uint256[] calldata recipients,
+    uint256[] calldata workerRewards,
+    uint256[] calldata _stakerRewards
+  ) internal {
     approves[fromBlock][toBlock]++;
     alreadyApproved[commitment][msg.sender] = true;
 
@@ -229,11 +251,28 @@ contract DistributedRewardsDistribution is AccessControlledPausable, IRewardsDis
   }
 
   /// @dev Set required number of approvals
-  function setApprovesRequired(uint8 _approvesRequired) external onlyRole(DEFAULT_ADMIN_ROLE) {
+  function setApprovesRequired(uint256 _approvesRequired) external onlyRole(DEFAULT_ADMIN_ROLE) {
     require(_approvesRequired > 0, "Approves required must be greater than 0");
     require(_approvesRequired <= distributors.length(), "Approves required must be less than distributors count");
     requiredApproves = _approvesRequired;
 
     emit ApprovesRequiredChanged(_approvesRequired);
+  }
+
+  /// @dev Set required number of approvals
+  function setWindowSize(uint256 _windowSize) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    require(_windowSize > 0, "Number of simultaneous committers must be positive");
+    require(_windowSize <= distributors.length(), "Number of simultaneous committers less than distributors count");
+    windowSize = _windowSize;
+
+    emit WindowSizeChanged(_windowSize);
+  }
+
+  /// @dev Set round robin length
+  function setRoundRobinBlocks(uint256 _roundRobinBlocks) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    require(_roundRobinBlocks > 0, "Round robin blocks must be positive");
+    roundRobinBlocks = _roundRobinBlocks;
+
+    emit RoundRobinBlocksChanged(_roundRobinBlocks);
   }
 }
