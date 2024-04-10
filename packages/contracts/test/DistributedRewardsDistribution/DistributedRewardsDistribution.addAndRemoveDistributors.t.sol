@@ -23,7 +23,15 @@ contract RewardsDistributionAddRemoveDistributorsTest is RewardsDistributionTest
   }
 
   function test_RevertsIf_RemovingUnknownDistributor() public {
+    rewardsDistribution.addDistributor(address(1));
     vm.expectRevert("Distributor does not exist");
+    rewardsDistribution.removeDistributor(address(2));
+  }
+
+  function test_RevertsIf_AmountOfDistributorsBelowRequiredApproves() public {
+    rewardsDistribution.addDistributor(address(1));
+    rewardsDistribution.setApprovesRequired(2);
+    vm.expectRevert("Not enough distributors to approve distribution");
     rewardsDistribution.removeDistributor(address(1));
   }
 }
