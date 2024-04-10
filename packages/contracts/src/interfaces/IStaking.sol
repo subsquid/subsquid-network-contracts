@@ -49,6 +49,9 @@ interface IStaking {
   /// @dev sum of all staked amounts for all provided workers
   function activeStake(uint256[] calldata workers) external view returns (uint256);
 
+  /// @dev total staked amount for the worker
+  function delegated(uint256 worker) external view returns (uint256);
+
   /// @dev Distribute tokens to stakers in favour of a worker
   /// @param workers array of workerIds in WorkerRegistration contract
   /// @param amounts array of amounts of tokens to distribute for i-th worker

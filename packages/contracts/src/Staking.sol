@@ -81,7 +81,6 @@ contract Staking is AccessControlledPausable, IStaking {
     );
     require(router.workerRegistration().isWorkerActive(worker), "Worker not active");
     StakerRewards storage _rewards = rewards[worker];
-    require(_rewards.totalStaked + amount <= network.delegationLimit(), "Delegation limit exceeded");
 
     updateCheckpoint(_rewards, worker);
     _rewards.totalStaked += amount;
@@ -134,6 +133,10 @@ contract Staking is AccessControlledPausable, IStaking {
       result += rewards[activeWorkers[i]].totalStaked;
     }
     return result;
+  }
+
+  function delegated(uint256 worker) external view returns (uint256) {
+    return rewards[worker].totalStaked;
   }
 
   /**

@@ -33,9 +33,8 @@ contract SoftCapTest is BaseTest {
   }
 
   function assertCapAroundFraction(uint256 mockStake, uint256 fraction) internal {
-    uint256[] memory workers = new uint256[](1);
     vm.mockCall(
-      address(router.staking()), abi.encodeWithSelector(IStaking.activeStake.selector, workers), abi.encode(mockStake)
+      address(router.staking()), abi.encodeWithSelector(IStaking.delegated.selector), abi.encode(mockStake)
     );
     assertApproxEqRel(cap.capedStake(0), bond * precalculated[fraction] / 1e20, 1e16);
   }

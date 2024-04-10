@@ -40,9 +40,7 @@ contract SoftCap {
   }
 
   function _getStake(uint256 workerId) internal view returns (uint256) {
-    uint256[] memory workers = new uint256[](1);
-    workers[0] = workerId;
-    return router.staking().activeStake(workers);
+    return router.staking().delegated(workerId);
   }
 
   function _capStake(uint256 stake) internal view returns (uint256) {

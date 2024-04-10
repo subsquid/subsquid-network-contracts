@@ -19,7 +19,6 @@ contract NetworkController is AccessControl, INetworkController {
   uint256 public stakingDeadlock = 2;
   uint128 internal epochCheckpoint;
   uint128 public storagePerWorkerInGb = 1000;
-  uint256 public delegationLimitCoefficientInBP = 2_000;
   uint256 public override targetCapacityGb = 100_000;
   uint256 public override yearlyRewardCapCoefficient = 3000;
   mapping(address => bool) public isAllowedVestedTarget;
@@ -72,13 +71,6 @@ contract NetworkController is AccessControl, INetworkController {
   }
 
   /// @dev Set delegation limit coefficient in basis points
-  function setDelegationLimitCoefficient(uint256 _delegationLimitCoefficientInBP) external onlyRole(DEFAULT_ADMIN_ROLE) {
-    delegationLimitCoefficientInBP = _delegationLimitCoefficientInBP;
-
-    emit DelegationLimitCoefficientInBPUpdated(_delegationLimitCoefficientInBP);
-  }
-
-  /// @dev Set delegation limit coefficient in basis points
   function setStakingDeadlock(uint256 _newDeadlock) external onlyRole(DEFAULT_ADMIN_ROLE) {
     require(_newDeadlock > 1, "Deadlock should be more than 1 epoch");
     stakingDeadlock = _newDeadlock;
@@ -119,10 +111,5 @@ contract NetworkController is AccessControl, INetworkController {
     uint128 blockNumber = uint128(block.number);
     if (blockNumber < firstEpochBlock) return epochCheckpoint;
     return (blockNumber - firstEpochBlock) / epochLength + epochCheckpoint + 1;
-  }
-
-  /// @inheritdoc INetworkController
-  function delegationLimit() external view returns (uint256) {
-    return delegationLimitCoefficientInBP * bondAmount / ONE_BASIS_POINT;
   }
 }
