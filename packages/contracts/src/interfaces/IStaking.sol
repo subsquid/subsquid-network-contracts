@@ -46,9 +46,6 @@ interface IStaking {
   /// MUST return same value as claim(address staker) but without modifying state
   function claimable(address staker) external view returns (uint256);
 
-  /// @dev sum of all staked amounts for all provided workers
-  function activeStake(uint256[] calldata workers) external view returns (uint256);
-
   /// @dev total staked amount for the worker
   function delegated(uint256 worker) external view returns (uint256);
 

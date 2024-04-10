@@ -126,15 +126,6 @@ contract Staking is AccessControlledPausable, IStaking {
     return result;
   }
 
-  /// @dev Total stake for all active workers
-  function activeStake(uint256[] calldata activeWorkers) external view returns (uint256) {
-    uint256 result = 0;
-    for (uint256 i = 0; i < activeWorkers.length; i++) {
-      result += rewards[activeWorkers[i]].totalStaked;
-    }
-    return result;
-  }
-
   function delegated(uint256 worker) external view returns (uint256) {
     return rewards[worker].totalStaked;
   }
