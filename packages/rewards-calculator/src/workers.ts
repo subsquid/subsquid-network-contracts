@@ -31,6 +31,7 @@ import { config } from "./config";
 import { Rewards } from "./reward";
 
 import Decimal from "decimal.js";
+import { Hex } from "viem";
 Decimal.set({ precision: 28, minE: -9 });
 
 const YEAR = 365 * 24 * 60 * 60;
@@ -43,6 +44,8 @@ export class Workers {
   baseApr = new Decimal(0);
   stakeFactor = new Decimal(0);
   rAPR = new Decimal(0);
+  commitmentTxHash: string;
+  commitmentError: string;
 
   constructor(private clickhouseClient: ClickhouseClient) {}
 
@@ -160,7 +163,15 @@ export class Workers {
     this.map((worker) => worker.getRewards(rMax));
   }
 
-  public async calcluateLogs() {
+  public noteSuccessfulCommit(txHash: Hex) {
+    this.commitmentTxHash = txHash;
+  }
+
+  public noteFailedCommit(error: Error) {
+    this.commitmentError = error.toString();
+  }
+
+  public async printLogs({ walletAddress, index }: { walletAddress: string, index: number }) {
     const target_capacity = await getTargetCapacity(
       this.nextDistributionStartBlockNumber,
     );
@@ -181,10 +192,19 @@ export class Workers {
       this.map((w) => w.workerReward.add(w.stakerReward)),
     );
 
+    const address = walletAddress.toLowerCase()
+    const botId = process.env.BOT_NAME || `bot-${index}`;
+    const isCommitSuccess = !!this.commitmentTxHash;
+
     console.log(
       JSON.stringify({
         time: new Date(),
         type: "rewards_report",
+        bot_id: botId,
+        bot_wallet: address,
+        is_commit_success: isCommitSuccess,
+        commit_tx_hash: this.commitmentTxHash ?? "",
+        commit_error_message: this.commitmentError ?? "",
         target_capacity,
         current_capacity,
         active_workers_count,
@@ -193,23 +213,33 @@ export class Workers {
         r_apr: this.rAPR.toFixed(),
         total_reward: total_reward.toFixed(),
       }),
-    ),
-      this.map((worker) =>
-        console.log(
-          JSON.stringify({
-            time: new Date(),
-            type: "worker_report",
-            worker_id: worker.peerId,
-            t_i: worker.trafficWeight.toFixed(),
-            s_i: worker.stakeWeight(stakeSum).toFixed(),
-            r_i: worker.actualYield.toFixed(),
-            ...worker.apr(duration, YEAR),
-            worker_reward: worker.workerReward,
-            staker_reward: worker.stakerReward,
-            stake: worker.stake
-          }),
-        ),
-      );
+    );
+
+    // If commit is not successful, don't print worker report
+    if(!isCommitSuccess) {
+      return
+    }
+
+    this.map((worker) =>
+      console.log(
+        JSON.stringify({
+          time: new Date(),
+          type: "worker_report",
+          bot_id: botId,
+          bot_wallet: address,
+          worker_id: worker.peerId,
+          t_i: worker.trafficWeight.toFixed(),
+          s_i: worker.stakeWeight(stakeSum).toFixed(),
+          r_i: worker.actualYield.toFixed(),
+          ...worker.apr(duration, YEAR),
+          worker_reward: worker.workerReward.toFixed(),
+          staker_reward: worker.stakerReward.toFixed(),
+          stake: worker.stake.toFixed(),
+          bytes_sent: worker.bytesSent,
+          chunks_read: worker.chunksRead,
+        }),
+      ),
+    );
   }
 
   private parseMulticallResult<

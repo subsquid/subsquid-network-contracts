@@ -3,7 +3,6 @@ import {
   canCommit,
   commitRewards,
   epochLength,
-  getBlockNumber,
   getBlockTimestamp,
   getRegistrations,
   isCommitted,
@@ -15,6 +14,7 @@ import { epochStats } from "./reward";
 import { logger } from "./logger";
 import { addresses, config, contracts, publicClient } from "./config";
 import { parseAbiItem, WalletClient } from "viem";
+import type { Workers } from "./workers";
 
 async function firstRegistrationBlock(registrations: Registrations) {
   return Math.min(
@@ -33,25 +33,23 @@ export function isEpochConfirmed(epochEnd: Date) {
 }
 
 export class RewardWorker {
-  constructor(private walletClient: WalletClient) {}
+  constructor(
+    private walletClient: WalletClient,
+    private index: number,
+  ) {}
   public startWorker() {
     this.commitIfPossible();
-    // this.approveIfNecessary();
+    this.approveIfNecessary();
   }
 
   private async commitIfPossible() {
     try {
       if (await canCommit(this.walletClient)) {
         const { fromBlock, toBlock } = await this.commitRange();
-        if (
-          fromBlock < toBlock &&
-          isEpochConfirmed(await getBlockTimestamp(toBlock)) &&
-          !(await isCommitted(fromBlock, toBlock))
-        ) {
+        if (await this.canCommit(fromBlock, toBlock)) {
           logger.log("Can commit", this.walletClient.account.address);
           const workers = await epochStats(fromBlock, toBlock);
-          const rewards = await workers.rewards();
-          await commitRewards(fromBlock, toBlock, rewards, this.walletClient);
+          await this.tryToCommit(fromBlock, toBlock, workers);
         }
       }
     } catch (e) {
@@ -60,17 +58,63 @@ export class RewardWorker {
     setTimeout(() => this.commitIfPossible(), config.workTimeout);
   }
 
+  private async canCommit(fromBlock: number, toBlock: number) {
+    return (
+      fromBlock < toBlock &&
+      isEpochConfirmed(await getBlockTimestamp(toBlock)) &&
+      !(await isCommitted(fromBlock, toBlock))
+    );
+  }
+
+  private async tryToCommit(
+    fromBlock: number,
+    toBlock: number,
+    workers: Workers,
+  ) {
+    const rewards = await workers.rewards();
+    try {
+      const tx = await commitRewards(
+        fromBlock,
+        toBlock,
+        rewards,
+        this.walletClient,
+      );
+      workers.noteSuccessfulCommit(tx);
+    } catch (e) {
+      if (e.message?.includes("Already approved")) {
+        return;
+      }
+      workers.noteFailedCommit(e);
+      logger.error(e);
+    }
+
+    await workers.printLogs({
+      walletAddress: this.walletClient.account.address,
+      index: this.index,
+    });
+  }
+
   private async approveIfNecessary() {
     try {
       const ranges = await approveRanges();
       if (ranges.shouldApprove) {
         const workers = await epochStats(ranges.fromBlock, ranges.toBlock);
         const rewards = await workers.rewards();
-        await approveRewards(
+        const tx = await approveRewards(
           ranges.fromBlock,
           ranges.toBlock,
           rewards,
           this.walletClient,
+        );
+        console.log(
+          JSON.stringify({
+            time: new Date(),
+            type: "rewards_approved",
+            bot_wallet: this.walletClient.account.address,
+            tx_hash: tx,
+            from_block: ranges.fromBlock,
+            to_block: ranges.toBlock,
+          }),
         );
       }
     } catch (e) {

@@ -11,6 +11,7 @@ import "../src/RewardTreasury.sol";
 import "../src/Router.sol";
 import "../src/SQD.sol";
 import "../src/RewardCalculation.sol";
+import "../src/GatewayRegistry.sol";
 
 contract MockRewardsDistribution is IRewardsDistribution {
   function claimable(address) external pure override returns (uint256) {
@@ -24,6 +25,7 @@ contract MockRewardsDistribution is IRewardsDistribution {
 
 contract BaseTest is Test {
   SoftCap cap;
+  GatewayRegistry gatewayRegistry;
 
   function deployAll() internal returns (SQD token, Router router) {
     router = Router(address(new TransparentUpgradeableProxy(address(new Router()), address(1234), "")));
@@ -45,6 +47,9 @@ contract BaseTest is Test {
     allowedTargets[2] = address(treasury);
     INetworkController networkController = new NetworkController(5, 10 ether, allowedTargets);
     router.initialize(workerRegistration, staking, address(treasury), networkController, rewards);
+    gatewayRegistry =
+      GatewayRegistry(address(new TransparentUpgradeableProxy(address(new GatewayRegistry()), address(1234), "")));
+    gatewayRegistry.initialize(IERC20WithMetadata(address(token)), router);
   }
 
   function getCaller() internal returns (address) {

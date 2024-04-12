@@ -6,9 +6,9 @@ RUN apk add jq python3 py3-pip nodejs npm
 RUN pip install base58
 COPY foundry.toml ./foundry.toml
 COPY package.json ./package.json
-RUN forge install foundry-rs/forge-std OpenZeppelin/openzeppelin-contracts PaulRBerg/prb-math@release-v4 --no-git
 RUN npm install -g zx pnpm
 RUN pnpm install @libp2p/peer-id
+RUN forge install foundry-rs/forge-std OpenZeppelin/openzeppelin-contracts OpenZeppelin/openzeppelin-contracts-upgradeable PaulRBerg/prb-math@release-v4 --no-git
 COPY . .
 RUN forge build
 

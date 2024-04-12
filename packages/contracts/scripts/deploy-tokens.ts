@@ -1,7 +1,7 @@
 import { getL2Network } from "@arbitrum/sdk";
 import { ethers } from "ethers";
-import tSQDL1 from "../artifacts/tSQD.sol/tSQD";
-import tSQDL2 from "../artifacts/tSQD.sol/tSQDArbitrum";
+import SQDL1 from "../artifacts/SQD.sol/SQD";
+import SQDL2 from "../artifacts/SQD.sol/SQDArbitrum";
 import { AdminErc20Bridger } from "@arbitrum/sdk/dist/lib/assetBridger/erc20Bridger";
 
 const l1provider = ethers.providers.getDefaultProvider("sepolia");
@@ -14,8 +14,8 @@ const l2Network = await getL2Network(l2provider);
 async function deployL1() {
   const signer = new ethers.Wallet(privateKey, l1provider);
   const l1TokenFactory = new ethers.ContractFactory(
-    tSQDL1.abi,
-    tSQDL1.bytecode,
+    SQDL1.abi,
+    SQDL1.bytecode,
     signer,
   );
   const amounts = [100];
@@ -32,8 +32,8 @@ async function deployL1() {
 async function deployL2(l1TokenAddress: string) {
   const signer = new ethers.Wallet(privateKey, l2provider);
   const l2TokenFactory = new ethers.ContractFactory(
-    tSQDL2.abi,
-    tSQDL2.bytecode,
+    SQDL2.abi,
+    SQDL2.bytecode,
     signer,
   );
   const l2Token = await l2TokenFactory.deploy(

@@ -18,6 +18,7 @@ import "../src/GatewayRegistry.sol";
 import "../src/VestingFactory.sol";
 import "../src/SoftCap.sol";
 import "../src/gateway-strategies/EqualStrategy.sol";
+import "../src/AllocationsViewer.sol";
 
 contract Deploy is Script {
   function run() public {
@@ -40,11 +41,14 @@ contract Deploy is Script {
     WorkerRegistration workerRegistration = new WorkerRegistration(token, router);
     RewardTreasury treasury = new RewardTreasury(token);
     DistributedRewardsDistribution distributor = new DistributedRewardsDistribution(router);
-    GatewayRegistry gatewayReg = new GatewayRegistry(IERC20WithMetadata(address(token)), router);
+    GatewayRegistry gatewayReg =
+      GatewayRegistry(address(new TransparentUpgradeableProxy(address(new GatewayRegistry()), proxyAdmin, "")));
+    gatewayReg.initialize(IERC20WithMetadata(address(token)), router);
     VestingFactory factory = new VestingFactory(token, router);
     EqualStrategy strategy = new EqualStrategy(router, gatewayReg);
     SoftCap cap = new SoftCap(router);
     RewardCalculation rewardCalc = new RewardCalculation(router, cap);
+    AllocationsViewer viewer = new AllocationsViewer(gatewayReg);
     router.initialize(workerRegistration, staking, address(treasury), network, rewardCalc);
     staking.grantRole(staking.REWARDS_DISTRIBUTOR_ROLE(), address(distributor));
     treasury.setWhitelistedDistributor(distributor, true);

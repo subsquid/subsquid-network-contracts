@@ -41,4 +41,8 @@ interface IGatewayRegistry {
   event AverageBlockTimeChanged(uint256 newBlockTime);
 
   function computationUnitsAvailable(bytes calldata gateway) external view returns (uint256);
+  function getUsedStrategy(bytes calldata peerId) external view returns (address);
+  function getActiveGateways(uint256 pageNumber, uint256 perPage) external view returns (bytes[] memory);
+  function getGateway(bytes calldata peerId) external view returns (Gateway memory);
+  function getActiveGatewaysCount() external view returns (uint256);
 }

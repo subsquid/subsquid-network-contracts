@@ -18,20 +18,27 @@ const func = async function ({ deployments, getNamedAccounts }) {
     log: true,
     deterministicDeployment: salt,
   });
-  const distributionContract = await ethers.getContractAt("RewardsDistribution", rewardDistribution.address);
-  await distributionContract.grantRole(await distributionContract.REWARDS_DISTRIBUTOR_ROLE(), deployer)
+  const distributionContract = await ethers.getContractAt(
+    "RewardsDistribution",
+    rewardDistribution.address,
+  );
+  await distributionContract.grantRole(
+    await distributionContract.REWARDS_DISTRIBUTOR_ROLE(),
+    deployer,
+  );
   const rewardTreasury = await deploy("RewardTreasury", {
     from: deployer,
     args: [deployer, tsqd.address],
     log: true,
     deterministicDeployment: salt,
   });
-  await distributionContract.grantRole(await distributionContract.REWARDS_TREASURY_ROLE(), rewardTreasury.address)
+  await distributionContract.grantRole(
+    await distributionContract.REWARDS_TREASURY_ROLE(),
+    rewardTreasury.address,
+  );
   console.log("RewardCalculation deployed at:", rewardDistribution.address);
 };
 
 module.exports = func;
 func.tags = ["WorkerRegistration"];
-func.dependencies = ["tSQD"];
-
-
+func.dependencies = ["SQD"];
