@@ -19,6 +19,7 @@ import "../src/VestingFactory.sol";
 import "../src/SoftCap.sol";
 import "../src/gateway-strategies/EqualStrategy.sol";
 import "../src/AllocationsViewer.sol";
+import "../src/gateway-strategies/SubequalStrategy.sol";
 
 contract Deploy is Script {
   function run() public {
@@ -26,12 +27,9 @@ contract Deploy is Script {
     vm.startBroadcast(deployerPrivateKey);
 
     SQD token = SQD(vm.envOr("TOKEN", address(0)));
+
     if (address(token) == address(0)) {
-      address[] memory recipients = new address[](1);
-      recipients[0] = vm.addr(deployerPrivateKey);
-      uint256[] memory amounts = new uint256[](1);
-      amounts[0] = 1337 * (10 ** 6) * 1 ether;
-      token = new SQD(recipients, amounts, IL1CustomGateway(address(0)), IGatewayRouter2(address(0)));
+      revert("Token address is required");
     }
     address proxyAdmin = address(new ProxyAdmin(vm.addr(deployerPrivateKey)));
     Router router = Router(address(new TransparentUpgradeableProxy(address(new Router()), proxyAdmin, "")));
@@ -44,8 +42,8 @@ contract Deploy is Script {
     GatewayRegistry gatewayReg =
       GatewayRegistry(address(new TransparentUpgradeableProxy(address(new GatewayRegistry()), proxyAdmin, "")));
     gatewayReg.initialize(IERC20WithMetadata(address(token)), router);
-    VestingFactory factory = new VestingFactory(token, router);
     EqualStrategy strategy = new EqualStrategy(router, gatewayReg);
+    SubequalStrategy subStrategy = new SubequalStrategy(router, gatewayReg);
     SoftCap cap = new SoftCap(router);
     RewardCalculation rewardCalc = new RewardCalculation(router, cap);
     AllocationsViewer viewer = new AllocationsViewer(gatewayReg);
@@ -56,8 +54,11 @@ contract Deploy is Script {
 
     network.setAllowedVestedTarget(address(workerRegistration), true);
     network.setAllowedVestedTarget(address(staking), true);
+    network.setAllowedVestedTarget(address(gatewayReg), true);
+    network.setAllowedVestedTarget(address(treasury), true);
 
     gatewayReg.setIsStrategyAllowed(address(strategy), true, true);
+    gatewayReg.setIsStrategyAllowed(address(subStrategy), true, false);
 
     vm.stopBroadcast();
   }
