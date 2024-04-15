@@ -8,7 +8,7 @@ COPY foundry.toml ./foundry.toml
 COPY package.json ./package.json
 RUN npm install -g zx pnpm
 RUN pnpm install @libp2p/peer-id
-RUN forge install foundry-rs/forge-std OpenZeppelin/openzeppelin-contracts OpenZeppelin/openzeppelin-contracts-upgradeable PaulRBerg/prb-math@release-v4 --no-git
+RUN forge install foundry-rs/forge-std OpenZeppelin/openzeppelin-contracts@v5.0.1 OpenZeppelin/openzeppelin-contracts-upgradeable@v5.0.2 PaulRBerg/prb-math@release-v4 --no-git
 COPY . .
 RUN forge build
 
