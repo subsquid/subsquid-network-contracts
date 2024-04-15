@@ -66,12 +66,16 @@ contract UnlockFunds is Script {
     for (uint256 i = 0; i < workerIds.length; i++) {
       WorkerRegistration.Worker memory worker = workerReg.getWorker(workerIds[i]);
       if (worker.deregisteredAt == 0) {
-        console2.log("Deregistering worker ", workerIds[i], ". Rerun script in several hours to reclaim bond");
+        console2.log("Deregistering worker ", workerIds[i]);
         workerReg.deregister(worker.peerId);
+        worker = workerReg.getWorker(workerIds[i]);
       }
-      if (block.number >= worker.deregisteredAt + workerReg.lockPeriod()) {
-        console2.log("Withrawing bond for worker ", workerIds[i]);
+      uint deregistrationTime = worker.deregisteredAt + workerReg.lockPeriod();
+      if (deregistrationTime > 0 && block.number >= worker.deregisteredAt + workerReg.lockPeriod()) {
+        console2.log("Withdrawing bond for worker ", workerIds[i]);
         workerReg.withdraw(worker.peerId);
+      } else if (block.number < worker.deregisteredAt + workerReg.lockPeriod()) {
+        console2.log("Bond is locked for worker", workerIds[i], "until block", deregistrationTime);
       }
     }
   }
@@ -87,14 +91,19 @@ contract UnlockFunds is Script {
     for (uint256 i = 0; i < workerIds.length; i++) {
       WorkerRegistration.Worker memory worker = workerReg.getWorker(workerIds[i]);
       if (worker.deregisteredAt == 0) {
-        console2.log("Deregistering worker ", workerIds[i], ". Rerun this script in several hours to reclaim bond");
+        console2.log("Deregistering worker ", workerIds[i]);
         bytes memory call = abi.encodeWithSelector(WorkerRegistration.deregister.selector, worker.peerId);
         vesting.execute(address(workerReg), call);
+        worker = workerReg.getWorker(workerIds[i]);
       }
-      if (block.number >= worker.deregisteredAt + workerReg.lockPeriod()) {
-        console2.log("Withrawing bond for worker ", workerIds[i]);
+      uint deregistrationTime = worker.deregisteredAt + workerReg.lockPeriod();
+      if (deregistrationTime > 0 && block.number >= worker.deregisteredAt + workerReg.lockPeriod()) {
+        console2.log("Withdrawing bond for worker ", workerIds[i]);
         bytes memory call = abi.encodeWithSelector(WorkerRegistration.withdraw.selector, worker.peerId);
         vesting.execute(address(workerReg), call);
+      } else if (block.number < worker.deregisteredAt + workerReg.lockPeriod()) {
+        console2.log("Bond is locked for worker", workerIds[i], "until block", deregistrationTime);
+        console.log("Rerun this script later to withdraw the bond");
       }
     }
   }
