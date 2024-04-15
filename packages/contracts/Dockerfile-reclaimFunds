@@ -2,4 +2,4 @@
 
 INCLUDE+ Dockerfile.common
 
-ENTRYPOINT ["forge", "script", "script/UnlockFunds.s.sol", "--broadcast", "--json", "--rpc-url", "arbitrum-sepolia"]
+ENTRYPOINT ["forge", "script", "script/UnlockFunds.s.sol", "--broadcast", "--rpc-url", "arbitrum-sepolia"]
