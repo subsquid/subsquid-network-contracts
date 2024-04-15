@@ -1,0 +1,5 @@
+# syntax = edrevo/dockerfile-plus
+
+INCLUDE+ Dockerfile.common
+
+ENTRYPOINT ["forge", "script", "script/RegisterGateway.s.sol", "--broadcast", "--json", "--rpc-url", "arbitrum-sepolia"]
