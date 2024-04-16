@@ -40,7 +40,7 @@ contract GatewayRegistry is AccessControlledPausableUpgradeable, IGatewayRegistr
   using EnumerableSet for EnumerableSet.AddressSet;
 
   uint256 constant BASIS_POINT_MULTIPLIER = 10000;
-  uint256 MAX_LOCK_DURATION = 3 * 360 days;
+  uint256 constant MAX_LOCK_DURATION = 3 * 360 days;
 
   struct GatewayOperator {
     bool previousInteractions;
