@@ -2,7 +2,7 @@ FROM ghcr.io/foundry-rs/foundry:latest
 
 WORKDIR /usr/src/app
 
-RUN apk add jq python3 py3-pip nodejs npm
+RUN apk add jq python3 py3-pip nodejs>=18 npm
 RUN pip install base58
 COPY foundry.toml ./foundry.toml
 COPY package.json ./package.json
