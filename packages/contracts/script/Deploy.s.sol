@@ -35,16 +35,17 @@ contract Deploy is Script {
       token = new SQD(recipients, amounts, IL1CustomGateway(address(0)), IGatewayRouter2(address(0)));
     }
 
-    address proxyAdmin = address(new ProxyAdmin(vm.addr(deployerPrivateKey)));
-    Router router = Router(address(new TransparentUpgradeableProxy(address(new Router()), proxyAdmin, "")));
+    Router router =
+      Router(address(new TransparentUpgradeableProxy(address(new Router()), vm.addr(deployerPrivateKey), "")));
 
     NetworkController network = new NetworkController(100, 100000 ether, new address[](0));
     Staking staking = new Staking(token, router);
     WorkerRegistration workerRegistration = new WorkerRegistration(token, router);
     RewardTreasury treasury = new RewardTreasury(token);
     DistributedRewardsDistribution distributor = new DistributedRewardsDistribution(router);
-    GatewayRegistry gatewayReg =
-      GatewayRegistry(address(new TransparentUpgradeableProxy(address(new GatewayRegistry()), proxyAdmin, "")));
+    GatewayRegistry gatewayReg = GatewayRegistry(
+      address(new TransparentUpgradeableProxy(address(new GatewayRegistry()), vm.addr(deployerPrivateKey), ""))
+    );
     gatewayReg.initialize(IERC20WithMetadata(address(token)), router);
     EqualStrategy strategy = new EqualStrategy(router, gatewayReg);
     SubequalStrategy subStrategy = new SubequalStrategy(router, gatewayReg);

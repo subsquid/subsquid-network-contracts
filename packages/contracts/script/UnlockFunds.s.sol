@@ -70,7 +70,7 @@ contract UnlockFunds is Script {
         workerReg.deregister(worker.peerId);
         worker = workerReg.getWorker(workerIds[i]);
       }
-      uint deregistrationTime = worker.deregisteredAt + workerReg.lockPeriod();
+      uint256 deregistrationTime = worker.deregisteredAt + workerReg.lockPeriod();
       if (deregistrationTime > 0 && block.number >= worker.deregisteredAt + workerReg.lockPeriod()) {
         console2.log("Withdrawing bond for worker ", workerIds[i]);
         workerReg.withdraw(worker.peerId);
@@ -96,7 +96,7 @@ contract UnlockFunds is Script {
         vesting.execute(address(workerReg), call);
         worker = workerReg.getWorker(workerIds[i]);
       }
-      uint deregistrationTime = worker.deregisteredAt + workerReg.lockPeriod();
+      uint256 deregistrationTime = worker.deregisteredAt + workerReg.lockPeriod();
       if (deregistrationTime > 0 && block.number >= worker.deregisteredAt + workerReg.lockPeriod()) {
         console2.log("Withdrawing bond for worker ", workerIds[i]);
         bytes memory call = abi.encodeWithSelector(WorkerRegistration.withdraw.selector, worker.peerId);
