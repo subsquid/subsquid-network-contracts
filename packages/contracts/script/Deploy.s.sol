@@ -27,6 +27,13 @@ contract Deploy is Script {
     vm.startBroadcast(deployerPrivateKey);
 
     SQD token = SQD(vm.envOr("TOKEN", address(0)));
+    if (address(token) == address(0)) {
+      address[] memory recipients = new address[](1);
+      recipients[0] = vm.addr(deployerPrivateKey);
+      uint256[] memory amounts = new uint256[](1);
+      amounts[0] = 1337 * (10 ** 6) * 1 ether;
+      token = new SQD(recipients, amounts, IL1CustomGateway(address(0)), IGatewayRouter2(address(0)));
+    }
 
     address proxyAdmin = address(new ProxyAdmin(vm.addr(deployerPrivateKey)));
     Router router = Router(address(new TransparentUpgradeableProxy(address(new Router()), proxyAdmin, "")));

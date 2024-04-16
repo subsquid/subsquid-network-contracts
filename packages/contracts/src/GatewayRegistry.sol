@@ -67,7 +67,7 @@ contract GatewayRegistry is AccessControlledPausableUpgradeable, IGatewayRegistr
   uint256 public mana;
   /// @dev How many gateways can be operated by a single wallet
   uint256 public maxGatewaysPerCluster;
-  uint256 public minStake = 1;
+  uint256 public minStake;
 
   constructor() {
     _disableInitializers();
@@ -83,6 +83,7 @@ contract GatewayRegistry is AccessControlledPausableUpgradeable, IGatewayRegistr
     averageBlockTime = 12 seconds;
     mana = 1_000;
     maxGatewaysPerCluster = 10;
+    minStake = 1;
   }
 
   function register(bytes calldata peerId) external {
