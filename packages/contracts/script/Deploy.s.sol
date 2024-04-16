@@ -28,9 +28,6 @@ contract Deploy is Script {
 
     SQD token = SQD(vm.envOr("TOKEN", address(0)));
 
-    if (address(token) == address(0)) {
-      revert("Token address is required");
-    }
     address proxyAdmin = address(new ProxyAdmin(vm.addr(deployerPrivateKey)));
     Router router = Router(address(new TransparentUpgradeableProxy(address(new Router()), proxyAdmin, "")));
 
