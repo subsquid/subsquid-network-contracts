@@ -25,6 +25,10 @@ interface IStaking {
   event Rewarded(uint256 indexed workerId, address indexed staker, uint256 amount);
   /// @dev Emitted when a staker claims rewards
   event Claimed(address indexed staker, uint256 amount, uint256[] workerIds);
+  /// @dev Emitted when max delegations is changed
+  event EpochsLockChanged(uint128 epochsLock);
+
+  event MaxDelegationsChanged(uint256 maxDelegations);
 
   /// @dev Deposit amount of tokens in favour of a worker
   /// @param worker workerId in WorkerRegistration contract
@@ -44,8 +48,8 @@ interface IStaking {
   /// MUST return same value as claim(address staker) but without modifying state
   function claimable(address staker) external view returns (uint256);
 
-  /// @dev sum of all staked amounts for all provided workers
-  function activeStake(uint256[] calldata workers) external view returns (uint256);
+  /// @dev total staked amount for the worker
+  function delegated(uint256 worker) external view returns (uint256);
 
   /// @dev Distribute tokens to stakers in favour of a worker
   /// @param workers array of workerIds in WorkerRegistration contract

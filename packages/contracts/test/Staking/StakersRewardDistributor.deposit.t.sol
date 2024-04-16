@@ -4,8 +4,8 @@ pragma solidity 0.8.20;
 import "./StakersRewardDistributorTest.sol";
 
 contract StakersRewardDistributionDepositTest is StakersRewardDistributionTest {
-  function test_RevertsWhen_NothingWasStakedInEpoch() public {
-    vm.expectRevert("Nothing staked");
+  function test_NothingWasStakedInEpoch() public {
+    // should not revert
     staking.distribute(workers[0], 100);
   }
 
@@ -16,13 +16,6 @@ contract StakersRewardDistributionDepositTest is StakersRewardDistributionTest {
     vm.roll(20);
     vm.expectRevert("Rewards out of date");
     staking.deposit(workers[0], 100);
-  }
-
-  function test_RevertsIf_StakingMoreThanLimit() public {
-    staking.deposit(workers[0], 10);
-    uint256 limit = network.delegationLimit();
-    vm.expectRevert("Delegation limit exceeded");
-    staking.deposit(workers[0], limit);
   }
 
   function test_DistributeForOneStakerAndAllPreviousEpochsWereRewarded() public {

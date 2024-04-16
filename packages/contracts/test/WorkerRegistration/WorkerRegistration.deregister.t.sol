@@ -41,32 +41,6 @@ contract WorkerRegistrationDeregisterTest is WorkerRegistrationTest {
     assertEq(deregisteredAt, nextEpoch());
   }
 
-  function testExcludesInactiveWorkerStakeFromTVLAndActiveStake() public {
-    token.approve(address(workerRegistration), workerRegistration.bondAmount() * 2 + 300);
-
-    workerRegistration.register(workerId);
-    workerRegistration.register(workerId2);
-    jumpEpoch();
-
-    token.approve(address(staking), 300);
-    staking.deposit(1, 100);
-    staking.deposit(2, 200);
-    assertEq(workerRegistration.effectiveTVL(), workerRegistration.bondAmount() * 2 + 300);
-
-    workerRegistration.deregister(workerId);
-    // hasn't changed before new epoch started
-    assertEq(workerRegistration.effectiveTVL(), workerRegistration.bondAmount() * 2 + 300);
-    assertEq(workerRegistration.activeStake(), 300);
-
-    jumpEpoch();
-    assertEq(workerRegistration.effectiveTVL(), workerRegistration.bondAmount() + 200);
-    assertEq(workerRegistration.activeStake(), 200);
-    workerRegistration.deregister(workerId2);
-    jumpEpoch();
-    assertEq(workerRegistration.activeStake(), 0);
-    assertEq(workerRegistration.effectiveTVL(), 0);
-  }
-
   function testEmitsDeregisteredEvent() public {
     workerRegistration.register(workerId);
     jumpEpoch();

@@ -30,10 +30,6 @@ contract TemporaryHoldingFactory is AccessControlledPausable {
     _grantRole(HOLDING_CREATOR_ROLE, msg.sender);
   }
 
-  function allowTemporaryHoldingCreator(address account) external onlyRole(DEFAULT_ADMIN_ROLE) {
-    _grantRole(HOLDING_CREATOR_ROLE, account);
-  }
-
   function createTemporaryHolding(
     address beneficiaryAddress,
     address admin,

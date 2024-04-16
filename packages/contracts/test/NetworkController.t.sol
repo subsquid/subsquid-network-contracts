@@ -83,24 +83,6 @@ contract NetworkControllerTest is BaseTest {
     controller.setStoragePerWorkerInGb(10);
   }
 
-  function test_RevertsIf_SettingDelegationCoefficientNotByAdmin() public {
-    hoax(address(1));
-    expectNotAdminRevert();
-    controller.setDelegationLimitCoefficient(10);
-  }
-
-  function test_ChangingDelegationCoefficientChangesMaxDelegation() public {
-    assertEq(controller.delegationLimit(), 20 ether);
-    controller.setDelegationLimitCoefficient(1000);
-    assertEq(controller.delegationLimit(), 10 ether);
-  }
-
-  function test_ChangingBondAmountChangesMaxDelegation() public {
-    assertEq(controller.delegationLimit(), 20 ether);
-    controller.setBondAmount(200 ether);
-    assertEq(controller.delegationLimit(), 40 ether);
-  }
-
   function test_RevertsIf_SettingStorageAmountTo0() public {
     vm.expectRevert("Storage cannot be 0");
     controller.setStoragePerWorkerInGb(0);

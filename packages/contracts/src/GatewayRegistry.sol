@@ -40,6 +40,7 @@ contract GatewayRegistry is AccessControlledPausableUpgradeable, IGatewayRegistr
   using EnumerableSet for EnumerableSet.AddressSet;
 
   uint256 constant BASIS_POINT_MULTIPLIER = 10000;
+  uint256 MAX_LOCK_DURATION = 3 * 360 days;
 
   struct GatewayOperator {
     bool previousInteractions;
@@ -66,6 +67,7 @@ contract GatewayRegistry is AccessControlledPausableUpgradeable, IGatewayRegistr
   uint256 public mana;
   /// @dev How many gateways can be operated by a single wallet
   uint256 public maxGatewaysPerCluster;
+  uint256 public minStake = 1;
 
   constructor() {
     _disableInitializers();
@@ -155,6 +157,9 @@ contract GatewayRegistry is AccessControlledPausableUpgradeable, IGatewayRegistr
    * mana * duration * boostFactor, where boostFactor is specified in reward calculation contract
    */
   function stake(uint256 amount, uint128 durationBlocks, bool withAutoExtension) public whenNotPaused {
+    require(amount >= minStake, "Cannot stake below minStake");
+    require(durationBlocks >= router.networkController().epochLength(), "Cannot stake for less than an epoch");
+    require(durationBlocks * averageBlockTime <= MAX_LOCK_DURATION, "Lock duration too long");
     require(operators[msg.sender].stake.amount == 0, "Stake already exists, call addStake instead");
     uint256 _computationUnits = computationUnitsAmount(amount, durationBlocks);
     uint128 lockStart = router.networkController().nextEpoch();
@@ -180,6 +185,7 @@ contract GatewayRegistry is AccessControlledPausableUpgradeable, IGatewayRegistr
   }
 
   /// @dev Add more stake to the existing one
+  /// If called with amount=0, extends stake by another lock period
   function addStake(uint256 amount) public whenNotPaused {
     Stake storage _stake = operators[msg.sender].stake;
     require(_stake.amount > 0, "Cannot add stake when nothing was staked");
@@ -360,6 +366,13 @@ contract GatewayRegistry is AccessControlledPausableUpgradeable, IGatewayRegistr
     maxGatewaysPerCluster = _maxGatewaysPerCluster;
 
     emit MaxGatewaysPerClusterChanged(_maxGatewaysPerCluster);
+  }
+
+  function setMinStake(uint256 _minStake) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    require(_minStake > 0, "Min stake should not be 0");
+    minStake = _minStake;
+
+    emit MinStakeChanged(_minStake);
   }
 
   function _saturatedDiff(uint128 a, uint128 b) internal pure returns (uint128) {

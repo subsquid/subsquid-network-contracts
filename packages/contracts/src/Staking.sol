@@ -27,6 +27,8 @@ contract Staking is AccessControlledPausable, IStaking {
   IERC20 public immutable token;
   IRouter public immutable router;
   uint256 public lastEpochRewarded;
+  uint256 public maxDelegations = 100;
+  uint128 public epochsLockedAfterStake = 1;
   mapping(uint256 worker => StakerRewards) internal rewards;
   mapping(address staker => uint256) internal _claimable;
   mapping(address staker => EnumerableSet.UintSet workers) internal delegatedTo;
@@ -59,7 +61,9 @@ contract Staking is AccessControlledPausable, IStaking {
   function _distribute(uint256 worker, uint256 amount) internal {
     if (amount == 0) return;
     uint256 totalStaked = rewards[worker].totalStaked;
-    require(totalStaked > 0, "Nothing staked");
+    if (totalStaked == 0) {
+      return;
+    }
     rewards[worker].cumulatedRewardsPerShare += amount * PRECISION / totalStaked;
   }
 
@@ -77,15 +81,14 @@ contract Staking is AccessControlledPausable, IStaking {
       "Rewards out of date"
     );
     require(router.workerRegistration().isWorkerActive(worker), "Worker not active");
-
     StakerRewards storage _rewards = rewards[worker];
-    require(_rewards.totalStaked + amount <= network.delegationLimit(), "Delegation limit exceeded");
 
     updateCheckpoint(_rewards, worker);
     _rewards.totalStaked += amount;
     _rewards.depositAmount[msg.sender] += amount;
     delegatedTo[msg.sender].add(worker);
-    rewards[worker].withdrawAllowed[msg.sender] = network.nextEpoch() + network.epochLength();
+    require(delegatedTo[msg.sender].length() <= maxDelegations, "Max delegations reached");
+    rewards[worker].withdrawAllowed[msg.sender] = network.nextEpoch() + lockLengthBlocks();
 
     token.transferFrom(msg.sender, address(this), amount);
 
@@ -124,13 +127,8 @@ contract Staking is AccessControlledPausable, IStaking {
     return result;
   }
 
-  /// @dev Total stake for all active workers
-  function activeStake(uint256[] calldata activeWorkers) external view returns (uint256) {
-    uint256 result = 0;
-    for (uint256 i = 0; i < activeWorkers.length; i++) {
-      result += rewards[activeWorkers[i]].totalStaked;
-    }
-    return result;
+  function delegated(uint256 worker) external view returns (uint256) {
+    return rewards[worker].totalStaked;
   }
 
   /**
@@ -147,7 +145,9 @@ contract Staking is AccessControlledPausable, IStaking {
       uint256 claimed = pendingReward(_rewards, staker);
       reward += claimed;
       _rewards.checkpoint[staker] = _rewards.cumulatedRewardsPerShare;
-      emit Rewarded(workers[i], staker, claimed);
+      if (claimed > 0) {
+        emit Rewarded(workers[i], staker, claimed);
+      }
     }
     _claimable[staker] = 0;
     emit Claimed(staker, reward, workers);
@@ -186,6 +186,11 @@ contract Staking is AccessControlledPausable, IStaking {
     return (amount * (_rewards.cumulatedRewardsPerShare - _rewards.checkpoint[staker])) / PRECISION;
   }
 
+  /// @dev Minimum amount of time when withdraw is not allowed after stake
+  function lockLengthBlocks() public view returns (uint128) {
+    return router.networkController().epochLength() * epochsLockedAfterStake;
+  }
+
   /// @dev Get the total deposit amount and how much the staker is allowed to withdraw
   function getDeposit(address staker, uint256 worker)
     external
@@ -193,5 +198,19 @@ contract Staking is AccessControlledPausable, IStaking {
     returns (uint256 depositAmount, uint256 withdrawAllowed)
   {
     return (rewards[worker].depositAmount[staker], rewards[worker].withdrawAllowed[staker]);
+  }
+
+  function setMaxDelegations(uint256 _maxDelegations) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    maxDelegations = _maxDelegations;
+
+    emit MaxDelegationsChanged(_maxDelegations);
+  }
+
+  function setEpochsLock(uint128 _epochsLock) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    require(_epochsLock > 0, "Epochs lock must be greater than 0");
+    require(_epochsLock < 100, "Epochs lock too high");
+    epochsLockedAfterStake = _epochsLock;
+
+    emit EpochsLockChanged(_epochsLock);
   }
 }

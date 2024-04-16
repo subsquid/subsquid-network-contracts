@@ -100,4 +100,26 @@ contract StakersRewardDistributionWithdrawTest is StakersRewardDistributionTest 
     (, whenCanWithdraw) = staking.getDeposit(address(this), workers[0]);
     assertEq(whenCanWithdraw, 155);
   }
+
+  // 2.5M gas for 100 distinct deposits
+  function test_ClaimGasUsage() public {
+    vm.mockCall(
+      address(staking.router().workerRegistration()),
+      abi.encodeWithSelector(IWorkerRegistration.isWorkerActive.selector),
+      abi.encode(true)
+    );
+
+    staking.setMaxDelegations(100);
+    for (uint256 i = 0; i < 100; i++) {
+      staking.deposit(i, 100);
+    }
+    for (uint256 i = 0; i < 100; i++) {
+      staking.distribute(i, 100 * i);
+    }
+    uint256 gasBefore = gasleft();
+    staking.claim(address(this));
+    uint256 gasAfter = gasleft();
+    uint256 gasUsed = gasBefore - gasAfter;
+    emit log_named_uint("gasUsed", gasUsed);
+  }
 }

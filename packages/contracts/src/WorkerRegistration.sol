@@ -251,18 +251,6 @@ contract WorkerRegistration is AccessControlledPausable, IWorkerRegistration {
     return workers[workerId].metadata;
   }
 
-  /// @dev Returns the effective TVL which is as sum of all worker bonds and
-  /// tokens staked for active workers
-  function effectiveTVL() external view returns (uint256) {
-    return getActiveWorkerCount() * bondAmount() + activeStake();
-  }
-
-  /// @dev Returns sum of stakes of all active workers
-  /// @notice Worker is considered active if it has been registered and not deregistered yet
-  function activeStake() public view returns (uint256) {
-    return router.staking().activeStake(getActiveWorkerIds());
-  }
-
   /// @dev Get current bond amount
   function bondAmount() public view returns (uint256) {
     return router.networkController().bondAmount();

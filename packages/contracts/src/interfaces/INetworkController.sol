@@ -8,7 +8,6 @@ interface INetworkController {
   event BondAmountUpdated(uint256 bondAmount);
   /// @dev Emitted when storage per worker is updated
   event StoragePerWorkerInGbUpdated(uint128 storagePerWorkerInGb);
-  event DelegationLimitCoefficientInBPUpdated(uint256 newDelegationLimitCoefficientInBP);
   event StakingDeadlockUpdated(uint256 stakingDeadlock);
   event AllowedVestedTargetUpdated(address target, bool isAllowed);
   event TargetCapacityUpdated(uint256 target);
@@ -16,9 +15,6 @@ interface INetworkController {
 
   /// @dev Amount of blocks in one epoch
   function epochLength() external view returns (uint128);
-
-  /// @dev Max total worker delegation amount
-  function delegationLimit() external view returns (uint256);
 
   /// @dev Amount of tokens required to register a worker
   function bondAmount() external view returns (uint256);
