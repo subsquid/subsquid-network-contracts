@@ -54,15 +54,18 @@ pnpm run test
 | Contract name                      | Address.                                                                                                                     |
 |------------------------------------|------------------------------------------------------------------------------------------------------------------------------|
 | **tSQDArbitrum**                   | [0x24f9C46d86c064a6FA2a568F918fe62fC6917B3c](https://sepolia.arbiscan.io/token/0x24f9C46d86c064a6FA2a568F918fe62fC6917B3c)   |
-| **Router**                         | [0x6bAc05cDe58D02953496541b4d615f71a5Db57a3](https://sepolia.arbiscan.io/address/0x6bAc05cDe58D02953496541b4d615f71a5Db57a3) |
-| **NetworkController**              | [0xa4285F5503D903BB10978AD652D072e79cc92F0a](https://sepolia.arbiscan.io/address/0xa4285F5503D903BB10978AD652D072e79cc92F0a) |
-| **Staking**                        | [0x2B0D385DBC2Eb2946448d1f6be6bfa9Bb53F68C9](https://sepolia.arbiscan.io/address/0x2B0D385DBC2Eb2946448d1f6be6bfa9Bb53F68C9) |
-| **WorkerRegistration**             | [0x7Bf0B1ee9767eAc70A857cEbb24b83115093477F](https://sepolia.arbiscan.io/address/0x7Bf0B1ee9767eAc70A857cEbb24b83115093477F) |
-| **RewardTreasury**                 | [0xBE8518812597C37FA807b1B8A4a3Bb98849E67ab](https://sepolia.arbiscan.io/address/0xBE8518812597C37FA807b1B8A4a3Bb98849E67ab) |
-| **DistributedRewardsDistribution** | [0xcD7560602c6583a1E6dc38df271A3aB5A2023D9b](https://sepolia.arbiscan.io/address/0xcD7560602c6583a1E6dc38df271A3aB5A2023D9b) |
-| **GatewayRegistry**                | [0x01D7D0CC06cDdD744a9E06C9bc5249DA6da3e848](https://sepolia.arbiscan.io/address/0x01D7D0CC06cDdD744a9E06C9bc5249DA6da3e848) |
+| **Router**                         | [0xD2093610c5d27c201CD47bCF1Df4071610114b64](https://sepolia.arbiscan.io/address/0xD2093610c5d27c201CD47bCF1Df4071610114b64) |
+| **NetworkController**              | [0x68Fc7E375945d8C8dFb0050c337Ff09E962D976D](https://sepolia.arbiscan.io/address/0x68Fc7E375945d8C8dFb0050c337Ff09E962D976D) |
+| **Staking**                        | [0x347E326b8b4EA27c87d5CA291e708cdEC6d65EB5](https://sepolia.arbiscan.io/address/0x347E326b8b4EA27c87d5CA291e708cdEC6d65EB5) |
+| **WorkerRegistration**             | [0xCD8e983F8c4202B0085825Cf21833927D1e2b6Dc](https://sepolia.arbiscan.io/address/0xCD8e983F8c4202B0085825Cf21833927D1e2b6Dc) |
+| **RewardTreasury**                 | [0x785136e611E15D532C36502AaBdfE8E35008c7ca](https://sepolia.arbiscan.io/address/0x785136e611E15D532C36502AaBdfE8E35008c7ca) |
+| **DistributedRewardsDistribution** | [0x68f9fE3504652360afF430dF198E1Cb7B2dCfD57](https://sepolia.arbiscan.io/address/0x68f9fE3504652360afF430dF198E1Cb7B2dCfD57) |
+| **GatewayRegistry**                | [0xAB46F688AbA4FcD1920F21E9BD16B229316D8b0a](https://sepolia.arbiscan.io/address/0xAB46F688AbA4FcD1920F21E9BD16B229316D8b0a) |
 | **VestingFactory**                 | [0x0eD5FB811167De1928322a0fa30Ed7F3c8C370Ca](https://sepolia.arbiscan.io/address/0x0eD5FB811167De1928322a0fa30Ed7F3c8C370Ca) |
-| **RewardCalculation**              | [0xA60Ce3598A94AE2a7E381aDe710f3C747A590CFB](https://sepolia.arbiscan.io/address/0xA60Ce3598A94AE2a7E381aDe710f3C747A590CFB) |
+| **RewardCalculation**              | [0x93D16d5210122c804DE9931b41b3c6FA2649CE3F](https://sepolia.arbiscan.io/address/0x93D16d5210122c804DE9931b41b3c6FA2649CE3F) |
+| **EqualStrategy**              | [0x94DF0410BF415765e8e9431d545AF9805859b5Db](https://sepolia.arbiscan.io/address/0x94DF0410BF415765e8e9431d545AF9805859b5Db) |
+| **SubequalStrategy**              | [0x20cA692986D127CE78938E2518cE2F49F105eC48](https://sepolia.arbiscan.io/address/0x20cA692986D127CE78938E2518cE2F49F105eC48) |
+| **AllocationsViewer**              | [0xC0Af6432947db51e0C179050dAF801F19d40D2B7](https://sepolia.arbiscan.io/address/0xC0Af6432947db51e0C179050dAF801F19d40D2B7) |
 
 #### Arbitrum-goerli
 
