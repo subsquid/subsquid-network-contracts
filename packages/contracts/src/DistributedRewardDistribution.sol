@@ -132,6 +132,7 @@ contract DistributedRewardsDistribution is AccessControlledPausable, IRewardsDis
     require(!alreadyApproved[commitment][msg.sender], "Already approved");
     if (commitments[fromBlock][toBlock] == commitment) {
       _approve(commitment, fromBlock, toBlock, recipients, workerRewards, _stakerRewards);
+      return;
     }
 
     commitments[fromBlock][toBlock] = commitment;
