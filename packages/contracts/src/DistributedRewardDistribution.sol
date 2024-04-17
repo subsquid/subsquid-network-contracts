@@ -88,8 +88,8 @@ contract DistributedRewardsDistribution is AccessControlledPausable, IRewardsDis
   /**
    * @dev Get an index of the first distribuor which can currently commit a distribution
    */
-  function distributorIndex() internal view returns (uint256) {
-    return (block.number / roundRobinBlocks * roundRobinBlocks) % distributors.length();
+  function distributorIndex() public view returns (uint256) {
+    return (block.number / roundRobinBlocks) % distributors.length();
   }
 
   function canCommit(address who) public view returns (bool) {
@@ -249,6 +249,10 @@ contract DistributedRewardsDistribution is AccessControlledPausable, IRewardsDis
       reward += _claimable[workerId];
     }
     return reward;
+  }
+
+  function getDistributors() external view returns (address[] memory) {
+    return distributors.values();
   }
 
   /// @dev Set required number of approvals

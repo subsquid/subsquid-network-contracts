@@ -154,6 +154,26 @@ contract RewardsDistributionCommitApproveTest is RewardsDistributionTest {
     assertEq(rewardsDistribution.canApprove(address(1), 1, 4, recipients, workerAmounts, stakerAmounts), false);
   }
 
+  function test_DistributorIndexChangesEveryRoundRobinBlocks() public {
+    uint roundRobinBlocks = rewardsDistribution.roundRobinBlocks();
+    rewardsDistribution.addDistributor(address(1));
+    rewardsDistribution.addDistributor(address(2));
+    assertEq(rewardsDistribution.getDistributors().length, 3);
+    assertEq(rewardsDistribution.distributorIndex(), 0);
+    vm.roll(block.number + roundRobinBlocks);
+    assertEq(rewardsDistribution.distributorIndex(), 1);
+    vm.roll(block.number + roundRobinBlocks);
+    assertEq(rewardsDistribution.distributorIndex(), 2);
+    vm.roll(block.number + roundRobinBlocks);
+    assertEq(rewardsDistribution.distributorIndex(), 0);
+    vm.roll(block.number + roundRobinBlocks);
+    assertEq(rewardsDistribution.distributorIndex(), 1);
+    vm.roll(block.number + roundRobinBlocks);
+    assertEq(rewardsDistribution.distributorIndex(), 2);
+    vm.roll(block.number + roundRobinBlocks);
+    assertEq(rewardsDistribution.distributorIndex(), 0);
+  }
+
   function waitUntilDistributor() internal {
     vm.roll(block.number + 256);
     while (!rewardsDistribution.canCommit(address(this))) {
