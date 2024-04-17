@@ -1,4 +1,4 @@
-# Panthalasa smart contracts
+# Tethys smart contracts
 
 ## Installation
 
