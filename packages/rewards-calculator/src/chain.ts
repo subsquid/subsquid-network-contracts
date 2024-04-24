@@ -1,14 +1,8 @@
-import {
-  addresses,
-  config,
-  contract,
-  contracts,
-  l1Client,
-  publicClient,
-} from "./config";
+import { abis, addresses, contracts, l1Client, publicClient } from "./config";
 import {
   ContractFunctionConfig,
-  isAddressEqual,
+  encodeFunctionData,
+  Hex,
   parseAbiItem,
   WalletClient,
 } from "viem";
@@ -16,6 +10,8 @@ import { logger } from "./logger";
 import { fromBase58 } from "./utils";
 import { Rewards } from "./reward";
 import { Workers } from "./workers";
+import { fordefiRequest } from "./fordefi/request";
+import { sendFordefiTransaction } from "./fordefi/sendTransaction";
 
 export async function getRegistrations() {
   return (
@@ -100,7 +96,7 @@ export async function preloadWorkerIds(
     blockNumber,
   });
   workers.forEach((workerId, i) => {
-    workerIds[workerId] = results[i].result;
+    workerIds[workerId] = results[i].result!;
   });
   return workerIds;
 }
@@ -121,11 +117,8 @@ export async function getBlockTimestamp(blockNumber: number) {
   );
 }
 
-export async function canCommit(walletClient: WalletClient) {
-  return isAddressEqual(
-    await contracts.rewardsDistribution.read.currentDistributor(),
-    walletClient.account.address,
-  );
+export async function canCommit(address: Hex) {
+  return contracts.rewardsDistribution.read.canCommit([address]);
 }
 
 function rewardsToTxArgs(rewards: Rewards) {
@@ -139,37 +132,78 @@ function rewardsToTxArgs(rewards: Rewards) {
   return { workerIds, rewardAmounts, stakedAmounts, computationUnitsUsed };
 }
 
+async function sendCommitRequest(
+  fromBlock: bigint,
+  toBlock: bigint,
+  workerIds: bigint[],
+  rewardAmounts: bigint[],
+  stakedAmounts: bigint[],
+) {
+  const data = encodeFunctionData({
+    abi: contracts.rewardsDistribution.abi,
+    functionName: "commit",
+    args: [fromBlock, toBlock, workerIds, rewardAmounts, stakedAmounts],
+  });
+  const request = fordefiRequest(
+    contracts.rewardsDistribution.address,
+    data,
+    "Reward commit",
+  );
+  return sendFordefiTransaction(request);
+}
+
 export async function commitRewards(
   fromBlock: number,
   toBlock: number,
   rewards: Rewards,
-  walletClient: WalletClient,
+  address: Hex,
 ) {
   const { workerIds, rewardAmounts, stakedAmounts } = rewardsToTxArgs(rewards);
-  if (!(await canCommit(walletClient))) {
+  if (!(await canCommit(address))) {
     return;
   }
-  const tx = await contract("rewardsDistribution", walletClient).write.commit([
+  const tx = await sendCommitRequest(
     BigInt(fromBlock),
     BigInt(toBlock),
     workerIds,
     rewardAmounts,
     stakedAmounts,
-  ]);
+  );
   logger.log("Commit rewards", tx);
   return tx;
+}
+
+async function sendApproveRequest(
+  fromBlock: bigint,
+  toBlock: bigint,
+  workerIds: bigint[],
+  rewardAmounts: bigint[],
+  stakedAmounts: bigint[],
+) {
+  const data = encodeFunctionData({
+    // @ts-ignore
+    abi: abis.rewardsDistribution.abi,
+    function: "approve",
+    args: [fromBlock, toBlock, workerIds, rewardAmounts, stakedAmounts],
+  });
+  const request = fordefiRequest(
+    contracts.rewardsDistribution.address,
+    data,
+    "Reward approve",
+  );
+  return sendFordefiTransaction(request);
 }
 
 export async function approveRewards(
   fromBlock: number,
   toBlock: number,
   rewards: Rewards,
-  walletClient: WalletClient,
+  address: Hex,
 ) {
   const { workerIds, rewardAmounts, stakedAmounts } = rewardsToTxArgs(rewards);
   if (
     !(await contracts.rewardsDistribution.read.canApprove([
-      walletClient.account.address,
+      address,
       BigInt(fromBlock),
       BigInt(toBlock),
       workerIds,
@@ -177,20 +211,15 @@ export async function approveRewards(
       stakedAmounts,
     ]))
   ) {
-    logger.log("Cannot approve rewards", walletClient.account.address);
+    logger.log("Cannot approve rewards", address);
     return;
   }
-  const tx = await contract("rewardsDistribution", walletClient).write.approve(
-    [
-      BigInt(fromBlock),
-      BigInt(toBlock),
-      workerIds,
-      rewardAmounts,
-      stakedAmounts,
-    ],
-    {
-      gas: config.network.gasLimit,
-    },
+  const tx = await sendApproveRequest(
+    BigInt(fromBlock),
+    BigInt(toBlock),
+    workerIds,
+    rewardAmounts,
+    stakedAmounts,
   );
   logger.log("Approve rewards", tx);
   return tx;
@@ -209,8 +238,8 @@ export async function getStakes(workers: Workers, blockNumber?: bigint) {
     workers.map(async (worker) => ({
       address: contracts.staking.address,
       abi: contracts.staking.abi,
-      functionName: "activeStake" as "activeStake",
-      args: [[await worker.getId()]] as const,
+      functionName: "delegated" as "delegated",
+      args: [await worker.getId()] as const,
     })),
   );
   return [
@@ -221,7 +250,7 @@ export async function getStakes(workers: Workers, blockNumber?: bigint) {
       blockNumber,
     }),
     await publicClient.multicall<
-      ContractFunctionConfig<typeof contracts.staking.abi, "activeStake">[]
+      ContractFunctionConfig<typeof contracts.staking.abi, "delegated">[]
     >({
       contracts: totalStakeCalls,
       blockNumber,

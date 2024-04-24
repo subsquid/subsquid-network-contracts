@@ -6,16 +6,8 @@ import stakingAbi from "../../contracts/artifacts/Staking.sol/Staking";
 import capAbi from "../../contracts/artifacts/SoftCap.sol/SoftCap";
 import networkControllerAbi from "../../contracts/artifacts/NetworkController.sol/NetworkController";
 import deployments from "../../contracts/deployments/421614.json" assert { type: "json" };
-import {
-  Address,
-  createPublicClient,
-  createWalletClient,
-  getContract,
-  http,
-  WalletClient,
-} from "viem";
+import { Address, createPublicClient, getContract, http } from "viem";
 import { arbitrumSepolia, sepolia } from "viem/chains";
-import { privateKeyToAccount } from "viem/accounts";
 
 function env<T>(
   name: string,
@@ -35,7 +27,7 @@ export const config = {
   tenureEpochCount: Number(env("TENURE_EPOCH_COUNT", 10)),
   workTimeout: Number(env("WORK_TIMEOUT_SECONDS", 300)) * 1000,
   epochConfirmationTime: Number(env("EPOCH_CONFIRMATION_SECONDS", 900)) * 1000,
-  maxEpochsPerCommit: Number(env("MAX_EPOCHS_PER_COMMIT", 10)),
+  maxEpochsPerCommit: Number(env("MAX_EPOCHS_PER_COMMIT", 100)),
   clickhouse: {
     username: env("CLICKHOUSE_USERNAME", "sqd_read"),
     password: env("CLICKHOUSE_PASSWORD"),
@@ -44,7 +36,6 @@ export const config = {
     pingsTableName: env("CLICKHOUSE_PINGS_TABLE", "testnet.worker_pings"),
   },
   network: {
-    privateKey: env("PRIVATE_KEY") as `0x${string}`,
     gasLimit: BigInt(env("GAS_LIMIT", 10_000_000n)),
     l2RpcUrl: env(
       "L2_RPC_URL",
@@ -73,7 +64,7 @@ export const abis = {
   staking: stakingAbi,
   capedStaking: capAbi,
   networkController: networkControllerAbi,
-} as const;
+};
 
 export const publicClient = createPublicClient({
   chain: arbitrumSepolia,
@@ -83,23 +74,12 @@ export const l1Client = createPublicClient({
   chain: sepolia,
   transport: http(),
 });
-export const walletClient = createWalletClient({
-  chain: arbitrumSepolia,
-  transport: http(),
-  account: privateKeyToAccount(config.network.privateKey),
-});
 
-export function contract<T extends ContractName>(
-  name: T,
-  _walletClient: WalletClient = walletClient,
-) {
+export function contract<T extends ContractName>(name: T) {
   return getContract({
     address: addresses[name],
     abi: abis[name].abi,
-    // @ts-ignore
     publicClient,
-    // @ts-ignore
-    walletClient,
   });
 }
 

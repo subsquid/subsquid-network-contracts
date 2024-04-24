@@ -172,11 +172,11 @@ function splitLogs(timestamps: number[], epochRanges: number[]) {
   let index = 1;
   for (const timestamp of sortedTimestamps) {
     while (index < epochRanges.length && timestamp > epochRanges[index]) {
-      splits.at(-1).push(epochRanges[index]);
+      splits.at(-1)!.push(epochRanges[index]);
       splits.push([epochRanges[index]]);
       index++;
     }
-    const lastSplit = splits.at(-1);
+    const lastSplit = splits.at(-1)!;
     lastSplit.push(timestamp);
   }
   return splits;

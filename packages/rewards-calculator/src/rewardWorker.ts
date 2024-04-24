@@ -13,7 +13,7 @@ import {
 import { epochStats } from "./reward";
 import { logger } from "./logger";
 import { addresses, config, contracts, publicClient } from "./config";
-import { parseAbiItem, WalletClient } from "viem";
+import { Hex, parseAbiItem, WalletClient } from "viem";
 import type { Workers } from "./workers";
 
 async function firstRegistrationBlock(registrations: Registrations) {
@@ -34,7 +34,7 @@ export function isEpochConfirmed(epochEnd: Date) {
 
 export class RewardWorker {
   constructor(
-    private walletClient: WalletClient,
+    private address: Hex,
     private index: number,
   ) {}
   public startWorker() {
@@ -44,10 +44,10 @@ export class RewardWorker {
 
   private async commitIfPossible() {
     try {
-      if (await canCommit(this.walletClient)) {
+      if (await canCommit(this.address)) {
         const { fromBlock, toBlock } = await this.commitRange();
         if (await this.canCommit(fromBlock, toBlock)) {
-          logger.log("Can commit", this.walletClient.account.address);
+          logger.log("Can commit", this.address);
           const workers = await epochStats(fromBlock, toBlock);
           await this.tryToCommit(fromBlock, toBlock, workers);
         }
@@ -73,14 +73,9 @@ export class RewardWorker {
   ) {
     const rewards = await workers.rewards();
     try {
-      const tx = await commitRewards(
-        fromBlock,
-        toBlock,
-        rewards,
-        this.walletClient,
-      );
-      workers.noteSuccessfulCommit(tx);
-    } catch (e) {
+      const tx = await commitRewards(fromBlock, toBlock, rewards, this.address);
+      workers.noteSuccessfulCommit(tx ?? "0x");
+    } catch (e: any) {
       if (e.message?.includes("Already approved")) {
         return;
       }
@@ -89,7 +84,7 @@ export class RewardWorker {
     }
 
     await workers.printLogs({
-      walletAddress: this.walletClient.account.address,
+      walletAddress: this.address,
       index: this.index,
     });
   }
@@ -104,13 +99,13 @@ export class RewardWorker {
           ranges.fromBlock,
           ranges.toBlock,
           rewards,
-          this.walletClient,
+          this.address,
         );
         console.log(
           JSON.stringify({
             time: new Date(),
             type: "rewards_approved",
-            bot_wallet: this.walletClient.account.address,
+            bot_wallet: this.address,
             tx_hash: tx,
             from_block: ranges.fromBlock,
             to_block: ranges.toBlock,

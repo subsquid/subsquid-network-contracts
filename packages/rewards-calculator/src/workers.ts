@@ -39,13 +39,13 @@ const YEAR = 365 * 24 * 60 * 60;
 export class Workers {
   private workers: Record<string, Worker> = {};
   private bond = new Decimal(0);
-  private nextDistributionStartBlockNumber: bigint;
+  private nextDistributionStartBlockNumber = 0n;
 
   baseApr = new Decimal(0);
   stakeFactor = new Decimal(0);
   rAPR = new Decimal(0);
-  commitmentTxHash: string;
-  commitmentError: string;
+  commitmentTxHash = "0x";
+  commitmentError = "";
 
   constructor(private clickhouseClient: ClickhouseClient) {}
 
@@ -57,7 +57,7 @@ export class Workers {
     return this.workers[workerId];
   }
 
-  public map<T>(fn: (worker: Worker, index?: number) => T) {
+  public map<T>(fn: (worker: Worker, index: number) => T) {
     return Object.values(this.workers).map(fn);
   }
 
@@ -163,7 +163,7 @@ export class Workers {
     this.map((worker) => worker.getRewards(rMax));
   }
 
-  public noteSuccessfulCommit(txHash: Hex) {
+  public noteSuccessfulCommit(txHash: string) {
     this.commitmentTxHash = txHash;
   }
 
@@ -171,7 +171,13 @@ export class Workers {
     this.commitmentError = error.toString();
   }
 
-  public async printLogs({ walletAddress, index }: { walletAddress: string, index: number }) {
+  public async printLogs({
+    walletAddress,
+    index,
+  }: {
+    walletAddress: string;
+    index: number;
+  }) {
     const target_capacity = await getTargetCapacity(
       this.nextDistributionStartBlockNumber,
     );
@@ -192,7 +198,7 @@ export class Workers {
       this.map((w) => w.workerReward.add(w.stakerReward)),
     );
 
-    const address = walletAddress.toLowerCase()
+    const address = walletAddress.toLowerCase();
     const botId = process.env.BOT_NAME || `bot-${index}`;
     const isCommitSuccess = !!this.commitmentTxHash;
 
@@ -216,8 +222,8 @@ export class Workers {
     );
 
     // If commit is not successful, don't print worker report
-    if(!isCommitSuccess) {
-      return
+    if (!isCommitSuccess) {
+      return;
     }
 
     this.map((worker) =>
@@ -247,7 +253,7 @@ export class Workers {
     TValue extends Worker[TKey],
   >(key: TKey, multicallResult: MulticallResult<TValue>[]) {
     this.map((worker, i) => {
-      worker[key] = multicallResult[i].result;
+      worker[key] = multicallResult[i].result!;
     });
   }
 

@@ -108,7 +108,9 @@ export function verifySignature(
   signature: string,
   peerId: string,
 ) {
-  const publicKey = keys.unmarshalPublicKey(peerIdFromString(peerId).publicKey);
+  const publicKey = keys.unmarshalPublicKey(
+    peerIdFromString(peerId).publicKey!,
+  );
   return publicKey.verify(message, Buffer.from(signature, "hex"));
 }
 

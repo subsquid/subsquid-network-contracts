@@ -8,7 +8,7 @@ Decimal.set({ precision: 28, minE: -9 });
 
 export class Worker {
   private contractId: bigint | undefined;
-  public networkStats: NetworkStatsEntry;
+  public networkStats!: NetworkStatsEntry;
   public bytesSent = 0;
   public chunksRead = 0;
   public trafficWeight = new Decimal(0);
@@ -18,9 +18,9 @@ export class Worker {
   public livenessCoefficient = new Decimal(0);
   public bond = new Decimal(0);
   public actualYield = new Decimal(0);
-  public workerReward: Decimal;
-  public stakerReward: Decimal;
-  public dTenure: Decimal;
+  public workerReward!: Decimal;
+  public stakerReward!: Decimal;
+  public dTenure!: Decimal;
   public requestsProcessed = 0n;
   public totalRequests = 0;
 
