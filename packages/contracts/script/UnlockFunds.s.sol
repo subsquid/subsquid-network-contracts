@@ -66,11 +66,11 @@ contract UnlockFunds is Script {
     for (uint256 i = 0; i < workerIds.length; i++) {
       uint128 deregisteredAt;
       bytes memory peerId;
-      (,peerId,,,deregisteredAt,) = workerReg.workers(workerIds[i]);
+      (, peerId,,, deregisteredAt,) = workerReg.workers(workerIds[i]);
       if (deregisteredAt == 0) {
         console2.log("Deregistering worker ", workerIds[i]);
         workerReg.deregister(peerId);
-        (,,,,deregisteredAt,) = workerReg.workers(workerIds[i]);
+        (,,,, deregisteredAt,) = workerReg.workers(workerIds[i]);
       }
       uint256 deregistrationTime = deregisteredAt + workerReg.lockPeriod();
       if (deregistrationTime > 0 && block.number >= deregistrationTime) {
@@ -94,12 +94,12 @@ contract UnlockFunds is Script {
     for (uint256 i = 0; i < workerIds.length; i++) {
       uint128 deregisteredAt;
       bytes memory peerId;
-      (,peerId,,,deregisteredAt,) = workerReg.workers(workerIds[i]);
+      (, peerId,,, deregisteredAt,) = workerReg.workers(workerIds[i]);
       if (deregisteredAt == 0) {
         console2.log("Deregistering worker ", workerIds[i]);
         bytes memory call = abi.encodeWithSelector(WorkerRegistration.deregister.selector, peerId);
         vesting.execute(address(workerReg), call);
-        (,,,,deregisteredAt,) = workerReg.workers(workerIds[i]);
+        (,,,, deregisteredAt,) = workerReg.workers(workerIds[i]);
       }
       uint256 deregistrationTime = deregisteredAt + workerReg.lockPeriod();
       if (deregistrationTime > 0 && block.number >= deregistrationTime) {

@@ -1,14 +1,15 @@
 import * as crypto from "crypto";
 import fs from "fs";
+import { config } from "../config";
 
 const gatewayHost = "api.fordefi.com";
 
 export async function sendFordefiTransaction(request: any): Promise<string> {
-  const accessToken = process.env.FORDEFI_ACCESS_TOKEN;
+  const accessToken = config.fordefi.accessToken;
 
   const requestBody = JSON.stringify(request);
   const path = "/api/v1/transactions";
-  const privateKeyFile = "./private.pem";
+  const privateKeyFile = config.fordefi.secretPath;
   const timestamp = new Date().getTime();
   const payload = `${path}|${timestamp}|${requestBody}`;
 

@@ -5,3 +5,4 @@ node_modules
 pings.csv
 queries.csv
 stakes.csv
+*.pem

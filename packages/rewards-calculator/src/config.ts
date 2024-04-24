@@ -35,6 +35,11 @@ export const config = {
     logsTableName: env("CLICKHOUSE_LOGS_TABLE", "testnet.worker_query_logs"),
     pingsTableName: env("CLICKHOUSE_PINGS_TABLE", "testnet.worker_pings"),
   },
+  fordefi: {
+    accessToken: env("FORDEFI_ACCESS_TOKEN"),
+    vaultId: env("FORDEFI_VAULT_ID"),
+    secretPath: env("FORDEFI_SECRET_KEY", "./private.pem"),
+  },
   network: {
     gasLimit: BigInt(env("GAS_LIMIT", 10_000_000n)),
     l2RpcUrl: env(
