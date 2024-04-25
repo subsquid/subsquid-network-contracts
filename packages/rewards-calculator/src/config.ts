@@ -27,7 +27,7 @@ export const config = {
   tenureEpochCount: Number(env("TENURE_EPOCH_COUNT", 10)),
   workTimeout: Number(env("WORK_TIMEOUT_SECONDS", 300)) * 1000,
   epochConfirmationTime: Number(env("EPOCH_CONFIRMATION_SECONDS", 900)) * 1000,
-  maxEpochsPerCommit: Number(env("MAX_EPOCHS_PER_COMMIT", 100)),
+  maxEpochsPerCommit: Number(env("MAX_EPOCHS_PER_COMMIT", 10)),
   clickhouse: {
     username: env("CLICKHOUSE_USERNAME", "sqd_read"),
     password: env("CLICKHOUSE_PASSWORD"),

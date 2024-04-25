@@ -74,7 +74,8 @@ export class RewardWorker {
     const rewards = await workers.rewards();
     try {
       const tx = await commitRewards(fromBlock, toBlock, rewards, this.address);
-      workers.noteSuccessfulCommit(tx ?? "0x");
+      if (!tx) return;
+      workers.noteSuccessfulCommit(tx);
     } catch (e: any) {
       if (e.message?.includes("Already approved")) {
         return;

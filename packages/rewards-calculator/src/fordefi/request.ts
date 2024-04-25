@@ -8,7 +8,7 @@ export function fordefiRequest(to: string, data: string, name: string) {
       value: "0",
       gas: {
         type: "priority",
-        priority_level: "medium",
+        priority_level: "low",
       },
       chain: "arbitrum_sepolia",
       data: {

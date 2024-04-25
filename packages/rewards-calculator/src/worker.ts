@@ -113,7 +113,9 @@ export class Worker {
 
     return {
       worker_apr: workerReward.div(bond).mul(duration).toFixed(),
-      delegator_apr: stakerReward.div(this.totalStake).mul(duration).toFixed(),
+      delegator_apr: this.totalStake.eq(0)
+        ? "0"
+        : stakerReward.div(this.totalStake).mul(duration).toFixed(),
     };
   }
 
