@@ -31,7 +31,7 @@ import { config } from "./config";
 import { Rewards } from "./reward";
 
 import Decimal from "decimal.js";
-import { Hex } from "viem";
+
 Decimal.set({ precision: 28, minE: -9 });
 
 const YEAR = 365 * 24 * 60 * 60;
@@ -205,6 +205,7 @@ export class Workers {
     console.log(
       JSON.stringify({
         time: new Date(),
+        epoch_end: this.clickhouseClient.to,
         type: "rewards_report",
         bot_id: botId,
         bot_wallet: address,
@@ -238,8 +239,8 @@ export class Workers {
           s_i: worker.stakeWeight(stakeSum).toFixed(),
           r_i: worker.actualYield.toFixed(),
           ...worker.apr(duration, YEAR),
-          worker_reward: worker.workerReward.toFixed(),
-          staker_reward: worker.stakerReward.toFixed(),
+          worker_reward: worker.workerReward.toFixed(0),
+          staker_reward: worker.stakerReward.toFixed(0),
           stake: worker.stake.toFixed(),
           bytes_sent: worker.bytesSent,
           chunks_read: worker.chunksRead,
