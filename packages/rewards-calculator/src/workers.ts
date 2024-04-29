@@ -44,7 +44,7 @@ export class Workers {
   baseApr = new Decimal(0);
   stakeFactor = new Decimal(0);
   rAPR = new Decimal(0);
-  commitmentTxHash = "0x";
+  commitmentTxHash = "";
   commitmentError = "";
 
   constructor(private clickhouseClient: ClickhouseClient) {}
@@ -200,7 +200,7 @@ export class Workers {
 
     const address = walletAddress.toLowerCase();
     const botId = process.env.BOT_NAME || `bot-${index}`;
-    const isCommitSuccess = !!this.commitmentTxHash;
+    const isCommitSuccess = !this.commitmentError;
 
     console.log(
       JSON.stringify({
