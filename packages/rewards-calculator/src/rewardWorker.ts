@@ -47,9 +47,11 @@ export class RewardWorker {
       if (await canCommit(this.address)) {
         const { fromBlock, toBlock } = await this.commitRange();
         if (await this.canCommit(fromBlock, toBlock)) {
-          logger.log("Can commit", this.address);
+          console.log("Can commit", this.address);
           const workers = await epochStats(fromBlock, toBlock);
           await this.tryToCommit(fromBlock, toBlock, workers);
+        } else {
+          console.log("Nothing to commit", this.address);
         }
       }
     } catch (e) {
