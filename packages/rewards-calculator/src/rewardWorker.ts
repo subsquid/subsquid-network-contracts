@@ -55,7 +55,7 @@ export class RewardWorker {
         }
       }
     } catch (e) {
-      logger.error(e);
+      console.log(e);
     }
     setTimeout(() => this.commitIfPossible(), config.workTimeout);
   }
@@ -83,7 +83,7 @@ export class RewardWorker {
         return;
       }
       workers.noteFailedCommit(e);
-      logger.error(e);
+      console.log(e);
     }
 
     await workers.printLogs({
@@ -116,7 +116,7 @@ export class RewardWorker {
         );
       }
     } catch (e) {
-      logger.error(e);
+      console.log(e);
     }
     setTimeout(() => this.approveIfNecessary(), config.workTimeout);
   }

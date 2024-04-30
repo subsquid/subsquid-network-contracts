@@ -8,7 +8,7 @@ Decimal.set({ precision: 28, minE: -9 });
 
 export class Worker {
   private contractId: bigint | undefined;
-  public networkStats!: NetworkStatsEntry;
+  public networkStats: NetworkStatsEntry | undefined;
   public bytesSent = 0;
   public chunksRead = 0;
   public trafficWeight = new Decimal(0);
