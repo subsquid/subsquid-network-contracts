@@ -1,4 +1,11 @@
-import { abis, addresses, contracts, l1Client, publicClient } from "./config";
+import {
+  abis,
+  addresses,
+  config,
+  contracts,
+  l1Client,
+  publicClient,
+} from "./config";
 import {
   ContractFunctionConfig,
   encodeFunctionData,
@@ -49,6 +56,9 @@ export async function currentApy(blockNumber?: bigint) {
 }
 
 export async function epochLength(blockNumber?: bigint) {
+  if (config.rewardEpochLength) {
+    return config.rewardEpochLength;
+  }
   return Number(
     await contracts.workerRegistration.read.epochLength({ blockNumber }),
   );

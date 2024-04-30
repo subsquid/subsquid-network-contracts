@@ -3,6 +3,7 @@ import {
   canCommit,
   commitRewards,
   epochLength,
+  getBlockNumber,
   getBlockTimestamp,
   getRegistrations,
   isCommitted,
@@ -11,9 +12,8 @@ import {
   Registrations,
 } from "./chain";
 import { epochStats } from "./reward";
-import { logger } from "./logger";
 import { addresses, config, contracts, publicClient } from "./config";
-import { Hex, parseAbiItem, WalletClient } from "viem";
+import { Hex, parseAbiItem } from "viem";
 import type { Workers } from "./workers";
 
 async function firstRegistrationBlock(registrations: Registrations) {
@@ -22,37 +22,26 @@ async function firstRegistrationBlock(registrations: Registrations) {
   );
 }
 
-function getEpochStart(blockNumber: number, epochLength: number) {
-  return Math.floor(blockNumber / epochLength) * epochLength;
-}
-
-export function isEpochConfirmed(epochEnd: Date) {
-  return (
-    new Date().valueOf() - epochEnd.valueOf() > config.epochConfirmationTime
-  );
-}
-
-export class RewardWorker {
+export class RewardBot {
   constructor(
     private address: Hex,
     private index: number,
   ) {}
-  public startWorker() {
+  public startBot() {
     this.commitIfPossible();
     this.approveIfNecessary();
   }
 
   private async commitIfPossible() {
     try {
-      if (await canCommit(this.address)) {
-        const { fromBlock, toBlock } = await this.commitRange();
-        if (await this.canCommit(fromBlock, toBlock)) {
-          console.log("Can commit", this.address);
-          const workers = await epochStats(fromBlock, toBlock);
-          await this.tryToCommit(fromBlock, toBlock, workers);
-        } else {
-          console.log("Nothing to commit", this.address);
-        }
+      const { fromBlock, toBlock } = await this.commitRange();
+
+      if (await this.canCommit(fromBlock, toBlock)) {
+        console.log("Can commit", this.address);
+        const workers = await epochStats(fromBlock, toBlock);
+        await this.tryToCommit(fromBlock, toBlock, workers);
+      } else {
+        console.log("Nothing to commit", this.address);
       }
     } catch (e) {
       console.log(e);
@@ -63,7 +52,7 @@ export class RewardWorker {
   private async canCommit(fromBlock: number, toBlock: number) {
     return (
       fromBlock < toBlock &&
-      isEpochConfirmed(await getBlockTimestamp(toBlock)) &&
+      (await canCommit(this.address)) &&
       !(await isCommitted(fromBlock, toBlock))
     );
   }
@@ -80,6 +69,9 @@ export class RewardWorker {
       workers.noteSuccessfulCommit(tx);
     } catch (e: any) {
       if (e.message?.includes("Already approved")) {
+        return;
+      }
+      if (e.message?.includes("not all blocks covered")) {
         return;
       }
       workers.noteFailedCommit(e);
@@ -130,12 +122,16 @@ export class RewardWorker {
         await getRegistrations(),
       );
     }
-    let currentEpochStart = (await nextEpoch()) - epochLen;
-    if (currentEpochStart - _lastRewardedBlock - 1 > maxCommitBlocksCovered) {
-      currentEpochStart = _lastRewardedBlock + maxCommitBlocksCovered;
+    const currentBlock = await getBlockNumber();
+    const lastConfirmedBlock = currentBlock - config.epochConfirmationBlocks;
+    if (lastConfirmedBlock - _lastRewardedBlock < epochLen) {
+      return { fromBlock: 0, toBlock: 0 };
     }
+    const toBlock = Math.min(
+      _lastRewardedBlock + maxCommitBlocksCovered,
+      lastConfirmedBlock,
+    );
     const fromBlock = _lastRewardedBlock + 1;
-    const toBlock = currentEpochStart - 1;
     return { fromBlock, toBlock };
   }
 }

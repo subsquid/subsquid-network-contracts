@@ -11,7 +11,7 @@ import {
 } from "viem";
 import { arbitrumSepolia } from "viem/chains";
 import { logger } from "./logger";
-import { RewardWorker } from "./rewardWorker";
+import { RewardBot } from "./rewardBot";
 import { getVaultAddress } from "./fordefi/getAddress";
 
 async function transferFundsIfNecessary(
@@ -36,8 +36,8 @@ async function transferFundsIfNecessary(
   }
 }
 
-export async function startWorker(index: number) {
+export async function startBot(index: number) {
   const address = await getVaultAddress();
-  const worker = new RewardWorker(address, index);
-  worker.startWorker();
+  const bot = new RewardBot(address, index);
+  bot.startBot();
 }

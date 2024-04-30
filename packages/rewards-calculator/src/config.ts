@@ -26,8 +26,9 @@ export const config = {
   requestPrice: BigInt(env("REQUEST_PRICE", 1n)),
   tenureEpochCount: Number(env("TENURE_EPOCH_COUNT", 10)),
   workTimeout: Number(env("WORK_TIMEOUT_SECONDS", 300)) * 1000,
-  epochConfirmationTime: Number(env("EPOCH_CONFIRMATION_SECONDS", 900)) * 1000,
-  maxEpochsPerCommit: Number(env("MAX_EPOCHS_PER_COMMIT", 10)),
+  rewardEpochLength: Number(env("REWARD_EPOCH_LENGTH_BLOCKS", 7000)),
+  epochConfirmationBlocks: Number(env("EPOCH_CONFIRMATION_BLOCKS", 150)),
+  maxEpochsPerCommit: Number(env("MAX_EPOCHS_PER_COMMIT", 1)),
   clickhouse: {
     username: env("CLICKHOUSE_USERNAME", "sqd_read"),
     password: env("CLICKHOUSE_PASSWORD"),
