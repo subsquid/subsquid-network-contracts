@@ -1,4 +1,4 @@
-name: Build reclaim image
+name: Build balance monitor
 on:
   workflow_dispatch:
 
