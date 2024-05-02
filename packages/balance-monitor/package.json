@@ -1,0 +1,19 @@
+{
+  "name": "@subsquid-network/balance-monitor",
+  "version": "0.0.1",
+  "type": "module",
+  "engines": {
+    "node": ">=16"
+  },
+  "dependencies": {
+    "viem": "^2.9.31"
+  },
+  "scripts": {
+    "start": "TS_NODE_TRANSPILE_ONLY=true NODE_OPTIONS=\"--loader ts-node/esm\" ts-node src/index.ts",
+    "build": "tsc --outDir dist"
+  },
+  "devDependencies": {
+    "@types/node": "^20.12.8",
+    "typescript": "^5.4.5"
+  }
+}
