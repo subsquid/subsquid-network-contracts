@@ -31,5 +31,4 @@ jobs:
           push: true
           context: packages/balance-monitor
           platforms: linux/amd64,linux/arm64,linux/arm/v7,linux/arm/v8,windows/amd64
-          file: packages/contracts/Dockerfile
           tags: subsquid/balance-monitor:latest
