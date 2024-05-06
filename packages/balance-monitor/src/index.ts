@@ -76,7 +76,7 @@ app.listen(port, () => {
 });
 
 const balanceGauge = new promClient.Gauge({
-  name: "sqd_wallet_ballance",
+  name: "sqd_wallet_balance",
   help: "Balance of the wallet",
   labelNames: ["wallet", "token"],
 });
