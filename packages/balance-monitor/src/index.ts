@@ -1,5 +1,7 @@
 import { createPublicClient, formatEther, http, parseAbi } from "viem";
 import { arbitrum, arbitrumSepolia } from "viem/chains";
+import express from "express";
+import promClient from "prom-client";
 
 if (!process.env.RPC_URL) {
   throw new Error("RPC_URL is not set");
@@ -60,7 +62,26 @@ const tokenMulticalls = sqdBalanceWallets.map(
     }) as const,
 );
 
-const getBalances = async () => {
+// start express server with /metrics endpoint
+const app = express();
+const port = process.env.PORT ?? 3000;
+
+app.get("/metrics", async (_, res) => {
+  res.set("Content-Type", promClient.register.contentType);
+  res.end(await promClient.register.metrics());
+});
+
+app.listen(port, () => {
+  console.log(`Server listening at ${port}`);
+});
+
+const balanceGauge = new promClient.Gauge({
+  name: "sqd_wallet_ballance",
+  help: "Balance of the wallet",
+  labelNames: ["wallet", "token"],
+});
+
+const updateMetrics = async () => {
   const balances =
     (await client
       .multicall({
@@ -72,29 +93,23 @@ const getBalances = async () => {
   for (const balance of balances) {
     if (balance.status === "success") {
       if (i < ethMulticalls.length) {
-        console.log(
-          JSON.stringify({
-            address: ethBalanceWallets[i],
-            ethBalance: formatEther(balance.result),
-            timestamp,
-          }),
+        balanceGauge.set(
+          { wallet: ethBalanceWallets[i], token: "ETH" },
+          Number(formatEther(balance.result)),
         );
       } else {
-        console.log(
-          JSON.stringify({
-            address: sqdBalanceWallets[i - ethMulticalls.length],
-            sqdBalance: formatEther(balance.result),
-            timestamp,
-          }),
+        balanceGauge.set(
+          { wallet: sqdBalanceWallets[i - ethMulticalls.length], token: "SQD" },
+          Number(formatEther(balance.result)),
         );
       }
     }
     i++;
   }
   setTimeout(
-    getBalances,
+    updateMetrics,
     1000 * 60 * Number(process.env.INTERVAL_MINUTES ?? 120),
   );
 };
 
-void getBalances();
+void updateMetrics();
