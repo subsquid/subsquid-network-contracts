@@ -43,11 +43,30 @@ pnpm run test
 
 ### Deployed contracts
 
-#### Sepolia
+#### Ethereum Mainnet
 
 | Contract name | Address                                                                                                                     |
-|---------------|-----------------------------------------------------------------------------------------------------------------------------|
-| **tSQD**      | [0xb0571a833fc49442c030e27295f33049d9e5443b](https://sepolia.etherscan.io/token/0xb0571a833fc49442c030e27295f33049d9e5443b) |
+|--------------|-----------------------------------------------------------------------------------------------------------------------------|
+| **SQD**      | [0x1337420dED5ADb9980CFc35f8f2B054ea86f8aB1](https://etherscan.io/token/0x1337420dED5ADb9980CFc35f8f2B054ea86f8aB1) |
+
+#### Arbitrum
+
+| Contract name                      | Address.                                                                                                                     |
+|------------------------------------|------------------------------------------------------------------------------------------------------------------------------|
+| **SQD**                            | [0x1337420dED5ADb9980CFc35f8f2B054ea86f8aB1](https://arbiscan.io/token/0x1337420dED5ADb9980CFc35f8f2B054ea86f8aB1)   |
+| **Router**                         | [0x67F56D27dab93eEb07f6372274aCa277F49dA941](https://arbiscan.io/address/0x67F56D27dab93eEb07f6372274aCa277F49dA941) |
+| **NetworkController**              | [0x4cf58097d790b193d22ed633bf8b15c9bc4f0da7](https://arbiscan.io/address/0x4cf58097d790b193d22ed633bf8b15c9bc4f0da7) |
+| **Staking**                        | [0xb31a0d39d2c69ed4b28d96e12cbf52c5f9ac9a51](https://arbiscan.io/address/0xb31a0d39d2c69ed4b28d96e12cbf52c5f9ac9a51) |
+| **WorkerRegistration**             | [0x36e2b147db67e76ab67a4d07c293670ebefcae4e](https://arbiscan.io/address/0x36e2b147db67e76ab67a4d07c293670ebefcae4e) |
+| **RewardTreasury**                 | [0x237abf43bc51fd5c50d0d598a1a4c26e56a8a2a0](https://arbiscan.io/address/0x237abf43bc51fd5c50d0d598a1a4c26e56a8a2a0) |
+| **DistributedRewardsDistribution** | [0xab690da5815659fe94f08f73e870d91a4d376d8f](https://arbiscan.io/address/0xab690da5815659fe94f08f73e870d91a4d376d8f) |
+| **GatewayRegistry**                | [0x8a90a1ce5fa8cf71de9e6f76b7d3c0b72feb8c4b](https://arbiscan.io/address/0x8a90a1ce5fa8cf71de9e6f76b7d3c0b72feb8c4b) |
+| **SoftCap**                        | [0xde29d5215c28036ce56091ea91038c94c84c87d0](https://arbiscan.io/address/0xde29d5215c28036ce56091ea91038c94c84c87d0) |
+| **EqualStrategy**                  | [0xa604f84c9c59e223b12c831b35723aa0d7277f8b](https://arbiscan.io/address/0xa604f84c9c59e223b12c831b35723aa0d7277f8b) |
+| **SubequalStrategy**               | [0xf197094d96f45325ee8bd2c43c5d25c05d66ab62](https://arbiscan.io/address/0xf197094d96f45325ee8bd2c43c5d25c05d66ab62) |
+| **AllocationsViewer**              | [0x88ce6d8d70df9fe049315fd9d6c3d59108c15c4c](https://arbiscan.io/address/0x88ce6d8d70df9fe049315fd9d6c3d59108c15c4c) |
+| **VestingFactory**                 | [0x1f8f83cd76baeca1cb5c064ad59203c82b4e4ece](https://arbiscan.io/address/0x1f8f83cd76baeca1cb5c064ad59203c82b4e4ece) |
+| **TemporaryHoldingFactory**        | [0x14926ebf05a904b8e2e2bf05c10ecca9a54d8d0d](https://arbiscan.io/address/0x14926ebf05a904b8e2e2bf05c10ecca9a54d8d0d) |
 
 #### Arbitrum-sepolia
 
