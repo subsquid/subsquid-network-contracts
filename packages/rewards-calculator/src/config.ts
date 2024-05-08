@@ -5,9 +5,10 @@ import rewardsDistributionAbi from "../../contracts/artifacts/DistributedRewardD
 import stakingAbi from "../../contracts/artifacts/Staking.sol/Staking";
 import capAbi from "../../contracts/artifacts/SoftCap.sol/SoftCap";
 import networkControllerAbi from "../../contracts/artifacts/NetworkController.sol/NetworkController";
-import deployments from "../../contracts/deployments/421614.json" assert { type: "json" };
+import SepoliaDeployments from "../../contracts/deployments/421614.json" assert { type: "json" };
+import ArbitrumDeployments from "../../contracts/deployments/42161.json" assert { type: "json" };
 import { Address, createPublicClient, getContract, http } from "viem";
-import { arbitrumSepolia, sepolia } from "viem/chains";
+import { arbitrum, arbitrumSepolia, mainnet, sepolia } from "viem/chains";
 
 function env<T>(
   name: string,
@@ -43,6 +44,7 @@ export const config = {
   },
   network: {
     gasLimit: BigInt(env("GAS_LIMIT", 10_000_000n)),
+    networkName: env<"sepolia" | "mainnet">("NETWORK_NAME", "sepolia"),
     l2RpcUrl: env(
       "L2_RPC_URL",
       "https://arbitrum-sepolia.infura.io/v3/39b9cd000b9c4637b58d5a5214676196",
@@ -52,15 +54,25 @@ export const config = {
 
 export type ContractName = keyof typeof abis;
 
+const deployments =
+  config.network.networkName === "sepolia"
+    ? SepoliaDeployments
+    : ArbitrumDeployments;
+
 export const addresses = {
   workerRegistration: deployments.WorkerRegistration,
-  SQD: deployments.tSQDArbitrum,
+  SQD: deployments.SQD,
   rewardCalculation: deployments.RewardCalculation,
   rewardsDistribution: deployments.DistributedRewardsDistribution,
   staking: deployments.Staking,
   capedStaking: deployments.SoftCap,
   networkController: deployments.NetworkController,
 } as { [key in ContractName]: Address };
+
+const l1Chain = config.network.networkName === "sepolia" ? sepolia : mainnet;
+
+const l2Chain =
+  config.network.networkName === "sepolia" ? arbitrumSepolia : arbitrum;
 
 export const abis = {
   workerRegistration: workerRegistrationAbi,
@@ -73,11 +85,11 @@ export const abis = {
 };
 
 export const publicClient = createPublicClient({
-  chain: arbitrumSepolia,
+  chain: l2Chain,
   transport: http(config.network.l2RpcUrl),
 });
 export const l1Client = createPublicClient({
-  chain: sepolia,
+  chain: l1Chain,
   transport: http(),
 });
 
