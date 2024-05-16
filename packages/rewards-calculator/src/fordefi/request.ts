@@ -1,4 +1,11 @@
+import { config } from "../config";
+
 export function fordefiRequest(to: string, data: string, name: string) {
+  const chain =
+    config.network.networkName === "sepolia"
+      ? "arbitrum_sepolia"
+      : "armitrum_mainnet";
+
   return {
     signer_type: "api_signer",
     type: "evm_transaction",
@@ -10,7 +17,8 @@ export function fordefiRequest(to: string, data: string, name: string) {
         type: "priority",
         priority_level: "low",
       },
-      chain: "arbitrum_sepolia",
+      fail_on_prediction_failure: false,
+      chain,
       data: {
         type: "hex",
         hex_data: data,
