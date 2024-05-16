@@ -36,6 +36,9 @@ importers:
 
   packages/contracts:
     dependencies:
+      '@openzeppelin/merkle-tree':
+        specifier: ^1.0.6
+        version: 1.0.6
       bs58:
         specifier: ^5.0.0
         version: 5.0.0
@@ -955,6 +958,9 @@ packages:
   '@opentelemetry/api@1.8.0':
     resolution: {integrity: sha512-I/s6F7yKUDdtMsoBWXJe8Qz40Tui5vsuKCWJEWVL+5q9sSWRzzx6v2KeNsOBEwd94j0eWkpWCH4yB6rZg9Mf0w==}
     engines: {node: '>=8.0.0'}
+
+  '@openzeppelin/merkle-tree@1.0.6':
+    resolution: {integrity: sha512-cGWOb2WBWbJhqvupzxjnKAwGLxxAEYPg51sk76yZ5nVe5D03mw7Vx5yo8llaIEqYhP5O39M8QlrNWclgLfKVrA==}
 
   '@parcel/watcher-android-arm64@2.4.1':
     resolution: {integrity: sha512-LOi/WTbbh3aTn2RYddrO8pnapixAziFl6SMxHM69r3tvdSm94JtCenaKgk1GRg5FJ5wpMCpHeW+7yqPlvZv7kg==}
@@ -7684,6 +7690,11 @@ snapshots:
       hardhat: 2.22.3(bufferutil@4.0.8)(ts-node@10.9.2(@types/node@18.19.31)(typescript@5.4.5))(typescript@5.4.5)(utf-8-validate@5.0.10)
 
   '@opentelemetry/api@1.8.0': {}
+
+  '@openzeppelin/merkle-tree@1.0.6':
+    dependencies:
+      '@ethersproject/abi': 5.7.0
+      ethereum-cryptography: 1.2.0
 
   '@parcel/watcher-android-arm64@2.4.1':
     optional: true
