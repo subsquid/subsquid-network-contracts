@@ -92,18 +92,34 @@ export function App() {
               value={fromBip(data.networkController.yearlyRewardCapCoefficient)}
             />
           </Section>
-          <Section title="Staking">
-            <Pair label="Max Delegations" value={data.staking.maxDelegations} />
-          </Section>
-          <Section title="Reward Calculation">
+          <Section title="Rewards">
+            <Pair
+              label="TVL"
+              value={formatToken(data.rewardCalc.effectiveTVL)}
+            />
             <Pair
               label="Current APY"
               value={fromBip(data.rewardCalc.currentApy)}
             />
+            <Pair
+              label="Projected daily rewards amount"
+              value={dailyReward(
+                data.rewardCalc.effectiveTVL,
+                data.rewardCalc.currentApy,
+              )}
+            />
             <Pair label="APY Cap" value={fromBip(data.rewardCalc.apyCap)} />
+          </Section>
+          <Section title="Staking">
+            <Pair label="Max Delegations" value={data.staking.maxDelegations} />
           </Section>
         </div>
       </div>
     </main>
   );
+}
+
+function dailyReward(tvl?: bigint, apy?: bigint) {
+  if (tvl === undefined || !apy) return "";
+  return formatToken((tvl * apy) / 10000n / 365n);
 }

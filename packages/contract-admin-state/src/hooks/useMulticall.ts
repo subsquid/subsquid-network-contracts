@@ -62,6 +62,10 @@ export function useMulticall() {
         ...rewardCalcContractConfig,
         functionName: "apyCap",
       },
+      {
+        ...rewardCalcContractConfig,
+        functionName: "effectiveTVL",
+      },
     ],
   });
 
@@ -88,6 +92,7 @@ export function useMulticall() {
     maxDelegations,
     currentApy,
     apyCap,
+    effectiveTVL,
   ] = data;
 
   return {
@@ -111,6 +116,7 @@ export function useMulticall() {
     rewardCalc: {
       currentApy,
       apyCap,
+      effectiveTVL,
     },
   };
 }
