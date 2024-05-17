@@ -1,0 +1,33 @@
+{
+  "name": "@subsquid-network/contract-admin-state",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "dev": "node_modules/.bin/vite",
+    "build": "node_modules/.bin/tsc && vite build",
+    "preview": "node_modules/.bin/vite preview",
+    "predeploy": "pnpm run build",
+    "deploy": "gh-pages -d dist",
+    "lint:fix": "prettier --write \"src/**/*.{js,jsx,ts,tsx,json,css,scss,md}\""
+  },
+  "dependencies": {
+    "@tanstack/react-query": "^5.36.2",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "viem": "^2.10.9",
+    "wagmi": "^2.9.2"
+  },
+  "devDependencies": {
+    "@types/react": "^18.0.9",
+    "@types/react-dom": "^18.0.3",
+    "@vitejs/plugin-react": "^4.0.0",
+    "autoprefixer": "^10.4.16",
+    "gh-pages": "^6.0.0",
+    "postcss": "^8.4.31",
+    "prettier": "^3.0.3",
+    "prettier-plugin-tailwindcss": "^0.5.6",
+    "tailwindcss": "^3.3.3",
+    "typescript": "^5.4.5",
+    "vite": "^5.2.11"
+  }
+}
