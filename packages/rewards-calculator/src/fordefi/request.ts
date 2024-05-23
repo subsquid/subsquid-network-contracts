@@ -4,7 +4,7 @@ export function fordefiRequest(to: string, data: string, name: string) {
   const chain =
     config.network.networkName === "sepolia"
       ? "arbitrum_sepolia"
-      : "armitrum_mainnet";
+      : "arbitrum_mainnet";
 
   return {
     signer_type: "api_signer",
