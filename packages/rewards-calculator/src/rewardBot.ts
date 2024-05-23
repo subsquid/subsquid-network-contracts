@@ -15,6 +15,7 @@ import { epochStats } from "./reward";
 import { addresses, config, contracts, publicClient } from "./config";
 import { Hex, parseAbiItem } from "viem";
 import type { Workers } from "./workers";
+import { logger } from "./logger";
 
 async function firstRegistrationBlock(registrations: Registrations) {
   return Math.min(
@@ -27,7 +28,9 @@ export class RewardBot {
     private address: Hex,
     private index: number,
   ) {}
+
   public startBot() {
+    logger.workerAddress = this.address;
     this.commitIfPossible();
     this.approveIfNecessary();
   }
@@ -96,16 +99,18 @@ export class RewardBot {
           rewards,
           this.address,
         );
-        console.log(
-          JSON.stringify({
-            time: new Date(),
-            type: "rewards_approved",
-            bot_wallet: this.address,
-            tx_hash: tx,
-            from_block: ranges.fromBlock,
-            to_block: ranges.toBlock,
-          }),
-        );
+        if (tx) {
+          console.log(
+            JSON.stringify({
+              time: new Date(),
+              type: "rewards_approved",
+              bot_wallet: this.address,
+              tx_hash: tx,
+              from_block: ranges.fromBlock,
+              to_block: ranges.toBlock,
+            }),
+          );
+        }
       }
     } catch (e) {
       console.log(e);
