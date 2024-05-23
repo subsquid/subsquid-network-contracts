@@ -191,9 +191,8 @@ async function sendApproveRequest(
   stakedAmounts: bigint[],
 ) {
   const data = encodeFunctionData({
-    // @ts-ignore
-    abi: abis.rewardsDistribution.abi,
-    function: "approve",
+    abi: contracts.rewardsDistribution.abi,
+    functionName: "approve",
     args: [fromBlock, toBlock, workerIds, rewardAmounts, stakedAmounts],
   });
   const request = fordefiRequest(
