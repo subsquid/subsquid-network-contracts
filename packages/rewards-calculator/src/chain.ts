@@ -1,20 +1,13 @@
-import {
-  abis,
-  addresses,
-  config,
-  contracts,
-  l1Client,
-  publicClient,
-} from "./config";
+import { addresses, config, contracts, l1Client, publicClient } from "./config";
 import {
   ContractFunctionConfig,
   encodeFunctionData,
+  formatEther,
   Hex,
   parseAbiItem,
-  WalletClient,
 } from "viem";
 import { logger } from "./logger";
-import { fromBase58 } from "./utils";
+import { bigSum, fromBase58 } from "./utils";
 import { Rewards } from "./reward";
 import { Workers } from "./workers";
 import { fordefiRequest } from "./fordefi/request";
@@ -154,10 +147,14 @@ async function sendCommitRequest(
     functionName: "commit",
     args: [fromBlock, toBlock, workerIds, rewardAmounts, stakedAmounts],
   });
+  const totalWorkers = workerIds.length;
+  const totalWorkerReward = formatEther(bigSum(rewardAmounts));
+  const totalStarkerReward = formatEther(bigSum(stakedAmounts));
   const request = fordefiRequest(
     contracts.rewardsDistribution.address,
     data,
-    "Reward commit",
+    `Reward commit, blocks ${fromBlock} - ${toBlock}\n${totalWorkers} workers rewarded.
+Worker reward: ${totalWorkerReward} SQD;\nStaker reward: ${totalStarkerReward} SQD`,
   );
   return sendFordefiTransaction(request);
 }
