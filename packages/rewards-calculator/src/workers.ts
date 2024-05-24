@@ -205,6 +205,7 @@ export class Workers {
     console.log(
       JSON.stringify({
         time: new Date(),
+        epoch_start: this.clickhouseClient.from,
         epoch_end: this.clickhouseClient.to,
         type: "rewards_report",
         bot_id: botId,
