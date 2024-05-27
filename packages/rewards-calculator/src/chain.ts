@@ -45,17 +45,18 @@ export async function getLatestDistributionBlock() {
 }
 
 export async function currentApy(activeWorkers: number, blockNumber?: bigint) {
-  const target = await contracts.networkController.read.targetCapacityGb({
-    blockNumber,
-  });
-  const storagePerWorker =
-    await contracts.networkController.read.storagePerWorkerInGb({
-      blockNumber,
-    });
-  return contracts.rewardCalculation.read.apy(
-    [target, BigInt(activeWorkers) * storagePerWorker],
-    { blockNumber },
-  );
+  return 2000n;
+  // const target = await contracts.networkController.read.targetCapacityGb({
+  //   blockNumber,
+  // });
+  // const storagePerWorker =
+  //   await contracts.networkController.read.storagePerWorkerInGb({
+  //     blockNumber,
+  //   });
+  // return contracts.rewardCalculation.read.apy(
+  //   [target, BigInt(activeWorkers) * storagePerWorker],
+  //   { blockNumber },
+  // );
 }
 
 export async function epochLength(blockNumber?: bigint) {
