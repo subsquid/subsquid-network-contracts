@@ -152,7 +152,10 @@ export class Workers {
       dayjs(this.clickhouseClient.from),
       "second",
     );
-    const baseApr = await currentApy(this.nextDistributionStartBlockNumber);
+    const baseApr = await currentApy(
+      this.count(),
+      this.nextDistributionStartBlockNumber,
+    );
     this.baseApr = new Decimal(baseApr.toString());
 
     this.stakeFactor = this.calculateStakeFactor();
@@ -290,7 +293,7 @@ export class Workers {
       "second",
     );
     const apy = bigIntToDecimal(
-      await currentApy(this.nextDistributionStartBlockNumber),
+      await currentApy(this.count(), this.nextDistributionStartBlockNumber),
     );
     return apy.mul(this.totalSupply()).mul(duration).div(YEAR).div(10_000);
   }

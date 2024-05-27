@@ -44,8 +44,18 @@ export async function getLatestDistributionBlock() {
   return BigInt(maxBlock);
 }
 
-export async function currentApy(blockNumber?: bigint) {
-  return await contracts.rewardCalculation.read.currentApy({ blockNumber });
+export async function currentApy(activeWorkers: number, blockNumber?: bigint) {
+  const target = await contracts.networkController.read.targetCapacityGb({
+    blockNumber,
+  });
+  const storagePerWorker =
+    await contracts.networkController.read.storagePerWorkerInGb({
+      blockNumber,
+    });
+  return contracts.rewardCalculation.read.apy(
+    [target, BigInt(activeWorkers) * storagePerWorker],
+    { blockNumber },
+  );
 }
 
 export async function epochLength(blockNumber?: bigint) {
