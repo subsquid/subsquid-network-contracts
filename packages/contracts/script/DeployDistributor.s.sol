@@ -28,7 +28,8 @@ contract DeployDistributor is Script {
 
     Staking staking = Staking(0xB31a0D39D2C69Ed4B28d96E12cbf52C5f9Ac9a51);
     RewardTreasury treasury = RewardTreasury(0x237Abf43bc51fd5c50d0D598A1A4c26E56a8A2A0);
-    DistributedRewardsDistribution oldDistributor = DistributedRewardsDistribution(0xab690dA5815659Fe94f08F73E870D91a4d376d8f);
+    DistributedRewardsDistribution oldDistributor =
+      DistributedRewardsDistribution(0xab690dA5815659Fe94f08F73E870D91a4d376d8f);
     DistributedRewardsDistribution distributor = new DistributedRewardsDistribution(oldDistributor.router());
     staking.grantRole(staking.REWARDS_DISTRIBUTOR_ROLE(), address(distributor));
     staking.revokeRole(staking.REWARDS_DISTRIBUTOR_ROLE(), address(oldDistributor));
