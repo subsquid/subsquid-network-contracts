@@ -60,7 +60,7 @@ export class ClickhouseClient {
       config.clickhouse.logsTableName
     }.worker_timestamp >= '${formatDate(this.from)}' and ${
       config.clickhouse.logsTableName
-    }.worker_timestamp <= '${formatDate(this.to)}'`;
+    }.worker_timestamp <= '${formatDate(this.to)}' order by query_hash`;
     for await (const row of clickhouse.query(query).stream()) {
       const worker = this.workers.add(row.worker_id);
       await worker.processQuery(row);

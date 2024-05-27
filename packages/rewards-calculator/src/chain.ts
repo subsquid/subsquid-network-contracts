@@ -200,11 +200,40 @@ async function sendApproveRequest(
   return sendFordefiTransaction(request);
 }
 
+async function tryToRecommit(
+  fromBlock: number,
+  toBlock: number,
+  rewards: Rewards,
+  address: Hex,
+  commitment?: Hex,
+) {
+  if (!commitment) return;
+  if (
+    await contracts.rewardsDistribution.read.alreadyApproved([
+      commitment,
+      address,
+    ])
+  ) {
+    return;
+  }
+  const { workerIds, rewardAmounts, stakedAmounts } = rewardsToTxArgs(rewards);
+  const tx = await sendCommitRequest(
+    BigInt(fromBlock),
+    BigInt(toBlock),
+    workerIds,
+    rewardAmounts,
+    stakedAmounts,
+  );
+  logger.log("Recommit rewards", tx);
+  return tx;
+}
+
 export async function approveRewards(
   fromBlock: number,
   toBlock: number,
   rewards: Rewards,
   address: Hex,
+  commitment?: Hex,
 ) {
   const { workerIds, rewardAmounts, stakedAmounts } = rewardsToTxArgs(rewards);
   if (
@@ -217,7 +246,14 @@ export async function approveRewards(
       stakedAmounts,
     ]))
   ) {
-    logger.log("Cannot approve rewards", address);
+    const tx = await tryToRecommit(
+      fromBlock,
+      toBlock,
+      rewards,
+      address,
+      commitment,
+    );
+    if (!tx) logger.log("Cannot approve rewards", address);
     return;
   }
   const tx = await sendApproveRequest(

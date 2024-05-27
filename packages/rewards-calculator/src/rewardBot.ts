@@ -98,6 +98,7 @@ export class RewardBot {
           ranges.toBlock,
           rewards,
           this.address,
+          ranges.commitment,
         );
         if (tx) {
           console.log(
@@ -149,6 +150,7 @@ async function approveRanges(): Promise<
       shouldApprove: true;
       fromBlock: number;
       toBlock: number;
+      commitment?: Hex;
     }
 > {
   const commitmentBlocks = (
@@ -159,10 +161,11 @@ async function approveRanges(): Promise<
       ),
       fromBlock: 1n,
     })
-  ).map(({ args: { fromBlock, toBlock }, blockNumber }) => ({
+  ).map(({ args: { fromBlock, toBlock, commitment }, blockNumber }) => ({
     fromBlock: Number(fromBlock),
     toBlock: Number(toBlock),
     blockNumber: Number(blockNumber),
+    commitment,
   }));
 
   if (commitmentBlocks.length === 0) {
