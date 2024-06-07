@@ -87,10 +87,16 @@ export const abis = {
 export const publicClient = createPublicClient({
   chain: l2Chain,
   transport: http(config.network.l2RpcUrl),
+  batch: {
+    multicall: true,
+  },
 });
 export const l1Client = createPublicClient({
   chain: l1Chain,
   transport: http(),
+  batch: {
+    multicall: true,
+  },
 });
 
 export function contract<T extends ContractName>(name: T) {
