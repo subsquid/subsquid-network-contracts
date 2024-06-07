@@ -88,7 +88,9 @@ export const publicClient = createPublicClient({
   chain: l2Chain,
   transport: http(config.network.l2RpcUrl),
   batch: {
-    multicall: true,
+    multicall: {
+      batchSize: 2 ** 16,
+    },
   },
 });
 export const l1Client = createPublicClient({

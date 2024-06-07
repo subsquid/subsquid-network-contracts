@@ -108,6 +108,7 @@ export async function preloadWorkerIds(
       args: [fromBase58(workerId)],
     })),
     blockNumber,
+    batchSize: 2 ** 16,
   });
   workers.forEach((workerId, i) => {
     workerIds[workerId] = results[i].result!;
@@ -304,12 +305,14 @@ export async function getStakes(workers: Workers, blockNumber?: bigint) {
     >({
       contracts: capedStakeCalls,
       blockNumber,
+      batchSize: 2 ** 16,
     }),
     await publicClient.multicall<
       ContractFunctionConfig<typeof contracts.staking.abi, "delegated">[]
     >({
       contracts: totalStakeCalls,
       blockNumber,
+      batchSize: 2 ** 16,
     }),
   ];
 }
