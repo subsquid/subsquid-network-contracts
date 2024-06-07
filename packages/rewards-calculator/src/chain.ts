@@ -219,6 +219,9 @@ async function tryToRecommit(
   commitment?: Hex,
 ) {
   if (!commitment) return;
+  if (!(await canCommit(address))) {
+    return;
+  }
   if (
     await contracts.rewardsDistribution.read.alreadyApproved([
       commitment,

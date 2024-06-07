@@ -24,7 +24,7 @@ export const config = {
   targetCapacityGB: BigInt(env("TARGET_CAPACITY_GB", 30_000n)),
   workerOfflineThreshold: Number(env("WORKER_OFFLINE_THRESHOLD_SECONDS", 65)),
   dTrafficAlpha: Number(env("D_TRAFFIC_ALPHA", 0.1)),
-  requestPrice: BigInt(env("REQUEST_PRICE", 1n)),
+  requestPrice: Number(env("REQUEST_PRICE", 1n)),
   tenureEpochCount: Number(env("TENURE_EPOCH_COUNT", 10)),
   workTimeout: Number(env("WORK_TIMEOUT_SECONDS", 300)) * 1000,
   rewardEpochLength: Number(env("REWARD_EPOCH_LENGTH_BLOCKS", 7000)),

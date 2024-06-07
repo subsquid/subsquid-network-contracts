@@ -7,7 +7,7 @@ export type Rewards = {
   [key in string]: {
     workerReward: bigint;
     stakerReward: bigint;
-    computationUnitsUsed: bigint;
+    computationUnitsUsed: number;
     id: bigint;
   };
 };

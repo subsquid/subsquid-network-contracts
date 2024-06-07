@@ -223,6 +223,10 @@ export class Workers {
         stake_factor: this.stakeFactor.toFixed(),
         r_apr: this.rAPR.toFixed(),
         total_reward: total_reward.toFixed(),
+        total_chunks_read: this.totalChunksRead(),
+        total_bytes_sent: this.totalBytesSent(),
+        total_requests: sum(this.map((w) => w.totalRequests)),
+        valid_requests: sum(this.map((w) => w.requestsProcessed)),
       }),
     );
 
@@ -248,6 +252,8 @@ export class Workers {
           stake: worker.stake.toFixed(),
           bytes_sent: worker.bytesSent,
           chunks_read: worker.chunksRead,
+          requests: worker.totalRequests,
+          valid_requests: worker.requestsProcessed,
         }),
       ),
     );

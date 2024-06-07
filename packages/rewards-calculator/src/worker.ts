@@ -21,7 +21,7 @@ export class Worker {
   public workerReward!: Decimal;
   public stakerReward!: Decimal;
   public dTenure!: Decimal;
-  public requestsProcessed = 0n;
+  public requestsProcessed = 0;
   public totalRequests = 0;
 
   constructor(public peerId: string) {}
