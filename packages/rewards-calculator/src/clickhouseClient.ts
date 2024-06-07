@@ -52,6 +52,7 @@ export class ClickhouseClient {
       "lcase(hex(worker_signature)) as worker_signature",
       "toUnixTimestamp64Milli(worker_timestamp) as worker_timestamp",
       "toUnixTimestamp64Milli(collector_timestamp) as collector_timestamp",
+      "(collector_timestamp - worker_timestamp) / 60000 as timeDiff",
     ];
     await this.logTotalQueries();
     const query = `select ${columns.join(",")} from ${
@@ -60,7 +61,7 @@ export class ClickhouseClient {
       config.clickhouse.logsTableName
     }.worker_timestamp >= '${formatDate(this.from)}' and ${
       config.clickhouse.logsTableName
-    }.worker_timestamp <= '${formatDate(this.to)}' order by query_hash`;
+    }.worker_timestamp <= '${formatDate(this.to)}' and timeDiff < 20 order by query_hash`;
     for await (const row of clickhouse.query(query).stream()) {
       const worker = this.workers.add(row.worker_id);
       await worker.processQuery(row);
