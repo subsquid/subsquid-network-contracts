@@ -6,3 +6,4 @@ pings.csv
 queries.csv
 stakes.csv
 *.pem
+dist
