@@ -18,8 +18,8 @@
     "viem": "^1.19.10"
   },
   "scripts": {
-    "reward-simulation": "ts-node src/generate-logs.ts && ts-node src/index.ts",
-    "start": "TS_NODE_TRANSPILE_ONLY=true NODE_OPTIONS=\"--loader ts-node/esm\" ts-node src/index.ts",
+    "reward-simulation": "ts-node src/generate-logs.ts && ts-node src/run.ts",
+    "start": "TS_NODE_TRANSPILE_ONLY=true NODE_OPTIONS=\\\"--loader ts-node/esm\\\" ts-node src/run.ts",
     "stats": "ts-node src/epochStats.ts"
   },
   "devDependencies": {
