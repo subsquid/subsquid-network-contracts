@@ -26,15 +26,12 @@ const duration = async (_fromBlock: bigint, _toBlock: bigint) => {
     chain: mainnet,
     transport: http("https://eth.meowrpc.com"),
   });
-  console.log("asdasdasdasd");
   const fromBlock = await publicClient.getBlock({
     blockNumber: _fromBlock,
   });
-  console.log(fromBlock);
   const toBlock = await publicClient.getBlock({
     blockNumber: _toBlock,
   });
-  console.log(toBlock);
   return Number(toBlock.timestamp - fromBlock.timestamp);
 };
 
@@ -120,7 +117,6 @@ app.get("/rewards/:lastNBlocks", async (req, res) => {
     transport: http("https://eth.llamarpc.com"),
   });
   const lastBlock = await publicClient.getBlockNumber();
-  console.log(lastBlock);
   const fromBlock = lastBlock - BigInt(req.params.lastNBlocks);
   await rewards(fromBlock.toString(), lastBlock.toString(), res);
 });
