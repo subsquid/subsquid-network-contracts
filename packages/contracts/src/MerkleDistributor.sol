@@ -7,15 +7,18 @@ import {IERC20} from '@openzeppelin/contracts/token/ERC20/IERC20.sol';
 contract MerkleDistributor {
   IERC20 public immutable token;
   bytes32 public immutable merkleRoot;
+  address public immutable owner;
 
   event Claimed(uint256 indexed index, address indexed account, uint256 amount);
+  event Ended();
 
   // This is a packed array of booleans.
   mapping(uint256 => uint256) private claimedBitMap;
 
-  constructor(IERC20 token_, bytes32 merkleRoot_) {
+  constructor(IERC20 token_, bytes32 merkleRoot_, address owner_) {
     token = token_;
     merkleRoot = merkleRoot_;
+    owner = owner_;
   }
 
   function isClaimed(uint256 index) public view returns (bool) {
@@ -44,5 +47,12 @@ contract MerkleDistributor {
     require(token.transfer(account, amount), 'MerkleDistributor: Transfer failed.');
 
     emit Claimed(index, account, amount);
+  }
+
+  function withdrawAll() external {
+    require(msg.sender == owner, 'MerkleDistributor: Only owner can withdraw');
+    require(token.transfer(owner, token.balanceOf(address(this))), 'MerkleDistributor: Transfer failed.');
+
+    emit Ended();
   }
 }
