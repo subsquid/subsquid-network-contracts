@@ -32,3 +32,17 @@ jobs:
           context: packages/balance-monitor
           platforms: linux/amd64,linux/arm64,linux/arm/v7,linux/arm/v8
           tags: subsquid/balance-monitor:latest
+
+      - name: Docker login
+        uses: docker/login-action@v1
+        with:
+          username: ${{ secrets.DOCKER_LOGIN }}
+          password: ${{ secrets.DOCKER_TOKEN }}
+
+      - name: Build & publish contracts image
+        uses: docker/build-push-action@v5
+        with:
+          push: true
+          context: packages/reward-bot-monitor
+          platforms: linux/amd64,linux/arm64,linux/arm/v7,linux/arm/v8
+          tags: subsquid/reward-bot-monitor:latest
