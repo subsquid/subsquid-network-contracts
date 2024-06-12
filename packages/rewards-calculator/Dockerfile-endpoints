@@ -16,4 +16,4 @@ COPY packages/rewards-calculator ./rewards-calculator
 WORKDIR /usr/src/app/rewards-calculator
 RUN yarn
 
-RUN ["yarn", "endpoints"]
+CMD ["yarn endpoints"]
