@@ -37,7 +37,7 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           push: true
-          context: packages/rewards-calculator
+          context: .
           file: packages/rewards-calculator/Dockerfile-endpoints
           platforms: linux/amd64
           tags: subsquid/reward-monitor:latest
