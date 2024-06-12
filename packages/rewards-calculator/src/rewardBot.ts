@@ -8,7 +8,6 @@ import {
   getRegistrations,
   isCommitted,
   lastRewardedBlock,
-  nextEpoch,
   Registrations,
 } from "./chain";
 import { epochStats } from "./reward";
@@ -16,6 +15,7 @@ import { addresses, config, contracts, publicClient } from "./config";
 import { Hex, parseAbiItem } from "viem";
 import type { Workers } from "./workers";
 import { logger } from "./logger";
+import { bigSum } from "./utils";
 
 async function firstRegistrationBlock(registrations: Registrations) {
   return Math.min(
@@ -74,16 +74,20 @@ export class RewardBot {
         this.index,
       );
 
-      console.log(
-        JSON.stringify({
-          time: new Date(),
-          type: "rewards_commited",
-          bot_wallet: this.address,
-          tx_hash: tx,
-          from_block: fromBlock,
-          to_block: toBlock,
-        }),
-      );
+      console.log({
+        time: new Date(),
+        type: "rewards_commited",
+        bot_wallet: this.address,
+        tx_hash: tx,
+        from_block: fromBlock,
+        to_block: toBlock,
+        totalStake: bigSum(
+          workers.map(({ totalStake }) => BigInt(totalStake.toString())),
+        ),
+        capedStake: bigSum(
+          workers.map(({ stake }) => BigInt(stake.toString())),
+        ),
+      });
     } catch (e: any) {
       if (e.message?.includes("Already approved")) {
         return;
@@ -109,16 +113,14 @@ export class RewardBot {
           ranges.commitment,
         );
         if (tx) {
-          console.log(
-            JSON.stringify({
-              time: new Date(),
-              type: "rewards_approved",
-              bot_wallet: this.address,
-              tx_hash: tx,
-              from_block: ranges.fromBlock,
-              to_block: ranges.toBlock,
-            }),
-          );
+          console.log({
+            time: new Date(),
+            type: "rewards_approved",
+            bot_wallet: this.address,
+            tx_hash: tx,
+            from_block: ranges.fromBlock,
+            to_block: ranges.toBlock,
+          });
         }
       }
     } catch (e) {
