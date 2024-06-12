@@ -65,11 +65,25 @@ export class RewardBot {
     toBlock: number,
     workers: Workers,
   ) {
-    const rewards = await workers.rewards();
     try {
-      const tx = await commitRewards(fromBlock, toBlock, rewards, this.address);
-      if (!tx) return;
-      workers.noteSuccessfulCommit(tx);
+      const tx = await commitRewards(
+        fromBlock,
+        toBlock,
+        workers,
+        this.address,
+        this.index,
+      );
+
+      console.log(
+        JSON.stringify({
+          time: new Date(),
+          type: "rewards_commited",
+          bot_wallet: this.address,
+          tx_hash: tx,
+          from_block: fromBlock,
+          to_block: toBlock,
+        }),
+      );
     } catch (e: any) {
       if (e.message?.includes("Already approved")) {
         return;
@@ -77,14 +91,8 @@ export class RewardBot {
       if (e.message?.includes("not all blocks covered")) {
         return;
       }
-      workers.noteFailedCommit(e);
       console.log(e);
     }
-
-    await workers.printLogs({
-      walletAddress: this.address,
-      index: this.index,
-    });
   }
 
   private async approveIfNecessary() {
@@ -92,12 +100,12 @@ export class RewardBot {
       const ranges = await approveRanges();
       if (ranges.shouldApprove) {
         const workers = await epochStats(ranges.fromBlock, ranges.toBlock);
-        const rewards = await workers.rewards();
         const tx = await approveRewards(
           ranges.fromBlock,
           ranges.toBlock,
-          rewards,
+          workers,
           this.address,
+          this.index,
           ranges.commitment,
         );
         if (tx) {

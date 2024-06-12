@@ -1,6 +1,7 @@
 import * as crypto from "crypto";
 import fs from "fs";
 import { config } from "../config";
+import { Hex } from "viem";
 
 const gatewayHost = "api.fordefi.com";
 
@@ -19,7 +20,7 @@ async function waitForFordefiTransaction(id: string) {
     });
     const json = await response.json();
     if (json.hash && json.mined_result?.reversion?.state === "not_reverted") {
-      return json.hash;
+      return json.hash as Hex;
     }
     if (json.hash && json.mined_result?.reversion?.reason) {
       throw new Error(
@@ -37,7 +38,7 @@ async function waitForFordefiTransaction(id: string) {
   }
 }
 
-export async function sendFordefiTransaction(request: any): Promise<string> {
+export async function sendFordefiTransaction(request: any) {
   const accessToken = config.fordefi.accessToken;
 
   const requestBody = JSON.stringify(request);

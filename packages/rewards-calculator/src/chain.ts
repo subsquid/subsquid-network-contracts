@@ -1,6 +1,7 @@
 import { addresses, config, contracts, l1Client, publicClient } from "./config";
 import {
   ContractFunctionConfig,
+  decodeEventLog,
   encodeFunctionData,
   formatEther,
   Hex,
@@ -171,12 +172,42 @@ Worker reward: ${totalWorkerReward} SQD;\nStaker reward: ${totalStarkerReward} S
   return sendFordefiTransaction(request);
 }
 
+async function logIfSuccessfulDistribution(
+  txHash: Hex,
+  workers: Workers,
+  address: string,
+  index: number,
+) {
+  const transaction = await publicClient.getTransactionReceipt({
+    hash: txHash,
+  });
+  if (
+    transaction.logs
+      .map((log) =>
+        decodeEventLog({
+          abi: contracts.rewardsDistribution.abi,
+          data: log.data,
+          topics: log.topics,
+        }),
+      )
+      .some((event) => event.eventName === "Distributed")
+  ) {
+    workers.noteSuccessfulCommit(txHash);
+    await workers.printLogs({
+      walletAddress: address,
+      index,
+    });
+  }
+}
+
 export async function commitRewards(
   fromBlock: number,
   toBlock: number,
-  rewards: Rewards,
+  workers: Workers,
   address: Hex,
+  index: number,
 ) {
+  const rewards = await workers.rewards();
   const { workerIds, rewardAmounts, stakedAmounts } = rewardsToTxArgs(rewards);
   if (!(await canCommit(address))) {
     return;
@@ -188,6 +219,12 @@ export async function commitRewards(
     rewardAmounts,
     stakedAmounts,
   );
+
+  if (!tx) {
+    return;
+  }
+  await logIfSuccessfulDistribution(tx, workers, address, index);
+
   logger.log("Commit rewards", tx);
   return tx;
 }
@@ -246,10 +283,12 @@ async function tryToRecommit(
 export async function approveRewards(
   fromBlock: number,
   toBlock: number,
-  rewards: Rewards,
+  workers: Workers,
   address: Hex,
+  index: number,
   commitment?: Hex,
 ) {
+  const rewards = await workers.rewards();
   const { workerIds, rewardAmounts, stakedAmounts } = rewardsToTxArgs(rewards);
   if (
     !(await contracts.rewardsDistribution.read.canApprove([
@@ -269,6 +308,7 @@ export async function approveRewards(
       commitment,
     );
     if (!tx) logger.log("Cannot approve rewards", address);
+    if (tx) await logIfSuccessfulDistribution(tx, workers, address, 0);
     return;
   }
   const tx = await sendApproveRequest(
@@ -278,6 +318,8 @@ export async function approveRewards(
     rewardAmounts,
     stakedAmounts,
   );
+  if (!tx) return;
+  await logIfSuccessfulDistribution(tx, workers, address, 0);
   logger.log("Approve rewards", tx);
   return tx;
 }
