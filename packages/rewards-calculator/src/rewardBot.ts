@@ -82,10 +82,10 @@ export class RewardBot {
         from_block: fromBlock,
         to_block: toBlock,
         totalStake: bigSum(
-          workers.map(({ totalStake }) => BigInt(totalStake.toString())),
+          workers.map(({ totalStake }) => BigInt(totalStake.toFixed(0))),
         ),
         capedStake: bigSum(
-          workers.map(({ stake }) => BigInt(stake.toString())),
+          workers.map(({ stake }) => BigInt(stake.toFixed(0))),
         ),
       });
     } catch (e: any) {
