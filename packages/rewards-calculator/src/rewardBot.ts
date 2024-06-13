@@ -74,6 +74,8 @@ export class RewardBot {
         this.index,
       );
 
+      if (!tx) return;
+
       console.log({
         time: new Date(),
         type: "rewards_commited",
