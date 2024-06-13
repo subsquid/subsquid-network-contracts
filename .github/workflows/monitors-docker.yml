@@ -1,6 +1,10 @@
 name: Build balance monitor
 on:
-  workflow_dispatch:
+  workflow_dispatch: # manually run
+    inputs:
+      tag:
+        description: image tag
+        required: true
 
 env:
   CI: true
@@ -40,4 +44,4 @@ jobs:
           context: .
           file: packages/rewards-calculator/Dockerfile-endpoints
           platforms: linux/amd64
-          tags: subsquid/reward-monitor:latest
+          tags: subsquid/reward-monitor:${{ inputs.tag }}
