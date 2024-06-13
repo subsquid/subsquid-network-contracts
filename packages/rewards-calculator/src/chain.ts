@@ -5,6 +5,7 @@ import {
   encodeFunctionData,
   formatEther,
   Hex,
+  isAddressEqual,
   parseAbiItem,
 } from "viem";
 import { logger } from "./logger";
@@ -182,9 +183,12 @@ async function logIfSuccessfulDistribution(
     hash: txHash,
     timeout: 20000,
   });
+
   if (
     transaction.logs
-      .filter((log) => log.address === contracts.rewardsDistribution.address)
+      .filter((log) =>
+        isAddressEqual(log.address, contracts.rewardsDistribution.address),
+      )
       .map((log) =>
         decodeEventLog({
           abi: contracts.rewardsDistribution.abi,
@@ -211,7 +215,9 @@ export async function commitRewards(
 ) {
   const rewards = await workers.rewards();
   const { workerIds, rewardAmounts, stakedAmounts } = rewardsToTxArgs(rewards);
+
   if (!(await canCommit(address))) {
+    console.log("Cannot commit", address);
     return;
   }
   const tx = await sendCommitRequest(
