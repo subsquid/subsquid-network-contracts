@@ -15,7 +15,7 @@ import { addresses, config, contracts, publicClient } from "./config";
 import { Hex, parseAbiItem } from "viem";
 import type { Workers } from "./workers";
 import { logger } from "./logger";
-import { bigSum } from "./utils";
+import { bigSum, decimalSum } from "./utils";
 
 async function firstRegistrationBlock(registrations: Registrations) {
   return Math.min(
@@ -76,20 +76,20 @@ export class RewardBot {
 
       if (!tx) return;
 
-      console.log({
-        time: new Date(),
-        type: "rewards_commited",
-        bot_wallet: this.address,
-        tx_hash: tx,
-        from_block: fromBlock,
-        to_block: toBlock,
-        totalStake: bigSum(
-          workers.map(({ totalStake }) => BigInt(totalStake.toFixed(0))),
-        ),
-        capedStake: bigSum(
-          workers.map(({ stake }) => BigInt(stake.toFixed(0))),
-        ),
-      });
+      console.log(
+        JSON.stringify({
+          time: new Date(),
+          type: "rewards_commited",
+          bot_wallet: this.address,
+          tx_hash: tx,
+          from_block: fromBlock,
+          to_block: toBlock,
+          totalStake: decimalSum(
+            workers.map(({ totalStake }) => totalStake),
+          ).toFixed(),
+          capedStake: decimalSum(workers.map(({ stake }) => stake)).toFixed(),
+        }),
+      );
     } catch (e: any) {
       if (e.message?.includes("Already approved")) {
         return;
@@ -115,14 +115,16 @@ export class RewardBot {
           ranges.commitment,
         );
         if (tx) {
-          console.log({
-            time: new Date(),
-            type: "rewards_approved",
-            bot_wallet: this.address,
-            tx_hash: tx,
-            from_block: ranges.fromBlock,
-            to_block: ranges.toBlock,
-          });
+          console.log(
+            JSON.stringify({
+              time: new Date(),
+              type: "rewards_approved",
+              bot_wallet: this.address,
+              tx_hash: tx,
+              from_block: ranges.fromBlock,
+              to_block: ranges.toBlock,
+            }),
+          );
         }
       }
     } catch (e) {
