@@ -51,7 +51,11 @@ async function rewards(
     return;
   }
   try {
-    const _epochStats = await epochStats(Number(fromBlock), Number(toBlock));
+    const _epochStats = await epochStats(
+      Number(fromBlock),
+      Number(toBlock),
+      true,
+    );
     const _duration = await duration(BigInt(fromBlock), BigInt(toBlock));
     const workerStats = _epochStats.map((worker) => ({
       id: worker.peerId,

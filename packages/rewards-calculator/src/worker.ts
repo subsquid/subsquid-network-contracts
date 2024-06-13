@@ -30,9 +30,13 @@ export class Worker {
     this.contractId = contractId;
   }
 
-  public async processQuery(query: QueryLog) {
+  public async processQuery(
+    query: QueryLog,
+    shouldSkipSignatureValidation: boolean,
+  ) {
     this.totalRequests++;
-    if (!(await validateSignatures(query))) return false;
+    if (!shouldSkipSignatureValidation && !(await validateSignatures(query)))
+      return false;
     this.bytesSent += query.output_size;
     this.chunksRead += query.num_read_chunks;
     this.requestsProcessed++;

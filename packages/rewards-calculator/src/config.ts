@@ -87,6 +87,7 @@ export const abis = {
 export const publicClient = createPublicClient({
   chain: l2Chain,
   transport: http(config.network.l2RpcUrl),
+  cacheTime: 120_000,
   batch: {
     multicall: {
       batchSize: 2 ** 16,

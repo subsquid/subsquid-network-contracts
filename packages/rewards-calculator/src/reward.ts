@@ -15,12 +15,15 @@ export type Rewards = {
 export async function epochStats(
   fromBlock: number,
   toBlock: number,
+  shouldSkipSignatureValidation = false,
 ): Promise<Workers> {
   const from = await getBlockTimestamp(fromBlock);
   const to = await getBlockTimestamp(toBlock);
   logger.log(from, "-", to);
   const clickhouse = new ClickhouseClient(from, to);
-  const workers = await clickhouse.getActiveWorkers();
+  const workers = await clickhouse.getActiveWorkers(
+    shouldSkipSignatureValidation,
+  );
   if (workers.count() === 0) {
     return workers;
   }
