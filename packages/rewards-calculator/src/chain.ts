@@ -34,7 +34,7 @@ export async function getLatestDistributionBlock() {
     await publicClient.getLogs({
       address: addresses.rewardsDistribution,
       event: parseAbiItem(
-        `event Distributed(uint256 fromBlock, uint256 toBlock, uint256[] recipients, uint256[] workerRewards, uint256[] stakerRewards, uint256[] computationUnits)`,
+        `event Distributed(uint256 fromBlock, uint256 toBlock, uint256[] recipients, uint256[] workerRewards, uint256[] stakerRewards)`,
       ),
       fromBlock: 1n,
     })
@@ -316,7 +316,7 @@ export async function approveRewards(
       commitment,
     );
     if (!tx) logger.log("Cannot approve rewards", address);
-    if (tx) await logIfSuccessfulDistribution(tx, workers, address, 0);
+    if (tx) await logIfSuccessfulDistribution(tx, workers, address, index);
     return;
   }
   const tx = await sendApproveRequest(
@@ -327,7 +327,7 @@ export async function approveRewards(
     stakedAmounts,
   );
   if (!tx) return;
-  await logIfSuccessfulDistribution(tx, workers, address, 0);
+  await logIfSuccessfulDistribution(tx, workers, address, index);
   logger.log("Approve rewards", tx);
   return tx;
 }
