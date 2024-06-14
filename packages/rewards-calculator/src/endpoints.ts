@@ -1,8 +1,7 @@
 import express from "express";
-import { mainnet } from "viem/chains";
-import { createPublicClient, http } from "viem";
 import { epochStats } from "./reward";
-import { config } from "./config";
+import { config, l1Client } from "./config";
+import { getBlockNumber } from "./chain";
 
 const app = express();
 const port = process.env.PORT ?? 3000;
@@ -17,14 +16,10 @@ function isInteger(value: string): boolean {
 }
 
 const duration = async (_fromBlock: bigint, _toBlock: bigint) => {
-  const publicClient = createPublicClient({
-    chain: mainnet,
-    transport: http(),
-  });
-  const fromBlock = await publicClient.getBlock({
+  const fromBlock = await l1Client.getBlock({
     blockNumber: _fromBlock,
   });
-  const toBlock = await publicClient.getBlock({
+  const toBlock = await l1Client.getBlock({
     blockNumber: _toBlock,
   });
   return Number(toBlock.timestamp - fromBlock.timestamp);
@@ -111,12 +106,8 @@ app.get("/rewards/:fromBlock/:toBlock", async (req, res) => {
 });
 
 app.get("/rewards/:lastNBlocks", async (req, res) => {
-  const publicClient = createPublicClient({
-    chain: mainnet,
-    transport: http(),
-  });
-  const lastBlock = await publicClient.getBlockNumber();
-  const fromBlock = lastBlock - BigInt(req.params.lastNBlocks);
+  const lastBlock = await getBlockNumber();
+  const fromBlock = lastBlock - Number(req.params.lastNBlocks);
   await rewards(fromBlock.toString(), lastBlock.toString(), res);
 });
 
