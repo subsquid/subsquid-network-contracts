@@ -16,9 +16,8 @@ export function fordefiRequest(to: string, data: string, name: string) {
       gas: {
         type: "custom",
         details: {
-          type: "dynamic",
-          max_fee_per_gas: "100000000",
-          max_priority_fee_per_gas: "100000000",
+          type: "legacy",
+          price: "100000000",
         },
       },
       fail_on_prediction_failure: false,
