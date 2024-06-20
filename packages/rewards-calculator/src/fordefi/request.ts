@@ -14,8 +14,12 @@ export function fordefiRequest(to: string, data: string, name: string) {
       to,
       value: "0",
       gas: {
-        type: "priority",
-        priority_level: "low",
+        type: "custom",
+        details: {
+          type: "dynamic",
+          max_fee_per_gas: "10000000",
+          max_priority_fee_per_gas: "10000000",
+        },
       },
       fail_on_prediction_failure: false,
       chain,
