@@ -40,6 +40,7 @@ contract WorkerRegistrationTest is BaseTest {
     workerRegistration = WorkerRegistration(address(router.workerRegistration()));
     networkController = NetworkController(address(router.networkController()));
     networkController.setEpochLength(EPOCH_LENGTH);
+    networkController.setLockPeriod(EPOCH_LENGTH);
     vm.roll(workerRegistration.nextEpoch());
     staking = Staking(address(router.staking()));
     token.approve(address(workerRegistration), workerRegistration.bondAmount());

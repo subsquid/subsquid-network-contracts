@@ -13,7 +13,10 @@ import "./interfaces/INetworkController.sol";
 contract NetworkController is AccessControl, INetworkController {
   uint256 internal constant ONE_BASIS_POINT = 10_000;
 
+  /// @notice deprecated
   uint128 public epochLength;
+
+  uint128 public workerEpochLength;
   uint128 public firstEpochBlock;
   uint256 public bondAmount;
   uint256 public stakingDeadlock = 2;
@@ -31,7 +34,7 @@ contract NetworkController is AccessControl, INetworkController {
     for (uint256 i = 0; i < _allowedVestedTargets.length; i++) {
       setAllowedVestedTarget(_allowedVestedTargets[i], true);
     }
-    epochLength = _epochLength;
+    workerEpochLength = _epochLength;
     firstEpochBlock = nextEpoch();
     emit EpochLengthUpdated(_epochLength);
 
@@ -46,9 +49,23 @@ contract NetworkController is AccessControl, INetworkController {
     uint128 nextEpochStart = nextEpoch();
     epochCheckpoint = epochNumber();
     firstEpochBlock = nextEpochStart;
-    epochLength = _epochLength;
+    workerEpochLength = _epochLength;
 
     emit EpochLengthUpdated(_epochLength);
+  }
+
+  /// @dev Set how long the
+  function setLockPeriod(uint128 _lockPeriod) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    require(_lockPeriod > 1, "Lock period too short");
+    require(_lockPeriod < 100000, "Lock period too long");
+
+    epochLength = _lockPeriod;
+
+    emit LockPeriodUpdated(_lockPeriod);
+  }
+
+  function lockPeriod() external view returns (uint128) {
+    return epochLength;
   }
 
   /// @dev Set amount of tokens required to register a worker
@@ -103,13 +120,13 @@ contract NetworkController is AccessControl, INetworkController {
   function nextEpoch() public view returns (uint128) {
     uint128 blockNumber = uint128(block.number);
     if (blockNumber < firstEpochBlock) return firstEpochBlock;
-    return ((blockNumber - firstEpochBlock) / epochLength + 1) * epochLength + firstEpochBlock;
+    return ((blockNumber - firstEpochBlock) / workerEpochLength + 1) * workerEpochLength + firstEpochBlock;
   }
 
   /// @inheritdoc INetworkController
   function epochNumber() public view returns (uint128) {
     uint128 blockNumber = uint128(block.number);
     if (blockNumber < firstEpochBlock) return epochCheckpoint;
-    return (blockNumber - firstEpochBlock) / epochLength + epochCheckpoint + 1;
+    return (blockNumber - firstEpochBlock) / workerEpochLength + epochCheckpoint + 1;
   }
 }
