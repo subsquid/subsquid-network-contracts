@@ -30,7 +30,7 @@ export async function getRegistrations() {
 export type Registrations = Awaited<ReturnType<typeof getRegistrations>>;
 
 export async function getLatestDistributionBlock() {
-  const toBlock = (await publicClient.getBlockNumber()) - 1000n;
+  const toBlock = await publicClient.getBlockNumber();
   let offset = 1000n;
   while (offset <= toBlock) {
     const distributionBlocks = (
@@ -42,7 +42,8 @@ export async function getLatestDistributionBlock() {
         fromBlock: toBlock - offset,
       })
     ).map(({ blockNumber }) => Number(blockNumber));
-    if (distributionBlocks.length >= 0) {
+    console.log(distributionBlocks);
+    if (distributionBlocks.length > 0) {
       const maxBlock = Math.max(...distributionBlocks);
       return BigInt(maxBlock);
     }
