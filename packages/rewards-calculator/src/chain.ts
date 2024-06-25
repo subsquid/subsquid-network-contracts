@@ -30,20 +30,24 @@ export async function getRegistrations() {
 export type Registrations = Awaited<ReturnType<typeof getRegistrations>>;
 
 export async function getLatestDistributionBlock() {
-  const distributionBlocks = (
-    await publicClient.getLogs({
-      address: addresses.rewardsDistribution,
-      event: parseAbiItem(
-        `event Distributed(uint256 fromBlock, uint256 toBlock, uint256[] recipients, uint256[] workerRewards, uint256[] stakerRewards)`,
-      ),
-      fromBlock: 1n,
-    })
-  ).map(({ blockNumber }) => Number(blockNumber));
-  if (distributionBlocks.length === 0) {
-    return undefined;
+  const toBlock = (await publicClient.getBlockNumber()) - 1000n;
+  let offset = 1000n;
+  while (offset <= toBlock) {
+    const distributionBlocks = (
+      await publicClient.getLogs({
+        address: addresses.rewardsDistribution,
+        event: parseAbiItem(
+          `event Distributed(uint256 fromBlock, uint256 toBlock, uint256[] recipients, uint256[] workerRewards, uint256[] stakerRewards)`,
+        ),
+        fromBlock: toBlock - offset,
+      })
+    ).map(({ blockNumber }) => Number(blockNumber));
+    if (distributionBlocks.length >= 0) {
+      const maxBlock = Math.max(...distributionBlocks);
+      return BigInt(maxBlock);
+    }
+    offset *= 2n;
   }
-  const maxBlock = Math.max(...distributionBlocks);
-  return BigInt(maxBlock);
 }
 
 export async function currentApy(activeWorkers: number, blockNumber?: bigint) {
