@@ -5,6 +5,9 @@
     "@subsquid-network/reward-stats#build": {
       "dependsOn": ["@subsquid-network/contracts#build"]
     },
+    "@subsquid-network/contract-admin-state#build": {
+      "dependsOn": ["@subsquid-network/contracts#build"]
+    },
     "lint": {},
     "test": {}
   }

@@ -3,6 +3,10 @@ pragma solidity 0.8.20;
 import "./DistributedRewardsDistribution.sol";
 
 contract RewardsDistributionCommitApproveTest is RewardsDistributionTest {
+  event Distributed(
+    uint256 fromBlock, uint256 toBlock, uint256[] recipients, uint256[] workerRewards, uint256[] stakerRewards
+  );
+
   function test_CurrentDistributorReturnsThisInTests() public {
     assertEq(rewardsDistribution.canCommit(address(this)), true);
   }
@@ -108,11 +112,11 @@ contract RewardsDistributionCommitApproveTest is RewardsDistributionTest {
     rewardsDistribution.addDistributor(address(2));
     rewardsDistribution.setApprovesRequired(3);
     waitUntilDistributor();
-    //    rewardsDistribution.commit(1, 4, recipients, workerAmounts, stakerAmounts);
-    //    hoax(address(1));
-    //    rewardsDistribution.approve(1, 4, recipients, workerAmounts, stakerAmounts);
-    //    hoax(address(2));
-    //    rewardsDistribution.approve(1, 4, recipients, workerAmounts, stakerAmounts);
+    rewardsDistribution.commit(1, 4, recipients, workerAmounts, stakerAmounts);
+    hoax(address(1));
+    rewardsDistribution.approve(1, 4, recipients, workerAmounts, stakerAmounts);
+    hoax(address(2));
+    rewardsDistribution.approve(1, 4, recipients, workerAmounts, stakerAmounts);
   }
 
   function test_canApproveReturnsTrueIfCanApprove() public {
@@ -152,6 +156,22 @@ contract RewardsDistributionCommitApproveTest is RewardsDistributionTest {
     vm.roll(10);
     rewardsDistribution.commit(1, 4, recipients, workerAmounts, stakerAmounts);
     assertEq(rewardsDistribution.canApprove(address(1), 1, 4, recipients, workerAmounts, stakerAmounts), false);
+  }
+
+  function test_ItIsPossibleToApproveWithCommit() public {
+    (uint256[] memory recipients, uint256[] memory workerAmounts, uint256[] memory stakerAmounts) = prepareRewards(3);
+    rewardsDistribution.addDistributor(address(1));
+    rewardsDistribution.addDistributor(address(2));
+    rewardsDistribution.setApprovesRequired(3);
+    rewardsDistribution.setWindowSize(3);
+    waitUntilDistributor();
+    rewardsDistribution.commit(1, 4, recipients, workerAmounts, stakerAmounts);
+    hoax(address(1));
+    rewardsDistribution.commit(1, 4, recipients, workerAmounts, stakerAmounts);
+    hoax(address(2));
+    vm.expectEmit(address(rewardsDistribution));
+    emit Distributed(1, 4, recipients, workerAmounts, stakerAmounts);
+    rewardsDistribution.commit(1, 4, recipients, workerAmounts, stakerAmounts);
   }
 
   function waitUntilDistributor() internal {

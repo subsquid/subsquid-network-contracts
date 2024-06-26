@@ -1,20 +1,15 @@
-import {
-  abis,
-  addresses,
-  config,
-  contracts,
-  l1Client,
-  publicClient,
-} from "./config";
+import { addresses, config, contracts, l1Client, publicClient } from "./config";
 import {
   ContractFunctionConfig,
+  decodeEventLog,
   encodeFunctionData,
+  formatEther,
   Hex,
+  isAddressEqual,
   parseAbiItem,
-  WalletClient,
 } from "viem";
 import { logger } from "./logger";
-import { fromBase58 } from "./utils";
+import { bigSum, fromBase58 } from "./utils";
 import { Rewards } from "./reward";
 import { Workers } from "./workers";
 import { fordefiRequest } from "./fordefi/request";
@@ -35,24 +30,40 @@ export async function getRegistrations() {
 export type Registrations = Awaited<ReturnType<typeof getRegistrations>>;
 
 export async function getLatestDistributionBlock() {
-  const distributionBlocks = (
-    await publicClient.getLogs({
-      address: addresses.rewardsDistribution,
-      event: parseAbiItem(
-        `event Distributed(uint256 fromBlock, uint256 toBlock, uint256[] recipients, uint256[] workerRewards, uint256[] stakerRewards, uint256[] computationUnits)`,
-      ),
-      fromBlock: 1n,
-    })
-  ).map(({ blockNumber }) => Number(blockNumber));
-  if (distributionBlocks.length === 0) {
-    return undefined;
+  const toBlock = await publicClient.getBlockNumber();
+  let offset = 1000n;
+  while (offset <= toBlock) {
+    const distributionBlocks = (
+      await publicClient.getLogs({
+        address: addresses.rewardsDistribution,
+        event: parseAbiItem(
+          `event Distributed(uint256 fromBlock, uint256 toBlock, uint256[] recipients, uint256[] workerRewards, uint256[] stakerRewards)`,
+        ),
+        fromBlock: toBlock - offset,
+      })
+    ).map(({ blockNumber }) => Number(blockNumber));
+    console.log(distributionBlocks);
+    if (distributionBlocks.length > 0) {
+      const maxBlock = Math.max(...distributionBlocks);
+      return BigInt(maxBlock);
+    }
+    offset *= 2n;
   }
-  const maxBlock = Math.max(...distributionBlocks);
-  return BigInt(maxBlock);
 }
 
-export async function currentApy(blockNumber?: bigint) {
-  return await contracts.rewardCalculation.read.currentApy({ blockNumber });
+export async function currentApy(activeWorkers: number, blockNumber?: bigint) {
+  return 2000n;
+  // const target = await contracts.networkController.read.targetCapacityGb({
+  //   blockNumber,
+  // });
+  // const storagePerWorker =
+  //   await contracts.networkController.read.storagePerWorkerInGb({
+  //     blockNumber,
+  //   });
+  // return contracts.rewardCalculation.read.apy(
+  //   [target, BigInt(activeWorkers) * storagePerWorker],
+  //   { blockNumber },
+  // );
 }
 
 export async function epochLength(blockNumber?: bigint) {
@@ -104,6 +115,7 @@ export async function preloadWorkerIds(
       args: [fromBase58(workerId)],
     })),
     blockNumber,
+    batchSize: 2 ** 16,
   });
   workers.forEach((workerId, i) => {
     workerIds[workerId] = results[i].result!;
@@ -154,22 +166,63 @@ async function sendCommitRequest(
     functionName: "commit",
     args: [fromBlock, toBlock, workerIds, rewardAmounts, stakedAmounts],
   });
+  const totalWorkers = workerIds.length;
+  const totalWorkerReward = formatEther(bigSum(rewardAmounts));
+  const totalStarkerReward = formatEther(bigSum(stakedAmounts));
   const request = fordefiRequest(
     contracts.rewardsDistribution.address,
     data,
-    "Reward commit",
+    `Reward commit, blocks ${fromBlock} - ${toBlock}\n${totalWorkers} workers rewarded.
+Worker reward: ${totalWorkerReward} SQD;\nStaker reward: ${totalStarkerReward} SQD`,
   );
   return sendFordefiTransaction(request);
+}
+
+async function logIfSuccessfulDistribution(
+  txHash: Hex,
+  workers: Workers,
+  address: string,
+  index: number,
+) {
+  const transaction = await publicClient.waitForTransactionReceipt({
+    hash: txHash,
+    timeout: 20000,
+  });
+
+  if (
+    transaction.logs
+      .filter((log) =>
+        isAddressEqual(log.address, contracts.rewardsDistribution.address),
+      )
+      .map((log) =>
+        decodeEventLog({
+          abi: contracts.rewardsDistribution.abi,
+          data: log.data,
+          topics: log.topics,
+        }),
+      )
+      .some((event) => event.eventName === "Distributed")
+  ) {
+    workers.noteSuccessfulCommit(txHash);
+    await workers.printLogs({
+      walletAddress: address,
+      index,
+    });
+  }
 }
 
 export async function commitRewards(
   fromBlock: number,
   toBlock: number,
-  rewards: Rewards,
+  workers: Workers,
   address: Hex,
+  index: number,
 ) {
+  const rewards = await workers.rewards();
   const { workerIds, rewardAmounts, stakedAmounts } = rewardsToTxArgs(rewards);
+
   if (!(await canCommit(address))) {
+    console.log("Cannot commit", address);
     return;
   }
   const tx = await sendCommitRequest(
@@ -179,6 +232,12 @@ export async function commitRewards(
     rewardAmounts,
     stakedAmounts,
   );
+
+  if (!tx) {
+    return;
+  }
+  await logIfSuccessfulDistribution(tx, workers, address, index);
+
   logger.log("Commit rewards", tx);
   return tx;
 }
@@ -191,9 +250,8 @@ async function sendApproveRequest(
   stakedAmounts: bigint[],
 ) {
   const data = encodeFunctionData({
-    // @ts-ignore
-    abi: abis.rewardsDistribution.abi,
-    function: "approve",
+    abi: contracts.rewardsDistribution.abi,
+    functionName: "approve",
     args: [fromBlock, toBlock, workerIds, rewardAmounts, stakedAmounts],
   });
   const request = fordefiRequest(
@@ -204,12 +262,46 @@ async function sendApproveRequest(
   return sendFordefiTransaction(request);
 }
 
-export async function approveRewards(
+async function tryToRecommit(
   fromBlock: number,
   toBlock: number,
   rewards: Rewards,
   address: Hex,
+  commitment?: Hex,
 ) {
+  if (!commitment) return;
+  if (!(await canCommit(address))) {
+    return;
+  }
+  if (
+    await contracts.rewardsDistribution.read.alreadyApproved([
+      commitment,
+      address,
+    ])
+  ) {
+    return;
+  }
+  const { workerIds, rewardAmounts, stakedAmounts } = rewardsToTxArgs(rewards);
+  const tx = await sendCommitRequest(
+    BigInt(fromBlock),
+    BigInt(toBlock),
+    workerIds,
+    rewardAmounts,
+    stakedAmounts,
+  );
+  logger.log("Recommit rewards", tx);
+  return tx;
+}
+
+export async function approveRewards(
+  fromBlock: number,
+  toBlock: number,
+  workers: Workers,
+  address: Hex,
+  index: number,
+  commitment?: Hex,
+) {
+  const rewards = await workers.rewards();
   const { workerIds, rewardAmounts, stakedAmounts } = rewardsToTxArgs(rewards);
   if (
     !(await contracts.rewardsDistribution.read.canApprove([
@@ -221,7 +313,15 @@ export async function approveRewards(
       stakedAmounts,
     ]))
   ) {
-    logger.log("Cannot approve rewards", address);
+    const tx = await tryToRecommit(
+      fromBlock,
+      toBlock,
+      rewards,
+      address,
+      commitment,
+    );
+    if (!tx) logger.log("Cannot approve rewards", address);
+    if (tx) await logIfSuccessfulDistribution(tx, workers, address, index);
     return;
   }
   const tx = await sendApproveRequest(
@@ -231,6 +331,8 @@ export async function approveRewards(
     rewardAmounts,
     stakedAmounts,
   );
+  if (!tx) return;
+  await logIfSuccessfulDistribution(tx, workers, address, index);
   logger.log("Approve rewards", tx);
   return tx;
 }
@@ -258,12 +360,14 @@ export async function getStakes(workers: Workers, blockNumber?: bigint) {
     >({
       contracts: capedStakeCalls,
       blockNumber,
+      batchSize: 2 ** 16,
     }),
     await publicClient.multicall<
       ContractFunctionConfig<typeof contracts.staking.abi, "delegated">[]
     >({
       contracts: totalStakeCalls,
       blockNumber,
+      batchSize: 2 ** 16,
     }),
   ];
 }

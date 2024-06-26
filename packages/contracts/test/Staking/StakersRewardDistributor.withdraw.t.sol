@@ -85,7 +85,7 @@ contract StakersRewardDistributionWithdrawTest is StakersRewardDistributionTest 
   }
 
   function test_CannotWithdrawBeforeFullEpochEnds() public {
-    network.setEpochLength(50);
+    network.setLockPeriod(50);
     assertEq(network.nextEpoch(), 5);
     staking.deposit(workers[0], 100);
     (, uint256 whenCanWithdraw) = staking.getDeposit(address(this), workers[0]);
@@ -96,9 +96,9 @@ contract StakersRewardDistributionWithdrawTest is StakersRewardDistributionTest 
     jumpToMomentWhenCanWithdraw(address(this));
     staking.withdraw(workers[0], 50);
     staking.deposit(workers[0], 100);
-    assertEq(network.nextEpoch(), 105);
     (, whenCanWithdraw) = staking.getDeposit(address(this), workers[0]);
-    assertEq(whenCanWithdraw, 155);
+    assertEq(network.nextEpoch(), 57);
+    assertEq(whenCanWithdraw, 107);
   }
 
   // 2.5M gas for 100 distinct deposits

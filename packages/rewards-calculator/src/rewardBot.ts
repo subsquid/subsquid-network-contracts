@@ -8,13 +8,14 @@ import {
   getRegistrations,
   isCommitted,
   lastRewardedBlock,
-  nextEpoch,
   Registrations,
 } from "./chain";
 import { epochStats } from "./reward";
 import { addresses, config, contracts, publicClient } from "./config";
 import { Hex, parseAbiItem } from "viem";
 import type { Workers } from "./workers";
+import { logger } from "./logger";
+import { bigSum, decimalSum } from "./utils";
 
 async function firstRegistrationBlock(registrations: Registrations) {
   return Math.min(
@@ -27,7 +28,9 @@ export class RewardBot {
     private address: Hex,
     private index: number,
   ) {}
+
   public startBot() {
+    logger.workerAddress = this.address;
     this.commitIfPossible();
     this.approveIfNecessary();
   }
@@ -62,11 +65,31 @@ export class RewardBot {
     toBlock: number,
     workers: Workers,
   ) {
-    const rewards = await workers.rewards();
     try {
-      const tx = await commitRewards(fromBlock, toBlock, rewards, this.address);
+      const tx = await commitRewards(
+        fromBlock,
+        toBlock,
+        workers,
+        this.address,
+        this.index,
+      );
+
       if (!tx) return;
-      workers.noteSuccessfulCommit(tx);
+
+      console.log(
+        JSON.stringify({
+          time: new Date(),
+          type: "rewards_commited",
+          bot_wallet: this.address,
+          tx_hash: tx,
+          from_block: fromBlock,
+          to_block: toBlock,
+          totalStake: decimalSum(
+            workers.map(({ totalStake }) => totalStake),
+          ).toFixed(),
+          capedStake: decimalSum(workers.map(({ stake }) => stake)).toFixed(),
+        }),
+      );
     } catch (e: any) {
       if (e.message?.includes("Already approved")) {
         return;
@@ -74,14 +97,8 @@ export class RewardBot {
       if (e.message?.includes("not all blocks covered")) {
         return;
       }
-      workers.noteFailedCommit(e);
       console.log(e);
     }
-
-    await workers.printLogs({
-      walletAddress: this.address,
-      index: this.index,
-    });
   }
 
   private async approveIfNecessary() {
@@ -89,23 +106,26 @@ export class RewardBot {
       const ranges = await approveRanges();
       if (ranges.shouldApprove) {
         const workers = await epochStats(ranges.fromBlock, ranges.toBlock);
-        const rewards = await workers.rewards();
         const tx = await approveRewards(
           ranges.fromBlock,
           ranges.toBlock,
-          rewards,
+          workers,
           this.address,
+          this.index,
+          ranges.commitment,
         );
-        console.log(
-          JSON.stringify({
-            time: new Date(),
-            type: "rewards_approved",
-            bot_wallet: this.address,
-            tx_hash: tx,
-            from_block: ranges.fromBlock,
-            to_block: ranges.toBlock,
-          }),
-        );
+        if (tx) {
+          console.log(
+            JSON.stringify({
+              time: new Date(),
+              type: "rewards_approved",
+              bot_wallet: this.address,
+              tx_hash: tx,
+              from_block: ranges.fromBlock,
+              to_block: ranges.toBlock,
+            }),
+          );
+        }
       }
     } catch (e) {
       console.log(e);
@@ -144,6 +164,7 @@ async function approveRanges(): Promise<
       shouldApprove: true;
       fromBlock: number;
       toBlock: number;
+      commitment?: Hex;
     }
 > {
   const commitmentBlocks = (
@@ -154,10 +175,11 @@ async function approveRanges(): Promise<
       ),
       fromBlock: 1n,
     })
-  ).map(({ args: { fromBlock, toBlock }, blockNumber }) => ({
+  ).map(({ args: { fromBlock, toBlock, commitment }, blockNumber }) => ({
     fromBlock: Number(fromBlock),
     toBlock: Number(toBlock),
     blockNumber: Number(blockNumber),
+    commitment,
   }));
 
   if (commitmentBlocks.length === 0) {

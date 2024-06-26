@@ -1,6 +1,10 @@
 name: Build balance monitor
 on:
-  workflow_dispatch:
+  workflow_dispatch: # manually run
+    inputs:
+      tag:
+        description: image tag
+        required: true
 
 env:
   CI: true
@@ -25,10 +29,19 @@ jobs:
           username: ${{ secrets.DOCKER_LOGIN }}
           password: ${{ secrets.DOCKER_TOKEN }}
 
-      - name: Build & publish contracts image
+      - name: Build & publish balance monitor image
         uses: docker/build-push-action@v5
         with:
           push: true
           context: packages/balance-monitor
           platforms: linux/amd64,linux/arm64,linux/arm/v7,linux/arm/v8
           tags: subsquid/balance-monitor:latest
+
+      - name: Build & publish rewards monitor image
+        uses: docker/build-push-action@v5
+        with:
+          push: true
+          context: .
+          file: packages/rewards-calculator/Dockerfile-endpoints
+          platforms: linux/amd64
+          tags: subsquid/reward-monitor:${{ inputs.tag }}

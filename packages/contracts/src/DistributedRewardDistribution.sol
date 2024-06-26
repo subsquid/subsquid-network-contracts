@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: UNLICENSED
+// SPDX-License-Identifier: GPL-3.0-only
 pragma solidity 0.8.20;
 
 import "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
@@ -132,6 +132,7 @@ contract DistributedRewardsDistribution is AccessControlledPausable, IRewardsDis
     require(!alreadyApproved[commitment][msg.sender], "Already approved");
     if (commitments[fromBlock][toBlock] == commitment) {
       _approve(commitment, fromBlock, toBlock, recipients, workerRewards, _stakerRewards);
+      return;
     }
 
     commitments[fromBlock][toBlock] = commitment;

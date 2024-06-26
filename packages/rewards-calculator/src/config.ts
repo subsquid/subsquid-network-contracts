@@ -24,7 +24,7 @@ export const config = {
   targetCapacityGB: BigInt(env("TARGET_CAPACITY_GB", 30_000n)),
   workerOfflineThreshold: Number(env("WORKER_OFFLINE_THRESHOLD_SECONDS", 65)),
   dTrafficAlpha: Number(env("D_TRAFFIC_ALPHA", 0.1)),
-  requestPrice: BigInt(env("REQUEST_PRICE", 1n)),
+  requestPrice: Number(env("REQUEST_PRICE", 1n)),
   tenureEpochCount: Number(env("TENURE_EPOCH_COUNT", 10)),
   workTimeout: Number(env("WORK_TIMEOUT_SECONDS", 300)) * 1000,
   rewardEpochLength: Number(env("REWARD_EPOCH_LENGTH_BLOCKS", 7000)),
@@ -44,7 +44,10 @@ export const config = {
   },
   network: {
     gasLimit: BigInt(env("GAS_LIMIT", 10_000_000n)),
-    networkName: env<"sepolia" | "mainnet">("NETWORK_NAME", "sepolia"),
+    networkName: env<"sepolia" | "mainnet" | "testnet">(
+      "NETWORK_NAME",
+      "sepolia",
+    ),
     l2RpcUrl: env(
       "L2_RPC_URL",
       "https://arbitrum-sepolia.infura.io/v3/39b9cd000b9c4637b58d5a5214676196",
@@ -52,12 +55,16 @@ export const config = {
   },
 };
 
+function isTestnet() {
+  return (
+    config.network.networkName === "testnet" ||
+    config.network.networkName === "sepolia"
+  );
+}
+
 export type ContractName = keyof typeof abis;
 
-const deployments =
-  config.network.networkName === "sepolia"
-    ? SepoliaDeployments
-    : ArbitrumDeployments;
+const deployments = isTestnet() ? SepoliaDeployments : ArbitrumDeployments;
 
 export const addresses = {
   workerRegistration: deployments.WorkerRegistration,
@@ -69,10 +76,9 @@ export const addresses = {
   networkController: deployments.NetworkController,
 } as { [key in ContractName]: Address };
 
-const l1Chain = config.network.networkName === "sepolia" ? sepolia : mainnet;
+const l1Chain = isTestnet() ? sepolia : mainnet;
 
-const l2Chain =
-  config.network.networkName === "sepolia" ? arbitrumSepolia : arbitrum;
+const l2Chain = isTestnet() ? arbitrumSepolia : arbitrum;
 
 export const abis = {
   workerRegistration: workerRegistrationAbi,
@@ -87,10 +93,19 @@ export const abis = {
 export const publicClient = createPublicClient({
   chain: l2Chain,
   transport: http(config.network.l2RpcUrl),
+  cacheTime: 120_000,
+  batch: {
+    multicall: {
+      batchSize: 2 ** 16,
+    },
+  },
 });
 export const l1Client = createPublicClient({
   chain: l1Chain,
   transport: http(),
+  batch: {
+    multicall: true,
+  },
 });
 
 export function contract<T extends ContractName>(name: T) {

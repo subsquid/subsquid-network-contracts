@@ -152,7 +152,10 @@ export class Workers {
       dayjs(this.clickhouseClient.from),
       "second",
     );
-    const baseApr = await currentApy(this.nextDistributionStartBlockNumber);
+    const baseApr = await currentApy(
+      this.count(),
+      this.nextDistributionStartBlockNumber,
+    );
     this.baseApr = new Decimal(baseApr.toString());
 
     this.stakeFactor = this.calculateStakeFactor();
@@ -205,6 +208,7 @@ export class Workers {
     console.log(
       JSON.stringify({
         time: new Date(),
+        epoch_start: this.clickhouseClient.from,
         epoch_end: this.clickhouseClient.to,
         type: "rewards_report",
         bot_id: botId,
@@ -219,6 +223,10 @@ export class Workers {
         stake_factor: this.stakeFactor.toFixed(),
         r_apr: this.rAPR.toFixed(),
         total_reward: total_reward.toFixed(),
+        total_chunks_read: this.totalChunksRead(),
+        total_bytes_sent: this.totalBytesSent(),
+        total_requests: sum(this.map((w) => w.totalRequests)),
+        valid_requests: sum(this.map((w) => w.requestsProcessed)),
       }),
     );
 
@@ -244,6 +252,8 @@ export class Workers {
           stake: worker.stake.toFixed(),
           bytes_sent: worker.bytesSent,
           chunks_read: worker.chunksRead,
+          requests: worker.totalRequests,
+          valid_requests: worker.requestsProcessed,
         }),
       ),
     );
@@ -289,7 +299,7 @@ export class Workers {
       "second",
     );
     const apy = bigIntToDecimal(
-      await currentApy(this.nextDistributionStartBlockNumber),
+      await currentApy(this.count(), this.nextDistributionStartBlockNumber),
     );
     return apy.mul(this.totalSupply()).mul(duration).div(YEAR).div(10_000);
   }

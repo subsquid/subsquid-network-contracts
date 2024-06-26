@@ -21,7 +21,7 @@ export class Worker {
   public workerReward!: Decimal;
   public stakerReward!: Decimal;
   public dTenure!: Decimal;
-  public requestsProcessed = 0n;
+  public requestsProcessed = 0;
   public totalRequests = 0;
 
   constructor(public peerId: string) {}
@@ -30,9 +30,13 @@ export class Worker {
     this.contractId = contractId;
   }
 
-  public async processQuery(query: QueryLog) {
+  public async processQuery(
+    query: QueryLog,
+    shouldSkipSignatureValidation: boolean,
+  ) {
     this.totalRequests++;
-    if (!(await validateSignatures(query))) return false;
+    if (!shouldSkipSignatureValidation && !(await validateSignatures(query)))
+      return false;
     this.bytesSent += query.output_size;
     this.chunksRead += query.num_read_chunks;
     this.requestsProcessed++;
