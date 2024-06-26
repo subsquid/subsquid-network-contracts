@@ -38,7 +38,7 @@ contract Deploy is Script {
     Router router =
       Router(address(new TransparentUpgradeableProxy(address(new Router()), vm.addr(deployerPrivateKey), "")));
 
-    NetworkController network = new NetworkController(100, 100000 ether, new address[](0));
+    NetworkController network = new NetworkController(100, 0, 0, 100000 ether, new address[](0));
     Staking staking = new Staking(token, router);
     WorkerRegistration workerRegistration = new WorkerRegistration(token, router);
     RewardTreasury treasury = new RewardTreasury(token);

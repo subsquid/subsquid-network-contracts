@@ -4,7 +4,26 @@ import SubsquidVesting from "../artifacts/Vesting.sol/SubsquidVesting";
 import { fordefiRequest } from "./fordefi/request";
 import { sendFordefiTransaction } from "./fordefi/sendTransaction";
 
-const rpc = "https://sepolia-rollup.arbitrum.io/rpc";
+if (
+  process.env.Network &&
+  process.env.Network !== "sepolia" &&
+  process.env.Network !== "mainnet"
+) {
+  throw new Error("Invalid network. Only sepolia and mainnet are supported.");
+}
+
+const network: "sepolia" | "mainnet" =
+  (process.env.NETWORK as any) || "mainnet";
+
+const rpc = {
+  sepolia: "https://sepolia-rollup.arbitrum.io/rpc",
+  mainnet: "https://arb1.arbitrum.io/rpc",
+}[network];
+
+const tokenAddress = {
+  sepolia: "0x24f9C46d86c064a6FA2a568F918fe62fC6917B3c",
+  mainnet: "0x1337420dED5ADb9980CFc35f8f2B054ea86f8aB1",
+}[network];
 
 async function sendVaultTokens() {
   const data = fs
@@ -23,9 +42,7 @@ async function sendVaultTokens() {
       SubsquidVesting.abi,
       provider,
     );
-    const balance = await vestingContract.balanceOf(
-      "0x24f9C46d86c064a6FA2a568F918fe62fC6917B3c",
-    );
+    const balance = await vestingContract.balanceOf(tokenAddress);
     if (balance.gt(0)) {
       console.log(
         `Vesting ${vesting} has ${ethers.utils.formatEther(balance)} SQD, skipping [${++i}/${total}]`,
@@ -49,7 +66,13 @@ Amount            : ${ethers.utils.formatEther(amount)} SQD
 Immidiate release : ${ethers.utils.formatEther(amount.mul(release).div(10_000))} SQD (${release.toNumber() / 100}%)
 Vesting start     : ${new Date(vestingStart.toNumber() * 1000).toUTCString()}
 Vesting end       : ${new Date(end.toNumber() * 1000).toUTCString()}`;
-    const request = fordefiRequest(vesting, amount.toString(), name);
+    const request = fordefiRequest(
+      vesting,
+      amount.toString(),
+      name,
+      network,
+      tokenAddress,
+    );
     await sendFordefiTransaction(request);
     console.log(
       "Sent transaction to fordefi for",

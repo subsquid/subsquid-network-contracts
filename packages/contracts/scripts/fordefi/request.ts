@@ -1,4 +1,10 @@
-export function fordefiRequest(to: string, amount: string, name: string) {
+export function fordefiRequest(
+  to: string,
+  amount: string,
+  name: string,
+  chain: "mainnet" | "sepolia",
+  tokenAddr: string,
+) {
   return {
     signer_type: "api_signer",
     type: "evm_transaction",
@@ -9,14 +15,17 @@ export function fordefiRequest(to: string, amount: string, name: string) {
         type: "priority",
         priority_level: "low",
       },
-      chain: "arbitrum_sepolia",
+      chain: chain === "sepolia" ? "arbitrum_sepolia" : "arbitrum_mainnet",
       asset_identifier: {
         type: "evm",
         details: {
           type: "erc20",
           token: {
-            chain: "evm_arbitrum_sepolia",
-            hex_repr: "0x24f9C46d86c064a6FA2a568F918fe62fC6917B3c",
+            chain:
+              chain === "sepolia"
+                ? "evm_arbitrum_sepolia"
+                : "evm_arbitrum_mainnet",
+            hex_repr: tokenAddr,
           },
         },
       },

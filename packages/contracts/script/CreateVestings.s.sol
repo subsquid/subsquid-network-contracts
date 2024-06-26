@@ -22,7 +22,7 @@ contract CreateVestings is Script {
     address sender = vm.addr(deployerPrivateKey);
     VestingFactory factory = VestingFactory(address(0x0eD5FB811167De1928322a0fa30Ed7F3c8C370Ca));
     string memory root = vm.projectRoot();
-    string memory path = string.concat(root, "/script/mainnet-vestings.json");
+    string memory path = string.concat(root, "/script/vestings.json");
     string memory json = vm.readFile(path);
     bytes memory data = json.parseRaw(".");
     Entry[] memory entries = abi.decode(data, (Entry[]));
