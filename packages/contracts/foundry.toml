@@ -8,7 +8,7 @@ remappings = [
     "openzeppelin-contracts/contracts=lib/openzeppelin-contracts/contracts/",
     "@prb/math=lib/prb-math/",
 ]
-fs_permissions = [{ access = "read", path = "./"}]
+fs_permissions = [{ access = "read-write", path = "./"}]
 
 [fmt]
 int_types = "long"

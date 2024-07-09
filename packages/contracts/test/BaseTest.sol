@@ -45,7 +45,7 @@ contract BaseTest is Test {
     allowedTargets[0] = address(workerRegistration);
     allowedTargets[1] = address(staking);
     allowedTargets[2] = address(treasury);
-    INetworkController networkController = new NetworkController(5, 10 ether, allowedTargets);
+    INetworkController networkController = new NetworkController(5, 0, 0, 10 ether, allowedTargets);
     router.initialize(workerRegistration, staking, address(treasury), networkController, rewards);
     gatewayRegistry =
       GatewayRegistry(address(new TransparentUpgradeableProxy(address(new GatewayRegistry()), address(1234), "")));
