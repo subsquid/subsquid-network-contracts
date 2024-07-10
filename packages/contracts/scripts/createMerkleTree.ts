@@ -46,11 +46,3 @@ console.log(`Finished creating MerkleTree with ${leaves.length} leaves.`);
 console.log(`Root: ${tree.root}`);
 
 fs.writeFileSync("airdrop-data/tree.json", JSON.stringify(tree.dump()));
-
-console.log(
-  tree.getProof([
-    9,
-    "0xedfa74c6bc620cc992d4d2c9a27803748b8f5a64",
-    "987000000000000000000",
-  ]),
-);
