@@ -20,7 +20,6 @@ const leaves = fs
   .readFileSync("./airdrop.csv")
   .toString()
   .split("\n")
-  .slice(1)
   .filter((line) => line)
   .map(parseCsvLine);
 
