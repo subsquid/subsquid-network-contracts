@@ -40,11 +40,11 @@ export class RewardBot {
       const { fromBlock, toBlock } = await this.commitRange();
 
       if (await this.canCommit(fromBlock, toBlock)) {
-        console.log("Can commit", this.address);
+        console.log(`Can commit ${fromBlock} — ${toBlock} from ${this.address}`);
         const workers = await epochStats(fromBlock, toBlock);
         await this.tryToCommit(fromBlock, toBlock, workers);
       } else {
-        console.log("Nothing to commit", this.address);
+        console.log(`Nothing to commit ${fromBlock} — ${toBlock}`);
       }
     } catch (e) {
       console.log(e);
