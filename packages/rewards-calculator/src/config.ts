@@ -35,7 +35,7 @@ export const config = {
     password: env("CLICKHOUSE_PASSWORD"),
     url: env("CLICKHOUSE_URL", "https://clickhouse.subsquid.io/"),
     logsTableName: env("CLICKHOUSE_LOGS_TABLE", "testnet.worker_query_logs"),
-    pingsTableName: env("CLICKHOUSE_PINGS_TABLE", "testnet.worker_pings"),
+    pingsTableName: env("CLICKHOUSE_PINGS_TABLE", "testnet.worker_pings_v2"),
   },
   fordefi: {
     accessToken: env("FORDEFI_ACCESS_TOKEN"),

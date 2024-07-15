@@ -21,9 +21,7 @@ export async function epochStats(
   const to = await getBlockTimestamp(toBlock);
   logger.log(from, "-", to);
   const clickhouse = new ClickhouseClient(from, to);
-  const workers = await clickhouse.getActiveWorkers(
-    shouldSkipSignatureValidation,
-  );
+  const workers = await clickhouse.getActiveWorkers(shouldSkipSignatureValidation);
   if (workers.count() === 0) {
     return workers;
   }

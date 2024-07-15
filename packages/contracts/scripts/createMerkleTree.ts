@@ -35,9 +35,10 @@ for (const leaf of leaves) {
   total += BigInt(leaf[2]);
 }
 
+fs.mkdirSync('airdrop-data', { recursive: true });
 fs.writeFileSync("airdrop-data/leaves.json", JSON.stringify(walletMap));
 console.log(`Finished generating leaves.json.`);
-console.log(`Total distribution: ${total}`);
+console.log(`Total distribution: ${total} (${total / (10n ** 18n)} SQD)`);
 
 const tree = StandardMerkleTree.of(leaves, ["uint32", "address", "uint256"]);
 

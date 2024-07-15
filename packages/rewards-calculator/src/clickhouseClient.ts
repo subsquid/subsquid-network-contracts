@@ -70,14 +70,20 @@ export class ClickhouseClient {
   }
 
   public async getPings(from = this.from, to = this.to) {
-    const query = `select workerId,arrayConcat([toUnixTimestamp('${formatDate(from)}')],arraySort(groupArray(toUnixTimestamp(timestamp))),[toUnixTimestamp('${formatDate(to)}')]) as timestamps from ${
-      config.clickhouse.pingsTableName
-    } where timestamp >= '${formatDate(from)}' and timestamp <= '${formatDate(
-      to,
-    )}' group by workerId`;
+    const query = `select
+       worker_id,
+       arrayConcat(
+         [toUnixTimestamp('${formatDate(from)}')],
+         arraySort(groupArray(toUnixTimestamp(timestamp))),
+         [toUnixTimestamp('${formatDate(to)}')]
+       ) as timestamps 
+       from ${config.clickhouse.pingsTableName} 
+       where timestamp >= '${formatDate(from)}' and timestamp <= '${formatDate(to)}' 
+       group by worker_id
+    `;
     const pings: Record<string, number[]> = {};
     for await (const row of clickhouse.query(query).stream()) {
-      pings[row.workerId] = row.timestamps;
+      pings[row.worker_id] = row.timestamps;
     }
     return pings;
   }
@@ -114,14 +120,14 @@ export async function livenessFactor(clickhouseClient: ClickhouseClient) {
     dayjs(clickhouseClient.from),
     "second",
   );
-  const netwotkStats: Record<string, NetworkStatsEntry> = {};
+  const res: Record<string, NetworkStatsEntry> = {};
   for (const workersKey in pings) {
-    netwotkStats[workersKey] = networkStats(
+    res[workersKey] = networkStats(
       pings[workersKey],
       totalPeriodSeconds,
     );
   }
-  return netwotkStats;
+  return res;
 }
 
 function networkStats(pingTimestamps: number[], epochLength: number) {
