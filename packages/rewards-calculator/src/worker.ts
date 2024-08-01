@@ -101,11 +101,14 @@ export class Worker {
       .mul(this.dTenure);
 
     this.workerReward = this.actualYield.mul(this.bond.add(this.stake.div(2)));
-
     this.stakerReward = this.actualYield.mul(this.stake).div(2);
   }
 
   public stakeWeight(stakeSum: Decimal) {
+    if (!stakeSum) {
+      throw new Error("stakeSum is missed");
+    }
+
     return stakeSum.eq(0) ? new Decimal(0) : this.stake.div(stakeSum);
   }
 

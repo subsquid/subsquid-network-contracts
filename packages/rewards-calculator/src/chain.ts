@@ -8,7 +8,7 @@ import {
   isAddressEqual,
   parseAbiItem,
 } from "viem";
-import { logger } from "./logger";
+import { Context, logger } from './logger';
 import { bigSum, fromBase58 } from "./utils";
 import { Rewards } from "./reward";
 import { Workers } from "./workers";
@@ -89,7 +89,7 @@ export async function getBlockNumber() {
   return Number(await l1Client.getBlockNumber());
 }
 
-export async function lastRewardedBlock() {
+export async function getLastRewardedBlock() {
   return Number(await contracts.rewardsDistribution.read.lastBlockRewarded());
 }
 
@@ -175,6 +175,7 @@ async function sendCommitRequest(
     `Reward commit, blocks ${fromBlock} - ${toBlock}\n${totalWorkers} workers rewarded.
 Worker reward: ${totalWorkerReward} SQD;\nStaker reward: ${totalStarkerReward} SQD`,
   );
+
   return sendFordefiTransaction(request);
 }
 
@@ -204,6 +205,7 @@ async function logIfSuccessfulDistribution(
       .some((event) => event.eventName === "Distributed")
   ) {
     workers.noteSuccessfulCommit(txHash);
+
     await workers.printLogs({
       walletAddress: address,
       index,
@@ -212,6 +214,7 @@ async function logIfSuccessfulDistribution(
 }
 
 export async function commitRewards(
+  ctx: Context,
   fromBlock: number,
   toBlock: number,
   workers: Workers,
@@ -222,9 +225,10 @@ export async function commitRewards(
   const { workerIds, rewardAmounts, stakedAmounts } = rewardsToTxArgs(rewards);
 
   if (!(await canCommit(address))) {
-    console.log("Cannot commit", address);
+    ctx.logger.warn('Cannot commit rewards due blockchain read request');
     return;
   }
+
   const tx = await sendCommitRequest(
     BigInt(fromBlock),
     BigInt(toBlock),
@@ -232,13 +236,14 @@ export async function commitRewards(
     rewardAmounts,
     stakedAmounts,
   );
-
   if (!tx) {
     return;
   }
+
+  ctx.logger.info(`committed rewards ${tx}, logging successful distribution...`);
+
   await logIfSuccessfulDistribution(tx, workers, address, index);
 
-  logger.log("Commit rewards", tx);
   return tx;
 }
 
@@ -263,6 +268,7 @@ async function sendApproveRequest(
 }
 
 async function tryToRecommit(
+  ctx: Context,
   fromBlock: number,
   toBlock: number,
   rewards: Rewards,
@@ -281,6 +287,9 @@ async function tryToRecommit(
   ) {
     return;
   }
+
+  ctx.logger.debug(`trying to recommit...`);
+
   const { workerIds, rewardAmounts, stakedAmounts } = rewardsToTxArgs(rewards);
   const tx = await sendCommitRequest(
     BigInt(fromBlock),
@@ -289,11 +298,14 @@ async function tryToRecommit(
     rewardAmounts,
     stakedAmounts,
   );
-  logger.log("Recommit rewards", tx);
+
+  ctx.logger.debug(`recommit rewards successfully, tx ${tx}`)
+
   return tx;
 }
 
 export async function approveRewards(
+  ctx: Context,
   fromBlock: number,
   toBlock: number,
   workers: Workers,
@@ -314,16 +326,25 @@ export async function approveRewards(
     ]))
   ) {
     const tx = await tryToRecommit(
+      ctx,
       fromBlock,
       toBlock,
       rewards,
       address,
       commitment,
     );
-    if (!tx) logger.log("Cannot approve rewards", address);
-    if (tx) await logIfSuccessfulDistribution(tx, workers, address, index);
+    if (!tx) {
+      ctx.logger.info("cannot re-commit rewards");
+    }
+    else {
+      ctx.logger.info(`re-commited rewards ${tx}, logging successful distribution...`);
+
+      await logIfSuccessfulDistribution(tx, workers, address, index);
+    }
+
     return;
   }
+
   const tx = await sendApproveRequest(
     BigInt(fromBlock),
     BigInt(toBlock),
@@ -331,9 +352,15 @@ export async function approveRewards(
     rewardAmounts,
     stakedAmounts,
   );
-  if (!tx) return;
+  if (!tx) {
+    ctx.logger.info("cannot approve rewards, tx is missing");
+    return;
+  }
+
+  ctx.logger.info(`approved rewards ${tx}, logging successful distribution...`);
+
   await logIfSuccessfulDistribution(tx, workers, address, index);
-  logger.log("Approve rewards", tx);
+
   return tx;
 }
 

@@ -1,11 +1,11 @@
-import { ClickHouse } from "clickhouse";
-import dayjs from "dayjs";
-import utc from "dayjs/plugin/utc";
+import { ClickHouse } from 'clickhouse';
+import dayjs from 'dayjs';
+import utc from 'dayjs/plugin/utc';
 
-import { Workers } from "./workers";
-import { logger } from "./logger";
-import { config } from "./config";
-import { sum } from "./utils";
+import { Workers } from './workers';
+import { Context } from './logger';
+import { config } from './config';
+import { sum } from './utils';
 
 dayjs.extend(utc);
 const clickhouse = new ClickHouse({
@@ -25,6 +25,7 @@ export class ClickhouseClient {
   private readonly workers: Workers;
 
   constructor(
+    public ctx: Context,
     public from: Date,
     public to: Date,
   ) {
@@ -55,13 +56,14 @@ export class ClickhouseClient {
       "(collector_timestamp - worker_timestamp) / 60000 as timeDiff",
     ];
     await this.logTotalQueries();
-    const query = `select ${columns.join(",")} from ${
-      config.clickhouse.logsTableName
-    } where ${
-      config.clickhouse.logsTableName
-    }.worker_timestamp >= '${formatDate(this.from)}' and ${
-      config.clickhouse.logsTableName
-    }.worker_timestamp <= '${formatDate(this.to)}' and timeDiff < 20 order by query_hash`;
+
+    const query = `
+      select ${columns.join(",")}
+       from ${config.clickhouse.logsTableName}
+       where worker_timestamp >= '${formatDate(this.from)}' 
+        and worker_timestamp <= '${formatDate(this.to)}' 
+        and timeDiff < 20 order by query_hash
+    `;
     for await (const row of clickhouse.query(query).stream()) {
       const worker = this.workers.add(row.worker_id);
       await worker.processQuery(row, shouldSkipSignatureValidation);
@@ -89,15 +91,15 @@ export class ClickhouseClient {
   }
 
   private async logTotalQueries() {
-    const count = `select COUNT(*) as total from ${
-      config.clickhouse.logsTableName
-    } where ${
-      config.clickhouse.logsTableName
-    }.worker_timestamp >= '${formatDate(this.from)}' and ${
-      config.clickhouse.logsTableName
-    }.worker_timestamp <= '${formatDate(this.to)}'`;
+    const count = `
+        select COUNT(*) as total 
+        from ${config.clickhouse.logsTableName} 
+        where worker_timestamp >= '${formatDate(this.from)}' and worker_timestamp <= '${formatDate(this.to)}'
+    `;
+
     const [{ total }] = (await clickhouse.query(count).toPromise()) as any;
-    logger.log("Processing queries:", total);
+
+    this.ctx.logger.debug(`processing queries: ${total}`);
   }
 }
 
@@ -115,11 +117,14 @@ function totalOfflineSeconds(diffs: number[]) {
 }
 
 export async function livenessFactor(clickhouseClient: ClickhouseClient) {
+  clickhouseClient.ctx.logger.debug('calculating liveness factor...')
+
   const pings = await clickhouseClient.getPings();
   const totalPeriodSeconds = dayjs(clickhouseClient.to).diff(
     dayjs(clickhouseClient.from),
     "second",
   );
+
   const res: Record<string, NetworkStatsEntry> = {};
   for (const workersKey in pings) {
     res[workersKey] = networkStats(
@@ -127,6 +132,9 @@ export async function livenessFactor(clickhouseClient: ClickhouseClient) {
       totalPeriodSeconds,
     );
   }
+
+  clickhouseClient.ctx.logger.debug(`liveness factor calculated for ${Object.keys(pings).length}`)
+
   return res;
 }
 
