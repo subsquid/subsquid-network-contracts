@@ -8,7 +8,7 @@ import {
   isAddressEqual,
   parseAbiItem,
 } from "viem";
-import { Context, logger } from './logger';
+import { Context } from './logger';
 import { bigSum, fromBase58 } from "./utils";
 import { Rewards } from "./reward";
 import { Workers } from "./workers";
@@ -180,6 +180,7 @@ Worker reward: ${totalWorkerReward} SQD;\nStaker reward: ${totalStarkerReward} S
 }
 
 async function logIfSuccessfulDistribution(
+  ctx: Context,
   txHash: Hex,
   workers: Workers,
   address: string,
@@ -206,7 +207,7 @@ async function logIfSuccessfulDistribution(
   ) {
     workers.noteSuccessfulCommit(txHash);
 
-    await workers.printLogs({
+    await workers.printLogs(ctx,{
       walletAddress: address,
       index,
     });
@@ -242,7 +243,7 @@ export async function commitRewards(
 
   ctx.logger.info(`committed rewards ${tx}, logging successful distribution...`);
 
-  await logIfSuccessfulDistribution(tx, workers, address, index);
+  await logIfSuccessfulDistribution(ctx, tx, workers, address, index);
 
   return tx;
 }
@@ -339,7 +340,7 @@ export async function approveRewards(
     else {
       ctx.logger.info(`re-commited rewards ${tx}, logging successful distribution...`);
 
-      await logIfSuccessfulDistribution(tx, workers, address, index);
+      await logIfSuccessfulDistribution(ctx, tx, workers, address, index);
     }
 
     return;
@@ -359,7 +360,7 @@ export async function approveRewards(
 
   ctx.logger.info(`approved rewards ${tx}, logging successful distribution...`);
 
-  await logIfSuccessfulDistribution(tx, workers, address, index);
+  await logIfSuccessfulDistribution(ctx, tx, workers, address, index);
 
   return tx;
 }
