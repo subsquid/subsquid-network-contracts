@@ -1,19 +1,19 @@
 import pino from 'pino';
 import dayjs from 'dayjs';
-import pinoms, { Level, prettyStream, Streams } from 'pino-multi-stream';
+import pinoms from 'pino-multi-stream';
 
 const shouldLog = () => process.env.VERBOSE === "true";
 const prettyLog = process.env.DISABLE_PRETTY_PRINT === undefined && process.stdout.isTTY;
-const logLevel = (process.env.LOG_LEVEL || 'debug') as Level;
+const logLevel = (process.env.LOG_LEVEL || 'debug') as pinoms.Level;
 
 export type CtxValue = Record<string, string | number>
 
-const streams: Streams = [
+const streams: pinoms.Streams = [
   {
 
     level: logLevel,
     stream: prettyLog
-      ? prettyStream({
+      ? pinoms.prettyStream({
         prettyPrint: {
           messageKey: 'message',
           singleLine: true,

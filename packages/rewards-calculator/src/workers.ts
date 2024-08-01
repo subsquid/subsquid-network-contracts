@@ -10,7 +10,7 @@ import {
   registeredWorkersCount,
   storagePerWorkerInGb,
   targetCapacity as getTargetCapacity,
-} from "./chain";
+} from './chain';
 import {
   bigIntToDecimal,
   decimalSum,
@@ -18,21 +18,21 @@ import {
   formatSqd,
   keysToFixed,
   sum,
-} from "./utils";
+} from './utils';
 import {
   ClickhouseClient,
   historicalLiveness,
   livenessFactor,
-} from "./clickhouseClient";
-import { logger } from "./logger";
-import { Worker } from "./worker";
-import dayjs from "dayjs";
-import { config } from "./config";
-import { Rewards } from "./reward";
+} from './clickhouseClient';
+import { Context, logger } from './logger';
+import { Worker } from './worker';
+import dayjs from 'dayjs';
+import { config } from './config';
+import { Rewards } from './reward';
 
-import Decimal from "decimal.js";
+import Decimal from 'decimal.js';
 
-Decimal.set({ precision: 28, minE: -9 });
+Decimal.set({precision: 28, minE: -9});
 
 const YEAR = 365 * 24 * 60 * 60;
 
@@ -44,10 +44,11 @@ export class Workers {
   baseApr = new Decimal(0);
   stakeFactor = new Decimal(0);
   rAPR = new Decimal(0);
-  commitmentTxHash = "";
-  commitmentError = "";
+  commitmentTxHash = '';
+  commitmentError = '';
 
-  constructor(private clickhouseClient: ClickhouseClient) {}
+  constructor(private clickhouseClient: ClickhouseClient) {
+  }
 
   public add(workerId: string) {
     if (this.workers[workerId]) {
@@ -103,11 +104,11 @@ export class Workers {
       this.nextDistributionStartBlockNumber,
     );
     this.parseMulticallResult(
-      "stake",
+      'stake',
       this.mapMulticallResult(capedStakes, bigIntToDecimal),
     );
     this.parseMulticallResult(
-      "totalStake",
+      'totalStake',
       this.mapMulticallResult(totalStakes, bigIntToDecimal),
     );
   }
@@ -147,10 +148,10 @@ export class Workers {
     });
   }
 
-  public async calculateRewards() {
+  async calculateRewards() {
     const duration = dayjs(this.clickhouseClient.to).diff(
       dayjs(this.clickhouseClient.from),
-      "second",
+      'second',
     );
     const baseApr = await currentApy(
       this.count(),
@@ -166,15 +167,15 @@ export class Workers {
     this.map((worker) => worker.getRewards(rMax));
   }
 
-  public noteSuccessfulCommit(txHash: string) {
+  noteSuccessfulCommit(txHash: string) {
     this.commitmentTxHash = txHash;
   }
 
-  public noteFailedCommit(error: Error) {
+  noteFailedCommit(error: Error) {
     this.commitmentError = error.toString();
   }
 
-  public async printLogs({
+  async printLogs(ctx: Context, {
     walletAddress,
     index,
   }: {
@@ -190,11 +191,11 @@ export class Workers {
     );
     const current_capacity = active_workers_count * storagePerWorker;
 
-    const stakeSum = decimalSum(this.map(({ stake }) => stake));
+    const stakeSum = decimalSum(this.map(({stake}) => stake));
 
     const duration = dayjs(this.clickhouseClient.to).diff(
       dayjs(this.clickhouseClient.from),
-      "second",
+      'second',
     );
 
     const total_reward = decimalSum(
@@ -205,41 +206,39 @@ export class Workers {
     const botId = process.env.BOT_NAME || `bot-${index}`;
     const isCommitSuccess = !this.commitmentError;
 
-    console.log(
-      JSON.stringify({
-        time: new Date(),
-        epoch_start: this.clickhouseClient.from,
-        epoch_end: this.clickhouseClient.to,
-        type: "rewards_report",
-        bot_id: botId,
-        bot_wallet: address,
-        is_commit_success: isCommitSuccess,
-        commit_tx_hash: this.commitmentTxHash ?? "",
-        commit_error_message: this.commitmentError ?? "",
-        target_capacity,
-        current_capacity,
-        active_workers_count,
-        base_apr: this.baseApr.toFixed(),
-        stake_factor: this.stakeFactor.toFixed(),
-        r_apr: this.rAPR.toFixed(),
-        total_reward: total_reward.toFixed(),
-        total_chunks_read: this.totalChunksRead(),
-        total_bytes_sent: this.totalBytesSent(),
-        total_requests: sum(this.map((w) => w.totalRequests)),
-        valid_requests: sum(this.map((w) => w.requestsProcessed)),
-      }),
-    );
+    ctx.logger.info({
+      time: new Date(),
+      epoch_start: this.clickhouseClient.from,
+      epoch_end: this.clickhouseClient.to,
+      type: 'rewards_report',
+      bot_id: botId,
+      bot_wallet: address,
+      is_commit_success: isCommitSuccess,
+      commit_tx_hash: this.commitmentTxHash ?? '',
+      commit_error_message: this.commitmentError ?? '',
+      target_capacity,
+      current_capacity,
+      active_workers_count,
+      base_apr: this.baseApr.toFixed(),
+      stake_factor: this.stakeFactor.toFixed(),
+      r_apr: this.rAPR.toFixed(),
+      total_reward: total_reward.toFixed(),
+      total_chunks_read: this.totalChunksRead(),
+      total_bytes_sent: this.totalBytesSent(),
+      total_requests: sum(this.map((w) => w.totalRequests)),
+      valid_requests: sum(this.map((w) => w.requestsProcessed)),
+    });
 
     // If commit is not successful, don't print worker report
     if (!isCommitSuccess) {
+      ctx.logger.warn('skipping worker report due to failed commit');
       return;
     }
 
     this.map((worker) =>
-      console.log(
-        JSON.stringify({
+        ctx.logger.info({
           time: new Date(),
-          type: "worker_report",
+          type: 'worker_report',
           bot_id: botId,
           bot_wallet: address,
           worker_id: worker.peerId,
@@ -254,8 +253,7 @@ export class Workers {
           chunks_read: worker.chunksRead,
           requests: worker.totalRequests,
           valid_requests: worker.requestsProcessed,
-        }),
-      ),
+        })
     );
   }
 
@@ -272,31 +270,31 @@ export class Workers {
     multicallResult: MulticallResult<S>[],
     mapper: (v: S) => T,
   ): MulticallResult<T>[] {
-    return multicallResult.map(({ status, error, result }) =>
-      status === "success"
-        ? { status, error, result: mapper(result) }
-        : { status, error, result },
+    return multicallResult.map(({status, error, result}) =>
+      status === 'success'
+        ? {status, error, result: mapper(result)}
+        : {status, error, result},
     );
   }
 
   private totalBytesSent() {
-    return sum(this.map(({ bytesSent }) => bytesSent));
+    return sum(this.map(({bytesSent}) => bytesSent));
   }
 
   private totalChunksRead() {
-    return sum(this.map(({ chunksRead }) => chunksRead));
+    return sum(this.map(({chunksRead}) => chunksRead));
   }
 
   private totalSupply() {
     return this.bond
       .mul(this.count())
-      .add(decimalSum(this.map(({ stake }) => stake)));
+      .add(decimalSum(this.map(({stake}) => stake)));
   }
 
   private async rUnlocked() {
     const duration = dayjs(this.clickhouseClient.to).diff(
       dayjs(this.clickhouseClient.from),
-      "second",
+      'second',
     );
     const apy = bigIntToDecimal(
       await currentApy(this.count(), this.nextDistributionStartBlockNumber),
@@ -308,7 +306,7 @@ export class Workers {
     return new Decimal(1);
   }
 
-  public async logStats() {
+  public async logStats(ctx: Context) {
     const stats = Object.fromEntries(
       this.map((worker) => [
         worker.peerId,
@@ -325,24 +323,22 @@ export class Workers {
     );
     const totalUnlocked = await this.rUnlocked();
     const totalReward = decimalSum(
-      this.map(({ workerReward, stakerReward }) =>
+      this.map(({workerReward, stakerReward}) =>
         workerReward.add(stakerReward),
       ),
     );
     logger.table(stats);
-    logger.log("Max unlocked:", formatSqd(totalUnlocked));
-    logger.log("Total reward:", formatSqd(totalReward));
-    this.logPercentageUnlocked(totalReward, totalUnlocked);
-  }
-
-  private logPercentageUnlocked(totalReward: Decimal, totalUnlocked: Decimal) {
-    if (!totalUnlocked) logger.log("Percentage unlocked 0 %");
-    else
+    logger.log('Max unlocked:', formatSqd(totalUnlocked));
+    logger.log('Total reward:', formatSqd(totalReward));
+    if (!totalUnlocked) {
+      logger.log('Percentage unlocked 0 %');
+    } else {
       logger.log(
-        "Percentage of max unlocked",
+        'Percentage of max unlocked',
         totalReward.mul(10000).div(totalUnlocked).div(100).toFixed(2),
-        "%",
+        '%',
       );
+    }
   }
 
   public async rewards(): Promise<Rewards> {
