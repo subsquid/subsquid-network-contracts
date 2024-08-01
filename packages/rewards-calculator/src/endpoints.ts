@@ -2,6 +2,7 @@ import express from "express";
 import { epochStats } from "./reward";
 import { config, l1Client } from "./config";
 import { getBlockNumber } from "./chain";
+import { Context } from './logger';
 
 const app = express();
 const port = process.env.PORT ?? 3000;
@@ -37,16 +38,22 @@ async function rewards(
     res.status(400).send("fromBlock is not an integer");
     return;
   }
+
   if (!isInteger(toBlock)) {
     res.status(400).send("toBlock is not an integer");
     return;
   }
+
   if (Number(fromBlock) >= Number(toBlock)) {
     res.status(400).send("fromBlock should be less than toBlock");
     return;
   }
+
+  const ctx = new Context()
+
   try {
     const _epochStats = await epochStats(
+      ctx,
       Number(fromBlock),
       Number(toBlock),
       true,
