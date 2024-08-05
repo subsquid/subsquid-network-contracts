@@ -41,6 +41,7 @@ export const config = {
     accessToken: env("FORDEFI_ACCESS_TOKEN"),
     vaultId: env("FORDEFI_VAULT_ID"),
     secretPath: env("FORDEFI_SECRET_KEY", "./private.pem"),
+    txGasPrice: env("FORDEFI_TX_GAS_PRICE", "100000000"),
   },
   network: {
     gasLimit: BigInt(env("GAS_LIMIT", 10_000_000n)),

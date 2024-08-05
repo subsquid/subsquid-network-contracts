@@ -17,7 +17,7 @@ export function fordefiRequest(to: string, data: string, name: string) {
         type: "custom",
         details: {
           type: "legacy",
-          price: "100000000",
+          price: config.fordefi.txGasPrice,
         },
       },
       fail_on_prediction_failure: false,
