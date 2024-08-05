@@ -53,6 +53,9 @@ export const config = {
       "L2_RPC_URL",
       "https://arbitrum-sepolia.infura.io/v3/39b9cd000b9c4637b58d5a5214676196",
     ),
+    l1RpcUrl: env<string | undefined>(
+      "L1_RPC_URL"
+    ),
   },
 };
 
@@ -103,7 +106,7 @@ export const publicClient = createPublicClient({
 });
 export const l1Client = createPublicClient({
   chain: l1Chain,
-  transport: http(),
+  transport: http(config.network.l1RpcUrl),
   batch: {
     multicall: true,
   },
