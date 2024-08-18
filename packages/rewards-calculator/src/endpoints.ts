@@ -17,19 +17,30 @@ function isInteger(value: string): boolean {
 }
 
 const duration = async (_fromBlock: bigint, _toBlock: bigint) => {
-  const fromBlock = await l1Client.getBlock({
-    blockNumber: _fromBlock,
-  });
-  const toBlock = await l1Client.getBlock({
-    blockNumber: _toBlock,
-  });
+  const fromBlock = await l1Client.getBlock({ blockNumber: _fromBlock });
+  const toBlock = await l1Client.getBlock({ blockNumber: _toBlock });
+
   return Number(toBlock.timestamp - fromBlock.timestamp);
 };
 
-const bn = (value: { toString(): string }) =>
-  BigInt(Math.floor(Number(value.toString())));
+const bn = (value: { toString(): string }) => BigInt(Math.floor(Number(value.toString())));
+
+function newRequestId() {
+  return `gen-${Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15)}`;
+}
+
+export const NGINX_REQUEST_ID = 'x-request-id';
+export const CTX_REQ_ID = 'req_id';
+
+
+function getContextFromRequest(req: express.Request) {
+  const req_id = req.header(NGINX_REQUEST_ID) || newRequestId();
+
+  return new Context({ [CTX_REQ_ID]: req_id })
+}
 
 async function rewards(
+  ctx: Context,
   fromBlock: string,
   toBlock: string,
   res: express.Response,
@@ -49,16 +60,18 @@ async function rewards(
     return;
   }
 
-  const ctx = new Context()
-
   try {
+    ctx.logger.trace('getting epoch stats...')
     const _epochStats = await epochStats(
       ctx,
       Number(fromBlock),
       Number(toBlock),
       true,
     );
+
+    ctx.logger.trace('getting epoch duration...')
     const _duration = await duration(BigInt(fromBlock), BigInt(toBlock));
+    ctx.logger.trace('done')
     const workerStats = _epochStats.map((worker) => ({
       id: worker.peerId,
       workerReward: bn(worker.workerReward),
@@ -97,25 +110,52 @@ async function rewards(
       workers: workerStats,
     });
   } catch (e: any) {
-    console.error(e);
+    ctx.logger.error({
+      message: 'failed to calculate rewards',
+      err: e
+    });
+
     res.status(500).send(e.message);
   }
 }
 
+function maskUrlPath<T = string>(url: T): T {
+  if (!url) return url;
+
+
+  const urlObj = new URL(url as string);
+  urlObj.pathname = '...';
+
+  return urlObj.toString() as T;
+}
+
 app.get("/config", async (_, res) => {
   const { fordefi, clickhouse, ...rest } = config;
+
+  rest.network.l1RpcUrl = maskUrlPath(rest.network.l1RpcUrl)
+  rest.network.l2RpcUrl = maskUrlPath(rest.network.l2RpcUrl)
+
   res.jsonp(rest);
 });
 
 app.get("/rewards/:fromBlock/:toBlock", async (req, res) => {
+  const ctx = getContextFromRequest(req)
   const { fromBlock, toBlock } = req.params;
-  await rewards(fromBlock, toBlock, res);
+
+  await rewards(ctx, fromBlock, toBlock, res);
 });
 
 app.get("/rewards/:lastNBlocks", async (req, res) => {
+  const ctx = getContextFromRequest(req);
+
+  ctx.logger.trace('getting last block number...');
+
   const lastBlock = await getBlockNumber();
   const fromBlock = lastBlock - Number(req.params.lastNBlocks);
-  await rewards(fromBlock.toString(), lastBlock.toString(), res);
+
+  ctx.logger.trace(`calculating ${fromBlock.toString()} to ${lastBlock.toString()}...`);
+
+  await rewards(ctx, fromBlock.toString(),lastBlock.toString(), res);
 });
 
 app.listen(port, () => {

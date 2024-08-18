@@ -42,7 +42,8 @@ export async function getLatestDistributionBlock() {
         fromBlock: toBlock - offset,
       })
     ).map(({ blockNumber }) => Number(blockNumber));
-    console.log(distributionBlocks);
+
+
     if (distributionBlocks.length > 0) {
       const maxBlock = Math.max(...distributionBlocks);
       return BigInt(maxBlock);

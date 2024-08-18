@@ -47,23 +47,27 @@ export class Workers {
   commitmentTxHash = '';
   commitmentError = '';
 
-  constructor(private clickhouseClient: ClickhouseClient) {
-  }
+  constructor(private clickhouseClient: ClickhouseClient) {}
 
-  public add(workerId: string) {
+  add(workerId: string) {
     if (this.workers[workerId]) {
       return this.workers[workerId];
     }
+
     this.workers[workerId] = new Worker(workerId);
     return this.workers[workerId];
   }
 
-  public map<T>(fn: (worker: Worker, index: number) => T) {
+  map<T>(fn: (worker: Worker, index: number) => T) {
     return Object.values(this.workers).map(fn);
   }
 
-  public count() {
+  count() {
     return Object.keys(this.workers).length;
+  }
+
+  getAllIds() {
+    return Object.keys(this.workers);
   }
 
   public async getNextDistributionStartBlockNumber() {
@@ -131,8 +135,8 @@ export class Workers {
 
   public async getDTenure(epochStartBlockNumber: number) {
     const epochLengthInBlocks = await epochLength();
-    const tenureStart =
-      epochStartBlockNumber - epochLengthInBlocks * config.tenureEpochCount;
+    const tenureStart = epochStartBlockNumber - epochLengthInBlocks * config.tenureEpochCount;
+
     const epochStartBlocks = [...new Array(config.tenureEpochCount + 1)].map(
       (_, i) => tenureStart + i * epochLengthInBlocks,
     );

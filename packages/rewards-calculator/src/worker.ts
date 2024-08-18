@@ -35,11 +35,14 @@ export class Worker {
     shouldSkipSignatureValidation: boolean,
   ) {
     this.totalRequests++;
-    if (!shouldSkipSignatureValidation && !(await validateSignatures(query)))
+    if (!shouldSkipSignatureValidation && !(await validateSignatures(query))) {
       return false;
+    }
+
     this.bytesSent += query.output_size;
     this.chunksRead += query.num_read_chunks;
     this.requestsProcessed++;
+
     return true;
   }
 
