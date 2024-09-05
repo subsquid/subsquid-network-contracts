@@ -252,6 +252,7 @@ async function sendApproveRequest(
   const data = encodeFunctionData({
     abi: contracts.rewardsDistribution.abi,
     functionName: "approve",
+
     args: [fromBlock, toBlock, workerIds, rewardAmounts, stakedAmounts],
   });
   const request = fordefiRequest(
@@ -324,6 +325,7 @@ export async function approveRewards(
     if (tx) await logIfSuccessfulDistribution(tx, workers, address, index);
     return;
   }
+
   const tx = await sendApproveRequest(
     BigInt(fromBlock),
     BigInt(toBlock),

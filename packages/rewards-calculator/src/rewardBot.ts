@@ -4,7 +4,6 @@ import {
   commitRewards,
   epochLength,
   getBlockNumber,
-  getBlockTimestamp,
   getRegistrations,
   isCommitted,
   lastRewardedBlock,
@@ -15,7 +14,7 @@ import { addresses, config, contracts, publicClient } from "./config";
 import { Hex, parseAbiItem } from "viem";
 import type { Workers } from "./workers";
 import { logger } from "./logger";
-import { bigSum, decimalSum } from "./utils";
+import { decimalSum } from "./utils";
 
 async function firstRegistrationBlock(registrations: Registrations) {
   return Math.min(
@@ -37,12 +36,21 @@ export class RewardBot {
 
   private async commitIfPossible() {
     try {
-      const { fromBlock, toBlock } = await this.commitRange();
+      const { fromBlock, toBlock, epochLen, chunkType } = await this.commitRange();
 
       if (await this.canCommit(fromBlock, toBlock)) {
         console.log(`Can commit ${fromBlock} — ${toBlock} from ${this.address}`);
-        const workers = await epochStats(fromBlock, toBlock);
-        await this.tryToCommit(fromBlock, toBlock, workers);
+
+        /**
+         * We need to calculate 2 epochs to get the correct period for the rewards
+         * because of splitting the rewards to chunks
+         */
+        const workers = await epochStats(fromBlock - epochLen, toBlock);
+
+        /**
+         * We send to blockchain original epoch length due to a flaw in the contract
+         */
+        await this.tryToCommit(fromBlock, toBlock, workers.filterChunk(chunkType));
       } else {
         console.log(`Nothing to commit ${fromBlock} — ${toBlock}`);
       }
@@ -105,15 +113,24 @@ export class RewardBot {
     try {
       const ranges = await approveRanges();
       if (ranges.shouldApprove) {
-        const workers = await epochStats(ranges.fromBlock, ranges.toBlock);
+        /**
+         * We need to calculate 2 epochs to get the correct period for the rewards
+         * because of splitting the rewards to chunks
+         */
+        const workers = await epochStats(ranges.fromBlock - ranges.epochLen, ranges.toBlock);
+
+        /**
+         * We send to blockchain original epoch length due to a flaw in the contract
+         */
         const tx = await approveRewards(
           ranges.fromBlock,
           ranges.toBlock,
-          workers,
+          workers.filterChunk(ranges.chunkType),
           this.address,
           this.index,
           ranges.commitment,
         );
+
         if (tx) {
           console.log(
             JSON.stringify({
@@ -133,27 +150,36 @@ export class RewardBot {
     setTimeout(() => this.approveIfNecessary(), config.workTimeout);
   }
 
-  private async commitRange() {
+  private async commitRange(): Promise<{ fromBlock: number, toBlock: number, epochLen: number, chunkType: 'even' | 'odd' }> {
     const epochLen = await epochLength();
     const maxCommitBlocksCovered = epochLen * config.maxEpochsPerCommit;
+
     let _lastRewardedBlock = await lastRewardedBlock();
     if (_lastRewardedBlock === 0) {
       _lastRewardedBlock = await firstRegistrationBlock(
         await getRegistrations(),
       );
     }
+
     const currentBlock = await getBlockNumber();
     const lastConfirmedBlock = currentBlock - config.epochConfirmationBlocks;
     if (lastConfirmedBlock - _lastRewardedBlock < epochLen) {
-      return { fromBlock: 0, toBlock: 0 };
+      return { fromBlock: 0, toBlock: 0, epochLen, chunkType: 'even' };
     }
+
+
     const toBlock = Math.min(
       _lastRewardedBlock + maxCommitBlocksCovered,
       lastConfirmedBlock,
     );
     const fromBlock = _lastRewardedBlock + 1;
-    return { fromBlock, toBlock };
+
+    return { fromBlock, toBlock, epochLen, chunkType: getChunkType(toBlock, epochLen) };
   }
+}
+
+function getChunkType(block: number, epochLen: number) : 'even' | 'odd' {
+  return Math.ceil(block / epochLen) % 2 === 0 ? 'even' : 'odd'
 }
 
 async function approveRanges(): Promise<
@@ -164,9 +190,13 @@ async function approveRanges(): Promise<
       shouldApprove: true;
       fromBlock: number;
       toBlock: number;
+      chunkType: 'odd' | 'even';
+      epochLen: number;
       commitment?: Hex;
     }
 > {
+  const epochLen = await epochLength();
+
   const commitmentBlocks = (
     await publicClient.getLogs({
       address: addresses.rewardsDistribution,
@@ -197,8 +227,13 @@ async function approveRanges(): Promise<
     return { shouldApprove: false };
   }
   if (!latestCommit.fromBlock) return { shouldApprove: false };
+
+
+
   return {
     shouldApprove: true,
     ...latestCommit,
+    epochLen,
+    chunkType: getChunkType(latestCommit.toBlock, epochLen)
   };
 }

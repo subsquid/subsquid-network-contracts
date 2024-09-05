@@ -31,6 +31,7 @@ import { config } from "./config";
 import { Rewards } from "./reward";
 
 import Decimal from "decimal.js";
+import bs58 from "bs58";
 
 Decimal.set({ precision: 28, minE: -9 });
 
@@ -49,16 +50,29 @@ export class Workers {
 
   constructor(private clickhouseClient: ClickhouseClient) {}
 
-  public add(workerId: string) {
-    if (this.workers[workerId]) {
-      return this.workers[workerId];
+  public add(peerId: string) {
+    if (this.workers[peerId]) {
+      return this.workers[peerId];
     }
-    this.workers[workerId] = new Worker(workerId);
-    return this.workers[workerId];
+    this.workers[peerId] = new Worker(peerId);
+    return this.workers[peerId];
   }
 
   public map<T>(fn: (worker: Worker, index: number) => T) {
     return Object.values(this.workers).map(fn);
+  }
+
+  filterChunk(chunkType: 'odd' | 'even') {
+    const newWorkers =  Object.values(this.workers).filter(w => {
+      const arr = bs58.decode(w.peerId)
+      const isEven = arr[arr.length - 1] % 2 === 0;
+
+      return chunkType === 'even' ? isEven : !isEven;
+    });
+
+    this.workers = Object.fromEntries(newWorkers.map(w => [w.peerId, w]));
+
+    return this
   }
 
   public count() {
