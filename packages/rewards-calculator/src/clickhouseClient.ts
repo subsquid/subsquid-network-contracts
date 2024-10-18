@@ -32,6 +32,38 @@ export class ClickhouseClient {
   }
 
   public async getActiveWorkers(shouldSkipSignatureValidation = false) {
+    if (shouldSkipSignatureValidation) {
+      const columns = [
+        "worker_id",
+        "sum(num_read_chunks) as num_read_chunks",
+        "sum(output_size) as output_size",
+        "count(*) as totalRequests",
+      ];
+      await this.logTotalQueries();
+      const query = `
+        select ${columns.join(",")}
+        from ${
+          config.clickhouse.logsTableName
+        }
+        where
+          ${config.clickhouse.logsTableName}.worker_timestamp >= '${formatDate(this.from)}' and  
+          ${config.clickhouse.logsTableName}.worker_timestamp <= '${formatDate(this.to)}' and
+          (collector_timestamp - worker_timestamp) / 60000 < 20 order by query_hash
+        group by worker_id
+      `;
+      const res: any[] = await clickhouse.query(query).toPromise()
+
+      for await (const row of res) {
+        const worker = this.workers.add(row.worker_id);
+        worker.totalRequests = row.totalRequests;
+        worker.requestsProcessed = row.totalRequests;
+        worker.bytesSent = row.output_size;
+        worker.chunksRead = row.num_read_chunks;
+      }
+
+      return this.workers;
+    } 
+
     const columns = [
       "client_id",
       "worker_id",
@@ -64,8 +96,9 @@ export class ClickhouseClient {
     }.worker_timestamp <= '${formatDate(this.to)}' and timeDiff < 20 order by query_hash`;
     for await (const row of clickhouse.query(query).stream()) {
       const worker = this.workers.add(row.worker_id);
-      await worker.processQuery(row, shouldSkipSignatureValidation);
+      await worker.processQuery(row, false);
     }
+
     return this.workers;
   }
 
