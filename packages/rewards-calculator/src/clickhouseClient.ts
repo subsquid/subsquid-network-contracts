@@ -133,6 +133,7 @@ export async function livenessFactor(clickhouseClient: ClickhouseClient) {
 function networkStats(pingTimestamps: number[], epochLength: number) {
   const diffs = secondDiffs(pingTimestamps);
   const totalTimeOffline = totalOfflineSeconds(diffs);
+
   return {
     totalPings: diffs.length - 1,
     totalTimeOffline: totalTimeOffline,
