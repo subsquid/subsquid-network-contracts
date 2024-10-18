@@ -32,6 +32,44 @@ export class ClickhouseClient {
   }
 
   public async getActiveWorkers(shouldSkipSignatureValidation = false) {
+    if (shouldSkipSignatureValidation) {
+      const columns = [
+        "worker_id",
+        "sum(num_read_chunks) as num_read_chunks",
+        "sum(output_size) as output_size",
+        "count(*) as totalRequests",
+      ];
+      await this.logTotalQueries();
+      const query = `
+        select ${columns.join(",")}
+        from ${
+          config.clickhouse.logsTableName
+        }
+        where
+          ${config.clickhouse.logsTableName}.worker_timestamp >= '${formatDate(this.from)}' and  
+          ${config.clickhouse.logsTableName}.worker_timestamp <= '${formatDate(this.to)}' and
+          (toUnixTimestamp64Micro(collector_timestamp) - toUnixTimestamp64Micro(worker_timestamp)) / 60000000 < 20
+        group by worker_id
+      `;
+      const res: any[] = await clickhouse.query(query).toPromise()
+
+
+
+      let rows = 0
+      for await (const row of res) {
+        const worker = this.workers.add(row.worker_id);
+        worker.totalRequests = row.totalRequests;
+        worker.requestsProcessed = row.totalRequests;
+        worker.bytesSent = row.output_size;
+        worker.chunksRead = row.num_read_chunks;
+        rows+= row.totalRequests
+      }
+
+      console.log('ROWS', rows)
+
+      return this.workers;
+    } 
+
     const columns = [
       "client_id",
       "worker_id",
@@ -62,10 +100,15 @@ export class ClickhouseClient {
     }.worker_timestamp >= '${formatDate(this.from)}' and ${
       config.clickhouse.logsTableName
     }.worker_timestamp <= '${formatDate(this.to)}' and timeDiff < 20 order by query_hash`;
+
+    let rows = 0
     for await (const row of clickhouse.query(query).stream()) {
+      rows++
       const worker = this.workers.add(row.worker_id);
-      await worker.processQuery(row, shouldSkipSignatureValidation);
+      await worker.processQuery(row, false);
     }
+    console.log('ROWS', rows)
+
     return this.workers;
   }
 
@@ -85,6 +128,7 @@ export class ClickhouseClient {
     for await (const row of clickhouse.query(query).stream()) {
       pings[row.worker_id] = row.timestamps;
     }
+
     return pings;
   }
 

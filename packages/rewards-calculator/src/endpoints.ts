@@ -49,7 +49,7 @@ async function rewards(
     const _epochStats = await epochStats(
       Number(fromBlock),
       Number(toBlock),
-      true,
+      config.skipSignatureValidation,
     );
     const _duration = await duration(BigInt(fromBlock), BigInt(toBlock));
     const workerStats = _epochStats.map((worker) => ({

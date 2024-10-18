@@ -45,7 +45,7 @@ export class RewardBot {
          * We need to calculate 2 epochs to get the correct period for the rewards
          * because of splitting the rewards to chunks
          */
-        const workers = await epochStats(fromBlock - epochLen, toBlock);
+        const workers = await epochStats(fromBlock - epochLen, toBlock, config.skipSignatureValidation);
 
         /**
          * We send to blockchain original epoch length due to a flaw in the contract
@@ -117,7 +117,7 @@ export class RewardBot {
          * We need to calculate 2 epochs to get the correct period for the rewards
          * because of splitting the rewards to chunks
          */
-        const workers = await epochStats(ranges.fromBlock - ranges.epochLen, ranges.toBlock);
+        const workers = await epochStats(ranges.fromBlock - ranges.epochLen, ranges.toBlock, config.skipSignatureValidation);
 
         /**
          * We send to blockchain original epoch length due to a flaw in the contract
