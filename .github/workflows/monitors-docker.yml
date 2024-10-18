@@ -35,7 +35,7 @@ jobs:
           push: true
           context: packages/balance-monitor
           platforms: linux/amd64,linux/arm64,linux/arm/v7,linux/arm/v8
-          tags: subsquid/balance-monitor:latest
+          tags: subsquid/balance-monitor:${{ inputs.tag }}
 
       - name: Build & publish rewards monitor image
         uses: docker/build-push-action@v5
