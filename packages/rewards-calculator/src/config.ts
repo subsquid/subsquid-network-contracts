@@ -30,7 +30,7 @@ export const config = {
   rewardEpochLength: Number(env("REWARD_EPOCH_LENGTH_BLOCKS", 7000)),
   epochConfirmationBlocks: Number(env("EPOCH_CONFIRMATION_BLOCKS", 150)),
   maxEpochsPerCommit: Number(env("MAX_EPOCHS_PER_COMMIT", 1)),
-  skipSignatureValidation: Boolean(env("SKIP_SIGNATURE_VALIDATION", false)),
+  skipSignatureValidation: env<string>("SKIP_SIGNATURE_VALIDATION", 'false') === 'true',
   clickhouse: {
     username: env("CLICKHOUSE_USERNAME", "sqd_read"),
     password: env("CLICKHOUSE_PASSWORD"),

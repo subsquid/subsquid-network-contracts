@@ -48,7 +48,7 @@ export class ClickhouseClient {
         where
           ${config.clickhouse.logsTableName}.worker_timestamp >= '${formatDate(this.from)}' and  
           ${config.clickhouse.logsTableName}.worker_timestamp <= '${formatDate(this.to)}' and
-          (collector_timestamp - worker_timestamp) / 60000 < 20 order by query_hash
+          (toInt64(collector_timestamp) - toInt64(worker_timestamp)) / 60000 < 2
         group by worker_id
       `;
       const res: any[] = await clickhouse.query(query).toPromise()
