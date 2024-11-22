@@ -55,12 +55,13 @@ pnpm run test
 |------------------------------------|------------------------------------------------------------------------------------------------------------------------------|
 | **SQD**                            | [0x1337420dED5ADb9980CFc35f8f2B054ea86f8aB1](https://arbiscan.io/token/0x1337420dED5ADb9980CFc35f8f2B054ea86f8aB1)   |
 | **Router**                         | [0x67F56D27dab93eEb07f6372274aCa277F49dA941](https://arbiscan.io/address/0x67F56D27dab93eEb07f6372274aCa277F49dA941) |
-| **NetworkController**              | [0x4cf58097d790b193d22ed633bf8b15c9bc4f0da7](https://arbiscan.io/address/0x4cf58097d790b193d22ed633bf8b15c9bc4f0da7) |
+| **NetworkController**              | [0xf5462EF65Ca8a9Cca789c912Bc8ada80b582d68d](https://arbiscan.io/address/0xf5462EF65Ca8a9Cca789c912Bc8ada80b582d68d) |
 | **Staking**                        | [0xb31a0d39d2c69ed4b28d96e12cbf52c5f9ac9a51](https://arbiscan.io/address/0xb31a0d39d2c69ed4b28d96e12cbf52c5f9ac9a51) |
 | **WorkerRegistration**             | [0x36e2b147db67e76ab67a4d07c293670ebefcae4e](https://arbiscan.io/address/0x36e2b147db67e76ab67a4d07c293670ebefcae4e) |
 | **RewardTreasury**                 | [0x237abf43bc51fd5c50d0d598a1a4c26e56a8a2a0](https://arbiscan.io/address/0x237abf43bc51fd5c50d0d598a1a4c26e56a8a2a0) |
 | **DistributedRewardsDistribution** | [0xab690da5815659fe94f08f73e870d91a4d376d8f](https://arbiscan.io/address/0xab690da5815659fe94f08f73e870d91a4d376d8f) |
 | **GatewayRegistry**                | [0x8a90a1ce5fa8cf71de9e6f76b7d3c0b72feb8c4b](https://arbiscan.io/address/0x8a90a1ce5fa8cf71de9e6f76b7d3c0b72feb8c4b) |
+| **RewardCalculation**              | [0xd3D2C185a30484641C07b60e7d952d7B85516eB5](https://arbiscan.io/address/0xd3D2C185a30484641C07b60e7d952d7B85516eB5) |
 | **SoftCap**                        | [0xde29d5215c28036ce56091ea91038c94c84c87d0](https://arbiscan.io/address/0xde29d5215c28036ce56091ea91038c94c84c87d0) |
 | **EqualStrategy**                  | [0xa604f84c9c59e223b12c831b35723aa0d7277f8b](https://arbiscan.io/address/0xa604f84c9c59e223b12c831b35723aa0d7277f8b) |
 | **SubequalStrategy**               | [0xf197094d96f45325ee8bd2c43c5d25c05d66ab62](https://arbiscan.io/address/0xf197094d96f45325ee8bd2c43c5d25c05d66ab62) |

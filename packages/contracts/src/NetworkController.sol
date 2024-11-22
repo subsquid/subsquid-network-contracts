@@ -13,7 +13,7 @@ import "./interfaces/INetworkController.sol";
 contract NetworkController is AccessControl, INetworkController {
   uint256 internal constant ONE_BASIS_POINT = 10_000;
 
-  /// @notice deprecated
+  /// @notice deprecated used ONLY for worker bond and delegation lock period
   uint128 public epochLength;
 
   uint128 public workerEpochLength;

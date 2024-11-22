@@ -256,7 +256,10 @@ contract WorkerRegistration is AccessControlledPausable, IWorkerRegistration {
     return router.networkController().bondAmount();
   }
 
-  /// @dev Get current epoch length in blocks
+  /*
+  * @dev Get current epoch length in blocks
+  * @deprecated
+  */
   function epochLength() public view returns (uint128) {
     return router.networkController().epochLength();
   }
