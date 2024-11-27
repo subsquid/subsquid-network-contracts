@@ -1,46 +1,14 @@
 import { BlockTag, createPublicClient, http } from 'viem';
 import { addresses, contracts } from './config';
 import { logger } from './logger';
-import { ArbitrumProvider } from '@arbitrum/sdk';
-import { JsonRpcProvider } from '@ethersproject/providers';
-import { getFirstBlockForL1Block } from '@arbitrum/sdk/dist/lib/utils/lib';
-import { currentApy } from './chain';
-
-const arbitrumProvider = new ArbitrumProvider(new JsonRpcProvider(process.env.L2_RPC_URL))
-
-const client = createPublicClient({
-  transport: http(process.env.L2_RPC_URL),
-});
-
-const abi = [
-  {
-    inputs: [],
-    name: 'effectiveTVL',
-    outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }],
-    stateMutability: 'view',
-    type: 'function',
-  },
-  {
-    inputs: [],
-    name: 'INITIAL_REWARD_POOL_SIZE',
-    outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }],
-    stateMutability: 'view',
-    type: 'function',
-  },
-  {
-    inputs: [],
-    name: 'yearlyRewardCapCoefficient',
-    outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }],
-    stateMutability: 'view',
-    type: 'function',
-  },
-];
+import { currentApy, getFirstBlockForL1Block } from './chain';
 
 export async function currentApyTest(blockNumber?: number) {
-  let l2block: number | undefined;
+  let l2block: bigint | undefined;
   if (blockNumber) {
-    l2block = await getFirstBlockForL1Block({arbitrumProvider, forL1Block: blockNumber})
+    l2block = await getFirstBlockForL1Block(blockNumber)
   }
+
   const l2blockNumber = l2block ? BigInt(l2block) : undefined
   try {
     //Directly read from the contract using the public client
