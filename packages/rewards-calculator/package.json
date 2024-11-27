@@ -6,7 +6,6 @@
     "node": ">=16"
   },
   "dependencies": {
-    "@arbitrum/sdk": "^4.0.2",
     "@clickhouse/client-web": "^0.2.6",
     "@libp2p/crypto": "^3.0.0",
     "@libp2p/peer-id": "^4.0.0",
@@ -14,7 +13,6 @@
     "clickhouse": "^2.6.0",
     "dayjs": "^1.11.10",
     "decimal.js": "^10.4.3",
-    "ethers": "^6.13.4",
     "express": "^4.19.2",
     "libp2p": "^1.0.0",
     "protobufjs": "^7.2.5",
