@@ -47,3 +47,23 @@ export function fromBase58(value: string): `0x${string}` {
 export function toBase58(value: `0x${string}`): string {
   return encode(Buffer.from(value.slice(2), "hex"));
 }
+
+export function cachedFunction<F extends (...args: any[]) => Promise<any>>(func: F): F {
+  const cache = new Map<string, ReturnType<F>>();
+
+  const cachedFunction = async (...args: Parameters<F>): Promise<ReturnType<F>> => {
+    const key = JSON.stringify(args);
+
+    if (cache.has(key)) {
+      console.log('Returning from cache:', key);
+      return cache.get(key) as ReturnType<F>;
+    }
+
+    const result = await func(...args);
+    cache.set(key, result);
+
+    return result;
+  };
+
+  return cachedFunction as F; // Type-cast to match the original function signature
+}

@@ -9,11 +9,27 @@ import {
   parseAbiItem,
 } from "viem";
 import { logger } from "./logger";
-import { bigSum, fromBase58 } from "./utils";
+import { bigSum, cachedFunction, fromBase58 } from "./utils";
 import { Rewards } from "./reward";
 import { Workers } from "./workers";
 import { fordefiRequest } from "./fordefi/request";
 import { sendFordefiTransaction } from "./fordefi/sendTransaction";
+import { ArbitrumProvider } from '@arbitrum/sdk';
+import { JsonRpcProvider } from '@ethersproject/providers';
+import { getFirstBlockForL1Block } from '@arbitrum/sdk/dist/lib/utils/lib';
+import assert from "assert";
+
+export const arbitrumProvider = new ArbitrumProvider(new JsonRpcProvider(process.env.L2_RPC_URL))
+
+export async function getL2BlockForL1Block(l1block: number | undefined): Promise<bigint | undefined> {
+  let l1blockNum = l1block
+  if (l1blockNum == undefined) {
+      l1blockNum = await getBlockNumber()
+  }
+  const l2block = await getFirstBlockForL1Block({arbitrumProvider, forL1Block: l1blockNum})
+  return l2block ? BigInt(l2block) : undefined
+}
+
 
 export async function getRegistrations() {
   return (
@@ -51,20 +67,31 @@ export async function getLatestDistributionBlock() {
   }
 }
 
-export async function currentApy(activeWorkers: number, blockNumber?: bigint) {
-  return 2000n;
-  // const target = await contracts.networkController.read.targetCapacityGb({
-  //   blockNumber,
-  // });
-  // const storagePerWorker =
-  //   await contracts.networkController.read.storagePerWorkerInGb({
-  //     blockNumber,
-  //   });
-  // return contracts.rewardCalculation.read.apy(
-  //   [target, BigInt(activeWorkers) * storagePerWorker],
-  //   { blockNumber },
-  // );
+export const currentApy = cachedFunction(_currentApy)
+
+async function _currentApy(l1BlockNumber: number | bigint) {
+  assert (l1BlockNumber < 1000000000n, `${l1BlockNumber} should fit into number` )
+    
+  const l2blockNumber = await getL2BlockForL1Block(Number(l1BlockNumber))
+  
+  const tvl = await contracts.rewardCalculation.read.effectiveTVL({ blockNumber: l2blockNumber });
+  logger.log(`TVL: ${tvl.toString()}`);
+  if (tvl === 0n) {
+    return 2000n;
+  }
+
+  const initialRewardPoolsSize = await contracts.rewardCalculation.read.INITIAL_REWARD_POOL_SIZE({ blockNumber: l2blockNumber });
+  logger.log(`Initial Reward Pool Size: ${initialRewardPoolsSize.toString()}`);
+
+  const yearlyRewardCapCoefficient = await contracts.networkController.read.yearlyRewardCapCoefficient({ blockNumber: l2blockNumber });
+  logger.log(`Yearly Reward Cap Coefficient: ${yearlyRewardCapCoefficient.toString()}`);
+
+  const apyCap = (BigInt(10000) * yearlyRewardCapCoefficient * initialRewardPoolsSize) / tvl;
+  logger.log(`APY Cap: ${apyCap.toString()}`);
+
+  return 2000n > apyCap ? apyCap : 2000n;
 }
+
 
 export async function epochLength(blockNumber?: bigint) {
   if (config.rewardEpochLength) {
@@ -407,3 +434,5 @@ export type MulticallResult<T> =
       result: T;
       status: "success";
     };
+
+
