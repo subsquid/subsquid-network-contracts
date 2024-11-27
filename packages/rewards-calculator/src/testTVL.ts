@@ -60,11 +60,11 @@ export async function currentApyTest(blockNumber?: number) {
 }
 
 (async () => {
+  console.log(`APY: ${await currentApy(21279057n)}`)
   console.log(`APY: ${await currentApy(21279057)}`)
+  console.log(`APY: ${await currentApy(21279057n)}`)
   console.log(`APY: ${await currentApy(21279057)}`)
-  console.log(`APY: ${await currentApy(21279057)}`)
-  console.log(`APY: ${await currentApy(21279057)}`)
-  console.log(`APY: ${await currentApy(21279057)}`)
+  console.log(`APY: ${await currentApy(21279057n)}`)
   console.log(`APY: ${await currentApy(21279057)}`)
 })().then(() => console.log('Done'))
  

@@ -48,22 +48,22 @@ export function toBase58(value: `0x${string}`): string {
   return encode(Buffer.from(value.slice(2), "hex"));
 }
 
-export function cachedFunction<F extends (...args: any[]) => Promise<any>>(func: F): F {
-  const cache = new Map<string, ReturnType<F>>();
+export function withCache<T extends (...args: any[]) => Promise<any>>(func: T): T {
+  const cache = new Map<string, ReturnType<T>>();
 
-  const cachedFunction = async (...args: Parameters<F>): Promise<ReturnType<F>> => {
-    const key = JSON.stringify(args);
+  return (async function (...args: Parameters<T>): Promise<ReturnType<T>> {
+    // Custom key generator to handle BigInt
+    const key = args
+      .map(arg => (typeof arg === 'bigint' ? `bigint:${arg}` : JSON.stringify(arg)))
+      .join('|');
 
     if (cache.has(key)) {
       console.log('Returning from cache:', key);
-      return cache.get(key) as ReturnType<F>;
+      return cache.get(key)!;
     }
 
     const result = await func(...args);
     cache.set(key, result);
-
     return result;
-  };
-
-  return cachedFunction as F; // Type-cast to match the original function signature
+  }) as T;
 }

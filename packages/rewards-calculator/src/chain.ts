@@ -9,7 +9,7 @@ import {
   parseAbiItem,
 } from "viem";
 import { logger } from "./logger";
-import { bigSum, fromBase58 } from "./utils";
+import { bigSum, fromBase58, withCache } from "./utils";
 import { Rewards } from "./reward";
 import { Workers } from "./workers";
 import { fordefiRequest } from "./fordefi/request";
@@ -118,7 +118,9 @@ export async function getLatestDistributionBlock() {
   }
 }
 
-export async function currentApy(l1BlockNumber: number | bigint) {
+export const currentApy = withCache(_currentApy)
+
+async function _currentApy(l1BlockNumber: number | bigint) {
   assert (l1BlockNumber < 1000000000n, `${l1BlockNumber} should fit into number` )
     
   const l2blockNumber = await getFirstBlockForL1Block(l1BlockNumber)
