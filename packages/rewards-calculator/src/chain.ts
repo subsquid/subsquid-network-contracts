@@ -1,5 +1,6 @@
 import { addresses, config, contracts, l1Client, publicClient } from "./config";
 import {
+  Address,
   ContractFunctionConfig,
   decodeEventLog,
   encodeFunctionData,
@@ -15,6 +16,8 @@ import { Workers } from "./workers";
 import { fordefiRequest } from "./fordefi/request";
 import { sendFordefiTransaction } from "./fordefi/sendTransaction";
 import assert from "assert";
+
+const MAX_BLOCK_RANGE_SIZE = BigInt(config.logScanMaxRange)
 
 function getNitroGenesisBlock(chainId: number) {
   // all networks except Arbitrum One started off with Nitro
@@ -97,24 +100,26 @@ export async function getRegistrations() {
 export type Registrations = Awaited<ReturnType<typeof getRegistrations>>;
 
 export async function getLatestDistributionBlock() {
-  const toBlock = await publicClient.getBlockNumber();
-  let offset = 1000n;
-  while (offset <= toBlock) {
+  const lastBlock = await publicClient.getBlockNumber();
+  let fromBlock = lastBlock - MAX_BLOCK_RANGE_SIZE
+  while (fromBlock >= 1) {
+    const toBlock = fromBlock + MAX_BLOCK_RANGE_SIZE >= lastBlock ? undefined : fromBlock + MAX_BLOCK_RANGE_SIZE
     const distributionBlocks = (
       await publicClient.getLogs({
         address: addresses.rewardsDistribution,
         event: parseAbiItem(
           `event Distributed(uint256 fromBlock, uint256 toBlock, uint256[] recipients, uint256[] workerRewards, uint256[] stakerRewards)`,
         ),
-        fromBlock: toBlock - offset,
-      })
+        fromBlock,
+        toBlock
+    })
     ).map(({ blockNumber }) => Number(blockNumber));
-    console.log(distributionBlocks);
+    console.log(`Fetched Distributed ;ogs from ${fromBlock} to ${toBlock}: ${JSON.stringify(distributionBlocks)}`);
     if (distributionBlocks.length > 0) {
       const maxBlock = Math.max(...distributionBlocks);
       return BigInt(maxBlock);
     }
-    offset *= 2n;
+    fromBlock = fromBlock - MAX_BLOCK_RANGE_SIZE;
   }
 }
 
@@ -472,6 +477,58 @@ export async function registeredWorkersCount(blockNumber?: bigint) {
       blockNumber,
     }),
   );
+}
+
+interface NewCommitmentLog {
+  fromBlock: number;
+  toBlock: number;
+  commitment: Hex;
+  blockNumber: number;
+  who: Address
+}
+
+export async function getLatestCommitment(): Promise<NewCommitmentLog | undefined> {
+  const latestBlock = await publicClient.getBlockNumber(); // Get the latest L2 block number
+  let currentBlock = latestBlock;
+
+  while (currentBlock > 0n) {
+    const fromBlock = currentBlock > MAX_BLOCK_RANGE_SIZE ? currentBlock - MAX_BLOCK_RANGE_SIZE : 1n;
+    // if we are at the top, set no toBlock
+    const toBlock = (currentBlock === latestBlock) ? undefined : currentBlock
+
+    // Fetch logs for the current batch
+    logger.log(`Fetching NewCommitment logs from ${fromBlock} to ${toBlock}` )
+    const logs = await publicClient.getLogs({
+      address: addresses.rewardsDistribution,
+      event: parseAbiItem(
+        `event NewCommitment(address indexed who, uint256 fromBlock, uint256 toBlock, bytes32 commitment)`
+      ),
+      fromBlock,
+      toBlock
+    });
+
+    // If logs are found, process and return the latest commit
+    if (logs.length > 0) {
+      const commitmentBlocks = logs.map(({ args: { who, fromBlock, toBlock, commitment }, blockNumber }: any) => ({
+        fromBlock: Number(fromBlock),
+        toBlock: Number(toBlock),
+        blockNumber: Number(blockNumber),
+        commitment,
+        who
+      }));
+
+      return commitmentBlocks.sort(
+        ({ blockNumber: a }, { blockNumber: b }) => Number(b) - Number(a)
+      )[0];
+
+    }
+
+    // Move to the previous batch
+    currentBlock = fromBlock;
+  }
+
+  // If no logs are found
+  return undefined;
 }
 
 export type MulticallResult<T> =

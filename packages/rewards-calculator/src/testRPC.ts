@@ -1,7 +1,8 @@
-import { BlockTag, createPublicClient, http } from 'viem';
-import { addresses, contracts } from './config';
+import { BlockTag, createPublicClient, http, parseAbiItem } from 'viem';
+import { addresses, contracts, l1Client, publicClient } from './config';
 import { logger } from './logger';
-import { currentApy, getFirstBlockForL1Block } from './chain';
+import { currentApy, getFirstBlockForL1Block, getLatestDistributionBlock } from './chain';
+import { approveRanges } from './rewardBot';
 
 export async function currentApyTest(blockNumber?: number) {
   let l2block: bigint | undefined;
@@ -59,7 +60,10 @@ export async function currentApyTest(blockNumber?: number) {
   }
 }
 
+
 (async () => {
+  console.log(`Latest Distribution: ${await getLatestDistributionBlock()}`)
+  console.log(`Approve Ranges: ${JSON.stringify(await approveRanges())}`)
   console.log(`APY: ${await currentApy(21279057n)}`)
   console.log(`APY: ${await currentApy(21279057)}`)
   console.log(`APY: ${await currentApy(21279057n)}`)

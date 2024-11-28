@@ -21,6 +21,7 @@ function env<T>(
 }
 
 export const config = {
+  logScanMaxRange: Number(env("LOS_SCAN_MAX_RANGE", 2000)), // Max range for get logs for RPC not to shit
   targetCapacityGB: BigInt(env("TARGET_CAPACITY_GB", 30_000n)),
   workerOfflineThreshold: Number(env("WORKER_OFFLINE_THRESHOLD_SECONDS", 65)),
   dTrafficAlpha: Number(env("D_TRAFFIC_ALPHA", 0.1)),
@@ -51,8 +52,7 @@ export const config = {
       "sepolia",
     ),
     l2RpcUrl: env(
-      "L2_RPC_URL",
-      "https://arbitrum-sepolia.infura.io/v3/39b9cd000b9c4637b58d5a5214676196",
+      "L2_RPC_URL"
     ),
     l1RpcUrl: env<string | undefined>(
       "L1_RPC_URL"
