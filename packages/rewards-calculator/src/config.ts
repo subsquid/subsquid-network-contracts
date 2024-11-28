@@ -21,7 +21,7 @@ function env<T>(
 }
 
 export const config = {
-  logScanMaxRange: Number(env("LOS_SCAN_MAX_RANGE", 2000)), // Max range for get logs for RPC not to shit
+  logScanMaxRange: Number(env("LOG_SCAN_MAX_RANGE", 2000)), // Max range for get logs for RPC not to shit
   targetCapacityGB: BigInt(env("TARGET_CAPACITY_GB", 30_000n)),
   workerOfflineThreshold: Number(env("WORKER_OFFLINE_THRESHOLD_SECONDS", 65)),
   dTrafficAlpha: Number(env("D_TRAFFIC_ALPHA", 0.1)),
