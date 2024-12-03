@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.20;
 
-import {MerkleProof} from '@openzeppelin/contracts/utils/cryptography/MerkleProof.sol';
-import {IERC20} from '@openzeppelin/contracts/token/ERC20/IERC20.sol';
+import {MerkleProof} from "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 contract MerkleDistributor {
   IERC20 public immutable token;
@@ -36,22 +36,22 @@ contract MerkleDistributor {
   }
 
   function claim(uint256 index, address account, uint256 amount, bytes32[] calldata merkleProof) external {
-    require(!isClaimed(index), 'MerkleDistributor: Drop already claimed.');
+    require(!isClaimed(index), "MerkleDistributor: Drop already claimed.");
 
     // Verify the merkle proof.
     bytes32 leaf = keccak256(bytes.concat(keccak256(abi.encode(index, account, amount))));
-    require(MerkleProof.verifyCalldata(merkleProof, merkleRoot, leaf), 'MerkleDistributor: Invalid proof.');
+    require(MerkleProof.verifyCalldata(merkleProof, merkleRoot, leaf), "MerkleDistributor: Invalid proof.");
 
     // Mark it claimed and send the token.
     _setClaimed(index);
-    require(token.transfer(account, amount), 'MerkleDistributor: Transfer failed.');
+    require(token.transfer(account, amount), "MerkleDistributor: Transfer failed.");
 
     emit Claimed(index, account, amount);
   }
 
   function withdrawAll() external {
-    require(msg.sender == owner, 'MerkleDistributor: Only owner can withdraw');
-    require(token.transfer(owner, token.balanceOf(address(this))), 'MerkleDistributor: Transfer failed.');
+    require(msg.sender == owner, "MerkleDistributor: Only owner can withdraw");
+    require(token.transfer(owner, token.balanceOf(address(this))), "MerkleDistributor: Transfer failed.");
 
     emit Ended();
   }
