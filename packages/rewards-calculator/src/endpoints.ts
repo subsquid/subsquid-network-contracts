@@ -1,7 +1,8 @@
 import express from "express";
 import { epochStats } from "./reward";
 import { config, l1Client } from "./config";
-import { getBlockNumber } from "./chain";
+import { getBlockNumber, currentApy } from "./chain";
+import { logger } from "./logger"
 
 const app = express();
 const port = process.env.PORT ?? 3000;
@@ -104,6 +105,20 @@ app.get("/rewards/:fromBlock/:toBlock", async (req, res) => {
   const { fromBlock, toBlock } = req.params;
   await rewards(fromBlock, toBlock, res);
 });
+
+app.get("/currentApy/:atBlock", async (req, res) => {
+  const { atBlock } = req.params
+  let block
+  if (!isInteger(atBlock)) {
+    block = await getBlockNumber()
+  } else {
+    block = atBlock
+  }
+  logger.log(`Block: ${block}`)
+  const apy = await currentApy(Number(block));
+  res.jsonp({ block, apy})
+});
+
 
 app.get("/rewards/:lastNBlocks", async (req, res) => {
   const lastBlock = await getBlockNumber();

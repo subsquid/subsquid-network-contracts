@@ -167,7 +167,6 @@ export class Workers {
       "second",
     );
     const baseApr = await currentApy(
-      this.count(),
       this.nextDistributionStartBlockNumber,
     );
     this.baseApr = new Decimal(baseApr.toString());
@@ -313,7 +312,7 @@ export class Workers {
       "second",
     );
     const apy = bigIntToDecimal(
-      await currentApy(this.count(), this.nextDistributionStartBlockNumber),
+      await currentApy(this.nextDistributionStartBlockNumber),
     );
     return apy.mul(this.totalSupply()).mul(duration).div(YEAR).div(10_000);
   }

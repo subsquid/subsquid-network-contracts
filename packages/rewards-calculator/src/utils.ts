@@ -47,3 +47,23 @@ export function fromBase58(value: string): `0x${string}` {
 export function toBase58(value: `0x${string}`): string {
   return encode(Buffer.from(value.slice(2), "hex"));
 }
+
+export function withCache<T extends (...args: any[]) => Promise<any>>(func: T): T {
+  const cache = new Map<string, ReturnType<T>>();
+
+  return (async function (...args: Parameters<T>): Promise<ReturnType<T>> {
+    // Custom key generator to handle BigInt
+    const key = args
+      .map(arg => (typeof arg === 'bigint' ? `bigint:${arg}` : JSON.stringify(arg)))
+      .join('|');
+
+    if (cache.has(key)) {
+      console.log('Returning from cache:', key);
+      return cache.get(key)!;
+    }
+
+    const result = await func(...args);
+    cache.set(key, result);
+    return result;
+  }) as T;
+}
