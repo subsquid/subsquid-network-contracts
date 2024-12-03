@@ -26,7 +26,13 @@ contract NetworkController is AccessControl, INetworkController {
   uint256 public override yearlyRewardCapCoefficient = 3000;
   mapping(address => bool) public isAllowedVestedTarget;
 
-  constructor(uint128 _epochLength, uint128 _firstEpochBlock, uint128 _epochCheckpoint, uint256 _bondAmount, address[] memory _allowedVestedTargets) {
+  constructor(
+    uint128 _epochLength,
+    uint128 _firstEpochBlock,
+    uint128 _epochCheckpoint,
+    uint256 _bondAmount,
+    address[] memory _allowedVestedTargets
+  ) {
     require(_epochLength > 1, "Epoch length too short");
     require(_epochLength < 100000, "Epoch length too long");
 
