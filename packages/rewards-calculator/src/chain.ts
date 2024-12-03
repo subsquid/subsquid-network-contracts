@@ -100,27 +100,31 @@ export async function getRegistrations() {
 export type Registrations = Awaited<ReturnType<typeof getRegistrations>>;
 
 export async function getLatestDistributionBlock() {
-  const lastBlock = await publicClient.getBlockNumber();
-  let fromBlock = lastBlock - MAX_BLOCK_RANGE_SIZE
-  while (fromBlock >= 1) {
-    const toBlock = fromBlock + MAX_BLOCK_RANGE_SIZE >= lastBlock ? undefined : fromBlock + MAX_BLOCK_RANGE_SIZE
-    const distributionBlocks = (
-      await publicClient.getLogs({
+  let toBlock = await publicClient.getBlockNumber();
+
+  while (toBlock >= 0) {
+    let fromBlock = toBlock - MAX_BLOCK_RANGE_SIZE
+    fromBlock = fromBlock < 0 ? 0n : fromBlock
+
+    const distributionBlocks = await publicClient.getLogs({
         address: addresses.rewardsDistribution,
         event: parseAbiItem(
-          `event Distributed(uint256 fromBlock, uint256 toBlock, uint256[] recipients, uint256[] workerRewards, uint256[] stakerRewards)`,
+            `event Distributed(uint256 fromBlock, uint256 toBlock, uint256[] recipients, uint256[] workerRewards, uint256[] stakerRewards)`
         ),
         fromBlock,
-        toBlock
-    })
-    ).map(({ blockNumber }) => Number(blockNumber));
-    console.log(`Fetched Distributed ;ogs from ${fromBlock} to ${toBlock}: ${JSON.stringify(distributionBlocks)}`);
+        toBlock,
+    }).then(logs => logs.map(({ blockNumber }) => blockNumber));
+
+    console.log(`Fetched Distributed logs from ${fromBlock} to ${toBlock}: [${distributionBlocks.join(', ')}]`);
+
     if (distributionBlocks.length > 0) {
-      const maxBlock = Math.max(...distributionBlocks);
-      return BigInt(maxBlock);
+      return distributionBlocks[distributionBlocks.length - 1];
     }
-    fromBlock = fromBlock - MAX_BLOCK_RANGE_SIZE;
+
+    toBlock = fromBlock - 1n;
   }
+
+  return -1n
 }
 
 export const currentApy = withCache(_currentApy)
@@ -488,13 +492,11 @@ interface NewCommitmentLog {
 }
 
 export async function getLatestCommitment(): Promise<NewCommitmentLog | undefined> {
-  const latestBlock = await publicClient.getBlockNumber(); // Get the latest L2 block number
-  let currentBlock = latestBlock;
+  let toBlock = await publicClient.getBlockNumber(); // Get the latest L2 block number
 
-  while (currentBlock > 0n) {
-    const fromBlock = currentBlock > MAX_BLOCK_RANGE_SIZE ? currentBlock - MAX_BLOCK_RANGE_SIZE : 1n;
-    // if we are at the top, set no toBlock
-    const toBlock = (currentBlock === latestBlock) ? undefined : currentBlock
+  while (toBlock >= 0n) {
+    let fromBlock = toBlock - MAX_BLOCK_RANGE_SIZE
+    fromBlock = fromBlock < 0 ? 0n : fromBlock
 
     // Fetch logs for the current batch
     logger.log(`Fetching NewCommitment logs from ${fromBlock} to ${toBlock}` )
@@ -504,12 +506,13 @@ export async function getLatestCommitment(): Promise<NewCommitmentLog | undefine
         `event NewCommitment(address indexed who, uint256 fromBlock, uint256 toBlock, bytes32 commitment)`
       ),
       fromBlock,
-      toBlock
+      toBlock,
+      strict: true
     });
 
     // If logs are found, process and return the latest commit
     if (logs.length > 0) {
-      const commitmentBlocks = logs.map(({ args: { who, fromBlock, toBlock, commitment }, blockNumber }: any) => ({
+      const commitmentBlocks = logs.map(({ args: { who, fromBlock, toBlock, commitment }, blockNumber }) => ({
         fromBlock: Number(fromBlock),
         toBlock: Number(toBlock),
         blockNumber: Number(blockNumber),
@@ -518,13 +521,13 @@ export async function getLatestCommitment(): Promise<NewCommitmentLog | undefine
       }));
 
       return commitmentBlocks.sort(
-        ({ blockNumber: a }, { blockNumber: b }) => Number(b) - Number(a)
+        ({ blockNumber: a }, { blockNumber: b }) => b - a
       )[0];
 
     }
 
     // Move to the previous batch
-    currentBlock = fromBlock;
+    toBlock = fromBlock - 1n;
   }
 
   // If no logs are found

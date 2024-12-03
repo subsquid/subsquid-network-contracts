@@ -51,7 +51,7 @@ export const config = {
       "NETWORK_NAME",
       "sepolia",
     ),
-    l2RpcUrl: env(
+    l2RpcUrl: env<string | undefined>(
       "L2_RPC_URL"
     ),
     l1RpcUrl: env<string | undefined>(

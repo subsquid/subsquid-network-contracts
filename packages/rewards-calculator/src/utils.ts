@@ -54,7 +54,7 @@ export function withCache<T extends (...args: any[]) => Promise<any>>(func: T): 
   return (async function (...args: Parameters<T>): Promise<ReturnType<T>> {
     // Custom key generator to handle BigInt
     const key = args
-      .map(arg => (typeof arg === 'bigint' ? `bigint:${arg}` : JSON.stringify(arg)))
+      .map(arg => JSON.stringify(arg, (_, v) => typeof v === 'bigint' ? `bigint:${v.toString()}` : v))
       .join('|');
 
     if (cache.has(key)) {

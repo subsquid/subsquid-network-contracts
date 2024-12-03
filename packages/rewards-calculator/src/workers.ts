@@ -81,9 +81,7 @@ export class Workers {
 
   public async getNextDistributionStartBlockNumber() {
     const latestDistributionBlock = await getLatestDistributionBlock();
-    if (latestDistributionBlock) {
-      this.nextDistributionStartBlockNumber = latestDistributionBlock + 1n;
-    }
+    this.nextDistributionStartBlockNumber = latestDistributionBlock + 1n;
   }
 
   public async fetchCurrentBond() {

@@ -227,6 +227,6 @@ export async function approveRanges(): Promise<
     shouldApprove: true,
     ...latestCommit,
     epochLen,
-    chunkType: getChunkType(latestCommit.toBlock, epochLen)
+    chunkType: getChunkType(Number(latestCommit.toBlock), epochLen)
   };
 }
