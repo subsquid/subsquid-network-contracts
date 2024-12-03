@@ -4,6 +4,8 @@ import {
   commitRewards,
   epochLength,
   getBlockNumber,
+  getFirstBlockForL1Block,
+  getLatestCommitment,
   getRegistrations,
   isCommitted,
   lastRewardedBlock,
@@ -11,7 +13,7 @@ import {
 } from "./chain";
 import { epochStats } from "./reward";
 import { addresses, config, contracts, publicClient } from "./config";
-import { Hex, parseAbiItem } from "viem";
+import { Account, Address, Hex, parseAbiItem } from "viem";
 import type { Workers } from "./workers";
 import { logger } from "./logger";
 import { decimalSum } from "./utils";
@@ -156,6 +158,7 @@ export class RewardBot {
 
     let _lastRewardedBlock = await lastRewardedBlock();
     if (_lastRewardedBlock === 0) {
+      logger.error(`Last reward block is 0!`)
       _lastRewardedBlock = await firstRegistrationBlock(
         await getRegistrations(),
       );
@@ -182,7 +185,7 @@ function getChunkType(block: number, epochLen: number) : 'even' | 'odd' {
   return Math.ceil(block / epochLen) % 2 === 0 ? 'even' : 'odd'
 }
 
-async function approveRanges(): Promise<
+export async function approveRanges(): Promise<
   | {
       shouldApprove: false;
     }
@@ -197,43 +200,33 @@ async function approveRanges(): Promise<
 > {
   const epochLen = await epochLength();
 
-  const commitmentBlocks = (
-    await publicClient.getLogs({
-      address: addresses.rewardsDistribution,
-      event: parseAbiItem(
-        `event NewCommitment(address indexed who, uint256 fromBlock, uint256 toBlock, bytes32 commitment)`,
-      ),
-      fromBlock: 1n,
-    })
-  ).map(({ args: { fromBlock, toBlock, commitment }, blockNumber }) => ({
-    fromBlock: Number(fromBlock),
-    toBlock: Number(toBlock),
-    blockNumber: Number(blockNumber),
-    commitment,
-  }));
+  const latestCommit =  await getLatestCommitment()
+  logger.log(`Latest commit: ${JSON.stringify(latestCommit)}`)
 
-  if (commitmentBlocks.length === 0) {
+  if (latestCommit == null) {
     return { shouldApprove: false };
   }
 
-  const latestCommit = commitmentBlocks.sort(
-    ({ blockNumber: a }, { blockNumber: b }) => Number(b) - Number(a),
-  )[0];
   const latestDistributionBlock = Number(
     await contracts.rewardsDistribution.read.lastBlockRewarded(),
   );
 
   if (latestDistributionBlock >= Number(latestCommit.toBlock)) {
+    logger.log(`Latest distribution block ${latestDistributionBlock} is not before the latest commit block ${latestCommit.toBlock}, no approve needed` )
     return { shouldApprove: false };
   }
-  if (!latestCommit.fromBlock) return { shouldApprove: false };
 
+  if (!latestCommit.fromBlock) {
+    // FIXME can it even happen?
+    logger.log(`latestCommit.fromBlock is undefined, no approve`)
+    return { shouldApprove: false };
+  }
 
 
   return {
     shouldApprove: true,
     ...latestCommit,
     epochLen,
-    chunkType: getChunkType(latestCommit.toBlock, epochLen)
+    chunkType: getChunkType(Number(latestCommit.toBlock), epochLen)
   };
 }
