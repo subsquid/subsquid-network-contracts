@@ -1,7 +1,7 @@
 import express from "express";
 import { epochStats } from "./reward";
-import { config, l1Client } from "./config";
-import { getBlockNumber, currentApy } from "./chain";
+import { config, l1Client, publicClient } from "./config";
+import { getL1BlockNumber, currentApy, getFirstBlockForL1Block } from "./chain";
 import { logger } from "./logger"
 
 const app = express();
@@ -106,22 +106,29 @@ app.get("/rewards/:fromBlock/:toBlock", async (req, res) => {
   await rewards(fromBlock, toBlock, res);
 });
 
-app.get("/currentApy/:atBlock", async (req, res) => {
-  const { atBlock } = req.params
-  let block
-  if (!isInteger(atBlock)) {
-    block = await getBlockNumber()
-  } else {
-    block = atBlock
+app.get("/currentApy/:atBlock?", async (req, res) => {
+  try {
+    const { atBlock } = req.params
+    let blockNumber: bigint
+    let l1BlockNumber: bigint
+    if (!atBlock || !isInteger(atBlock)) {
+      let block = await publicClient.getBlock()
+      blockNumber = block.number
+      l1BlockNumber = BigInt((block as any).l1BlockNumber)
+    } else {
+      l1BlockNumber = BigInt(atBlock)
+      blockNumber = await getFirstBlockForL1Block(l1BlockNumber)
+    }
+    const apy = await currentApy(blockNumber);
+    res.jsonp({ blockNumber, l1BlockNumber, apy})
+  } catch (e: any) {
+    console.error(e);
+    res.status(500).send(e.message);
   }
-  logger.log(`Block: ${block}`)
-  const apy = await currentApy(Number(block));
-  res.jsonp({ block, apy})
 });
 
-
 app.get("/rewards/:lastNBlocks", async (req, res) => {
-  const lastBlock = await getBlockNumber();
+  const lastBlock = await getL1BlockNumber();
   const fromBlock = lastBlock - Number(req.params.lastNBlocks);
   await rewards(fromBlock.toString(), lastBlock.toString(), res);
 });

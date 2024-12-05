@@ -65,10 +65,6 @@ export async function currentApyTest(blockNumber?: number) {
   console.log(`Latest Distribution: ${await getLatestDistributionBlock()}`)
   console.log(`Approve Ranges: ${JSON.stringify(await approveRanges())}`)
   console.log(`APY: ${await currentApy(21279057n)}`)
-  console.log(`APY: ${await currentApy(21279057)}`)
   console.log(`APY: ${await currentApy(21279057n)}`)
-  console.log(`APY: ${await currentApy(21279057)}`)
-  console.log(`APY: ${await currentApy(21279057n)}`)
-  console.log(`APY: ${await currentApy(21279057)}`)
 })().then(() => console.log('Done'))
  
