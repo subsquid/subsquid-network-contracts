@@ -3,7 +3,7 @@ import {
   canCommit,
   commitRewards,
   epochLength,
-  getBlockNumber,
+  getL1BlockNumber,
   getFirstBlockForL1Block,
   getLatestCommitment,
   getRegistrations,
@@ -164,7 +164,7 @@ export class RewardBot {
       );
     }
 
-    const currentBlock = await getBlockNumber();
+    const currentBlock = await getL1BlockNumber();
     const lastConfirmedBlock = currentBlock - config.epochConfirmationBlocks;
     if (lastConfirmedBlock - _lastRewardedBlock < epochLen) {
       return { fromBlock: 0, toBlock: 0, epochLen, chunkType: 'even' };

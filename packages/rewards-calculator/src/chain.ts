@@ -10,7 +10,7 @@ import {
   parseAbiItem,
 } from "viem";
 import { logger } from "./logger";
-import { bigSum, fromBase58, withCache } from "./utils";
+import { bigSum, fromBase58 } from "./utils";
 import { Rewards } from "./reward";
 import { Workers } from "./workers";
 import { fordefiRequest } from "./fordefi/request";
@@ -31,8 +31,8 @@ function getNitroGenesisBlock(chainId: number) {
 let lastKnowBlockPair: {l1Block: bigint, l2Block: bigint} | undefined = undefined
 
 // ref https://github.com/OffchainLabs/arbitrum-sdk/blob/5ef44308d3c89fd956c9dfdc59b6776b88afd251/src/lib/utils/lib.ts#L90
-export async function getFirstBlockForL1Block(targetL1Block: number | bigint | undefined): Promise<bigint> {
-  targetL1Block = targetL1Block == null ? await l1Client.getBlockNumber() : BigInt(targetL1Block)
+export async function getFirstBlockForL1Block(targetL1Block: number | bigint): Promise<bigint> {
+  targetL1Block = BigInt(targetL1Block)
 
   let start: bigint
   if (lastKnowBlockPair == null || lastKnowBlockPair.l1Block > targetL1Block) {
@@ -48,7 +48,9 @@ export async function getFirstBlockForL1Block(targetL1Block: number | bigint | u
     return lastKnowBlockPair.l2Block
   }
 
-  let end = await publicClient.getBlockNumber()
+  // for some reason .getBlockNumber() returns inconsistent result to .getBlock(),
+  // so, since we use .getBlock() further down the code, we should use .getBlock() here as well
+  let end = await publicClient.getBlock().then(block => block.number)
 
   let targetL2Block: bigint | undefined
   while (start <= end) {
@@ -127,9 +129,9 @@ export async function getLatestDistributionBlock() {
   return -1n
 }
 
-export const currentApy = withCache(_currentApy)
+// export const currentApy = withCache(_currentApy)
 
-async function _currentApy(l1BlockNumber: number | bigint) {
+export async function currentApy(l1BlockNumber: number | bigint) {
   assert (l1BlockNumber < 1000000000n, `${l1BlockNumber} should fit into number` )
     
   const l2blockNumber = await getFirstBlockForL1Block(l1BlockNumber)
@@ -172,8 +174,9 @@ export async function bond(blockNumber?: bigint) {
   return contracts.workerRegistration.read.bondAmount({ blockNumber });
 }
 
-export async function getBlockNumber() {
-  return Number(await l1Client.getBlockNumber());
+export async function getL1BlockNumber() {
+  const block = await publicClient.getBlock();
+  return Number.parseInt((block as any).l1BlockNumber, 16);
 }
 
 export async function lastRewardedBlock() {

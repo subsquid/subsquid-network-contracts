@@ -41,7 +41,7 @@ export class Workers {
   private workers: Record<string, Worker> = {};
   private bond = new Decimal(0);
   private nextDistributionStartBlockNumber = 0n;
-
+  
   baseApr = new Decimal(0);
   stakeFactor = new Decimal(0);
   rAPR = new Decimal(0);
@@ -167,7 +167,7 @@ export class Workers {
     const baseApr = await currentApy(
       this.nextDistributionStartBlockNumber,
     );
-    this.baseApr = new Decimal(baseApr.toString());
+    this.baseApr = bigIntToDecimal(baseApr);
 
     this.stakeFactor = this.calculateStakeFactor();
 
@@ -309,10 +309,7 @@ export class Workers {
       dayjs(this.clickhouseClient.from),
       "second",
     );
-    const apy = bigIntToDecimal(
-      await currentApy(this.nextDistributionStartBlockNumber),
-    );
-    return apy.mul(this.totalSupply()).mul(duration).div(YEAR).div(10_000);
+    return this.baseApr.mul(this.totalSupply()).mul(duration).div(YEAR).div(10_000);
   }
 
   private calculateStakeFactor() {
