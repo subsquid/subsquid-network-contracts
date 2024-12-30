@@ -14,11 +14,8 @@ export function fordefiRequest(to: string, data: string, name: string) {
       to,
       value: "0",
       gas: {
-        type: "custom",
-        details: {
-          type: "legacy",
-          price: config.fordefi.txGasPrice,
-        },
+        type: "priority",
+        priority_level: "medium",
       },
       fail_on_prediction_failure: false,
       chain,
