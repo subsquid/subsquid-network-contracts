@@ -195,7 +195,7 @@ export async function approveRanges(): Promise<
       shouldApprove: true;
       fromBlock: number;
       toBlock: number;
-      chunkType: 'odd' | 'even';
+      batchNumber: number;
       epochLen: number;
       commitment?: Hex;
     }
