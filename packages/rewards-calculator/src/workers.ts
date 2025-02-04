@@ -32,6 +32,7 @@ import { Rewards } from "./reward";
 
 import Decimal from "decimal.js";
 import bs58 from "bs58";
+import { strict as assert } from "assert";
 
 Decimal.set({ precision: 28, minE: -9 });
 
@@ -62,12 +63,13 @@ export class Workers {
     return Object.values(this.workers).map(fn);
   }
 
-  filterChunk(chunkType: 'odd' | 'even') {
-    const newWorkers =  Object.values(this.workers).filter(w => {
+  filterBatch(batchNumber: number, totalBatches: number) {
+    assert(totalBatches <= 64);  // consider using multiple bytes if more batches are needed
+    const newWorkers = Object.values(this.workers).filter(w => {
       const arr = bs58.decode(w.peerId)
-      const isEven = arr[arr.length - 1] % 2 === 0;
+      const group = arr[arr.length - 1] % totalBatches;
 
-      return chunkType === 'even' ? isEven : !isEven;
+      return batchNumber === group;
     });
 
     this.workers = Object.fromEntries(newWorkers.map(w => [w.peerId, w]));

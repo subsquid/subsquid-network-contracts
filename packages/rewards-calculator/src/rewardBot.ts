@@ -18,6 +18,8 @@ import type { Workers } from "./workers";
 import { logger } from "./logger";
 import { decimalSum } from "./utils";
 
+const TOTAL_BATCHES: number = 4;
+
 async function firstRegistrationBlock(registrations: Registrations) {
   return Math.min(
     ...registrations.map(({ registeredAt }) => Number(registeredAt)),
@@ -38,21 +40,21 @@ export class RewardBot {
 
   private async commitIfPossible() {
     try {
-      const { fromBlock, toBlock, epochLen, chunkType } = await this.commitRange();
+      const { fromBlock, toBlock, epochLen, batchNumber } = await this.commitRange();
 
       if (await this.canCommit(fromBlock, toBlock)) {
         console.log(`Can commit ${fromBlock} — ${toBlock} from ${this.address}`);
 
         /**
-         * We need to calculate 2 epochs to get the correct period for the rewards
-         * because of splitting the rewards to chunks
+         * We need to calculate `TOTAL_BATCHES` epochs to get the correct period for the rewards
+         * because of splitting the rewards to batches
          */
-        const workers = await epochStats(fromBlock - epochLen, toBlock, config.skipSignatureValidation);
+        const workers = await epochStats(toBlock - epochLen * TOTAL_BATCHES, toBlock, config.skipSignatureValidation);
 
         /**
          * We send to blockchain original epoch length due to a flaw in the contract
          */
-        await this.tryToCommit(fromBlock, toBlock, workers.filterChunk(chunkType));
+        await this.tryToCommit(fromBlock, toBlock, workers.filterBatch(batchNumber, TOTAL_BATCHES));
       } else {
         console.log(`Nothing to commit ${fromBlock} — ${toBlock}`);
       }
@@ -116,10 +118,10 @@ export class RewardBot {
       const ranges = await approveRanges();
       if (ranges.shouldApprove) {
         /**
-         * We need to calculate 2 epochs to get the correct period for the rewards
-         * because of splitting the rewards to chunks
+         * We need to calculate `TOTAL_BATCHES` epochs to get the correct period for the rewards
+         * because of splitting the rewards to batches
          */
-        const workers = await epochStats(ranges.fromBlock - ranges.epochLen, ranges.toBlock, config.skipSignatureValidation);
+        const workers = await epochStats(ranges.toBlock - ranges.epochLen * TOTAL_BATCHES, ranges.toBlock, config.skipSignatureValidation);
 
         /**
          * We send to blockchain original epoch length due to a flaw in the contract
@@ -127,7 +129,7 @@ export class RewardBot {
         const tx = await approveRewards(
           ranges.fromBlock,
           ranges.toBlock,
-          workers.filterChunk(ranges.chunkType),
+          workers.filterBatch(ranges.batchNumber, TOTAL_BATCHES),
           this.address,
           this.index,
           ranges.commitment,
@@ -152,7 +154,7 @@ export class RewardBot {
     setTimeout(() => this.approveIfNecessary(), config.workTimeout);
   }
 
-  private async commitRange(): Promise<{ fromBlock: number, toBlock: number, epochLen: number, chunkType: 'even' | 'odd' }> {
+  private async commitRange(): Promise<{ fromBlock: number, toBlock: number, epochLen: number, batchNumber: number }> {
     const epochLen = await epochLength();
     const maxCommitBlocksCovered = epochLen * config.maxEpochsPerCommit;
 
@@ -167,7 +169,7 @@ export class RewardBot {
     const currentBlock = await getL1BlockNumber();
     const lastConfirmedBlock = currentBlock - config.epochConfirmationBlocks;
     if (lastConfirmedBlock - _lastRewardedBlock < epochLen) {
-      return { fromBlock: 0, toBlock: 0, epochLen, chunkType: 'even' };
+      return { fromBlock: 0, toBlock: 0, epochLen, batchNumber: 0 };
     }
 
 
@@ -177,12 +179,12 @@ export class RewardBot {
     );
     const fromBlock = _lastRewardedBlock + 1;
 
-    return { fromBlock, toBlock, epochLen, chunkType: getChunkType(toBlock, epochLen) };
+    return { fromBlock, toBlock, epochLen, batchNumber: getBatchNumber(toBlock, epochLen) };
   }
 }
 
-function getChunkType(block: number, epochLen: number) : 'even' | 'odd' {
-  return Math.ceil(block / epochLen) % 2 === 0 ? 'even' : 'odd'
+function getBatchNumber(block: number, epochLen: number): number {
+  return Math.ceil(block / epochLen) % TOTAL_BATCHES
 }
 
 export async function approveRanges(): Promise<
@@ -193,7 +195,7 @@ export async function approveRanges(): Promise<
       shouldApprove: true;
       fromBlock: number;
       toBlock: number;
-      chunkType: 'odd' | 'even';
+      batchNumber: number;
       epochLen: number;
       commitment?: Hex;
     }
@@ -227,6 +229,6 @@ export async function approveRanges(): Promise<
     shouldApprove: true,
     ...latestCommit,
     epochLen,
-    chunkType: getChunkType(Number(latestCommit.toBlock), epochLen)
+    batchNumber: getBatchNumber(Number(latestCommit.toBlock), epochLen)
   };
 }
