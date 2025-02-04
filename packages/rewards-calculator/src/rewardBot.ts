@@ -40,21 +40,21 @@ export class RewardBot {
 
   private async commitIfPossible() {
     try {
-      const { fromBlock, toBlock, epochLen, batchNumber: chunkType } = await this.commitRange();
+      const { fromBlock, toBlock, epochLen, batchNumber } = await this.commitRange();
 
       if (await this.canCommit(fromBlock, toBlock)) {
         console.log(`Can commit ${fromBlock} — ${toBlock} from ${this.address}`);
 
         /**
          * We need to calculate `TOTAL_BATCHES` epochs to get the correct period for the rewards
-         * because of splitting the rewards to chunks
+         * because of splitting the rewards to batches
          */
         const workers = await epochStats(toBlock - epochLen * TOTAL_BATCHES, toBlock, config.skipSignatureValidation);
 
         /**
          * We send to blockchain original epoch length due to a flaw in the contract
          */
-        await this.tryToCommit(fromBlock, toBlock, workers.filterBatch(chunkType, TOTAL_BATCHES));
+        await this.tryToCommit(fromBlock, toBlock, workers.filterBatch(batchNumber, TOTAL_BATCHES));
       } else {
         console.log(`Nothing to commit ${fromBlock} — ${toBlock}`);
       }
@@ -119,7 +119,7 @@ export class RewardBot {
       if (ranges.shouldApprove) {
         /**
          * We need to calculate `TOTAL_BATCHES` epochs to get the correct period for the rewards
-         * because of splitting the rewards to chunks
+         * because of splitting the rewards to batches
          */
         const workers = await epochStats(ranges.toBlock - ranges.epochLen * TOTAL_BATCHES, ranges.toBlock, config.skipSignatureValidation);
 
