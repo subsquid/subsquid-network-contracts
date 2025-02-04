@@ -5,8 +5,8 @@ import rewardsDistributionAbi from "../../contracts/artifacts/DistributedRewardD
 import stakingAbi from "../../contracts/artifacts/Staking.sol/Staking";
 import capAbi from "../../contracts/artifacts/SoftCap.sol/SoftCap";
 import networkControllerAbi from "../../contracts/artifacts/NetworkController.sol/NetworkController";
-import SepoliaDeployments from "../../contracts/deployments/421614.json" assert { type: "json" };
-import ArbitrumDeployments from "../../contracts/deployments/42161.json" assert { type: "json" };
+import SepoliaDeployments from "../../contracts/deployments/421614.json" with { type: "json" };
+import ArbitrumDeployments from "../../contracts/deployments/42161.json" with { type: "json" };
 import { Address, createPublicClient, getContract, http } from "viem";
 import { arbitrum, arbitrumSepolia, mainnet, sepolia } from "viem/chains";
 
