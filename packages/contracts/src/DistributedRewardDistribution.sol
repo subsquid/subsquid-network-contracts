@@ -113,6 +113,12 @@ contract DistributedRewardsDistribution is IRewardsDistribution, AccessControlle
    * @notice Checks if an address is currently eligible to commit a distribution
    * @param who Address to check
    * @return canPerformCommit True if the address can commit, false otherwise
+   * @dev Round-robin distributor selection mechanism:
+   *      1. Calculates the current eligible distributor window based on block number
+   *      2. The window size determines how many consecutive distributors are eligible
+   *      3. Rotates through the distributor list every roundRobinBlocks blocks
+   *      This prevents any single distributor from having permanent control while
+   *      ensuring a consistent, predictable schedule for reward distributions
    */
   function canCommit(address who) public view returns (bool canPerformCommit) {
     uint256 distCount = distributors.length();
@@ -133,6 +139,13 @@ contract DistributedRewardsDistribution is IRewardsDistribution, AccessControlle
    * @param _finalRoot The final MMR root calculated off-chain
    * @param _totalLeaves The total number of leaves (batches) included in the MMR
    * @param ipfsLink IPFS link to the full data
+   * @dev This function initiates the approval process for a new reward distribution:
+   *      1. Ensures the caller is eligible to commit based on current round-robin status
+   *      2. Validates the root and totalLeaves inputs to prevent empty distributions
+   *      3. Creates a new MMR entry for the block range and records the first approval
+   *      4. If requiredApproves is 1, the distribution is immediately considered fully approved
+   *      5. Otherwise, additional approvals must be gathered via approveFinalRoot
+   *      Multiple distributors provide fault tolerance and prevent malicious distributions
    */
   function commitFinalRoot(
     uint256[2] calldata blockRange,
@@ -208,6 +221,12 @@ contract DistributedRewardsDistribution is IRewardsDistribution, AccessControlle
    * @param workerRewards Array of worker reward amounts
    * @param stakerRewards Array of staker reward amounts
    * @param merkleProof Proof that this batch is part of the final MMR
+   * @dev Several critical steps:
+   *      1. Validates array lengths match and ensures MMR root is committed/approved
+   *      2. Checks that this batch hasn't been processed before
+   *      3. Calculates and verifies the batch leaf hash against the MMR proof
+   *      4. Updates accumulated rewards for recipients and distributes to stakers
+   *      5. Updates lastBlockRewarded if applicable
    */
   function distributeBatch(
     uint256[2] calldata blockRange,
@@ -260,6 +279,16 @@ contract DistributedRewardsDistribution is IRewardsDistribution, AccessControlle
 
   /**
    * @dev Helper function to verify MMR proof with fewer stack variables
+   * @param root the final MMR root to verify against
+   * @param merkleProof array of hashes comprising the Merkle proof
+   * @param kIndex position index of the leaf node in the MMR structure
+   * @param leafIndex sequential index of the leaf in the MMR (0-based)
+   * @param leafHash hash of the leaf data being verified
+   * @param totalLeaves total number of leaves in the MMR
+   * @return true if the proof successfully verifies the leaf against the root
+   * @dev ceates a single-element MmrLeaf array and delegates to the MerkleMountainRange library
+   *      for actual proof verification. The MMR structure allows efficient verification that
+   *      a specific leaf (batch of rewards) is part of the committed distribution
    */
   function _verifyProof(
     bytes32 root,
@@ -334,6 +363,10 @@ contract DistributedRewardsDistribution is IRewardsDistribution, AccessControlle
    * @param fromBlock Starting block
    * @param toBlock Ending block
    * @return Hash representing the block range
+   * @dev Creates a deterministic, unique identifier for each block range by:
+   *      1. Packing the fromBlock and toBlock into a single bytes value
+   *      2. Applying keccak256 hash function to get a unique 32-byte key
+   *      This key is used as the primary identifier for MMR data storage and retrieval
    */
   function _blockRangeKey(uint256 fromBlock, uint256 toBlock) internal pure returns (bytes32) {
     return keccak256(abi.encodePacked(fromBlock, toBlock));
@@ -345,6 +378,9 @@ contract DistributedRewardsDistribution is IRewardsDistribution, AccessControlle
    * @param workerRewards Worker reward amounts
    * @param stakerRewards Staker reward amounts
    * @return Root hash for the batch leaf
+   * @dev Creates a deterministic hash of the entire batch data (recipients and their rewards)
+   *      This hash serves as the leaf value in the MMR structure, allowing verification
+   *      that this specific distribution data was included in the committed MMR root
    */
   function calculateBatchRoot(
     uint256[] calldata recipients,
@@ -370,6 +406,17 @@ contract DistributedRewardsDistribution is IRewardsDistribution, AccessControlle
     return workerId;
   }
 
+  /**
+   * @dev Calculates the peak positions in a Merkle Mountain Range
+   * @param leaves Number of leaves in the MMR
+   * @return Array of peak positions in post-order traversal
+   * @dev MMR structure consists of multiple perfect binary trees (mountains) where:
+   *      1. Each bit in the binary representation of 'leaves' corresponds to a mountain
+   *      2. The algorithm finds the rightmost node of each mountain (peak)
+   *      3. Returns peaks in left-to-right order for MMR verification
+   *      This implementation uses bit manipulation to efficiently find peaks without
+   *      building the entire tree structure
+   */
   function _getPeaks(uint256 leaves) internal pure returns (uint256[] memory) {
     uint256[] memory buf = new uint256[](64); // scratch
     uint256 count;
