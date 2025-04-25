@@ -1,73 +1,63 @@
 // SPDX-License-Identifier: GPL-3.0-only
 pragma solidity 0.8.20;
 
-import "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
+import {EnumerableSet} from "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
+import {AccessControlledPausable} from "./AccessControlledPausable.sol";
 
-import "./interfaces/IRewardsDistribution.sol";
-import "./interfaces/IRouter.sol";
-import "./AccessControlledPausable.sol";
+import {MerkleMountainRange} from "./mmr/MerkleMountainRange.sol";
+import {StorageValue, Node, MmrLeaf, Iterator} from "./mmr/Types.sol";
+import {IRewardsDistribution} from "./interfaces/IRewardsDistribution.sol";
+import {IRouter} from "./interfaces/IRouter.sol";
+import {Errors} from "./libs/Errors.sol";
 
 /**
- * @title Distributed Rewards Distribution Contract
- * @dev Contract has a list of whitelisted distributors
- * Each `roundRobinBlocks` blocks, a new subset of distributors are nominated as committers
- * One of them can then commit a distribution
- * Other distributors can approve it
- * After N approvals, the distribution is executed
+ * @title DistributedRewardsDistribution V2
+ * @notice A rewards distribution system that uses Merkle Mountain Range for reward verification
+ * @dev This contract manages reward distribution based on a single, final MMR root per block range.
  */
-contract DistributedRewardsDistribution is AccessControlledPausable, IRewardsDistribution {
+contract DistributedRewardsDistribution is IRewardsDistribution, AccessControlledPausable {
   using EnumerableSet for EnumerableSet.AddressSet;
 
   bytes32 public constant REWARDS_DISTRIBUTOR_ROLE = keccak256("REWARDS_DISTRIBUTOR_ROLE");
   bytes32 public constant REWARDS_TREASURY_ROLE = keccak256("REWARDS_TREASURY_ROLE");
 
-  mapping(uint256 workerId => uint256) internal _claimable;
-  mapping(uint256 fromBlock => mapping(uint256 toBlock => bytes32)) public commitments;
-  mapping(uint256 fromBlock => mapping(uint256 toBlock => uint8)) public approves;
-  mapping(bytes32 commitment => mapping(address distributor => bool)) public alreadyApproved;
-  uint256 public requiredApproves;
-  uint256 public lastBlockRewarded;
-  // How often the current committers set is changed
-  uint256 public roundRobinBlocks = 256;
-  // Number of distributors which can commit a distribution at the same time
-  uint256 public windowSize = 1;
-
   IRouter public immutable router;
   EnumerableSet.AddressSet private distributors;
 
-  /// @dev Emitted on new commitment
-  event NewCommitment(address indexed who, uint256 fromBlock, uint256 toBlock, bytes32 commitment);
+  uint256 public requiredApproves;
+  uint256 public lastBlockRewarded;
+  uint128 public roundRobinBlocks;
+  uint128 public windowSize;
 
-  /// @dev Emitted when commitment is approved
-  event Approved(address indexed who, uint256 fromBlock, uint256 toBlock, bytes32 commitment);
+  mapping(uint256 => uint256) public accumulatedRewards;
+  mapping(uint256 => uint256) public withdrawnRewards;
 
-  /// @dev Emitted when commitment is approved
-  event Distributed(
-    uint256 fromBlock, uint256 toBlock, uint256[] recipients, uint256[] workerRewards, uint256[] stakerRewards
-  );
+  struct MMRData {
+    uint64 totalLeaves; // total number of leaves in the final MMR
+    bytes32 finalRoot; // the single, final, approved MMR root
+    uint256 approvalCount; // approvals for the finalRoot
+    mapping(address => bool) approvedBy; // who approved the finalRoot
+  }
 
-  /// @dev Emitted when new distributor is added
-  event DistributorAdded(address indexed distributor);
-  /// @dev Emitted when distributor is removed
-  event DistributorRemoved(address indexed distributor);
-  /// @dev Emitted when required approvals is changed
-  event ApprovesRequiredChanged(uint256 newApprovesRequired);
-  /// @dev Emitted when window size is changed
-  event WindowSizeChanged(uint256 newWindowSize);
-  /// @dev Emitted when round robin blocks is changed
-  event RoundRobinBlocksChanged(uint256 newRoundRobinBlocks);
+  mapping(bytes32 => MMRData) private mmrStore;
+
+  mapping(bytes32 => mapping(uint64 => bool)) public processed;
 
   constructor(IRouter _router) {
+    if (address(_router) == address(0)) revert Errors.ZeroAddress();
+
     requiredApproves = 1;
     router = _router;
+    roundRobinBlocks = 256;
+    windowSize = 1;
   }
 
   /**
    * @dev Add whitelisted distributor
-   * Only admin can call this function
+   * @param distributor Address of the new distributor
    */
   function addDistributor(address distributor) external onlyRole(DEFAULT_ADMIN_ROLE) {
-    require(distributors.add(distributor), "Distributor already added");
+    if (!distributors.add(distributor)) revert Errors.DistributorAlreadyAdded();
     _grantRole(REWARDS_DISTRIBUTOR_ROLE, distributor);
 
     emit DistributorAdded(distributor);
@@ -75,28 +65,62 @@ contract DistributedRewardsDistribution is AccessControlledPausable, IRewardsDis
 
   /**
    * @dev Remove whitelisted distributor
-   * Only admin can call this function
+   * @param distributor Address of the distributor to remove
    */
   function removeDistributor(address distributor) external onlyRole(DEFAULT_ADMIN_ROLE) {
-    require(distributors.length() > requiredApproves, "Not enough distributors to approve distribution");
-    require(distributors.remove(distributor), "Distributor does not exist");
+    if (distributors.length() <= requiredApproves) revert Errors.NotEnoughDistributorsToApprove();
+    if (!distributors.remove(distributor)) revert Errors.DistributorDoesNotExist();
     _revokeRole(REWARDS_DISTRIBUTOR_ROLE, distributor);
 
     emit DistributorRemoved(distributor);
   }
 
   /**
-   * @dev Get an index of the first distribuor which can currently commit a distribution
+   * @notice Sets the number of approvals required for a distribution
+   * @param _approvesRequired New number of required approvals
    */
-  function distributorIndex() internal view returns (uint256) {
-    return (block.number / roundRobinBlocks * roundRobinBlocks) % distributors.length();
+  function setApprovesRequired(uint256 _approvesRequired) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    if (_approvesRequired == 0) revert Errors.ApprovesRequiredMustBeGreaterThanZero();
+    if (_approvesRequired > distributors.length()) {
+      revert Errors.ApprovesRequiredMustBeLessThanOrEqualToDistributorsCount();
+    }
+    requiredApproves = _approvesRequired;
+    emit ApprovesRequiredChanged(_approvesRequired);
   }
 
-  function canCommit(address who) public view returns (bool) {
+  /**
+   * @notice Sets the window size for eligible distributors
+   * @param _windowSize New window size
+   */
+  function setWindowSize(uint256 _windowSize) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    if (_windowSize == 0) revert Errors.WindowSizeMustBeGreaterThanZero();
+    if (_windowSize > distributors.length()) revert Errors.WindowSizeMustBeLessThanOrEqualToDistributorsCount();
+    windowSize = uint128(_windowSize);
+    emit WindowSizeChanged(_windowSize);
+  }
+
+  /**
+   * @notice Sets the number of blocks between distributor rotations
+   * @param _roundRobinBlocks New number of blocks
+   */
+  function setRoundRobinBlocks(uint256 _roundRobinBlocks) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    if (_roundRobinBlocks == 0) revert Errors.RoundRobinBlocksMustBeGreaterThanZero();
+    roundRobinBlocks = uint128(_roundRobinBlocks);
+    emit RoundRobinBlocksChanged(_roundRobinBlocks);
+  }
+
+  /**
+   * @notice Checks if an address is currently eligible to commit a distribution
+   * @param who Address to check
+   * @return canPerformCommit True if the address can commit, false otherwise
+   */
+  function canCommit(address who) public view returns (bool canPerformCommit) {
+    uint256 distCount = distributors.length();
+    if (distCount == 0) revert Errors.NoDistributorsAdded();
+
     uint256 firstIndex = distributorIndex();
-    uint256 distributorsCount = distributors.length();
-    for (uint256 i = 0; i < windowSize; i++) {
-      if (distributors.at((firstIndex + i) % distributorsCount) == who) {
+    for (uint256 i = 0; i < uint256(windowSize); i++) {
+      if (distributors.at((firstIndex + i) % distCount) == who) {
         return true;
       }
     }
@@ -104,177 +128,264 @@ contract DistributedRewardsDistribution is AccessControlledPausable, IRewardsDis
   }
 
   /**
-   * @dev Commit rewards for a worker
-   * @param fromBlock block from which the rewards are calculated
-   * @param toBlock block to which the rewards are calculated
-   * @param recipients array of workerIds. i-th recipient will receive i-th worker and staker rewards accordingly
-   * @param workerRewards array of rewards for workers
-   * @param _stakerRewards array of rewards for stakers
-   * can only be called by current distributor
-   * lengths of recipients, workerRewards and _stakerRewards must be equal
-   * can recommit to same toBlock, but this drops approve count back to 1
-   * @notice If only 1 approval is required, the distribution is executed immediately
+   * @notice Commit the single, final merkle root for a distribution block range
+   * @param blockRange Array with [fromBlock, toBlock]
+   * @param _finalRoot The final MMR root calculated off-chain
+   * @param _totalLeaves The total number of leaves (batches) included in the MMR
+   * @param ipfsLink IPFS link to the full data
    */
-  function commit(
-    uint256 fromBlock,
-    uint256 toBlock,
-    uint256[] calldata recipients,
-    uint256[] calldata workerRewards,
-    uint256[] calldata _stakerRewards
-  ) external whenNotPaused {
-    require(recipients.length == workerRewards.length, "Recipients and worker amounts length mismatch");
-    require(recipients.length == _stakerRewards.length, "Recipients and staker amounts length mismatch");
-    require(toBlock >= fromBlock, "toBlock before fromBlock");
+  function commitFinalRoot(
+    uint256[2] calldata blockRange,
+    bytes32 _finalRoot,
+    uint64 _totalLeaves,
+    string memory ipfsLink
+  ) external whenNotPaused onlyRole(REWARDS_DISTRIBUTOR_ROLE) {
+    require(canCommit(msg.sender), "COMMIT_ERR:NOT_COMMITTER");
+    if (!canCommit(msg.sender)) revert Errors.NotACommitter();
 
-    require(canCommit(msg.sender), "Not a committer");
-    require(toBlock < block.number, "Future block");
-    bytes32 commitment = keccak256(msg.data[4:]);
-    require(!alreadyApproved[commitment][msg.sender], "Already approved");
-    if (commitments[fromBlock][toBlock] == commitment) {
-      _approve(commitment, fromBlock, toBlock, recipients, workerRewards, _stakerRewards);
-      return;
+    require(_finalRoot != bytes32(0), "COMMIT_ERR:ROOT_ZERO");
+    if (_finalRoot == bytes32(0)) revert Errors.MerkleRootCannotBeZero();
+
+    require(_totalLeaves > 0, "COMMIT_ERR:LEAVES_ZERO");
+    if (_totalLeaves == 0) revert Errors.TotalLeavesCannotBeZero();
+
+    bytes32 key = _blockRangeKey(blockRange[0], blockRange[1]);
+    MMRData storage mmrData = mmrStore[key];
+
+    require(mmrData.finalRoot == bytes32(0), "COMMIT_ERR:ALREADY_COMMITTED");
+    if (mmrData.finalRoot != bytes32(0)) revert Errors.MerkleRootAlreadyCommitted();
+
+    mmrData.finalRoot = _finalRoot;
+    mmrData.totalLeaves = _totalLeaves;
+
+    mmrData.approvalCount = 1;
+    mmrData.approvedBy[msg.sender] = true;
+
+    emit FinalRootCommitted(key, _finalRoot, _totalLeaves, msg.sender);
+    emit NewCommitment(msg.sender, blockRange[0], blockRange[1], _finalRoot);
+
+    if (requiredApproves == 1) {
+      emit Approved(msg.sender, blockRange[0], blockRange[1], _finalRoot, ipfsLink);
     }
-
-    commitments[fromBlock][toBlock] = commitment;
-    approves[fromBlock][toBlock] = 0;
-
-    emit NewCommitment(msg.sender, fromBlock, toBlock, commitment);
-    _approve(commitment, fromBlock, toBlock, recipients, workerRewards, _stakerRewards);
   }
 
   /**
-   * @dev Approve a commitment
-   * Same args as for commit
-   * After `requiredApproves` approvals, the distribution is executed
+   * @notice Approve the final merkle root for a distribution block range
+   * @param blockRange Array with [fromBlock, toBlock]
+   * @param _finalRoot The final MMR root to approve
    */
-  function approve(
-    uint256 fromBlock,
-    uint256 toBlock,
-    uint256[] calldata recipients,
-    uint256[] calldata workerRewards,
-    uint256[] calldata _stakerRewards
-  ) external onlyRole(REWARDS_DISTRIBUTOR_ROLE) whenNotPaused {
-    require(commitments[fromBlock][toBlock] != 0, "Commitment does not exist");
-    bytes32 commitment = keccak256(msg.data[4:]);
-    require(commitments[fromBlock][toBlock] == commitment, "Commitment mismatch");
-    require(!alreadyApproved[commitment][msg.sender], "Already approved");
+  function approveFinalRoot(uint256[2] calldata blockRange, bytes32 _finalRoot)
+    external
+    whenNotPaused
+    onlyRole(REWARDS_DISTRIBUTOR_ROLE)
+  {
+    bytes32 key = _blockRangeKey(blockRange[0], blockRange[1]);
+    MMRData storage mmrData = mmrStore[key];
 
-    _approve(commitment, fromBlock, toBlock, recipients, workerRewards, _stakerRewards);
-  }
+    if (mmrData.finalRoot == bytes32(0)) revert Errors.MerkleRootNotCommitted();
+    if (mmrData.finalRoot != _finalRoot) revert Errors.MerkleRootMismatch();
 
-  function _approve(
-    bytes32 commitment,
-    uint256 fromBlock,
-    uint256 toBlock,
-    uint256[] calldata recipients,
-    uint256[] calldata workerRewards,
-    uint256[] calldata _stakerRewards
-  ) internal {
-    approves[fromBlock][toBlock]++;
-    alreadyApproved[commitment][msg.sender] = true;
+    if (mmrData.approvedBy[msg.sender]) revert Errors.AlreadyApproved();
 
-    emit Approved(msg.sender, fromBlock, toBlock, commitment);
+    if (mmrData.approvalCount >= requiredApproves) revert Errors.AlreadyFullyApproved();
 
-    if (approves[fromBlock][toBlock] == requiredApproves) {
-      distribute(fromBlock, toBlock, recipients, workerRewards, _stakerRewards);
+    mmrData.approvalCount += 1;
+    mmrData.approvedBy[msg.sender] = true;
+
+    emit FinalRootApproved(key, _finalRoot, msg.sender);
+
+    if (mmrData.approvalCount >= requiredApproves) {
+      emit Approved(msg.sender, blockRange[0], blockRange[1], _finalRoot, "");
     }
   }
 
-  /// @return true if the commitment can be approved by `who`
-  function canApprove(
-    address who,
-    uint256 fromBlock,
-    uint256 toBlock,
+  /**
+   * @notice Distribute rewards for a single batch, verifying against the final MMR root
+   * @param blockRange Array with [fromBlock, toBlock]
+   * @param kIndex Node position index of the leaf in the MMR structure
+   * @param leafIndex Sequential index (0-based) of the leaf/batch in the MMR
+   * @param recipients Array of worker IDs receiving rewards
+   * @param workerRewards Array of worker reward amounts
+   * @param stakerRewards Array of staker reward amounts
+   * @param merkleProof Proof that this batch is part of the final MMR
+   */
+  function distributeBatch(
+    uint256[2] calldata blockRange,
+    uint64 kIndex,
+    uint64 leafIndex,
     uint256[] calldata recipients,
     uint256[] calldata workerRewards,
-    uint256[] calldata _stakerRewards
-  ) external view returns (bool) {
-    if (!hasRole(REWARDS_DISTRIBUTOR_ROLE, who)) {
-      return false;
+    uint256[] calldata stakerRewards,
+    bytes32[] calldata merkleProof
+  ) external whenNotPaused {
+    if (recipients.length != workerRewards.length || recipients.length != stakerRewards.length) {
+      revert Errors.ArrayLengthMismatch();
     }
-    if (commitments[fromBlock][toBlock] == 0) {
-      return false;
-    }
-    bytes32 commitment = keccak256(abi.encode(fromBlock, toBlock, recipients, workerRewards, _stakerRewards));
-    if (commitments[fromBlock][toBlock] != commitment) {
-      return false;
-    }
-    if (alreadyApproved[commitment][who]) {
-      return false;
-    }
-    return true;
-  }
 
-  /// @dev All distributions must be sequential and not blocks can be missed
-  /// E.g. after distribution for blocks [A, B], next one bust be for [B + 1, C]
-  function distribute(
-    uint256 fromBlock,
-    uint256 toBlock,
-    uint256[] calldata recipients,
-    uint256[] calldata workerRewards,
-    uint256[] calldata _stakerRewards
-  ) internal {
-    require(lastBlockRewarded == 0 || fromBlock == lastBlockRewarded + 1, "Not all blocks covered");
+    bytes32 key = _blockRangeKey(blockRange[0], blockRange[1]);
+    MMRData storage mmrData = mmrStore[key];
+
+    if (mmrData.finalRoot == bytes32(0)) revert Errors.MerkleRootNotCommitted();
+    if (mmrData.approvalCount < requiredApproves) revert Errors.NotEnoughApprovals();
+
+    if (leafIndex >= mmrData.totalLeaves) {
+      revert Errors.InvalidBatchId();
+    }
+
+    if (processed[key][leafIndex]) {
+      revert Errors.BatchAlreadyProcessed();
+    }
+
+    bytes32 batchLeafHash = calculateBatchRoot(recipients, workerRewards, stakerRewards);
+
+    if (!_verifyProof(mmrData.finalRoot, merkleProof, kIndex, leafIndex, batchLeafHash, mmrData.totalLeaves)) {
+      revert Errors.InvalidMerkleProof();
+    }
+
+    processed[key][leafIndex] = true;
+
     for (uint256 i = 0; i < recipients.length; i++) {
-      _claimable[recipients[i]] += workerRewards[i];
+      uint256 workerId = recipients[i];
+      accumulatedRewards[workerId] += workerRewards[i];
     }
-    router.staking().distribute(recipients, _stakerRewards);
-    lastBlockRewarded = toBlock;
 
-    emit Distributed(fromBlock, toBlock, recipients, workerRewards, _stakerRewards);
+    router.staking().distribute(recipients, stakerRewards);
+
+    if (blockRange[1] > lastBlockRewarded) {
+      lastBlockRewarded = blockRange[1];
+    }
+
+    emit BatchDistributed(blockRange[0], blockRange[1], leafIndex, recipients, workerRewards, stakerRewards);
   }
 
-  /// @dev Treasury claims rewards for an address
-  /// @notice Can only be called by the treasury
-  /// @notice Claimable amount should drop to 0 after function call
-  function claim(address who) external onlyRole(REWARDS_TREASURY_ROLE) whenNotPaused returns (uint256 claimedAmount) {
-    claimedAmount = router.staking().claim(who);
-    uint256[] memory ownedWorkers = router.workerRegistration().getOwnedWorkers(who);
+  /**
+   * @dev Helper function to verify MMR proof with fewer stack variables
+   */
+  function _verifyProof(
+    bytes32 root,
+    bytes32[] calldata merkleProof,
+    uint64 kIndex,
+    uint64 leafIndex,
+    bytes32 leafHash,
+    uint64 totalLeaves
+  ) internal pure returns (bool) {
+    MmrLeaf[] memory leaves = new MmrLeaf[](1);
+    leaves[0] = MmrLeaf(kIndex, leafIndex, leafHash);
+    return MerkleMountainRange.VerifyProof(root, merkleProof, leaves, totalLeaves);
+  }
+
+  /**
+   * @notice Claim rewards for a worker
+   * @param worker Address of the worker
+   * @return reward Amount of rewards claimed
+   */
+  function claim(address worker) external whenNotPaused onlyRole(REWARDS_TREASURY_ROLE) returns (uint256 reward) {
+    uint256 claimedAmount = router.staking().claim(worker);
+
+    uint256[] memory ownedWorkers = router.workerRegistration().getOwnedWorkers(worker);
     for (uint256 i = 0; i < ownedWorkers.length; i++) {
       uint256 workerId = ownedWorkers[i];
-      uint256 claimedFromWorker = _claimable[workerId];
-      claimedAmount += claimedFromWorker;
-      _claimable[workerId] = 0;
-      emit Claimed(who, workerId, claimedFromWorker);
+      uint256 workerReward = withdrawableRewardOf(workerId);
+      if (workerReward > 0) {
+        withdrawnRewards[workerId] += workerReward;
+        claimedAmount += workerReward;
+        emit RewardClaimed(worker, workerId, workerReward);
+      }
     }
 
     return claimedAmount;
   }
 
-  /// @return claimable amount for the address
-  function claimable(address who) external view returns (uint256) {
-    uint256 reward = router.staking().claimable(who);
-    uint256[] memory ownedWorkers = router.workerRegistration().getOwnedWorkers(who);
-    for (uint256 i = 0; i < ownedWorkers.length; i++) {
-      uint256 workerId = ownedWorkers[i];
-      reward += _claimable[workerId];
+  /**
+   * @notice Get currently claimable rewards for worker
+   * @param worker Address of the worker
+   * @return reward Amount of claimable rewards
+   */
+  function claimable(address worker) external view returns (uint256 reward) {
+    uint256 workerId = getWorkerId(worker);
+    if (workerId == 0) return 0;
+
+    return withdrawableRewardOf(workerId);
+  }
+
+  /**
+   * @notice Get withdrawable rewards for a worker
+   * @param workerId Worker ID to check
+   * @return Withdrawable reward amount
+   */
+  function withdrawableRewardOf(uint256 workerId) public view returns (uint256) {
+    return accumulatedRewards[workerId] - withdrawnRewards[workerId];
+  }
+
+  // --- Internal Functions ---
+
+  /**
+   * @dev Get an index of the first distribuor which can currently commit a distribution
+   * @return Index of the current distributor in the round-robin rotation
+   */
+  function distributorIndex() internal view returns (uint256) {
+    uint256 distCount = distributors.length();
+    if (distCount == 0) return 0;
+    return (block.number / uint256(roundRobinBlocks)) % distCount;
+  }
+
+  /**
+   * @dev Generates a unique key for a block range
+   * @param fromBlock Starting block
+   * @param toBlock Ending block
+   * @return Hash representing the block range
+   */
+  function _blockRangeKey(uint256 fromBlock, uint256 toBlock) internal pure returns (bytes32) {
+    return keccak256(abi.encodePacked(fromBlock, toBlock));
+  }
+
+  /**
+   * @dev Calculate the root hash for a batch leaf
+   * @param recipients Worker IDs
+   * @param workerRewards Worker reward amounts
+   * @param stakerRewards Staker reward amounts
+   * @return Root hash for the batch leaf
+   */
+  function calculateBatchRoot(
+    uint256[] calldata recipients,
+    uint256[] calldata workerRewards,
+    uint256[] calldata stakerRewards
+  ) internal pure returns (bytes32) {
+    return keccak256(abi.encode(recipients, workerRewards, stakerRewards));
+  }
+
+  /**
+   * @notice Helper function to get worker ID from address
+   * @param worker Address of the worker
+   * @return workerId Worker ID
+   */
+  function getWorkerId(address worker) internal view returns (uint256 workerId) {
+    try router.workerRegistration().getOwnedWorkers(worker) returns (uint256[] memory ownedWorkers) {
+      if (ownedWorkers.length > 0) {
+        workerId = ownedWorkers[0];
+      }
+    } catch {
+      workerId = 0;
     }
-    return reward;
+    return workerId;
   }
 
-  /// @dev Set required number of approvals
-  function setApprovesRequired(uint256 _approvesRequired) external onlyRole(DEFAULT_ADMIN_ROLE) {
-    require(_approvesRequired > 0, "Approves required must be greater than 0");
-    require(_approvesRequired <= distributors.length(), "Approves required must be less than distributors count");
-    requiredApproves = _approvesRequired;
+  function _getPeaks(uint256 leaves) internal pure returns (uint256[] memory) {
+    uint256[] memory buf = new uint256[](64); // scratch
+    uint256 count;
+    uint256 pos = leaves * 2 - 2; // post-order index of right-most node
 
-    emit ApprovesRequiredChanged(_approvesRequired);
-  }
+    while (leaves != 0) {
+      uint256 bit = leaves & (~leaves + 1); // lowest set bit
+      buf[count++] = pos; // remember the peak
+      pos -= (bit << 1) - 1; // jump over subtree
+      leaves -= bit; // clear that bit
+    }
 
-  /// @dev Set required number of approvals
-  function setWindowSize(uint256 _windowSize) external onlyRole(DEFAULT_ADMIN_ROLE) {
-    require(_windowSize > 0, "Number of simultaneous committers must be positive");
-    require(_windowSize <= distributors.length(), "Number of simultaneous committers less than distributors count");
-    windowSize = _windowSize;
-
-    emit WindowSizeChanged(_windowSize);
-  }
-
-  /// @dev Set round robin length
-  function setRoundRobinBlocks(uint256 _roundRobinBlocks) external onlyRole(DEFAULT_ADMIN_ROLE) {
-    require(_roundRobinBlocks > 0, "Round robin blocks must be positive");
-    roundRobinBlocks = _roundRobinBlocks;
-
-    emit RoundRobinBlocksChanged(_roundRobinBlocks);
+    uint256[] memory peaks = new uint256[](count);
+    for (uint256 i = 0; i < count; ++i) {
+      peaks[i] = buf[count - 1 - i]; // left-to-right order
+    }
+    return peaks;
   }
 }
