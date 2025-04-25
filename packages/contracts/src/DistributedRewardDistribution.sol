@@ -153,19 +153,43 @@ contract DistributedRewardsDistribution is IRewardsDistribution, AccessControlle
     uint64 _totalLeaves,
     string memory ipfsLink
   ) external whenNotPaused onlyRole(REWARDS_DISTRIBUTOR_ROLE) {
-    require(canCommit(msg.sender), "COMMIT_ERR:NOT_COMMITTER");
-    if (!canCommit(msg.sender)) revert Errors.NotACommitter();
-
-    require(_finalRoot != bytes32(0), "COMMIT_ERR:ROOT_ZERO");
-    if (_finalRoot == bytes32(0)) revert Errors.MerkleRootCannotBeZero();
-
-    require(_totalLeaves > 0, "COMMIT_ERR:LEAVES_ZERO");
-    if (_totalLeaves == 0) revert Errors.TotalLeavesCannotBeZero();
-
     bytes32 key = _blockRangeKey(blockRange[0], blockRange[1]);
     MMRData storage mmrData = mmrStore[key];
 
-    require(mmrData.finalRoot == bytes32(0), "COMMIT_ERR:ALREADY_COMMITTED");
+    bool isCommitter = canCommit(msg.sender);
+
+    // if caller is not eligible to commit, try to handle as approval
+    if (!isCommitter) {
+      if (mmrData.finalRoot == bytes32(0)) {
+        revert Errors.NotACommitter();
+      }
+
+      if (mmrData.finalRoot != _finalRoot) {
+        revert Errors.MerkleRootMismatch();
+      }
+
+      if (mmrData.approvedBy[msg.sender]) {
+        revert Errors.AlreadyApproved();
+      }
+
+      if (mmrData.approvalCount >= requiredApproves) {
+        revert Errors.AlreadyFullyApproved();
+      }
+
+      mmrData.approvalCount += 1;
+      mmrData.approvedBy[msg.sender] = true;
+
+      emit FinalRootApproved(key, _finalRoot, msg.sender);
+
+      if (mmrData.approvalCount >= requiredApproves) {
+        emit Approved(msg.sender, blockRange[0], blockRange[1], _finalRoot, "");
+      }
+      return;
+    }
+
+    if (_finalRoot == bytes32(0)) revert Errors.MerkleRootCannotBeZero();
+    if (_totalLeaves == 0) revert Errors.TotalLeavesCannotBeZero();
+
     if (mmrData.finalRoot != bytes32(0)) revert Errors.MerkleRootAlreadyCommitted();
 
     mmrData.finalRoot = _finalRoot;
@@ -345,8 +369,6 @@ contract DistributedRewardsDistribution is IRewardsDistribution, AccessControlle
   function withdrawableRewardOf(uint256 workerId) public view returns (uint256) {
     return accumulatedRewards[workerId] - withdrawnRewards[workerId];
   }
-
-  // --- Internal Functions ---
 
   /**
    * @dev Get an index of the first distribuor which can currently commit a distribution
