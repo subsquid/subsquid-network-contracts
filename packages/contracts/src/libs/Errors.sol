@@ -14,6 +14,10 @@ library Errors {
   error NoDistributorsAdded();
   error NotEnoughDistributorsToApprove();
   error NotACommitter();
+  error ToBlockLessThanFromBlock();
+  error FutureBlock();
+  error InvalidMerkleRoot();
+  error NotAllBlocksCovered();
 
   // Configuration errors
   error ApprovesRequiredMustBeGreaterThanZero();

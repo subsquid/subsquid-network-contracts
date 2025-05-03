@@ -3,7 +3,8 @@
     "build": "turbo build",
     "lint": "turbo lint",
     "test": "turbo test",
-    "build-reward-image": "docker build -f packages/rewards-calculator/Dockerfile -t rewards-simulation ."
+    "build-reward-image": "docker build -f packages/rewards-calculator/Dockerfile -t rewards-simulation .",
+    "generate": "node packages/contracts/generate_merkle.mjs"
   },
   "devDependencies": {
     "turbo": "^1.9.9"
