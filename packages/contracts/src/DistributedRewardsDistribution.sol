@@ -90,7 +90,9 @@ contract DistributedRewardsDistribution is IRewardsDistribution, AccessControl, 
    */
   function setApprovesRequired(uint256 approvesRequired) external onlyRole(DEFAULT_ADMIN_ROLE) {
     if (approvesRequired == 0) revert Errors.ApprovesRequiredMustBeGreaterThanZero();
-    if (approvesRequired > distributors.length()) revert Errors.ApprovesRequiredMustBeLessThanOrEqualToDistributorsCount();
+    if (approvesRequired > distributors.length()) {
+      revert Errors.ApprovesRequiredMustBeLessThanOrEqualToDistributorsCount();
+    }
     requiredApproves = approvesRequired;
     emit ApprovesRequiredChanged(approvesRequired);
   }
@@ -282,6 +284,7 @@ contract DistributedRewardsDistribution is IRewardsDistribution, AccessControl, 
    * @param who Address of the worker
    * @return claimed Amount of rewards claimed
    * @dev Processes both staking rewards and worker rewards
+   * // Loop DOS danger
    */
   function claim(address who) external whenNotPaused onlyRole(REWARDS_TREASURY_ROLE) returns (uint256 claimed) {
     claimed = router.staking().claim(who);
@@ -293,7 +296,7 @@ contract DistributedRewardsDistribution is IRewardsDistribution, AccessControl, 
         withdrawnRewards[wid] += amt;
         claimed += amt;
         emit RewardClaimed(who, wid, amt);
-      }
+      } 
     }
   }
 

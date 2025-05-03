@@ -3,7 +3,7 @@ pragma solidity 0.8.20;
 
 import "forge-std/Test.sol";
 import "forge-std/console.sol";
-import {DistributedRewardsDistribution} from "../../src/DistributedRewardDistribution.sol";
+import {DistributedRewardsDistribution} from "../../src/DistributedRewardsDistribution.sol";
 import {IWorkerRegistration, WorkerRegistration} from "../../src/WorkerRegistration.sol";
 import {IStaking, Staking} from "../../src/Staking.sol";
 import {INetworkController, NetworkController} from "../../src/NetworkController.sol";
@@ -84,7 +84,6 @@ contract DistributedRewardsDistributionTest is Test {
   uint256 fromBlock = 100;
   uint256 toBlock = 200;
 
-
   function setUp() public {
     vm.startPrank(admin);
 
@@ -97,10 +96,9 @@ contract DistributedRewardsDistributionTest is Test {
 
     sqd = new SQD(initialHolders, initialAmounts, IL1CustomGateway(address(0)), IGatewayRouter2(address(0)));
 
-
     address[] memory allowedVestedTargets = new address[](0);
     NetworkController networkController = new NetworkController(
-      100, // epochLength 
+      100, // epochLength
       0, // firstEpochBlock
       0, // epochCheckpoint
       1000 * 10 ** 18, // bondAmount
@@ -137,6 +135,7 @@ contract DistributedRewardsDistributionTest is Test {
 
     vm.stopPrank();
   }
+
   function testSingleRootMultipleBatches() public {
     /* ------ build two batch leaves ------ */
     uint256[] memory rec1 = new uint256[](2);
@@ -159,18 +158,14 @@ contract DistributedRewardsDistributionTest is Test {
     sr2[0] = 15e17;
     sr2[1] = 2e18;
 
-
     bytes32 leaf1 = keccak256(abi.encode(rec1, wr1, sr1));
     bytes32 leaf2 = keccak256(abi.encode(rec2, wr2, sr2));
-
 
     bytes32[] memory leaves = new bytes32[](2);
     leaves[0] = leaf1;
     leaves[1] = leaf2;
 
-
     bytes32 root = createMerkleRoot(leaves);
-
 
     console.log("Leaf 1:");
     console.logBytes32(leaf1);
@@ -179,21 +174,17 @@ contract DistributedRewardsDistributionTest is Test {
     console.log("Root:");
     console.logBytes32(root);
 
-
     (bytes32 a, bytes32 b) = sortPair(leaf1, leaf2);
     bytes32 manualRoot = keccak256(abi.encodePacked(a, b));
     console.log("Manual root:");
     console.logBytes32(manualRoot);
 
-
     root = manualRoot;
-
 
     bytes32[] memory manualProof1 = new bytes32[](1);
     bytes32[] memory manualProof2 = new bytes32[](1);
     manualProof1[0] = leaf2;
     manualProof2[0] = leaf1;
-
 
     bool verified1 = MerkleProof.verify(manualProof1, root, leaf1);
     bool verified2 = MerkleProof.verify(manualProof2, root, leaf2);
@@ -204,19 +195,18 @@ contract DistributedRewardsDistributionTest is Test {
     require(verified1, "Manual proof 1 invalid");
     require(verified2, "Manual proof 2 invalid");
 
-
     vm.roll(256);
     vm.prank(dist2);
     rewards.commitRoot([fromBlock, toBlock], root, 2, "ipfs://test");
 
-
     vm.prank(dist1);
     rewards.distribute([fromBlock, toBlock], rec1, wr1, sr1, manualProof1);
 
-
     vm.prank(dist1);
     rewards.distribute([fromBlock, toBlock], rec2, wr2, sr2, manualProof2);
-  
+
     assertEq(rewards.lastBlockRewarded(), toBlock);
   }
+
+  // Test to check wrong Proof 
 }
