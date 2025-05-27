@@ -296,7 +296,7 @@ contract DistributedRewardsDistribution is IRewardsDistribution, AccessControl, 
         withdrawnRewards[wid] += amt;
         claimed += amt;
         emit RewardClaimed(who, wid, amt);
-      } 
+      }
     }
   }
 

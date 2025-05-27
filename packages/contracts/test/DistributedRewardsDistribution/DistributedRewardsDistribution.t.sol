@@ -208,5 +208,5 @@ contract DistributedRewardsDistributionTest is Test {
     assertEq(rewards.lastBlockRewarded(), toBlock);
   }
 
-  // Test to check wrong Proof 
+  // Test to check wrong Proof
 }

@@ -7,7 +7,7 @@ import { fileURLToPath } from "url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const LOCAL_RPC_URL = "https://sepolia-rollup.arbitrum.io/rpc";
+const LOCAL_RPC_URL = "http://localhost:8545";
 
 
 const PRIVATE_KEYS = {
@@ -32,6 +32,8 @@ const SKIP_APPROVE = process.env.SKIP_APPROVE === "true";
 const SKIP_DISTRIBUTE = process.env.SKIP_DISTRIBUTE === "true";
 
 console.log("Configuration loaded successfully");
+console.log(`Using REWARDS_DISTRIBUTION_ADDRESS: ${REWARDS_DISTRIBUTION_ADDRESS}`);
+console.log(`Using ROUTER_ADDRESS: ${ROUTER_ADDRESS}`);
 
 
 function loadAbi(contractName) {
@@ -517,9 +519,9 @@ async function testSingleMerkleDistribution() {
     }
     
     // Ensure window size is suitable
-    if (currentWindowSize.toNumber() < 2) {
-      console.log("Setting window size to 2");
-      await sendTransaction(rewardsContract, "setWindowSize", admin, [2]);
+    if (currentWindowSize.toNumber() < 3) {
+      console.log("Setting window size to 3");
+      await sendTransaction(rewardsContract, "setWindowSize", admin, [3]);
     }
   } catch(err) {
     console.error("Error during contract setup:", err);

@@ -25,11 +25,9 @@ contract DistributedRewardsDistributionFullFlowTest is BaseTest {
   uint256 toBlock = 200;
 
   function setUp() public {
+    vm.startPrank(address(this));
     (token, router) = deployAll();
     rewards = new DistributedRewardsDistribution(router);
-
-    rewards.grantRole(rewards.DEFAULT_ADMIN_ROLE(), admin);
-    vm.startPrank(admin);
     rewards.grantRole(rewards.REWARDS_DISTRIBUTOR_ROLE(), distributor1);
     rewards.grantRole(rewards.REWARDS_DISTRIBUTOR_ROLE(), distributor2);
     rewards.grantRole(rewards.REWARDS_TREASURY_ROLE(), address(this));
@@ -41,9 +39,7 @@ contract DistributedRewardsDistributionFullFlowTest is BaseTest {
     Staking(address(router.staking())).grantRole(
       Staking(address(router.staking())).REWARDS_DISTRIBUTOR_ROLE(), address(rewards)
     );
-    vm.stopPrank();
 
-    // print token balances to debug
     console.log("Admin balance before:", token.balanceOf(admin));
     console.log("Test contract balance:", token.balanceOf(address(this)));
 
@@ -51,6 +47,8 @@ contract DistributedRewardsDistributionFullFlowTest is BaseTest {
     token.transfer(user2, 10e18);
     token.transfer(user3, 10e18);
     token.transfer(user4, 10e18);
+
+    vm.stopPrank();
   }
 
   function createMerkleTree(uint256[] memory recipients, uint256[] memory workerRewards, uint256[] memory stakerRewards)
@@ -63,10 +61,8 @@ contract DistributedRewardsDistributionFullFlowTest is BaseTest {
       "Input arrays must be the same length"
     );
 
-    // Create leaves
     leaves = new bytes32[](recipients.length);
     for (uint256 i = 0; i < recipients.length; i++) {
-      // single-element arrays for each recipient and reward
       uint256[] memory recipientArr = new uint256[](1);
       uint256[] memory workerRewardArr = new uint256[](1);
       uint256[] memory stakerRewardArr = new uint256[](1);
@@ -78,13 +74,10 @@ contract DistributedRewardsDistributionFullFlowTest is BaseTest {
       leaves[i] = keccak256(abi.encode(recipientArr, workerRewardArr, stakerRewardArr));
     }
 
-    // For a simple two-leaf tree
     if (leaves.length == 2) {
-      // sort the leaves to match OpenZeppelin's implementation
       (bytes32 a, bytes32 b) = sortPair(leaves[0], leaves[1]);
       root = keccak256(abi.encodePacked(a, b));
 
-      // Create proofs
       proofs = new bytes32[][](2);
       proofs[0] = new bytes32[](1);
       proofs[1] = new bytes32[](1);
@@ -105,6 +98,8 @@ contract DistributedRewardsDistributionFullFlowTest is BaseTest {
   }
 
   function testFullDistributionFlow() public {
+    token.transfer(admin, 100 ether);
+
     vm.startPrank(admin);
 
     // Create two batches of rewards for a total of four users
@@ -148,49 +143,43 @@ contract DistributedRewardsDistributionFullFlowTest is BaseTest {
     proof1[0] = leaf2;
     proof2[0] = leaf1;
 
-    // Fund the rewards contract
-    uint256 totalRewards = 12 ether; // sum all rewards
+    uint256 totalRewards = 12 ether; // Sum of all rewards
     token.approve(address(rewards), totalRewards);
-    rewards.fundRewards(totalRewards);
+    token.transfer(address(rewards), totalRewards);
 
-    // Commit the merkle root
     vm.stopPrank();
-    vm.roll(fromBlock + 1);
+    vm.roll(fromBlock + 100);
 
     vm.prank(distributor1);
     rewards.commitRoot([fromBlock, toBlock], root, 2, "ipfs://testcid");
 
-    // Distribute rewards for the first batch
     vm.prank(distributor1);
     rewards.distribute([fromBlock, toBlock], recipients1, workerRewards1, stakerRewards1, proof1);
 
-    // Distribute rewards for the second batch
     vm.prank(distributor2);
     rewards.distribute([fromBlock, toBlock], recipients2, workerRewards2, stakerRewards2, proof2);
 
-    // Check that lastBlockRewarded is updated
     assertEq(rewards.lastBlockRewarded(), toBlock);
 
-    // Check claimable amounts
     assertEq(rewards.claimable(user1), 1.5 ether); // Worker + staker rewards
     assertEq(rewards.claimable(user2), 3 ether);
     assertEq(rewards.claimable(user3), 4.5 ether);
     assertEq(rewards.claimable(user4), 6 ether);
 
-    // Test claiming rewards
     uint256 balanceBefore = token.balanceOf(user1);
     vm.prank(user1);
     uint256 claimed = rewards.claim(user1);
 
     assertEq(claimed, 1.5 ether);
     assertEq(token.balanceOf(user1), balanceBefore + 1.5 ether);
-    assertEq(rewards.claimable(user1), 0);
+    assertEq(rewards.claimable(user1), 0); // Should be zero after claiming
   }
 
   function testEdgeCaseInvalidProof() public {
+    token.transfer(admin, 20 ether);
+
     vm.startPrank(admin);
 
-    // Create rewards data
     uint256[] memory recipients = new uint256[](2);
     uint256[] memory workerRewards = new uint256[](2);
     uint256[] memory stakerRewards = new uint256[](2);
@@ -206,16 +195,16 @@ contract DistributedRewardsDistributionFullFlowTest is BaseTest {
     bytes32 root = keccak256(abi.encodePacked(leaf, bytes32(0))); // Different root
 
     token.approve(address(rewards), 10 ether);
-    rewards.fundRewards(10 ether);
+    token.transfer(address(rewards), 10 ether);
 
     vm.stopPrank();
-    vm.roll(fromBlock + 1);
+    vm.roll(fromBlock + 100);
 
     vm.prank(distributor1);
     rewards.commitRoot([fromBlock, toBlock], root, 1, "ipfs://testcid");
 
     bytes32[] memory invalidProof = new bytes32[](1);
-    invalidProof[0] = bytes32(uint256(1)); // Invalid proof
+    invalidProof[0] = bytes32(uint256(1));
 
     vm.prank(distributor1);
     vm.expectRevert("Invalid merkle proof");
@@ -223,6 +212,8 @@ contract DistributedRewardsDistributionFullFlowTest is BaseTest {
   }
 
   function testEdgeCaseDoubleDistribution() public {
+    token.transfer(admin, 20 ether);
+
     vm.startPrank(admin);
 
     uint256[] memory recipients = new uint256[](1);
@@ -237,10 +228,10 @@ contract DistributedRewardsDistributionFullFlowTest is BaseTest {
     bytes32 root = leaf; // For a single leaf, the root is the leaf itself
 
     token.approve(address(rewards), 10 ether);
-    rewards.fundRewards(10 ether);
+    token.transfer(address(rewards), 10 ether);
 
     vm.stopPrank();
-    vm.roll(fromBlock + 1);
+    vm.roll(fromBlock + 100);
 
     vm.prank(distributor1);
     rewards.commitRoot([fromBlock, toBlock], root, 1, "ipfs://testcid");
@@ -256,6 +247,8 @@ contract DistributedRewardsDistributionFullFlowTest is BaseTest {
   }
 
   function testEdgeCaseInsufficientFunds() public {
+    token.transfer(admin, 20 ether);
+
     vm.startPrank(admin);
 
     uint256[] memory recipients = new uint256[](1);
@@ -268,11 +261,12 @@ contract DistributedRewardsDistributionFullFlowTest is BaseTest {
 
     bytes32 leaf = keccak256(abi.encode(recipients, workerRewards, stakerRewards));
     bytes32 root = leaf;
+
     token.approve(address(rewards), 10 ether);
-    rewards.fundRewards(10 ether);
+    token.transfer(address(rewards), 10 ether);
 
     vm.stopPrank();
-    vm.roll(fromBlock + 1);
+    vm.roll(fromBlock + 100);
 
     vm.prank(distributor1);
     rewards.commitRoot([fromBlock, toBlock], root, 1, "ipfs://testcid");
@@ -280,7 +274,7 @@ contract DistributedRewardsDistributionFullFlowTest is BaseTest {
     bytes32[] memory proof = new bytes32[](0);
 
     vm.prank(distributor1);
-    vm.expectRevert(); // Should revert due to insufficient funds
+    vm.expectRevert();
     rewards.distribute([fromBlock, toBlock], recipients, workerRewards, stakerRewards, proof);
   }
 }
