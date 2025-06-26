@@ -11,6 +11,7 @@ export default registerAs('blockchain', () => ({
     workerRegistration: process.env.WORKER_REGISTRATION_ADDRESS,
     rewardsDistribution: process.env.REWARDS_DISTRIBUTION_ADDRESS,
     staking: process.env.STAKING_ADDRESS,
+    capedStaking: process.env.CAPED_STAKING_ADDRESS,
     sqd: process.env.SQD_TOKEN_ADDRESS,
   },
   distributor: {

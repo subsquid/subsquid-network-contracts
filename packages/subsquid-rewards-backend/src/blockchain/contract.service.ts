@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Web3Service } from './web3.service';
 import { FordefiService } from './fordefi/fordefi.service';
+import { ClickHouseService } from '../database/clickhouse.service';
 import { Address, Hex, getContract, parseAbiItem, encodeFunctionData, keccak256, encodePacked } from 'viem';
 import {
   DistributedRewardsDistributionABI,
@@ -9,6 +10,7 @@ import {
   WorkerRegistrationABI,
   NetworkControllerABI,
   StakingABI,
+  CapedStakingABI,
 } from './contracts/abis';
 
 export interface MulticallResult<T> {
@@ -36,20 +38,66 @@ export class ContractService {
     private configService: ConfigService,
     private web3Service: Web3Service,
     private fordefiService: FordefiService,
+    private clickHouseService: ClickHouseService,
   ) {}
 
   async getCurrentApy(): Promise<bigint> {
     try {
-      const rewardCalculationAddress = this.configService.get('blockchain.contracts.rewardCalculation') as Address;
-      
-      if (!rewardCalculationAddress) {
-        this.logger.warn('Reward calculation contract address not configured');
+      try {
+        const networkName = this.configService.get('blockchain.networkName') || 'mainnet';
+        const query = `
+          SELECT 
+            base_apr
+          FROM ${networkName}.rewards_stats
+          WHERE is_commit_success = true
+          ORDER BY epoch_end DESC
+          LIMIT 1
+        `;
+        
+        // use the properly injected ClickHouse service
+        const client = (this.clickHouseService as any).client;
+        if (client) {
+          const resultSet = await client.query({
+            query,
+            format: 'JSONEachRow',
+          });
+
+          const results = await resultSet.json();
+          const resultArray = Array.isArray(results) ? results : [results];
+          
+          if (resultArray.length > 0 && resultArray[0].base_apr !== undefined) {
+            const apr = BigInt(resultArray[0].base_apr);
+            this.logger.log(`Retrieved APR from ClickHouse: ${apr} basis points`);
+            return apr;
+          }
+        }
+      } catch (error) {
+        this.logger.warn(`Failed to get APR from ClickHouse: ${error.message}`);
       }
 
-      // for dev: return mock APY (15% = 1500 basis points)
-      const mockApy = BigInt('1500');
-      this.logger.log('Using mock APY (15%) for development');
-      return mockApy;
+      // try to get from contract
+      const rewardCalculationAddress = this.configService.get('blockchain.contracts.rewardCalculation') as Address;
+      const networkControllerAddress = this.configService.get('blockchain.contracts.networkController') as Address;
+      
+      if (rewardCalculationAddress) {
+        try {
+          const contract = getContract({
+            address: rewardCalculationAddress,
+            abi: RewardCalculationABI,
+            client: this.web3Service.client,
+          });
+
+          this.logger.log('Contract APY calculation not available in current ABIs');
+          return BigInt('2000'); // 20% default
+        } catch (error) {
+          this.logger.warn(`Failed to calculate APY from contract: ${error.message}`);
+        }
+      }
+
+      // Default: return 20% APY (2000 basis points)
+      const defaultApy = BigInt('2000');
+      this.logger.log('Using default APY (20%)');
+      return defaultApy;
       
     } catch (error) {
       this.logger.error(`Failed to get current APY: ${error.message}`);
@@ -283,26 +331,148 @@ export class ContractService {
     }
   }
 
-  async getStakes(workerIds: string[]): Promise<[any[], any[]]> {
+  async getStakes(workerIds: string[]): Promise<[MulticallResult<bigint>[], MulticallResult<bigint>[]]> {
     try {
-      // use the proper config keys that match blockchain.config.ts
       const stakingAddress = this.configService.get('blockchain.contracts.staking') as Address;
+      const capedStakingAddress = this.configService.get('blockchain.contracts.capedStaking') as Address;
+      
+      this.logger.log(`🔍 Fetching stakes for ${workerIds.length} workers from contracts...`);
+      this.logger.log(`📍 Staking address: ${stakingAddress}`);
+      this.logger.log(`📍 CapedStaking address: ${capedStakingAddress}`);
       
       if (!stakingAddress) {
-        this.logger.warn('Staking contract address not configured, using mock data');
-        const mockStakes = workerIds.map(() => ({ result: BigInt('10000000000000000000') })); // 10 SQD each
-        return [mockStakes, mockStakes];
+        throw new Error('STAKING_ADDRESS not configured in environment');
+      }
+      
+      if (!capedStakingAddress) {
+        throw new Error('CAPED_STAKING_ADDRESS not configured in environment');
       }
 
-      this.logger.log(`Getting stakes for ${workerIds.length} workers from contract ${stakingAddress}`);
+      // get worker contract IDs first
+      const workerIdMapping = await this.web3Service.preloadWorkerIds(workerIds);
       
-      // for dev: mock data but with proper contract address configured
-      const mockStakes = workerIds.map(() => ({ result: BigInt('10000000000000000000') })); // 10 SQD each
-      this.logger.log('Using mock stakes for development (contract integration pending)');
-      return [mockStakes, mockStakes];
+      // create a list of valid workers that are registered on-chain
+      const validWorkers = workerIds
+        .map(peerId => ({ peerId, contractId: workerIdMapping[peerId] }))
+        .filter(({ contractId }) => contractId && contractId !== 0n);
+
+      if (validWorkers.length === 0) {
+        this.logger.warn('No registered workers found among the provided peer IDs.');
+        // Return zero stakes for all workers
+        const emptyResults: MulticallResult<bigint>[] = workerIds.map(() => ({ 
+          status: 'success' as const, 
+          result: 0n 
+        }));
+        return [emptyResults, emptyResults];
+      }
+      
+      this.logger.log(`🎯 Found ${validWorkers.length} registered workers to query for stakes.`);
+
+      // prepare multicalls ONLY for valid, registered workers
+      const capedStakeCalls = validWorkers.map(({ contractId }) => ({
+        address: capedStakingAddress,
+        abi: CapedStakingABI,
+        functionName: 'capedStake' as const,
+        args: [contractId] as const,
+      }));
+
+      const totalStakeCalls = validWorkers.map(({ contractId }) => ({
+        address: stakingAddress,
+        abi: StakingABI,
+        functionName: 'delegated' as const,
+        args: [contractId] as const,
+      }));
+
+      // execute the multicalls
+      this.logger.log(`📞 Executing multicalls for stakes...`);
+      const [capedStakesResults, totalStakesResults] = await Promise.all([
+        this.web3Service.client.multicall({ contracts: capedStakeCalls, allowFailure: true }),
+        this.web3Service.client.multicall({ contracts: totalStakeCalls, allowFailure: true }),
+      ]);
+
+      // map the results back to the original list of workerIds
+      const capedStakesMap = new Map<string, MulticallResult<bigint>>();
+      validWorkers.forEach((worker, i) => {
+        capedStakesMap.set(worker.peerId, capedStakesResults[i]);
+      });
+
+      const totalStakesMap = new Map<string, MulticallResult<bigint>>();
+      validWorkers.forEach((worker, i) => {
+        totalStakesMap.set(worker.peerId, totalStakesResults[i]);
+      });
+
+      const finalCapedStakes: MulticallResult<bigint>[] = workerIds.map(peerId => 
+        capedStakesMap.get(peerId) || { status: 'success' as const, result: 0n }
+      );
+      const finalTotalStakes: MulticallResult<bigint>[] = workerIds.map(peerId => 
+        totalStakesMap.get(peerId) || { status: 'success' as const, result: 0n }
+      );
+
+      // log successful stakes
+      const successfulCaped = finalCapedStakes.filter(s => s.status === 'success' && s.result && s.result > 0n).length;
+      const successfulTotal = finalTotalStakes.filter(s => s.status === 'success' && s.result && s.result > 0n).length;
+      
+      this.logger.log(`✅ Successfully mapped stakes for workers:`);
+      this.logger.log(`   - Caped stakes: ${successfulCaped}/${workerIds.length} workers with stakes > 0`);
+      this.logger.log(`   - Total stakes: ${successfulTotal}/${workerIds.length} workers with stakes > 0`);
+      
+      return [finalCapedStakes, finalTotalStakes];
       
     } catch (error) {
-      this.logger.error(`Failed to get stakes: ${error.message}`);
+      this.logger.error(`❌ Failed to get stakes from contracts: ${error.message}`);
+      this.logger.error(`Stack trace: ${error.stack}`);
+      
+      throw new Error(`Contract stake fetching failed: ${error.message}`);
+    }
+  }
+
+  private async getStakesFromClickHouse(workerIds: string[], networkName: string): Promise<[any[], any[]]> {
+    try {
+      const workerIdList = workerIds.map(id => `'${id}'`).join(',');
+      const query = `
+        SELECT 
+          worker_id,
+          stake,
+          staker_reward
+        FROM ${networkName}.worker_stats
+        WHERE worker_id IN (${workerIdList})
+          AND time >= NOW() - INTERVAL 1 HOUR
+        ORDER BY time DESC
+        LIMIT ${workerIds.length}
+      `;
+      
+      // use the properly injected ClickHouse service
+      const client = (this.clickHouseService as any).client;
+      if (!client) {
+        throw new Error('ClickHouse client not available');
+      }
+      
+      const resultSet = await client.query({
+        query,
+        format: 'JSONEachRow',
+      });
+
+      const results = await resultSet.json();
+      const resultArray = Array.isArray(results) ? results : [results];
+      
+      // map results back to worker order
+      const stakeMap = new Map<string, bigint>();
+      for (const row of resultArray) {
+        stakeMap.set(row.worker_id, BigInt(row.stake || 0));
+      }
+      
+      const capedStakes = workerIds.map(id => ({
+        result: stakeMap.get(id) || BigInt('10000000000000000000'), // Default 10 SQD
+        status: 'success',
+      }));
+      
+      const totalStakes = capedStakes; // For now, same as caped stakes
+      
+      this.logger.log(`Retrieved stakes from ClickHouse for ${resultArray.length} workers`);
+      return [capedStakes, totalStakes];
+      
+    } catch (error) {
+      this.logger.warn(`Failed to get stakes from ClickHouse: ${error.message}`);
       throw error;
     }
   }

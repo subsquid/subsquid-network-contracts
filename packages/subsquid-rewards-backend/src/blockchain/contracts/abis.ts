@@ -264,14 +264,24 @@ export const NetworkControllerABI = [
 export const StakingABI = [
   {
     "type": "function",
-    "name": "stake",
+    "name": "delegated",
     "inputs": [{"name": "worker", "type": "uint256", "internalType": "uint256"}],
     "outputs": [{"name": "", "type": "uint256", "internalType": "uint256"}],
     "stateMutability": "view"
   },
   {
     "type": "function",
-    "name": "totalStake",
+    "name": "stake",
+    "inputs": [{"name": "worker", "type": "uint256", "internalType": "uint256"}],
+    "outputs": [{"name": "", "type": "uint256", "internalType": "uint256"}],
+    "stateMutability": "view"
+  }
+] as const;
+
+export const CapedStakingABI = [
+  {
+    "type": "function",
+    "name": "capedStake",
     "inputs": [{"name": "worker", "type": "uint256", "internalType": "uint256"}],
     "outputs": [{"name": "", "type": "uint256", "internalType": "uint256"}],
     "stateMutability": "view"

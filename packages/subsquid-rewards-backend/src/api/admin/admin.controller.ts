@@ -405,7 +405,7 @@ export class AdminController {
       // Get sample workers from ClickHouse for the last 7 days
       const endTime = new Date();
       const startTime = new Date(endTime.getTime() - 7 * 24 * 60 * 60 * 1000);
-      const allWorkers = await this.clickHouseService.getActiveWorkers(startTime, endTime, true);
+      const allWorkers = await this.clickHouseService.getActiveWorkers(22779388, 22779987, true); //for now
       const sampleWorkers = allWorkers.slice(0, size);
       
       this.logger.log(`🔍 Debugging ${size} workers from ClickHouse (out of ${allWorkers.length} total)`);

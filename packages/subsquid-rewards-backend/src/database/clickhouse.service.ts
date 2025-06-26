@@ -281,7 +281,7 @@ export class ClickHouseService implements OnModuleInit {
     return this.getWorkerStats(startTime, endTime);
   }
 
-  async getActiveWorkers(from: Date, to: Date, skipSignatureValidation = false): Promise<WorkerQueryData[]> {
+  async getActiveWorkers(fromBlock: number, toBlock: number, skipSignatureValidation = false): Promise<WorkerQueryData[]> {
     if (skipSignatureValidation) {
       const columns = [
         'worker_id',
@@ -294,9 +294,8 @@ export class ClickHouseService implements OnModuleInit {
         SELECT ${columns.join(',')}
         FROM ${this.logsTableName}
         WHERE
-          ${this.logsTableName}.worker_timestamp >= '${this.formatDate(from)}' AND
-          ${this.logsTableName}.worker_timestamp <= '${this.formatDate(to)}' AND
-          (toUnixTimestamp64Micro(collector_timestamp) - toUnixTimestamp64Micro(worker_timestamp)) / 60000000 < 20
+          from_block >= ${fromBlock} AND
+          to_block <= ${toBlock}
         GROUP BY worker_id
       `;
 

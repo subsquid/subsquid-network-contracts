@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { createPublicClient, http, PublicClient, Address, parseAbiItem, Hex } from 'viem';
 import { arbitrum, arbitrumSepolia, mainnet, sepolia } from 'viem/chains';
 import { WorkerRegistrationABI } from './contracts/abis';
+const bs58 = require('bs58');
 
 export interface Registrations {
   workerId: bigint;
@@ -201,7 +202,8 @@ export class Web3Service {
 
   async getBlockTimestamp(blockNumber: number): Promise<Date> {
     const blockBigInt = BigInt(blockNumber);
-    const block = await this.publicClient.getBlock({ blockNumber: blockBigInt });
+    // Use L1 client for L1 block timestamps
+    const block = await this.l1Client.getBlock({ blockNumber: blockBigInt });
     return new Date(Number(block.timestamp) * 1000);
   }
 
@@ -224,16 +226,35 @@ export class Web3Service {
         batchSize: 2 ** 16,
       });
 
+      let successCount = 0;
+      let notRegisteredCount = 0;
+      let errorCount = 0;
+
       workers.forEach((workerId, i) => {
         if (results[i].status === 'success' && results[i].result) {
-          workerIds[workerId] = results[i].result as bigint;
+          const contractId = results[i].result as bigint;
+          workerIds[workerId] = contractId;
+          if (contractId > 0n) {
+            successCount++;
+            if (successCount <= 3) { // Log first 3 successful mappings
+              this.logger.log(`✅ Worker ${workerId.slice(0, 20)}... -> Contract ID ${contractId}`);
+            }
+          } else {
+            notRegisteredCount++;
+          }
         } else {
-          this.logger.warn(`Failed to get workerId for peer ${workerId}: ${results[i].error?.message || 'Unknown error'}`);
+          errorCount++;
+          if (errorCount <= 3) { // Log first 3 errors only
+            this.logger.warn(`Failed to get workerId for peer ${workerId.slice(0, 20)}...: ${results[i].error?.message || 'Unknown error'}`);
+          }
           workerIds[workerId] = 0n; // use 0 to indicate worker not found
         }
       });
 
-      this.logger.log(`Preloaded ${Object.keys(workerIds).length} worker IDs`);
+      this.logger.log(`📊 Worker ID mapping results: ${successCount} successful, ${notRegisteredCount} unregistered, ${errorCount} errors (total: ${workers.length})`);
+      if (errorCount > 3) {
+        this.logger.warn(`... and ${errorCount - 3} more errors (suppressed for brevity)`);
+      }
     return workerIds;
     } catch (error) {
       this.logger.error(`Failed to preload worker IDs: ${error.message}`);
@@ -244,17 +265,21 @@ export class Web3Service {
 
   /**
    * Convert base58 peer ID string to hex bytes format for smart contract calls
-   * Uses the same bs58 library as the old rewards-calculator for consistency
+   * Uses the same implementation as the old rewards-calculator for consistency
    */
   private fromBase58(value: string): Hex {
     try {
-      // use the same method as the old rewards-calculator
-      const bs58 = require('bs58');
-      return `0x${Buffer.from(bs58.decode(value)).toString('hex')}` as Hex;
+      // same implementation as packages/rewards-calculator/src/utils.ts
+      const { decode } = bs58;
+      const hexValue = `0x${Buffer.from(decode(value)).toString('hex')}` as Hex;
+      this.logger.debug(`Converted peer ID ${value.slice(0, 20)}... to ${hexValue.slice(0, 20)}...`);
+      return hexValue;
     } catch (error) {
       this.logger.error(`Failed to convert peer ID ${value} from base58: ${error.message}`);
       // fallback: encode the string as UTF-8 bytes
-      return `0x${Buffer.from(value, 'utf8').toString('hex')}` as Hex;
+      const fallbackHex = `0x${Buffer.from(value, 'utf8').toString('hex')}` as Hex;
+      this.logger.warn(`Using UTF-8 fallback for ${value.slice(0, 20)}...: ${fallbackHex.slice(0, 20)}...`);
+      return fallbackHex;
     }
   }
 

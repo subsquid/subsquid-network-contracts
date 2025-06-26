@@ -11,6 +11,12 @@ export const rewardsConfig = registerAs('rewards', () => ({
   workTimeout: parseInt(process.env.WORK_TIMEOUT_SECONDS || '300', 10) * 1000,
   skipSignatureValidation: process.env.SKIP_SIGNATURE_VALIDATION === 'true',
   
+  // APR calculation method: 
+  // - 'contracts': Use contract-based APR calculation
+  // - 'clickhouse': Use latest APR from rewards_stats table (base_apr / 10000) 
+  // - 'dynamic': Use dynamic APR based on network utilization and stake factors
+  aprCalculationMethod: process.env.APR_CALCULATION_METHOD || 'contracts',
+  
   totalBatches: parseInt(process.env.TOTAL_BATCHES || '4', 10),
   maxBatchSize: parseInt(process.env.MAX_BATCH_SIZE || '100', 10),
   maxGasPerBatch: parseInt(process.env.MAX_GAS_PER_BATCH || '10000000', 10),

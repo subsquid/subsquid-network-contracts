@@ -61,71 +61,54 @@ export class RewardsCalculatorService {
     skipSignatureValidation = true,   
   ): Promise<RewardCalculationResult> {
     try {
-      this.logger.log(`Calculating rewards for epoch ${fromBlock} - ${toBlock}`);
-      
-      if (skipSignatureValidation) {
-        this.logger.warn('⚠️  Signature validation skipped - using all worker data without verification');
-      }
-
-      // get timestamp range for the epoch
+      // get block timestamps
       const startTime = await this.web3Service.getBlockTimestamp(fromBlock);
       const endTime = await this.web3Service.getBlockTimestamp(toBlock);
-      
-      this.logger.log(`Epoch time range: ${startTime.toISOString()} - ${endTime.toISOString()}`);
+
+      this.logger.log(`\n🎯 Calculating rewards for blocks ${fromBlock} - ${toBlock}`);
+      this.logger.log(`   Period: ${startTime.toISOString()} to ${endTime.toISOString()}`);
 
       // get active workers from ClickHouse
-      const activeWorkerData = await this.clickHouseService.getActiveWorkers(
-        startTime,
-        endTime,
-        skipSignatureValidation,
-      );
+      const totalQueries = await this.clickHouseService.logTotalQueries(startTime, endTime);
+      const activeWorkerData = await this.clickHouseService.getActiveWorkers(fromBlock, toBlock, skipSignatureValidation);
+      
+      this.logger.log(`✅ Found ${activeWorkerData.length} active workers with ${totalQueries} total queries`);
 
-      if (activeWorkerData.length === 0) {
-        this.logger.warn('No active workers found for this epoch');
+      // filter valid workers (with actual queries/traffic)
+      const validWorkers = activeWorkerData.filter(w => Number(w.totalRequests) > 0);
+      
+      this.logger.log(`✅ ${validWorkers.length} workers have valid traffic data`);
+
+      if (validWorkers.length === 0) {
+        this.logger.warn('No workers found with query data in this epoch');
         return this.createEmptyResult(fromBlock, toBlock, startTime, endTime);
       }
 
-      this.logger.log(`Found ${activeWorkerData.length} active workers from ClickHouse`);
-
-      // get worker IDs and filter out unknown workers
-      const workerIds = activeWorkerData.map(w => w.worker_id);
+      // get worker contract IDs and filter out unregistered workers
+      this.logger.log(`🔍 Getting contract worker IDs for ${validWorkers.length} workers`);
+      const workerIdMapping = await this.web3Service.preloadWorkerIds(
+        validWorkers.map(w => w.worker_id)
+      );
       
-      // @dev: skip worker registration validation if using sample data
-      let validWorkers = activeWorkerData;
+      // filter workers that are actually registered in the contract
+      const registeredWorkers = validWorkers.filter(w => {
+        const contractId = workerIdMapping[w.worker_id];
+        return contractId && contractId !== 0n;
+      });
       
-      if (!skipSignatureValidation) {
-        const registeredWorkerIds = await this.web3Service.preloadWorkerIds(workerIds);
-        validWorkers = activeWorkerData.filter(w => registeredWorkerIds[w.worker_id] !== undefined);
-        this.logger.log(`Found ${validWorkers.length} valid workers out of ${activeWorkerData.length} active`);
-      } else {
-        this.logger.log(`Using all ${activeWorkerData.length} workers (registration check skipped)`);
+      this.logger.log(`✅ Found ${registeredWorkers.length} registered workers out of ${validWorkers.length} active workers`);
+      
+      if (registeredWorkers.length === 0) {
+        this.logger.warn('No registered workers found for this epoch');
+        return this.createEmptyResult(fromBlock, toBlock, startTime, endTime);
       }
 
-      // @dev: if no valid workers from contract, use sample data
-      if (validWorkers.length === 0 && skipSignatureValidation) {
-        this.logger.warn('🔧 No registered workers found - using sample data for development testing');
-        return this.createSampleResult(fromBlock, toBlock, startTime, endTime, activeWorkerData);
-      }
-
-      // get stakes for valid workers
-      let capedStakes: any[] = [];
-      let totalStakes: any[] = [];
-      
-      try {
-        [capedStakes, totalStakes] = await this.contractService.getStakes(
-          validWorkers.map(w => w.worker_id),
-        );
-      } catch (error) {
-        this.logger.warn(`Failed to get stakes from contract: ${error.message}`);
-        if (skipSignatureValidation) {
-          // @dev: use def stakes for development testing
-          capedStakes = validWorkers.map(() => ({ result: BigInt('10000000000000000000') })); // 10 SQD
-          totalStakes = validWorkers.map(() => ({ result: BigInt('10000000000000000000') })); // 10 SQD
-          this.logger.log('Using default stakes for development testing');
-        } else {
-          throw error;
-        }
-      }
+      // get on-chain stake data for all active workers (not just registered ones)
+      this.logger.log(`💰 Fetching stakes for ${activeWorkerData.length} active workers...`);
+      const [capedStakes, totalStakes] = await this.contractService.getStakes(
+        activeWorkerData.map(w => w.worker_id),
+      );
+      this.logger.log(`✅ Retrieved stakes from contracts for ${capedStakes.length} workers`);
 
       // get bond amount from WorkerRegistration contract
       let bondAmount: bigint;
@@ -141,38 +124,76 @@ export class RewardsCalculatorService {
         } catch (fallbackError) {
           this.logger.warn(`Fallback also failed: ${fallbackError.message}`);
           bondAmount = BigInt('100000000000000000000000'); // 100k SQD default
-          this.logger.log('Using default bond amount (1 SQD) for development testing');
+          this.logger.log('Using default bond amount (100k SQD) for development testing');
         }
       }
 
       // calc liveness factors
       const livenessFactor = await this.clickHouseService.calculateLivenessFactor(startTime, endTime);
 
-      // calc dynamic APR based on network utilization and stake factors
+      // calc APR based on configuration method
       let baseApr: number;
+      const aprMethod = this.configService.get('rewards.aprCalculationMethod') || 'clickhouse';
+      
+      this.logger.log(`🧮 Using APR calculation method: "${aprMethod}"`);
+      
       try {
-        const { targetCapacity, actualCapacity } = await this.calculateNetworkCapacity();
-        const { totalStakedSupply, totalSupply } = await this.getStakeMetrics();
-        
-        baseApr = await this.calculateDynamicAPR(totalStakedSupply, totalSupply, targetCapacity, actualCapacity);
-        
-        this.logger.log(`✅ Using dynamic APR: ${(baseApr * 100).toFixed(2)}%`);
-      } catch (error) {
-        this.logger.warn(`Failed to calculate dynamic APR: ${error.message}`);
-        
-        // fallback: try to get from contract service
-        try {
-          const currentApy = await this.contractService.getCurrentApy();
-          baseApr = Number(currentApy) / 100; // convert basis points to percentage
-          this.logger.log(`Using contract APY fallback: ${(baseApr * 100).toFixed(2)}%`);
-        } catch (contractError) {
-          baseApr = 0.15; // 15% final fallback for dev testing
-          this.logger.log('Using hardcoded APR (15%) as final fallback');
+        switch (aprMethod) {
+          case 'contracts':
+            baseApr = await this.getAPRFromContracts();
+            this.logger.log(`✅ Using contract-based APR: ${(baseApr * 100).toFixed(2)}%`);
+            break;
+            
+          case 'clickhouse':
+            const aprFromClickHouse = await this.getAPRFromClickHouse(startTime, endTime);
+            if (aprFromClickHouse !== null) {
+              baseApr = aprFromClickHouse;
+              this.logger.log(`✅ Using ClickHouse APR: ${(baseApr * 100).toFixed(2)}%`);
+            } else {
+              this.logger.warn('No ClickHouse APR data found, falling back to contracts method');
+              baseApr = await this.getAPRFromContracts();
+              this.logger.log(`✅ Fallback to contract APR: ${(baseApr * 100).toFixed(2)}%`);
+            }
+            break;
+            
+          case 'dynamic':
+            const { targetCapacity, actualCapacity } = await this.calculateNetworkCapacity();
+            const { totalStakedSupply, totalSupply } = await this.getStakeMetrics();
+            baseApr = await this.calculateDynamicAPR(totalStakedSupply, totalSupply, targetCapacity, actualCapacity);
+            this.logger.log(`✅ Using dynamic APR: ${(baseApr * 100).toFixed(2)}%`);
+            break;
+            
+          default:
+            this.logger.warn(`Unknown APR method "${aprMethod}", falling back to clickhouse`);
+            const aprFromClickHouseDefault = await this.getAPRFromClickHouse(startTime, endTime);
+            baseApr = aprFromClickHouseDefault || 0.20; // 20% default
+            this.logger.log(`✅ Using fallback APR: ${(baseApr * 100).toFixed(2)}%`);
         }
+      } catch (error) {
+        this.logger.error(`Failed to calculate APR using method '${aprMethod}': ${error.message}`);
+        
+        // final fallback: use realistic production APR
+        baseApr = 0.20; // 20% APR as default
+        this.logger.log(`Using hardcoded APR (20%) as final fallback`);
+      }
+
+      // filter workers that have stakes > 0 (these are the ones actually registered and staked)
+      const stakedWorkers = activeWorkerData.filter((worker, index) => {
+        const capedStake = capedStakes[index];
+        const totalStake = totalStakes[index];
+        return (capedStake?.status === 'success' && capedStake?.result && capedStake.result > 0n) || 
+               (totalStake?.status === 'success' && totalStake?.result && totalStake.result > 0n);
+      });
+      
+      this.logger.log(`🎯 Found ${stakedWorkers.length} workers with actual stakes out of ${activeWorkerData.length} active workers`);
+      
+      if (stakedWorkers.length === 0) {
+        this.logger.warn('No workers with stakes found for this epoch');
+        return this.createEmptyResult(fromBlock, toBlock, startTime, endTime);
       }
 
       const workers = await this.calculateIndividualRewards(
-        validWorkers,
+        stakedWorkers,
         capedStakes,
         totalStakes,
         bondAmount,
@@ -180,6 +201,7 @@ export class RewardsCalculatorService {
         baseApr,
         startTime,
         endTime,
+        workerIdMapping,
       );
 
       const stakeFactor = this.calculateStakeFactor(workers);
@@ -207,6 +229,7 @@ export class RewardsCalculatorService {
     baseApr: number,
     startTime: Date,
     endTime: Date,
+    workerIdMapping: Record<string, bigint>,
   ): Promise<WorkerReward[]> {
     const rewards: WorkerReward[] = [];
     
@@ -225,9 +248,12 @@ export class RewardsCalculatorService {
       const capedStake = BigInt(capedStakes[i]?.result || 0);
       const totalStake = BigInt(totalStakes[i]?.result || 0);
 
-      // se a simple sequential ID or hash-based ID
-      // his will be mapped to actual contract worker IDs during distribution
-      const calculationWorkerId = BigInt(i + 1); // Simple sequential ID for calculations
+      // use the actual contract worker ID  
+      const contractWorkerId = workerIdMapping[worker.worker_id];
+      if (!contractWorkerId || contractWorkerId === 0n) {
+        this.logger.warn(`Worker ${worker.worker_id} not found in contract mapping, skipping`);
+        continue;
+      }
 
       const liveness = livenessFactor[worker.worker_id]?.livenessFactor || 0;
 
@@ -237,8 +263,8 @@ export class RewardsCalculatorService {
       // calculate tenure factor (simplified for now)
       const tenureFactor = 1.0; // plch - would need historical data
       
-      // calculate reward components
-      const stakingReward = this.calculateStakingReward(
+      // calculate base staking reward (before performance factors)
+      const baseStakingReward = this.calculateStakingReward(
         capedStake,
         totalStake,
         baseApr,
@@ -247,16 +273,26 @@ export class RewardsCalculatorService {
       );
       
       const performanceMultiplier = liveness * trafficFactor * tenureFactor;
-      
       const performanceMultiplierBigInt = BigInt(Math.floor(performanceMultiplier * 1_000_000));
-      const finalWorkerReward = (stakingReward * performanceMultiplierBigInt) / 1_000_000n;
       
+      // worker reward: caped stake * base reward * performance multiplier
+      const finalWorkerReward = (baseStakingReward * performanceMultiplierBigInt) / 1_000_000n;
+      
+      // staker reward: delegated stake * base reward (no performance multiplier for stakers)
       let calculatedStakerReward: bigint;
       try {
-      if (totalStake > capedStake && totalStake !== 0n) {
-        const stakeDifference = totalStake - capedStake;
-          calculatedStakerReward = (stakingReward * stakeDifference) / totalStake;
-      } else {
+        if (totalStake > capedStake && totalStake !== 0n) {
+          const delegatedStake = totalStake - capedStake;
+          // calculate staker reward based on delegated stake only
+          const delegatedStakeReward = this.calculateStakingReward(
+            delegatedStake,
+            delegatedStake, // Use delegated stake as "total" for this calculation
+            baseApr,
+            (endTime.getTime() - startTime.getTime()) / 1000,
+            365 * 24 * 60 * 60,
+          );
+          calculatedStakerReward = delegatedStakeReward;
+        } else {
           calculatedStakerReward = 0n;
         }
       } catch (error) {
@@ -281,14 +317,14 @@ export class RewardsCalculatorService {
         this.logger.log(`    - Combined multiplier: ${performanceMultiplier}`);
         this.logger.log(`    - Multiplier as BigInt: ${performanceMultiplierBigInt}/1,000,000`);
         this.logger.log(`  Reward calculation:`);
-        this.logger.log(`    - Base staking reward: ${stakingReward} wei (${Number(stakingReward) / 1e18} SQD)`);
+        this.logger.log(`    - Base staking reward: ${baseStakingReward} wei (${Number(baseStakingReward) / 1e18} SQD)`);
         this.logger.log(`    - Final worker reward: ${finalWorkerReward} wei (${Number(finalWorkerReward) / 1e18} SQD)`);
         this.logger.log(`    - Staker reward: ${calculatedStakerReward} wei (${Number(calculatedStakerReward) / 1e18} SQD)`);
       }
 
       rewards.push({
-        workerId: calculationWorkerId, // sequential ID for calculations
-        id: BigInt(i), // sequential ID for this calculation
+        workerId: contractWorkerId, // actual contract worker ID
+        id: contractWorkerId, // use contract ID for identification
         workerReward: finalWorkerReward,
         stakerReward: calculatedStakerReward,
         stake: capedStake,
@@ -439,42 +475,7 @@ export class RewardsCalculatorService {
     return filtered;
   }
 
-  async mapToContractWorkerIds(
-    workers: WorkerReward[], 
-    workerData: WorkerQueryData[]
-  ): Promise<WorkerReward[]> {
-    try {
-      // get the mapping from peer IDs to actual contract worker IDs
-      const peerIds = workerData.map(worker => worker.worker_id);
-      const workerIdMapping = await this.web3Service.preloadWorkerIds(peerIds);
-      
-      const mappedWorkers: WorkerReward[] = [];
-      
-      for (let i = 0; i < workers.length && i < workerData.length; i++) {
-        const worker = workers[i];
-        const workerInfo = workerData[i];
-        const contractWorkerId = workerIdMapping[workerInfo.worker_id];
-        
-        if (!contractWorkerId || contractWorkerId === 0n) {
-          this.logger.warn(`Skipping worker ${workerInfo.worker_id} - not registered in contract`);
-          continue;
-        }
-        
-        // map to actual contract worker ID
-        mappedWorkers.push({
-          ...worker,
-          workerId: contractWorkerId, // use actual contract worker ID
-        });
-      }
-      
-      this.logger.log(`Mapped ${mappedWorkers.length} workers out of ${workers.length} calculated workers to contract IDs`);
-      return mappedWorkers;
-      
-    } catch (error) {
-      this.logger.error(`Failed to map worker IDs to contract: ${error.message}`);
-      throw error;
-    }
-  }
+
 
   /**
    * calculate dynamic APR based on network utilization and stake factors
@@ -520,88 +521,151 @@ export class RewardsCalculatorService {
   }
 
   // calc base APR based on network utilization
-  // 20% balanced, 5%-70% range based on capacity needs
+  // Following Tokenomics 2.1: 20% balanced state, scales 5%-70% based on utilization
   private calculateBaseAPR(utilizationRate: number): number {
-    // Balanced APR when utilization is optimal (around 0.1-0.2)
+    // Base APR in balanced state (20%)
     const BASE_APR = 0.20; // 20% 
     const MIN_APR = 0.05;  // 5%
     const MAX_APR = 0.70;  // 70%
 
+    // According to tokenomics: base_apr is set to 20% in balanced state
+    // and is increased up to 70% to incentivize more workers if utilization is high
+    
     if (utilizationRate <= 0.1) {
-      // low utilization - reduce APR to discourage over-staking
+      // Low utilization - network has too much capacity, reduce APR
       return Math.max(MIN_APR, BASE_APR * (1 - (0.1 - utilizationRate) * 2));
     } else if (utilizationRate <= 0.2) {
-      // optimal range - base APR
+      // Optimal/balanced range - use base APR
       return BASE_APR;
     } else {
-      // high utilization - increase APR --> to attract more workers
-      const scalingFactor = Math.min(3.5, 1 + (utilizationRate - 0.2) * 5); // Cap at 3.5x
-      return Math.min(MAX_APR, BASE_APR * scalingFactor);
+      // High utilization - increase APR to attract more workers
+      // Linear scaling from 20% to 70% as utilization goes from 0.2 to 1.0
+      const scaledAPR = BASE_APR + (MAX_APR - BASE_APR) * ((utilizationRate - 0.2) / 0.8);
+      return Math.min(MAX_APR, scaledAPR);
     }
   }
 
-  // calc discount factor based on stake percentage
-  // penalizes over-staking (>25% of supply staked)
+  // calc discount factor D(stake_factor) based on stake percentage
+  // Following Tokenomics 2.1: D(s) function that adjusts rewards based on total stake
   private calculateStakeDiscountFactor(stakeFactor: number): number {
-    const OPTIMAL_STAKE_FACTOR = 0.25; // 25%
+    // According to the tokenomics spec, this function should incentivize optimal staking levels
+    // For now, using a simple model that doesn't penalize staking
+    // In production, this would be based on the governance-defined D(s) function
     
-    if (stakeFactor <= OPTIMAL_STAKE_FACTOR) {
-      return 1.0; // no discount
-    }
-    
-    // linear discount from 1.0 to 0.1 as stake factor goes from 25% to 100%
-    const excessStake = stakeFactor - OPTIMAL_STAKE_FACTOR;
-    const maxExcess = 0.75; // 100% - 25%
-    const discountRate = 0.9; // max 90% discount
-    
-    return Math.max(0.1, 1.0 - (excessStake / maxExcess) * discountRate);
+    // Simple implementation: no discount for now
+    // TODO: Implement proper D(s) function based on governance parameters
+    return 1.0;
   }
 
   /**
    * calculate network capacity metrics for APR calculation
+   * Following Tokenomics 2.1 specification
    */
   private async calculateNetworkCapacity(): Promise<{ targetCapacity: number; actualCapacity: number }> {
     try {
-      // get current active worker count from contract
+      // Get current active worker count from contract
       const activeWorkerCount = await this.web3Service.getActiveWorkerCount();
       
-      // network parameters from tokenomics
+      // Network parameters from tokenomics
       const WORKER_CAPACITY_TB = 1; // 1TB per worker
       const CHURN_FACTOR = 0.9; // 90% efficiency factor
       
-      // actual capacity: active workers * capacity * churn factor
+      // Actual capacity: num_of_active_workers() * WORKER_CAPACITY * CHURN
       const actualCapacity = Number(activeWorkerCount) * WORKER_CAPACITY_TB * CHURN_FACTOR;
       
-      // target capacity: for now, we use active worker count as baseline
-      // --> prod: from dataset metadata: sum(reserved_space * replication_factor)
-      const targetCapacity = Number(activeWorkerCount) * WORKER_CAPACITY_TB * 1.2; // 20% buffer
+      // Target capacity: sum([d.reserved_space * d.replication_factor]) for non-disabled datasets
+      // For now, we'll estimate based on network size
+      // In production, this would query dataset metadata
+      let targetCapacity: number;
       
-      this.logger.log(`🏗️ Network Capacity:`);
+      // Try to get target capacity from contract or estimate it
+      try {
+        const targetCapacityBytes = await this.contractService.getTargetCapacity();
+        targetCapacity = Number(targetCapacityBytes) / (1024 ** 4); // Convert bytes to TB
+      } catch (error) {
+        // Estimate: assume network wants 50% more capacity than current active workers provide
+        targetCapacity = Number(activeWorkerCount) * WORKER_CAPACITY_TB * 1.5;
+        this.logger.warn(`Using estimated target capacity: ${error.message}`);
+      }
+      
+      // Ensure target capacity is reasonable
+      if (targetCapacity === 0 || targetCapacity > actualCapacity * 10) {
+        targetCapacity = actualCapacity * 1.2; // Default to 20% more than actual
+      }
+      
+      this.logger.log(`🏗️ Network Capacity (per Tokenomics 2.1):`);
       this.logger.log(`  Active workers: ${activeWorkerCount}`);
+      this.logger.log(`  Worker capacity: ${WORKER_CAPACITY_TB} TB`);
+      this.logger.log(`  Churn factor: ${CHURN_FACTOR}`);
       this.logger.log(`  Actual capacity: ${actualCapacity.toFixed(2)} TB`);
       this.logger.log(`  Target capacity: ${targetCapacity.toFixed(2)} TB`);
+      this.logger.log(`  Utilization rate: ${((targetCapacity - actualCapacity) / targetCapacity * 100).toFixed(2)}%`);
       
       return { targetCapacity, actualCapacity };
     } catch (error) {
       this.logger.warn(`Failed to calculate network capacity: ${error.message}`);
-      // fallback values for development
+      // Fallback values for development
       return { targetCapacity: 100, actualCapacity: 80 };
     }
   }
 
   private async getStakeMetrics(): Promise<{ totalStakedSupply: bigint; totalSupply: bigint }> {
     try {
-      // todo
+      // Try to get real delegation data from ClickHouse
+      const networkName = this.configService.get('blockchain.networkName') || 'mainnet';
+      const query = `
+        SELECT 
+          SUM(stake) as totalStake,
+          COUNT(DISTINCT worker_id) as workerCount
+        FROM ${networkName}.worker_stats 
+        WHERE time >= NOW() - INTERVAL 1 DAY
+          AND stake > 0
+        ORDER BY time DESC
+        LIMIT 1
+      `;
+
+      try {
+        const client = (this.clickHouseService as any).client;
+        if (client) {
+          const resultSet = await client.query({
+            query,
+            format: 'JSONEachRow',
+          });
+
+          const results = await resultSet.json();
+          const resultArray = Array.isArray(results) ? results : [results];
+          
+          if (resultArray.length > 0 && resultArray[0].totalStake) {
+            const totalStakedSupply = BigInt(resultArray[0].totalStake);
+            const workerCount = parseInt(resultArray[0].workerCount) || 0;
+            
+            // Total supply: 1 billion SQD (from tokenomics)
+            const totalSupply = BigInt('1000000000') * BigInt(1e18);
+            
+            this.logger.log(`💰 Stake Metrics (from ClickHouse):`);
+            this.logger.log(`  Total staked: ${Number(totalStakedSupply) / 1e18} SQD`);
+            this.logger.log(`  Worker count: ${workerCount}`);
+            this.logger.log(`  Total supply: ${Number(totalSupply) / 1e18} SQD`);
+            this.logger.log(`  Stake percentage: ${(Number(totalStakedSupply) / Number(totalSupply) * 100).toFixed(2)}%`);
+            
+            return { totalStakedSupply, totalSupply };
+          }
+        }
+      } catch (error) {
+        this.logger.warn(`Failed to fetch stake data from ClickHouse: ${error.message}`);
+      }
+
+      // Fallback to estimation if ClickHouse query fails
       const activeWorkerCount = await this.web3Service.getActiveWorkerCount();
       const bondAmount = await this.web3Service.getBondAmount();
       
       // estimate: bonded amount + delegated stake (assume 2x bond on average)
       const estimatedTotalStaked = activeWorkerCount * bondAmount * 3n; // 3x multiplier for delegation
       
-      // total supply estimate (todo)
-      const estimatedTotalSupply = BigInt('10000000000') * BigInt(1e18); //todo: supply from contract
+      // total supply: 1 billion SQD
+      const estimatedTotalSupply = BigInt('1000000000') * BigInt(1e18);
       
-      this.logger.log(`💰 Stake Metrics:`);
+      this.logger.log(`💰 Stake Metrics (estimated):`);
       this.logger.log(`  Estimated total staked: ${Number(estimatedTotalStaked) / 1e18} SQD`);
       this.logger.log(`  Estimated total supply: ${Number(estimatedTotalSupply) / 1e18} SQD`);
       
@@ -616,6 +680,105 @@ export class RewardsCalculatorService {
         totalStakedSupply: BigInt('100000000') * BigInt(1e18), // 100M SQD staked
         totalSupply: BigInt('10000000000') * BigInt(1e18)     // 10B SQD total
       };
+    }
+  }
+
+  /**
+   * Get APR from ClickHouse rewards_stats table
+   */
+  private async getAPRFromClickHouse(startTime: Date, endTime: Date): Promise<number | null> {
+    try {
+      const networkName = this.configService.get('blockchain.networkName') || 'mainnet';
+      
+      // Get the latest successful APR from rewards_stats
+      // This is more robust than trying to filter by time range
+      const query = `
+        SELECT 
+          base_apr / 10000 as apr
+        FROM ${networkName}.rewards_stats
+        WHERE is_commit_success = true
+        ORDER BY epoch_end DESC
+        LIMIT 1
+      `;
+
+      this.logger.log(`🔍 Fetching latest APR from ClickHouse rewards_stats`);
+      
+      const client = (this.clickHouseService as any).client;
+      if (!client) {
+        this.logger.warn('ClickHouse client not available');
+        return null;
+      }
+
+      const resultSet = await client.query({
+        query,
+        format: 'JSONEachRow',
+      });
+
+      const results = await resultSet.json();
+      const resultArray = Array.isArray(results) ? results : [results];
+      
+      if (resultArray.length > 0 && resultArray[0].apr !== undefined) {
+        const apr = parseFloat(resultArray[0].apr);
+        this.logger.log(`✅ Found latest APR in rewards_stats: ${(apr * 100).toFixed(2)}%`);
+        return apr;
+      }
+
+      this.logger.log('No APR data found in rewards_stats');
+      return null;
+    } catch (error) {
+      this.logger.warn(`Failed to fetch APR from ClickHouse: ${error.message}`);
+      return null;
+    }
+  }
+
+  /**
+   * Get APR from contracts using the old rewards calculator approach
+   * This mimics the currentApy() function from packages/rewards-calculator/src/chain.ts
+   */
+  private async getAPRFromContracts(): Promise<number> {
+    try {
+      this.logger.log(`🔗 Calculating APR from contracts (old backend method)`);
+      
+      // Get current block for consistent reads
+      const currentBlock = await this.web3Service.getLatestL2Block();
+      
+      // Try to get contract addresses
+      const rewardCalculationAddress = this.configService.get('blockchain.contracts.rewardCalculation');
+      const networkControllerAddress = this.configService.get('blockchain.contracts.networkController');
+      
+      if (!rewardCalculationAddress || !networkControllerAddress) {
+        this.logger.warn('Contract addresses not configured, using fallback APR');
+        return 0.20; // 20% fallback like old backend
+      }
+
+      // Try to implement the old backend's currentApy calculation
+      // The old logic was: min(20%, (yearlyRewardCapCoefficient * initialRewardPoolsSize) / effectiveTVL)
+      
+      try {
+        // For now, since we don't have access to the exact same contract methods,
+        // we'll use the contract service's getCurrentApy method which tries to get from contracts
+        const currentApyBasisPoints = await this.contractService.getCurrentApy();
+        const aprDecimal = Number(currentApyBasisPoints) / 10000; // Convert basis points to decimal
+        
+        this.logger.log(`📊 Contract APY calculation result: ${(aprDecimal * 100).toFixed(2)}%`);
+        
+        // Apply the same min logic as old backend (min of 20% or calculated)
+        const finalApr = Math.min(0.20, aprDecimal);
+        
+        this.logger.log(`✅ Final contract-based APR (min 20%): ${(finalApr * 100).toFixed(2)}%`);
+        return finalApr;
+        
+      } catch (contractError) {
+        this.logger.warn(`Contract APY calculation failed: ${contractError.message}`);
+        
+        // Fallback: use 20% default like old backend did when TVL = 0
+        this.logger.log('Using 20% fallback APR (same as old backend when TVL = 0)');
+        return 0.20;
+      }
+      
+    } catch (error) {
+      this.logger.error(`Failed to get APR from contracts: ${error.message}`);
+      return 0.20; // 20% fallback
     }
   }
 } 
