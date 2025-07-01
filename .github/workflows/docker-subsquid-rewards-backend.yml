@@ -1,0 +1,32 @@
+name: docker-subsquid-rewards-backend
+on:
+  workflow_dispatch: # manually run
+    inputs:
+      tag:
+        description: image tag
+        required: true
+
+env:
+  CI: true
+
+jobs:
+  publish:
+    name: Build & publish docker image
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Docker login
+        uses: docker/login-action@v1
+        with:
+          username: ${{ secrets.DOCKER_LOGIN }}
+          password: ${{ secrets.DOCKER_TOKEN }}
+
+      - name: Build & publish subsquid-rewards-backend image
+        uses: docker/build-push-action@v3
+        with:
+          push: true
+          context: .
+          file: packages/subsquid-rewards-backend/Dockerfile
+          tags: subsquid/subsquid-rewards-backend:${{ inputs.tag }} 
