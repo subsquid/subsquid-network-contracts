@@ -67,7 +67,7 @@ export class FordefiService {
           headers: {
             Authorization: `Bearer ${accessToken}`,
           },
-        }
+        },
       );
 
       if (!response.ok) {
@@ -92,17 +92,17 @@ export class FordefiService {
     gasOptions?: {
       type?: string;
       priority_level?: string;
-    }
+    },
   ): Promise<Hex> {
     const request = this.createTransactionRequest(to, data, name, gasOptions);
-    
+
     try {
       this.logger.log(`Sending Fordefi transaction: ${name}`);
       const transactionId = await this.submitTransaction(request);
-      
+
       this.logger.log(`Transaction submitted with ID: ${transactionId}`);
       const txHash = await this.waitForTransaction(transactionId);
-      
+
       this.logger.log(`Transaction completed: ${txHash}`);
       return txHash;
     } catch (error) {
@@ -121,11 +121,14 @@ export class FordefiService {
     gasOptions?: {
       type?: string;
       priority_level?: string;
-    }
+    },
   ): FordefiTransactionRequest {
-    const networkName = this.configService.get('blockchain.network.networkName');
-    const chain = networkName === 'sepolia' ? 'arbitrum_sepolia' : 'arbitrum_mainnet';
-    
+    const networkName = this.configService.get(
+      'blockchain.network.networkName',
+    );
+    const chain =
+      networkName === 'sepolia' ? 'arbitrum_sepolia' : 'arbitrum_mainnet';
+
     const vaultId = this.configService.get('fordefi.vaultId');
     if (!vaultId) {
       throw new Error('FORDEFI_VAULT_ID is not configured');
@@ -157,14 +160,16 @@ export class FordefiService {
   /**
    * submit transaction to Fordefi API
    */
-  private async submitTransaction(request: FordefiTransactionRequest): Promise<string> {
+  private async submitTransaction(
+    request: FordefiTransactionRequest,
+  ): Promise<string> {
     const accessToken = this.configService.get('fordefi.accessToken');
     const secretPath = this.configService.get('fordefi.secretPath');
-    
+
     if (!accessToken) {
       throw new Error('FORDEFI_ACCESS_TOKEN is not configured');
     }
-    
+
     if (!secretPath) {
       throw new Error('FORDEFI_SECRET_PATH is not configured');
     }
@@ -216,13 +221,16 @@ export class FordefiService {
 
     while (Date.now() - startTime < this.maxTimeout) {
       try {
-        const response = await fetch(`https://${this.gatewayHost}${path}/${transactionId}`, {
-          method: 'GET',
-          headers: {
-            Accept: 'application/json',
-            Authorization: `Bearer ${accessToken}`,
+        const response = await fetch(
+          `https://${this.gatewayHost}${path}/${transactionId}`,
+          {
+            method: 'GET',
+            headers: {
+              Accept: 'application/json',
+              Authorization: `Bearer ${accessToken}`,
+            },
           },
-        });
+        );
 
         if (!response.ok) {
           throw new Error(`HTTP ${response.status}: ${await response.text()}`);
@@ -231,7 +239,10 @@ export class FordefiService {
         const transaction: FordefiTransactionStatus = await response.json();
 
         // check if transaction is successfully mined
-        if (transaction.hash && transaction.mined_result?.reversion?.state === 'not_reverted') {
+        if (
+          transaction.hash &&
+          transaction.mined_result?.reversion?.state === 'not_reverted'
+        ) {
           return transaction.hash;
         }
 
@@ -241,7 +252,7 @@ export class FordefiService {
             JSON.stringify({
               id: transaction.hash,
               reason: transaction.mined_result.reversion.reason,
-            })
+            }),
           );
         }
 
@@ -255,7 +266,9 @@ export class FordefiService {
       }
     }
 
-    throw new Error(`Transaction ${transactionId} timeout after ${this.maxTimeout}ms`);
+    throw new Error(
+      `Transaction ${transactionId} timeout after ${this.maxTimeout}ms`,
+    );
   }
 
   /**
@@ -270,19 +283,24 @@ export class FordefiService {
   }
 
   /**
-  * get transaction status from Fordefi
+   * get transaction status from Fordefi
    */
-  async getTransactionStatus(transactionId: string): Promise<FordefiTransactionStatus> {
+  async getTransactionStatus(
+    transactionId: string,
+  ): Promise<FordefiTransactionStatus> {
     const accessToken = this.configService.get('fordefi.accessToken');
     const path = '/api/v1/transactions';
 
-    const response = await fetch(`https://${this.gatewayHost}${path}/${transactionId}`, {
-      method: 'GET',
-      headers: {
-        Accept: 'application/json',
-        Authorization: `Bearer ${accessToken}`,
+    const response = await fetch(
+      `https://${this.gatewayHost}${path}/${transactionId}`,
+      {
+        method: 'GET',
+        headers: {
+          Accept: 'application/json',
+          Authorization: `Bearer ${accessToken}`,
+        },
       },
-    });
+    );
 
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}: ${await response.text()}`);
@@ -292,6 +310,6 @@ export class FordefiService {
   }
 
   private sleep(ms: number): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, ms));
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
-} 
+}

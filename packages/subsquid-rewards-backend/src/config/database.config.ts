@@ -9,8 +9,10 @@ export default registerAs('database', () => {
       password: process.env.CLICKHOUSE_PASSWORD,
       database,
       tables: {
-        workerQueryLogs: process.env.CLICKHOUSE_LOGS_TABLE || `${database}.worker_query_logs`,
-        workerPings: process.env.CLICKHOUSE_PINGS_TABLE || `${database}.worker_pings_v2`,
+        workerQueryLogs:
+          process.env.CLICKHOUSE_LOGS_TABLE || `${database}.worker_query_logs`,
+        workerPings:
+          process.env.CLICKHOUSE_PINGS_TABLE || `${database}.worker_pings_v2`,
       },
       options: {
         clickhouse_settings: {
@@ -26,4 +28,4 @@ export default registerAs('database', () => {
       password: process.env.REDIS_PASSWORD,
     },
   };
-}); 
+});

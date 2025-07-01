@@ -8,7 +8,7 @@ import { rewardsConfig } from './rewards.config';
 const validateConfig = (config: Record<string, unknown>) => {
   const requiredVars = [
     'CLICKHOUSE_HOST',
-    'CLICKHOUSE_USERNAME', 
+    'CLICKHOUSE_USERNAME',
     'CLICKHOUSE_PASSWORD',
     'L2_RPC_URL',
     'DISTRIBUTOR_ADDRESS',
@@ -20,17 +20,20 @@ const validateConfig = (config: Record<string, unknown>) => {
     'SQD_TOKEN_ADDRESS',
   ];
 
-  const missing = requiredVars.filter(varName => !config[varName]);
-  
+  const missing = requiredVars.filter((varName) => !config[varName]);
+
   if (missing.length > 0) {
     throw new Error(
       `Missing required environment variables: ${missing.join(', ')}\n` +
-      'Please check your .env file and ensure all critical values are set.'
+        'Please check your .env file and ensure all critical values are set.',
     );
   }
 
   // validate private key format
-  if (config.DISTRIBUTOR_PRIVATE_KEY && !String(config.DISTRIBUTOR_PRIVATE_KEY).startsWith('0x')) {
+  if (
+    config.DISTRIBUTOR_PRIVATE_KEY &&
+    !String(config.DISTRIBUTOR_PRIVATE_KEY).startsWith('0x')
+  ) {
     throw new Error('DISTRIBUTOR_PRIVATE_KEY must start with "0x"');
   }
 
@@ -46,4 +49,4 @@ const validateConfig = (config: Record<string, unknown>) => {
     }),
   ],
 })
-export class AppConfigModule {} 
+export class AppConfigModule {}

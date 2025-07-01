@@ -9,4 +9,4 @@ import { DatabaseModule } from '../database/database.module';
   providers: [Web3Service, ContractService, FordefiService],
   exports: [Web3Service, ContractService, FordefiService],
 })
-export class BlockchainModule {} 
+export class BlockchainModule {}

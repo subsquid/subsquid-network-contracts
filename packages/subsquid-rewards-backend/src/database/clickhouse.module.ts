@@ -5,4 +5,4 @@ import { ClickHouseService } from './clickhouse.service';
   providers: [ClickHouseService],
   exports: [ClickHouseService],
 })
-export class ClickHouseModule {} 
+export class ClickHouseModule {}

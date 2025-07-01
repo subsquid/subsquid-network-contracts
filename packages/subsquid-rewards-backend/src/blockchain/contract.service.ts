@@ -3,7 +3,15 @@ import { ConfigService } from '@nestjs/config';
 import { Web3Service } from './web3.service';
 import { FordefiService } from './fordefi/fordefi.service';
 import { ClickHouseService } from '../database/clickhouse.service';
-import { Address, Hex, getContract, parseAbiItem, encodeFunctionData, keccak256, encodePacked } from 'viem';
+import {
+  Address,
+  Hex,
+  getContract,
+  parseAbiItem,
+  encodeFunctionData,
+  keccak256,
+  encodePacked,
+} from 'viem';
 import {
   DistributedRewardsDistributionABI,
   RewardCalculationABI,
@@ -44,7 +52,8 @@ export class ContractService {
   async getCurrentApy(): Promise<bigint> {
     try {
       try {
-        const networkName = this.configService.get('blockchain.network.networkName') || 'mainnet';
+        const networkName =
+          this.configService.get('blockchain.network.networkName') || 'mainnet';
         const query = `
           SELECT 
             base_apr
@@ -53,7 +62,7 @@ export class ContractService {
           ORDER BY epoch_end DESC
           LIMIT 1
         `;
-        
+
         // use the properly injected ClickHouse service
         const client = (this.clickHouseService as any).client;
         if (client) {
@@ -64,10 +73,12 @@ export class ContractService {
 
           const results = await resultSet.json();
           const resultArray = Array.isArray(results) ? results : [results];
-          
+
           if (resultArray.length > 0 && resultArray[0].base_apr !== undefined) {
             const apr = BigInt(resultArray[0].base_apr);
-            this.logger.log(`Retrieved APR from ClickHouse: ${apr} basis points`);
+            this.logger.log(
+              `Retrieved APR from ClickHouse: ${apr} basis points`,
+            );
             return apr;
           }
         }
@@ -76,9 +87,13 @@ export class ContractService {
       }
 
       // try to get from contract
-      const rewardCalculationAddress = this.configService.get('blockchain.contracts.rewardCalculation') as Address;
-      const networkControllerAddress = this.configService.get('blockchain.contracts.networkController') as Address;
-      
+      const rewardCalculationAddress = this.configService.get(
+        'blockchain.contracts.rewardCalculation',
+      ) as Address;
+      const networkControllerAddress = this.configService.get(
+        'blockchain.contracts.networkController',
+      ) as Address;
+
       if (rewardCalculationAddress) {
         try {
           const contract = getContract({
@@ -87,10 +102,14 @@ export class ContractService {
             client: this.web3Service.client,
           });
 
-          this.logger.log('Contract APY calculation not available in current ABIs');
+          this.logger.log(
+            'Contract APY calculation not available in current ABIs',
+          );
           return BigInt('2000'); // 20% default
         } catch (error) {
-          this.logger.warn(`Failed to calculate APY from contract: ${error.message}`);
+          this.logger.warn(
+            `Failed to calculate APY from contract: ${error.message}`,
+          );
         }
       }
 
@@ -98,7 +117,6 @@ export class ContractService {
       const defaultApy = BigInt('2000');
       this.logger.log('Using default APY (20%)');
       return defaultApy;
-      
     } catch (error) {
       this.logger.error(`Failed to get current APY: ${error.message}`);
       throw error;
@@ -106,14 +124,18 @@ export class ContractService {
   }
 
   async getEpochLength(blockNumber?: bigint): Promise<number> {
-    const configuredLength = this.configService.get('blockchain.rewardEpochLength');
+    const configuredLength = this.configService.get(
+      'blockchain.rewardEpochLength',
+    );
     if (configuredLength) {
       return configuredLength;
     }
 
     try {
-      const workerRegistrationAddress = this.configService.get('blockchain.contracts.workerRegistration') as Address;
-      
+      const workerRegistrationAddress = this.configService.get(
+        'blockchain.contracts.workerRegistration',
+      ) as Address;
+
       const contract = getContract({
         address: workerRegistrationAddress,
         abi: WorkerRegistrationABI,
@@ -129,8 +151,10 @@ export class ContractService {
 
   async getNextEpoch(blockNumber?: bigint): Promise<number> {
     try {
-      const networkControllerAddress = this.configService.get('blockchain.contracts.networkController') as Address;
-      
+      const networkControllerAddress = this.configService.get(
+        'blockchain.contracts.networkController',
+      ) as Address;
+
       const contract = getContract({
         address: networkControllerAddress,
         abi: NetworkControllerABI,
@@ -146,8 +170,10 @@ export class ContractService {
 
   async getBondAmount(): Promise<bigint> {
     try {
-      const stakingAddress = this.configService.get('blockchain.contracts.staking') as Address;
-      
+      const stakingAddress = this.configService.get(
+        'blockchain.contracts.staking',
+      ) as Address;
+
       if (!stakingAddress) {
         this.logger.warn('Staking contract address not configured');
       }
@@ -156,7 +182,6 @@ export class ContractService {
       const mockBondAmount = BigInt('100000000000000000000000'); // 100k SQD
       this.logger.log('Using mock bond amount (100k SQD) for development');
       return mockBondAmount;
-      
     } catch (error) {
       this.logger.error(`Failed to get bond amount: ${error.message}`);
       throw error;
@@ -165,8 +190,10 @@ export class ContractService {
 
   async getLastRewardedBlock(): Promise<number> {
     try {
-      const rewardsDistributionAddress = this.configService.get('blockchain.contracts.rewardsDistribution') as Address;
-      
+      const rewardsDistributionAddress = this.configService.get(
+        'blockchain.contracts.rewardsDistribution',
+      ) as Address;
+
       const contract = getContract({
         address: rewardsDistributionAddress,
         abi: DistributedRewardsDistributionABI,
@@ -182,8 +209,10 @@ export class ContractService {
 
   async isCommitted(fromBlock: number, toBlock: number): Promise<boolean> {
     try {
-      const rewardsDistributionAddress = this.configService.get('blockchain.contracts.rewardsDistribution') as Address;
-      
+      const rewardsDistributionAddress = this.configService.get(
+        'blockchain.contracts.rewardsDistribution',
+      ) as Address;
+
       const contract = getContract({
         address: rewardsDistributionAddress,
         abi: DistributedRewardsDistributionABI,
@@ -192,7 +221,10 @@ export class ContractService {
 
       // create the commitment key
       const commitmentKey = keccak256(
-        encodePacked(['uint256', 'uint256'], [BigInt(fromBlock), BigInt(toBlock)])
+        encodePacked(
+          ['uint256', 'uint256'],
+          [BigInt(fromBlock), BigInt(toBlock)],
+        ),
       );
 
       const commitment = await contract.read.commitments([commitmentKey]);
@@ -205,8 +237,10 @@ export class ContractService {
 
   async canCommit(address: Hex): Promise<boolean> {
     try {
-      const rewardsDistributionAddress = this.configService.get('blockchain.contracts.rewardsDistribution') as Address;
-      
+      const rewardsDistributionAddress = this.configService.get(
+        'blockchain.contracts.rewardsDistribution',
+      ) as Address;
+
       const contract = getContract({
         address: rewardsDistributionAddress,
         abi: DistributedRewardsDistributionABI,
@@ -222,8 +256,10 @@ export class ContractService {
 
   async getTargetCapacity(blockNumber?: bigint): Promise<bigint> {
     try {
-      const workerRegistrationAddress = this.configService.get('blockchain.contracts.workerRegistration') as Address;
-      
+      const workerRegistrationAddress = this.configService.get(
+        'blockchain.contracts.workerRegistration',
+      ) as Address;
+
       const contract = getContract({
         address: workerRegistrationAddress,
         abi: WorkerRegistrationABI,
@@ -240,8 +276,10 @@ export class ContractService {
 
   async getStoragePerWorkerInGb(blockNumber?: bigint): Promise<number> {
     try {
-      const workerRegistrationAddress = this.configService.get('blockchain.contracts.workerRegistration') as Address;
-      
+      const workerRegistrationAddress = this.configService.get(
+        'blockchain.contracts.workerRegistration',
+      ) as Address;
+
       const contract = getContract({
         address: workerRegistrationAddress,
         abi: WorkerRegistrationABI,
@@ -257,25 +295,33 @@ export class ContractService {
 
   async getRegisteredWorkersCount(blockNumber?: bigint): Promise<number> {
     try {
-      const workerRegistrationAddress = this.configService.get('blockchain.contracts.workerRegistration') as Address;
-      
+      const workerRegistrationAddress = this.configService.get(
+        'blockchain.contracts.workerRegistration',
+      ) as Address;
+
       const contract = getContract({
         address: workerRegistrationAddress,
         abi: WorkerRegistrationABI,
         client: this.web3Service.client,
       });
 
-      return Number(await contract.read.registeredWorkersCount({ blockNumber }));
+      return Number(
+        await contract.read.registeredWorkersCount({ blockNumber }),
+      );
     } catch (error) {
-      this.logger.error(`Failed to get registered workers count: ${error.message}`);
+      this.logger.error(
+        `Failed to get registered workers count: ${error.message}`,
+      );
       return 0;
     }
   }
 
   async getLatestCommitment(): Promise<CommitmentInfo | undefined> {
     try {
-      const rewardsDistributionAddress = this.configService.get('blockchain.contracts.rewardsDistribution') as Address;
-      
+      const rewardsDistributionAddress = this.configService.get(
+        'blockchain.contracts.rewardsDistribution',
+      ) as Address;
+
       const logs = await this.web3Service.client.getLogs({
         address: rewardsDistributionAddress,
         event: parseAbiItem(
@@ -290,18 +336,26 @@ export class ContractService {
       }
 
       const latestLog = logs[logs.length - 1];
-      
+
       // ensure args and required properties exist
-      if (!latestLog.args || 
-          latestLog.args.fromBlock === undefined || 
-          latestLog.args.toBlock === undefined || 
-          latestLog.args.merkleRoot === undefined) {
-        this.logger.warn('Latest commitment log found but arguments are incomplete.');
+      if (
+        !latestLog.args ||
+        latestLog.args.fromBlock === undefined ||
+        latestLog.args.toBlock === undefined ||
+        latestLog.args.merkleRoot === undefined
+      ) {
+        this.logger.warn(
+          'Latest commitment log found but arguments are incomplete.',
+        );
         return undefined;
       }
 
-      const { fromBlock: commitFromBlock, toBlock: commitToBlock, merkleRoot: commitMerkleRoot } = latestLog.args;
-      
+      const {
+        fromBlock: commitFromBlock,
+        toBlock: commitToBlock,
+        merkleRoot: commitMerkleRoot,
+      } = latestLog.args;
+
       // get additional commitment info from contract
       const contract = getContract({
         address: rewardsDistributionAddress,
@@ -310,7 +364,7 @@ export class ContractService {
       });
 
       const commitmentKey = keccak256(
-        encodePacked(['uint256', 'uint256'], [commitFromBlock, commitToBlock])
+        encodePacked(['uint256', 'uint256'], [commitFromBlock, commitToBlock]),
       );
 
       const commitmentData = await contract.read.commitments([commitmentKey]);
@@ -331,42 +385,55 @@ export class ContractService {
     }
   }
 
-  async getStakes(workerIds: string[]): Promise<[MulticallResult<bigint>[], MulticallResult<bigint>[]]> {
+  async getStakes(
+    workerIds: string[],
+  ): Promise<[MulticallResult<bigint>[], MulticallResult<bigint>[]]> {
     try {
-      const stakingAddress = this.configService.get('blockchain.contracts.staking') as Address;
-      const capedStakingAddress = this.configService.get('blockchain.contracts.capedStaking') as Address;
-      
-      this.logger.log(`🔍 Fetching stakes for ${workerIds.length} workers from contracts...`);
+      const stakingAddress = this.configService.get(
+        'blockchain.contracts.staking',
+      ) as Address;
+      const capedStakingAddress = this.configService.get(
+        'blockchain.contracts.capedStaking',
+      ) as Address;
+
+      this.logger.log(
+        `🔍 Fetching stakes for ${workerIds.length} workers from contracts...`,
+      );
       this.logger.log(`📍 Staking address: ${stakingAddress}`);
       this.logger.log(`📍 CapedStaking address: ${capedStakingAddress}`);
-      
+
       if (!stakingAddress) {
         throw new Error('STAKING_ADDRESS not configured in environment');
       }
-      
+
       if (!capedStakingAddress) {
         throw new Error('CAPED_STAKING_ADDRESS not configured in environment');
       }
 
       // get worker contract IDs first
-      const workerIdMapping = await this.web3Service.preloadWorkerIds(workerIds);
-      
+      const workerIdMapping =
+        await this.web3Service.preloadWorkerIds(workerIds);
+
       // create a list of valid workers that are registered on-chain
       const validWorkers = workerIds
-        .map(peerId => ({ peerId, contractId: workerIdMapping[peerId] }))
+        .map((peerId) => ({ peerId, contractId: workerIdMapping[peerId] }))
         .filter(({ contractId }) => contractId && contractId !== 0n);
 
       if (validWorkers.length === 0) {
-        this.logger.warn('No registered workers found among the provided peer IDs.');
+        this.logger.warn(
+          'No registered workers found among the provided peer IDs.',
+        );
         // Return zero stakes for all workers
-        const emptyResults: MulticallResult<bigint>[] = workerIds.map(() => ({ 
-          status: 'success' as const, 
-          result: 0n 
+        const emptyResults: MulticallResult<bigint>[] = workerIds.map(() => ({
+          status: 'success' as const,
+          result: 0n,
         }));
         return [emptyResults, emptyResults];
       }
-      
-      this.logger.log(`🎯 Found ${validWorkers.length} registered workers to query for stakes.`);
+
+      this.logger.log(
+        `🎯 Found ${validWorkers.length} registered workers to query for stakes.`,
+      );
 
       // prepare multicalls ONLY for valid, registered workers
       const capedStakeCalls = validWorkers.map(({ contractId }) => ({
@@ -386,8 +453,14 @@ export class ContractService {
       // execute the multicalls
       this.logger.log(`📞 Executing multicalls for stakes...`);
       const [capedStakesResults, totalStakesResults] = await Promise.all([
-        this.web3Service.client.multicall({ contracts: capedStakeCalls, allowFailure: true }),
-        this.web3Service.client.multicall({ contracts: totalStakeCalls, allowFailure: true }),
+        this.web3Service.client.multicall({
+          contracts: capedStakeCalls,
+          allowFailure: true,
+        }),
+        this.web3Service.client.multicall({
+          contracts: totalStakeCalls,
+          allowFailure: true,
+        }),
       ]);
 
       // map the results back to the original list of workerIds
@@ -401,34 +474,54 @@ export class ContractService {
         totalStakesMap.set(worker.peerId, totalStakesResults[i]);
       });
 
-      const finalCapedStakes: MulticallResult<bigint>[] = workerIds.map(peerId => 
-        capedStakesMap.get(peerId) || { status: 'success' as const, result: 0n }
+      const finalCapedStakes: MulticallResult<bigint>[] = workerIds.map(
+        (peerId) =>
+          capedStakesMap.get(peerId) || {
+            status: 'success' as const,
+            result: 0n,
+          },
       );
-      const finalTotalStakes: MulticallResult<bigint>[] = workerIds.map(peerId => 
-        totalStakesMap.get(peerId) || { status: 'success' as const, result: 0n }
+      const finalTotalStakes: MulticallResult<bigint>[] = workerIds.map(
+        (peerId) =>
+          totalStakesMap.get(peerId) || {
+            status: 'success' as const,
+            result: 0n,
+          },
       );
 
       // log successful stakes
-      const successfulCaped = finalCapedStakes.filter(s => s.status === 'success' && s.result && s.result > 0n).length;
-      const successfulTotal = finalTotalStakes.filter(s => s.status === 'success' && s.result && s.result > 0n).length;
-      
+      const successfulCaped = finalCapedStakes.filter(
+        (s) => s.status === 'success' && s.result && s.result > 0n,
+      ).length;
+      const successfulTotal = finalTotalStakes.filter(
+        (s) => s.status === 'success' && s.result && s.result > 0n,
+      ).length;
+
       this.logger.log(`✅ Successfully mapped stakes for workers:`);
-      this.logger.log(`   - Caped stakes: ${successfulCaped}/${workerIds.length} workers with stakes > 0`);
-      this.logger.log(`   - Total stakes: ${successfulTotal}/${workerIds.length} workers with stakes > 0`);
-      
+      this.logger.log(
+        `   - Caped stakes: ${successfulCaped}/${workerIds.length} workers with stakes > 0`,
+      );
+      this.logger.log(
+        `   - Total stakes: ${successfulTotal}/${workerIds.length} workers with stakes > 0`,
+      );
+
       return [finalCapedStakes, finalTotalStakes];
-      
     } catch (error) {
-      this.logger.error(`❌ Failed to get stakes from contracts: ${error.message}`);
+      this.logger.error(
+        `❌ Failed to get stakes from contracts: ${error.message}`,
+      );
       this.logger.error(`Stack trace: ${error.stack}`);
-      
+
       throw new Error(`Contract stake fetching failed: ${error.message}`);
     }
   }
 
-  private async getStakesFromClickHouse(workerIds: string[], networkName: string): Promise<[any[], any[]]> {
+  private async getStakesFromClickHouse(
+    workerIds: string[],
+    networkName: string,
+  ): Promise<[any[], any[]]> {
     try {
-      const workerIdList = workerIds.map(id => `'${id}'`).join(',');
+      const workerIdList = workerIds.map((id) => `'${id}'`).join(',');
       const query = `
         SELECT 
           worker_id,
@@ -440,13 +533,13 @@ export class ContractService {
         ORDER BY time DESC
         LIMIT ${workerIds.length}
       `;
-      
+
       // use the properly injected ClickHouse service
       const client = (this.clickHouseService as any).client;
       if (!client) {
         throw new Error('ClickHouse client not available');
       }
-      
+
       const resultSet = await client.query({
         query,
         format: 'JSONEachRow',
@@ -454,25 +547,28 @@ export class ContractService {
 
       const results = await resultSet.json();
       const resultArray = Array.isArray(results) ? results : [results];
-      
+
       // map results back to worker order
       const stakeMap = new Map<string, bigint>();
       for (const row of resultArray) {
         stakeMap.set(row.worker_id, BigInt(row.stake || 0));
       }
-      
-      const capedStakes = workerIds.map(id => ({
+
+      const capedStakes = workerIds.map((id) => ({
         result: stakeMap.get(id) || BigInt('10000000000000000000'), // Default 10 SQD
         status: 'success',
       }));
-      
+
       const totalStakes = capedStakes; // For now, same as caped stakes
-      
-      this.logger.log(`Retrieved stakes from ClickHouse for ${resultArray.length} workers`);
+
+      this.logger.log(
+        `Retrieved stakes from ClickHouse for ${resultArray.length} workers`,
+      );
       return [capedStakes, totalStakes];
-      
     } catch (error) {
-      this.logger.warn(`Failed to get stakes from ClickHouse: ${error.message}`);
+      this.logger.warn(
+        `Failed to get stakes from ClickHouse: ${error.message}`,
+      );
       throw error;
     }
   }
@@ -483,11 +579,13 @@ export class ContractService {
     toBlock: number,
     merkleRoot: Hex,
     totalBatches: number,
-    ipfsLink: string = ''
+    ipfsLink: string = '',
   ): Promise<Hex | undefined> {
     try {
-      const rewardsDistributionAddress = this.configService.get('blockchain.contracts.rewardsDistribution') as Address;
-      
+      const rewardsDistributionAddress = this.configService.get(
+        'blockchain.contracts.rewardsDistribution',
+      ) as Address;
+
       if (!this.fordefiService.isConfigured()) {
         this.logger.error('Fordefi is not properly configured');
         return undefined;
@@ -510,7 +608,7 @@ export class ContractService {
         rewardsDistributionAddress,
         data,
         `Commit Merkle root for blocks ${fromBlock}-${toBlock}`,
-        { priority_level: 'high' }
+        { priority_level: 'high' },
       );
 
       this.logger.log(`Root committed successfully: ${txHash}`);
@@ -521,10 +619,15 @@ export class ContractService {
     }
   }
 
-  async approveRoot(fromBlock: number, toBlock: number): Promise<Hex | undefined> {
+  async approveRoot(
+    fromBlock: number,
+    toBlock: number,
+  ): Promise<Hex | undefined> {
     try {
-      const rewardsDistributionAddress = this.configService.get('blockchain.contracts.rewardsDistribution') as Address;
-      
+      const rewardsDistributionAddress = this.configService.get(
+        'blockchain.contracts.rewardsDistribution',
+      ) as Address;
+
       if (!this.fordefiService.isConfigured()) {
         this.logger.error('Fordefi is not properly configured');
         return undefined;
@@ -542,7 +645,7 @@ export class ContractService {
         rewardsDistributionAddress,
         data,
         `Approve root for blocks ${fromBlock}-${toBlock}`,
-        { priority_level: 'high' }
+        { priority_level: 'high' },
       );
 
       this.logger.log(`Root approved successfully: ${txHash}`);
@@ -559,11 +662,13 @@ export class ContractService {
     recipients: number[],
     workerRewards: bigint[],
     stakerRewards: bigint[],
-    merkleProof: Hex[]
+    merkleProof: Hex[],
   ): Promise<Hex | undefined> {
     try {
-      const rewardsDistributionAddress = this.configService.get('blockchain.contracts.rewardsDistribution') as Address;
-      
+      const rewardsDistributionAddress = this.configService.get(
+        'blockchain.contracts.rewardsDistribution',
+      ) as Address;
+
       if (!this.fordefiService.isConfigured()) {
         this.logger.error('Fordefi is not properly configured');
         return undefined;
@@ -575,7 +680,7 @@ export class ContractService {
         functionName: 'distribute',
         args: [
           [BigInt(fromBlock), BigInt(toBlock)],
-          recipients.map(r => BigInt(r)),
+          recipients.map((r) => BigInt(r)),
           workerRewards,
           stakerRewards,
           merkleProof,
@@ -587,7 +692,7 @@ export class ContractService {
         rewardsDistributionAddress,
         data,
         `Distribute batch ${recipients.length} workers (blocks ${fromBlock}-${toBlock})`,
-        { priority_level: 'medium' }
+        { priority_level: 'medium' },
       );
 
       this.logger.log(`Batch distributed successfully: ${txHash}`);
@@ -601,11 +706,13 @@ export class ContractService {
   async isBatchProcessed(
     fromBlock: number,
     toBlock: number,
-    leafHash: Hex
+    leafHash: Hex,
   ): Promise<boolean> {
     try {
-      const rewardsDistributionAddress = this.configService.get('blockchain.contracts.rewardsDistribution') as Address;
-      
+      const rewardsDistributionAddress = this.configService.get(
+        'blockchain.contracts.rewardsDistribution',
+      ) as Address;
+
       const contract = getContract({
         address: rewardsDistributionAddress,
         abi: DistributedRewardsDistributionABI,
@@ -614,24 +721,45 @@ export class ContractService {
 
       // create the commitment key
       const commitmentKey = keccak256(
-        encodePacked(['uint256', 'uint256'], [BigInt(fromBlock), BigInt(toBlock)])
+        encodePacked(
+          ['uint256', 'uint256'],
+          [BigInt(fromBlock), BigInt(toBlock)],
+        ),
       );
 
       return await contract.read.processed([commitmentKey, leafHash]);
     } catch (error) {
-      this.logger.error(`Failed to check if batch is processed: ${error.message}`);
+      this.logger.error(
+        `Failed to check if batch is processed: ${error.message}`,
+      );
       return false;
     }
   }
 
   // legacy methods for backward compatibility
-  async commitRewards(fromBlock: number, toBlock: number, workerIds: bigint[], workerRewards: bigint[], stakerRewards: bigint[]): Promise<Hex | undefined> {
-    this.logger.warn('commitRewards (legacy) not implemented - use commitRoot instead');
+  async commitRewards(
+    fromBlock: number,
+    toBlock: number,
+    workerIds: bigint[],
+    workerRewards: bigint[],
+    stakerRewards: bigint[],
+  ): Promise<Hex | undefined> {
+    this.logger.warn(
+      'commitRewards (legacy) not implemented - use commitRoot instead',
+    );
     return undefined;
   }
 
-  async approveRewards(fromBlock: number, toBlock: number, workerIds: bigint[], workerRewards: bigint[], stakerRewards: bigint[]): Promise<Hex | undefined> {
-    this.logger.warn('approveRewards (legacy) not implemented - use approveRoot instead');
+  async approveRewards(
+    fromBlock: number,
+    toBlock: number,
+    workerIds: bigint[],
+    workerRewards: bigint[],
+    stakerRewards: bigint[],
+  ): Promise<Hex | undefined> {
+    this.logger.warn(
+      'approveRewards (legacy) not implemented - use approveRoot instead',
+    );
     return undefined;
   }
-} 
+}

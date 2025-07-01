@@ -8,15 +8,7 @@ import { CommonModule } from '../common/common.module';
 
 @Module({
   imports: [DatabaseModule, BlockchainModule, CommonModule],
-  providers: [
-    RewardsCalculatorService,
-    MerkleTreeService,
-    DistributionService,
-  ],
-  exports: [
-    RewardsCalculatorService,
-    MerkleTreeService,
-    DistributionService,
-  ],
+  providers: [RewardsCalculatorService, MerkleTreeService, DistributionService],
+  exports: [RewardsCalculatorService, MerkleTreeService, DistributionService],
 })
-export class RewardsModule {} 
+export class RewardsModule {}

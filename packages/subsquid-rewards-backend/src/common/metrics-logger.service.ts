@@ -45,8 +45,12 @@ export class MetricsLoggerService {
   private readonly botWallet: string;
 
   constructor(private configService: ConfigService) {
-    this.botId = this.configService.get('blockchain.network.networkName') || 'nestjs-backend';
-    this.botWallet = this.configService.get('blockchain.distributor.address') || '0x0000000000000000000000000000000000000000';
+    this.botId =
+      this.configService.get('blockchain.network.networkName') ||
+      'nestjs-backend';
+    this.botWallet =
+      this.configService.get('blockchain.distributor.address') ||
+      '0x0000000000000000000000000000000000000000';
   }
 
   /**
@@ -130,19 +134,21 @@ export class MetricsLoggerService {
   /**
    * Log multiple worker reports efficiently
    */
-  logWorkerReports(workers: Array<{
-    workerId: string;
-    trafficWeight: number;
-    stakeWeight: number;
-    rewardWeight: number;
-    workerApr: number;
-    delegatorApr: number;
-    workerReward: bigint;
-    stakerReward: bigint;
-    stake: bigint;
-    bytesSent: number;
-    chunksRead: number;
-  }>): void {
-    workers.forEach(worker => this.logWorkerReport(worker));
+  logWorkerReports(
+    workers: Array<{
+      workerId: string;
+      trafficWeight: number;
+      stakeWeight: number;
+      rewardWeight: number;
+      workerApr: number;
+      delegatorApr: number;
+      workerReward: bigint;
+      stakerReward: bigint;
+      stake: bigint;
+      bytesSent: number;
+      chunksRead: number;
+    }>,
+  ): void {
+    workers.forEach((worker) => this.logWorkerReport(worker));
   }
-} 
+}

@@ -106,10 +106,10 @@ export class ClickHouseService implements OnModuleInit {
     workerIds?: string[],
   ): Promise<WorkerStats[]> {
     const { workerQueryLogs, workerPings } = this.config.tables;
-    
+
     let workerFilter = '';
     if (workerIds && workerIds.length > 0) {
-      const workerList = workerIds.map(id => `'${id}'`).join(',');
+      const workerList = workerIds.map((id) => `'${id}'`).join(',');
       workerFilter = `AND worker_id IN (${workerList})`;
     }
 
@@ -158,7 +158,7 @@ export class ClickHouseService implements OnModuleInit {
     try {
       const result = await this.client.query({ query, format: 'JSONEachRow' });
       const rows = await result.json();
-      
+
       if (!Array.isArray(rows)) {
         throw new Error('Unexpected response format from ClickHouse');
       }
@@ -186,7 +186,7 @@ export class ClickHouseService implements OnModuleInit {
     workerId?: string,
   ): Promise<WorkerPing[]> {
     const { workerPings } = this.config.tables;
-    
+
     let workerFilter = '';
     if (workerId) {
       workerFilter = `AND worker_id = '${workerId}'`;
@@ -210,7 +210,7 @@ export class ClickHouseService implements OnModuleInit {
     try {
       const result = await this.client.query({ query, format: 'JSONEachRow' });
       const rows = await result.json();
-      
+
       if (!Array.isArray(rows)) {
         throw new Error('Unexpected response format from ClickHouse');
       }
@@ -228,7 +228,7 @@ export class ClickHouseService implements OnModuleInit {
     workerId: string,
   ): Promise<number> {
     const { workerPings } = this.config.tables;
-    
+
     const query = `
       SELECT 
         COUNT(DISTINCT date(timestamp)) * 24 / 
@@ -242,7 +242,7 @@ export class ClickHouseService implements OnModuleInit {
     try {
       const result = await this.client.query({ query, format: 'JSONEachRow' });
       const rows = await result.json();
-      
+
       if (!Array.isArray(rows) || rows.length === 0) {
         return 0;
       }
@@ -259,13 +259,13 @@ export class ClickHouseService implements OnModuleInit {
     const successRate = parseInt(row.successfulQueries) / Math.max(queries, 1);
     const responseTime = parseFloat(row.avgResponseTime) || 0;
     const bytes = parseInt(row.totalBytes) || 0;
-    
+
     // Traffic weight calculation similar to old rewards-calculator
     const queryWeight = Math.log(queries + 1);
     const successWeight = successRate;
     const speedWeight = responseTime > 0 ? 1 / (responseTime / 1000 + 1) : 0;
     const volumeWeight = Math.log(bytes + 1);
-    
+
     return queryWeight * successWeight * speedWeight * volumeWeight;
   }
 
@@ -277,11 +277,18 @@ export class ClickHouseService implements OnModuleInit {
     };
   }
 
-  async getWorkerStatsForEpoch(startTime: Date, endTime: Date): Promise<WorkerStats[]> {
+  async getWorkerStatsForEpoch(
+    startTime: Date,
+    endTime: Date,
+  ): Promise<WorkerStats[]> {
     return this.getWorkerStats(startTime, endTime);
   }
 
-  async getActiveWorkers(fromBlock: number, toBlock: number, skipSignatureValidation = false): Promise<WorkerQueryData[]> {
+  async getActiveWorkers(
+    fromBlock: number,
+    toBlock: number,
+    skipSignatureValidation = false,
+  ): Promise<WorkerQueryData[]> {
     if (skipSignatureValidation) {
       const columns = [
         'worker_id',
@@ -302,14 +309,16 @@ export class ClickHouseService implements OnModuleInit {
       try {
         this.logger.log(`🔍 Executing ClickHouse Query:`);
         this.logger.log(`${query}`);
-        
+
         const resultSet = await this.client.query({
           query,
           format: 'JSONEachRow',
         });
 
         const results = await resultSet.json<WorkerQueryData>();
-        this.logger.log(`✅ Processed ${Array.isArray(results) ? results.length : 1} workers with signature validation skipped`);
+        this.logger.log(
+          `✅ Processed ${Array.isArray(results) ? results.length : 1} workers with signature validation skipped`,
+        );
         return Array.isArray(results) ? results : [results];
       } catch (error) {
         this.logger.error(`Failed to fetch active workers: ${error.message}`);
@@ -338,22 +347,27 @@ export class ClickHouseService implements OnModuleInit {
     try {
       this.logger.log(`🔍 Executing ClickHouse Pings Query:`);
       this.logger.log(`${query}`);
-      
+
       const resultSet = await this.client.query({
         query,
         format: 'JSONEachRow',
       });
 
-      const results = await resultSet.json<{ worker_id: string; timestamps: number[] }>();
-      
+      const results = await resultSet.json<{
+        worker_id: string;
+        timestamps: number[];
+      }>();
+
       const pings: Record<string, number[]> = {};
       const resultArray = Array.isArray(results) ? results : [results];
-      
+
       for (const row of resultArray) {
         pings[row.worker_id] = row.timestamps;
       }
 
-      this.logger.log(`✅ Retrieved pings for ${Object.keys(pings).length} workers`);
+      this.logger.log(
+        `✅ Retrieved pings for ${Object.keys(pings).length} workers`,
+      );
       return pings;
     } catch (error) {
       this.logger.error(`Failed to fetch pings: ${error.message}`);
@@ -361,7 +375,10 @@ export class ClickHouseService implements OnModuleInit {
     }
   }
 
-  async getTotalDelegation(): Promise<{ totalDelegation: number; workerCount: number }> {
+  async getTotalDelegation(): Promise<{
+    totalDelegation: number;
+    workerCount: number;
+  }> {
     const query = `
       SELECT 
         SUM(stake) / 1e18 as totalDelegation,
@@ -391,7 +408,7 @@ export class ClickHouseService implements OnModuleInit {
     try {
       this.logger.log(`🔍 Executing ClickHouse Total Queries Count:`);
       this.logger.log(`${query}`);
-      
+
       const resultSet = await this.client.query({
         query,
         format: 'JSONEachRow',
@@ -408,17 +425,24 @@ export class ClickHouseService implements OnModuleInit {
     }
   }
 
-  async calculateLivenessFactor(from: Date, to: Date): Promise<Record<string, NetworkStatsEntry>> {
+  async calculateLivenessFactor(
+    from: Date,
+    to: Date,
+  ): Promise<Record<string, NetworkStatsEntry>> {
     const pings = await this.getPings(from, to);
     const totalPeriodSeconds = dayjs(to).diff(dayjs(from), 'second');
-    const workerOfflineThreshold = this.configService.get('rewards.workerOfflineThreshold') || 65;
-    
+    const workerOfflineThreshold =
+      this.configService.get('rewards.workerOfflineThreshold') || 65;
+
     const res: Record<string, NetworkStatsEntry> = {};
-    
+
     for (const workerId in pings) {
       const pingTimestamps = pings[workerId];
       const diffs = this.calculateSecondDiffs(pingTimestamps);
-      const totalTimeOffline = this.calculateTotalOfflineSeconds(diffs, workerOfflineThreshold);
+      const totalTimeOffline = this.calculateTotalOfflineSeconds(
+        diffs,
+        workerOfflineThreshold,
+      );
 
       res[workerId] = {
         totalPings: diffs.length - 1,
@@ -439,9 +463,12 @@ export class ClickHouseService implements OnModuleInit {
       .slice(1);
   }
 
-  private calculateTotalOfflineSeconds(diffs: number[], threshold: number): number {
+  private calculateTotalOfflineSeconds(
+    diffs: number[],
+    threshold: number,
+  ): number {
     return diffs
       .filter((diff) => diff > threshold)
       .reduce((sum, diff) => sum + diff, 0);
   }
-} 
+}

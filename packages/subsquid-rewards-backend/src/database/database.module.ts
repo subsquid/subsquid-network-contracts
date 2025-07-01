@@ -5,4 +5,4 @@ import { ClickHouseModule } from './clickhouse.module';
   imports: [ClickHouseModule],
   exports: [ClickHouseModule],
 })
-export class DatabaseModule {} 
+export class DatabaseModule {}

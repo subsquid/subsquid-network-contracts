@@ -1,5 +1,8 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { DistributionDemoService, WorkerReward } from './distribution-demo.service';
+import {
+  DistributionDemoService,
+  WorkerReward,
+} from './distribution-demo.service';
 import { MerkleTreeService } from './merkle-tree.service';
 
 describe('DistributionDemoService', () => {
@@ -22,9 +25,21 @@ describe('DistributionDemoService', () => {
   describe('createDistributionCommitment', () => {
     it('should create a valid distribution commitment', async () => {
       const workerRewards: WorkerReward[] = [
-        { workerId: 1, workerReward: '1000000000000000000', stakerReward: '100000000000000000' },
-        { workerId: 2, workerReward: '2000000000000000000', stakerReward: '200000000000000000' },
-        { workerId: 3, workerReward: '3000000000000000000', stakerReward: '300000000000000000' },
+        {
+          workerId: 1,
+          workerReward: '1000000000000000000',
+          stakerReward: '100000000000000000',
+        },
+        {
+          workerId: 2,
+          workerReward: '2000000000000000000',
+          stakerReward: '200000000000000000',
+        },
+        {
+          workerId: 3,
+          workerReward: '3000000000000000000',
+          stakerReward: '300000000000000000',
+        },
       ];
 
       const commitment = await service.createDistributionCommitment(
@@ -33,7 +48,7 @@ describe('DistributionDemoService', () => {
         2000,
         workerRewards,
         2, // batch size
-        'ipfs://test-link'
+        'ipfs://test-link',
       );
 
       expect(commitment.epochId).toBe('test-epoch-1');
@@ -50,23 +65,37 @@ describe('DistributionDemoService', () => {
 
       // Check batches structure
       expect(commitment.batches).toHaveLength(2);
-      
+
       // First batch should have 2 workers
       expect(commitment.batches[0].recipients).toEqual([1, 2]);
-      expect(commitment.batches[0].workerRewards).toEqual(['1000000000000000000', '2000000000000000000']);
-      expect(commitment.batches[0].stakerRewards).toEqual(['100000000000000000', '200000000000000000']);
+      expect(commitment.batches[0].workerRewards).toEqual([
+        '1000000000000000000',
+        '2000000000000000000',
+      ]);
+      expect(commitment.batches[0].stakerRewards).toEqual([
+        '100000000000000000',
+        '200000000000000000',
+      ]);
       expect(commitment.batches[0].proof).toBeInstanceOf(Array);
 
       // Second batch should have 1 worker
       expect(commitment.batches[1].recipients).toEqual([3]);
-      expect(commitment.batches[1].workerRewards).toEqual(['3000000000000000000']);
-      expect(commitment.batches[1].stakerRewards).toEqual(['300000000000000000']);
+      expect(commitment.batches[1].workerRewards).toEqual([
+        '3000000000000000000',
+      ]);
+      expect(commitment.batches[1].stakerRewards).toEqual([
+        '300000000000000000',
+      ]);
       expect(commitment.batches[1].proof).toBeInstanceOf(Array);
     });
 
     it('should handle single worker correctly', async () => {
       const workerRewards: WorkerReward[] = [
-        { workerId: 1, workerReward: '1000000000000000000', stakerReward: '100000000000000000' },
+        {
+          workerId: 1,
+          workerReward: '1000000000000000000',
+          stakerReward: '100000000000000000',
+        },
       ];
 
       const commitment = await service.createDistributionCommitment(
@@ -74,7 +103,7 @@ describe('DistributionDemoService', () => {
         1000,
         2000,
         workerRewards,
-        10
+        10,
       );
 
       expect(commitment.totalWorkers).toBe(1);
@@ -88,11 +117,15 @@ describe('DistributionDemoService', () => {
       jest.spyOn(merkleTreeService, 'verifyProof').mockReturnValue(false);
 
       const workerRewards: WorkerReward[] = [
-        { workerId: 1, workerReward: '1000000000000000000', stakerReward: '100000000000000000' },
+        {
+          workerId: 1,
+          workerReward: '1000000000000000000',
+          stakerReward: '100000000000000000',
+        },
       ];
 
       await expect(
-        service.createDistributionCommitment('test', 1000, 2000, workerRewards)
+        service.createDistributionCommitment('test', 1000, 2000, workerRewards),
       ).rejects.toThrow('Some Merkle proofs are invalid');
     });
   });
@@ -107,14 +140,20 @@ describe('DistributionDemoService', () => {
       expect(commitment.totalWorkers).toBe(7);
       expect(commitment.totalBatches).toBe(3); // 7 workers, batch size 3 = 3 batches
       expect(commitment.merkleRoot).toMatch(/^0x[a-fA-F0-9]{64}$/);
-      expect(commitment.ipfsLink).toBe('ipfs://QmSampleMerkleTreeImplementation');
+      expect(commitment.ipfsLink).toBe(
+        'ipfs://QmSampleMerkleTreeImplementation',
+      );
 
       // All batches should have valid proofs
       for (const batch of commitment.batches) {
         expect(batch.proof).toBeInstanceOf(Array);
         expect(batch.leafHash).toMatch(/^0x[a-fA-F0-9]{64}$/);
-        
-        const isValid = merkleTreeService.verifyProof(batch.leafHash, batch.proof, commitment.merkleRoot);
+
+        const isValid = merkleTreeService.verifyProof(
+          batch.leafHash,
+          batch.proof,
+          commitment.merkleRoot,
+        );
         expect(isValid).toBe(true);
       }
     });
@@ -123,8 +162,16 @@ describe('DistributionDemoService', () => {
   describe('getContractDistributionData', () => {
     it('should return correct contract data for distribution', async () => {
       const workerRewards: WorkerReward[] = [
-        { workerId: 1, workerReward: '1000000000000000000', stakerReward: '100000000000000000' },
-        { workerId: 2, workerReward: '2000000000000000000', stakerReward: '200000000000000000' },
+        {
+          workerId: 1,
+          workerReward: '1000000000000000000',
+          stakerReward: '100000000000000000',
+        },
+        {
+          workerId: 2,
+          workerReward: '2000000000000000000',
+          stakerReward: '200000000000000000',
+        },
       ];
 
       const commitment = await service.createDistributionCommitment(
@@ -132,15 +179,21 @@ describe('DistributionDemoService', () => {
         1000,
         2000,
         workerRewards,
-        2
+        2,
       );
 
       const contractData = service.getContractDistributionData(commitment, 0);
 
       expect(contractData.blockRange).toEqual([1000, 2000]);
       expect(contractData.recipients).toEqual([1, 2]);
-      expect(contractData.workerRewards).toEqual(['1000000000000000000', '2000000000000000000']);
-      expect(contractData.stakerRewards).toEqual(['100000000000000000', '200000000000000000']);
+      expect(contractData.workerRewards).toEqual([
+        '1000000000000000000',
+        '2000000000000000000',
+      ]);
+      expect(contractData.stakerRewards).toEqual([
+        '100000000000000000',
+        '200000000000000000',
+      ]);
       expect(contractData.merkleProof).toBeInstanceOf(Array);
       expect(contractData.merkleRoot).toBe(commitment.merkleRoot);
       expect(contractData.leafHash).toMatch(/^0x[a-fA-F0-9]{64}$/);
@@ -149,7 +202,11 @@ describe('DistributionDemoService', () => {
 
     it('should throw error for invalid batch index', async () => {
       const workerRewards: WorkerReward[] = [
-        { workerId: 1, workerReward: '1000000000000000000', stakerReward: '100000000000000000' },
+        {
+          workerId: 1,
+          workerReward: '1000000000000000000',
+          stakerReward: '100000000000000000',
+        },
       ];
 
       const commitment = await service.createDistributionCommitment(
@@ -157,11 +214,11 @@ describe('DistributionDemoService', () => {
         1000,
         2000,
         workerRewards,
-        2
+        2,
       );
 
       expect(() => service.getContractDistributionData(commitment, 5)).toThrow(
-        'Batch index 5 out of range'
+        'Batch index 5 out of range',
       );
     });
   });
@@ -169,8 +226,16 @@ describe('DistributionDemoService', () => {
   describe('getContractCommitmentData', () => {
     it('should return correct contract data for commitment', async () => {
       const workerRewards: WorkerReward[] = [
-        { workerId: 1, workerReward: '1000000000000000000', stakerReward: '100000000000000000' },
-        { workerId: 2, workerReward: '2000000000000000000', stakerReward: '200000000000000000' },
+        {
+          workerId: 1,
+          workerReward: '1000000000000000000',
+          stakerReward: '100000000000000000',
+        },
+        {
+          workerId: 2,
+          workerReward: '2000000000000000000',
+          stakerReward: '200000000000000000',
+        },
       ];
 
       const commitment = await service.createDistributionCommitment(
@@ -179,7 +244,7 @@ describe('DistributionDemoService', () => {
         2000,
         workerRewards,
         2,
-        'ipfs://test'
+        'ipfs://test',
       );
 
       const contractData = service.getContractCommitmentData(commitment);
@@ -196,18 +261,22 @@ describe('DistributionDemoService', () => {
 
     it('should use default IPFS link if none provided', async () => {
       const workerRewards: WorkerReward[] = [
-        { workerId: 1, workerReward: '1000000000000000000', stakerReward: '100000000000000000' },
+        {
+          workerId: 1,
+          workerReward: '1000000000000000000',
+          stakerReward: '100000000000000000',
+        },
       ];
 
       const commitment = await service.createDistributionCommitment(
         'test',
         1000,
         2000,
-        workerRewards
+        workerRewards,
       );
 
       const contractData = service.getContractCommitmentData(commitment);
       expect(contractData.ipfsLink).toBe('ipfs://QmDefaultLink');
     });
   });
-}); 
+});

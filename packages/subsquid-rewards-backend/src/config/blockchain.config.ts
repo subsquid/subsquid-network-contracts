@@ -29,4 +29,4 @@ export default registerAs('blockchain', () => ({
     confirmations: 1,
     timeout: 30000,
   },
-})); 
+}));

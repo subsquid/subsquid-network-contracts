@@ -9,4 +9,4 @@ import { DatabaseModule } from '../database/database.module';
   imports: [EpochsModule, RewardsModule, BlockchainModule, DatabaseModule],
   controllers: [AdminController],
 })
-export class ApiModule {} 
+export class ApiModule {}

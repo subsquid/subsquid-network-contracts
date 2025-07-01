@@ -5,4 +5,4 @@ import { MetricsLoggerService } from './metrics-logger.service';
   providers: [MetricsLoggerService],
   exports: [MetricsLoggerService],
 })
-export class CommonModule {} 
+export class CommonModule {}
