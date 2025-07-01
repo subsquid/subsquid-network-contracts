@@ -25,4 +25,8 @@ export const rewardsConfig = registerAs('rewards', () => ({
   appPort: parseInt(process.env.APP_PORT || '3000', 10),
   logLevel: process.env.LOG_LEVEL || 'info',
   epochIntervalHours: parseInt(process.env.EPOCH_INTERVAL_HOURS || '1', 10),
+  
+  // block-based distribution scheduling
+  distributionBlockInterval: parseInt(process.env.DISTRIBUTION_BLOCK_INTERVAL || '600', 10), // default 600 blocks
+  enableAutoDistribution: process.env.ENABLE_AUTO_DISTRIBUTION === 'true',
 })); 

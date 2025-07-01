@@ -123,7 +123,7 @@ export class FordefiService {
       priority_level?: string;
     }
   ): FordefiTransactionRequest {
-    const networkName = this.configService.get('blockchain.networkName');
+    const networkName = this.configService.get('blockchain.network.networkName');
     const chain = networkName === 'sepolia' ? 'arbitrum_sepolia' : 'arbitrum_mainnet';
     
     const vaultId = this.configService.get('fordefi.vaultId');

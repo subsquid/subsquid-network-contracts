@@ -27,7 +27,7 @@ export class Web3Service {
   }
 
   private initializeClients() {
-    const networkName = this.configService.get('blockchain.networkName');
+    const networkName = this.configService.get('blockchain.network.networkName');
     const isTestnet = networkName === 'testnet' || networkName === 'sepolia';
     
     const l1Chain = isTestnet ? sepolia : mainnet;

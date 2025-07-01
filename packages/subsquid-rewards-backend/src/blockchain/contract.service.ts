@@ -44,7 +44,7 @@ export class ContractService {
   async getCurrentApy(): Promise<bigint> {
     try {
       try {
-        const networkName = this.configService.get('blockchain.networkName') || 'mainnet';
+        const networkName = this.configService.get('blockchain.network.networkName') || 'mainnet';
         const query = `
           SELECT 
             base_apr

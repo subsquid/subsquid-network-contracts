@@ -3,6 +3,7 @@ import { RewardsCalculatorService } from '../../rewards/calculation/rewards-calc
 import { DistributionService, DistributionStatus } from '../../rewards/distribution/distribution.service';
 import { ClickHouseService } from '../../database/clickhouse.service';
 import { Web3Service } from '../../blockchain/web3.service';
+import { BlockSchedulerService } from '../../epochs/block-scheduler.service';
 // todo: add protection for admin endpoints
 
 export interface ManualDistributionRequest {
@@ -42,6 +43,7 @@ export class AdminController {
     private distributionService: DistributionService,
     private clickHouseService: ClickHouseService,
     private web3Service: Web3Service,
+    private blockSchedulerService: BlockSchedulerService,
   ) {}
 
   /**
@@ -529,6 +531,111 @@ export class AdminController {
     } catch (error) {
       this.logger.error(`Failed to convert hex to base58: ${error.message}`);
       return hex; // return original hex on error
+    }
+  }
+
+  /**
+   * Get block scheduler status
+   */
+  @Get('scheduler/status')
+  async getSchedulerStatus() {
+    try {
+      const status = this.blockSchedulerService.getStatus();
+      const currentBlock = await this.web3Service.getL1BlockNumber();
+      const lastRewardedBlock = await this.rewardsCalculatorService['contractService'].getLastRewardedBlock();
+      
+      return {
+        success: true,
+        scheduler: status,
+        network: {
+          currentBlock,
+          lastRewardedBlock,
+          blocksSinceLastReward: currentBlock - lastRewardedBlock,
+        },
+      };
+    } catch (error) {
+      this.logger.error(`Failed to get scheduler status: ${error.message}`);
+      return {
+        success: false,
+        error: error.message,
+      };
+    }
+  }
+
+  /**
+   * Manually trigger block check and potential distribution
+   */
+  @Post('scheduler/trigger')
+  async triggerSchedulerCheck() {
+    try {
+      this.logger.log('🔄 Manual scheduler trigger requested');
+      const result = await this.blockSchedulerService.triggerManualCheck();
+      
+      return {
+        success: true,
+        triggered: result,
+        message: result 
+          ? 'Block check completed successfully' 
+          : 'Block check completed - no distribution needed',
+      };
+    } catch (error) {
+      this.logger.error(`Failed to trigger scheduler: ${error.message}`);
+      return {
+        success: false,
+        error: error.message,
+      };
+    }
+  }
+
+  /**
+   * Force commit phase for specific block range
+   */
+  @Post('scheduler/force-commit')
+  async forceCommit(@Body() body: { fromBlock: number; toBlock: number }) {
+    try {
+      const { fromBlock, toBlock } = body;
+      this.logger.log(`🔧 Force commit requested for ${fromBlock}-${toBlock}`);
+      
+      const result = await this.blockSchedulerService.forceCommit(fromBlock, toBlock);
+      
+      return {
+        success: result,
+        message: result 
+          ? `Commit completed for ${fromBlock}-${toBlock}` 
+          : 'Commit failed',
+      };
+    } catch (error) {
+      this.logger.error(`Force commit failed: ${error.message}`);
+      return {
+        success: false,
+        error: error.message,
+      };
+    }
+  }
+
+  /**
+   * Force distribution phase for specific block range
+   */
+  @Post('scheduler/force-distribution')
+  async forceDistribution(@Body() body: { fromBlock: number; toBlock: number }) {
+    try {
+      const { fromBlock, toBlock } = body;
+      this.logger.log(`🔧 Force distribution requested for ${fromBlock}-${toBlock}`);
+      
+      const result = await this.blockSchedulerService.forceDistribution(fromBlock, toBlock);
+      
+      return {
+        success: result,
+        message: result 
+          ? `Distribution completed for ${fromBlock}-${toBlock}` 
+          : 'Distribution failed',
+      };
+    } catch (error) {
+      this.logger.error(`Force distribution failed: ${error.message}`);
+      return {
+        success: false,
+        error: error.message,
+      };
     }
   }
 

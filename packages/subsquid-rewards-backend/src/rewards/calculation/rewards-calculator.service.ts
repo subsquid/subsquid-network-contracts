@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { ClickHouseService, WorkerQueryData } from '../../database/clickhouse.service';
 import { Web3Service } from '../../blockchain/web3.service';
 import { ContractService } from '../../blockchain/contract.service';
+import { MetricsLoggerService } from '../../common/metrics-logger.service';
 
 export interface WorkerReward {
   workerId: bigint;
@@ -28,6 +29,7 @@ export class RewardsCalculatorService {
     private clickHouseService: ClickHouseService,
     private web3Service: Web3Service,
     private contractService: ContractService,
+    private metricsLoggerService: MetricsLoggerService,
   ) {}
 
   async calculateEpochRewards(
@@ -300,6 +302,26 @@ export class RewardsCalculatorService {
         calculatedStakerReward = 0n;
       }
 
+      // calculate APR metrics for worker logging
+      const stakeFactor = Number(capedStake) / Number(totalStake || 1n);
+      const workerApr = baseApr * performanceMultiplier;
+      const delegatorApr = totalStake > capedStake ? baseApr : 0; // only delegators get base APR
+      
+      // log worker report in the expected format
+      this.metricsLoggerService.logWorkerReport({
+        workerId: worker.worker_id, // use peer ID for worker_id field
+        trafficWeight: trafficFactor,
+        stakeWeight: stakeFactor,
+        rewardWeight: performanceMultiplier,
+        workerApr,
+        delegatorApr,
+        workerReward: finalWorkerReward,
+        stakerReward: calculatedStakerReward,
+        stake: capedStake,
+        bytesSent: Number(worker.output_size),
+        chunksRead: Number(worker.num_read_chunks),
+      });
+
       // log details for first 3 workers to debug
       if (i < 3) {
         this.logger.log(`\n--- Worker ${i + 1}: ${worker.worker_id.slice(0, 20)}... ---`);
@@ -320,6 +342,10 @@ export class RewardsCalculatorService {
         this.logger.log(`    - Base staking reward: ${baseStakingReward} wei (${Number(baseStakingReward) / 1e18} SQD)`);
         this.logger.log(`    - Final worker reward: ${finalWorkerReward} wei (${Number(finalWorkerReward) / 1e18} SQD)`);
         this.logger.log(`    - Staker reward: ${calculatedStakerReward} wei (${Number(calculatedStakerReward) / 1e18} SQD)`);
+        this.logger.log(`  Structured logging:`);
+        this.logger.log(`    - Worker APR: ${(workerApr * 100).toFixed(2)}%`);
+        this.logger.log(`    - Delegator APR: ${(delegatorApr * 100).toFixed(2)}%`);
+        this.logger.log(`    - Stake factor: ${stakeFactor.toFixed(6)}`);
       }
 
       rewards.push({
@@ -612,7 +638,7 @@ export class RewardsCalculatorService {
   private async getStakeMetrics(): Promise<{ totalStakedSupply: bigint; totalSupply: bigint }> {
     try {
       // Try to get real delegation data from ClickHouse
-      const networkName = this.configService.get('blockchain.networkName') || 'mainnet';
+      const networkName = this.configService.get('blockchain.network.networkName') || 'mainnet';
       const query = `
         SELECT 
           SUM(stake) as totalStake,
@@ -688,7 +714,7 @@ export class RewardsCalculatorService {
    */
   private async getAPRFromClickHouse(startTime: Date, endTime: Date): Promise<number | null> {
     try {
-      const networkName = this.configService.get('blockchain.networkName') || 'mainnet';
+      const networkName = this.configService.get('blockchain.network.networkName') || 'mainnet';
       
       // Get the latest successful APR from rewards_stats
       // This is more robust than trying to filter by time range
