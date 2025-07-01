@@ -1,4 +1,4 @@
-name: docker-subsquid-rewards-backend
+name: docker-rewards-backend
 on:
   workflow_dispatch: # manually run
     inputs:
@@ -29,4 +29,4 @@ jobs:
           push: true
           context: .
           file: packages/subsquid-rewards-backend/Dockerfile
-          tags: subsquid/subsquid-rewards-backend:${{ inputs.tag }} 
+          tags: subsquid/rewards-backend:${{ inputs.tag }}
