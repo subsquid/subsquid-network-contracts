@@ -316,7 +316,7 @@ export class Web3Service {
     try {
       // same implementation as packages/rewards-calculator/src/utils.ts
       const { decode } = bs58;
-      const hexValue = `0x${Buffer.from(decode(value)).toString('hex')}`;
+      const hexValue = `0x${Buffer.from(decode(value)).toString('hex')}` as Hex;
       this.logger.debug(
         `Converted peer ID ${value.slice(0, 20)}... to ${hexValue.slice(0, 20)}...`,
       );
@@ -326,7 +326,7 @@ export class Web3Service {
         `Failed to convert peer ID ${value} from base58: ${error.message}`,
       );
       // fallback: encode the string as UTF-8 bytes
-      const fallbackHex = `0x${Buffer.from(value, 'utf8').toString('hex')}`;
+      const fallbackHex = `0x${Buffer.from(value, 'utf8').toString('hex')}` as Hex;
       this.logger.warn(
         `Using UTF-8 fallback for ${value.slice(0, 20)}...: ${fallbackHex.slice(0, 20)}...`,
       );
