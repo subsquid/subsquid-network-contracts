@@ -6,6 +6,7 @@ import { ContractService } from '../blockchain/contract.service';
 import { DistributionService } from '../rewards/distribution/distribution.service';
 import { RewardsCalculatorService } from '../rewards/calculation/rewards-calculator.service';
 import { MetricsLoggerService } from '../common/metrics-logger.service';
+import { Context, TaskContext } from '../common';
 
 export interface BlockSchedulerStatus {
   enabled: boolean;
@@ -20,7 +21,6 @@ export interface BlockSchedulerStatus {
 
 @Injectable()
 export class BlockSchedulerService {
-  private readonly logger = new Logger(BlockSchedulerService.name);
   private readonly blockInterval: number;
   private readonly enableAutoDistribution: boolean;
   private readonly confirmationBlocks: number;
@@ -28,6 +28,7 @@ export class BlockSchedulerService {
   private isProcessing = false;
   private currentPhase: 'commit' | 'approve' | 'distribute' | 'idle' = 'idle';
   private lastCommittedRange?: { fromBlock: number; toBlock: number };
+  private logger: Logger;
 
   constructor(
     private configService: ConfigService,
@@ -44,12 +45,15 @@ export class BlockSchedulerService {
     this.confirmationBlocks =
       this.configService.get('blockchain.epochConfirmationBlocks') || 150;
 
-    this.logger.log(`🔄 Block Scheduler initialized:`);
-    this.logger.log(
+    const ctx = new TaskContext('block-scheduler-init');
+    this.logger = ctx.logger;
+
+    ctx.logger.debug(`🔄 Block Scheduler initialized:`);
+    ctx.logger.debug(
       `   - Auto distribution: ${this.enableAutoDistribution ? '✅' : '❌'}`,
     );
-    this.logger.log(`   - Block interval: ${this.blockInterval} blocks`);
-    this.logger.log(`   - Confirmation blocks: ${this.confirmationBlocks}`);
+    ctx.logger.debug(`   - Block interval: ${this.blockInterval} blocks`);
+    ctx.logger.debug(`   - Confirmation blocks: ${this.confirmationBlocks}`);
   }
 
   @Cron(CronExpression.EVERY_MINUTE)
@@ -57,63 +61,66 @@ export class BlockSchedulerService {
     if (!this.enableAutoDistribution || this.isProcessing) {
       return;
     }
-
+    const ctx = new TaskContext('block-scheduler:check');
     try {
-      await this.processBlockInterval();
+      await this.processBlockInterval(ctx);
     } catch (error) {
-      this.logger.error(`Block interval check failed: ${error.message}`);
+      ctx.logger.error({ error }, `Block interval check failed`);
     }
   }
 
-  private async processBlockInterval(): Promise<void> {
+  private async processBlockInterval(ctx: Context): Promise<void> {
     this.isProcessing = true;
     this.currentPhase = 'idle';
 
     try {
-      const currentBlock = await this.web3Service.getL1BlockNumber();
+      const currentBlock = await this.web3Service.getL1BlockNumber(ctx);
       this.lastCheckedBlock = currentBlock;
 
-      const commitRange = await this.getCommitRange();
+      const commitRange = await this.getCommitRange(ctx);
       if (commitRange.fromBlock > 0 && commitRange.toBlock > 0) {
-        this.logger.log(
+        ctx.logger.debug(
           `🚀 Block interval reached! Processing range ${commitRange.fromBlock}-${commitRange.toBlock}`,
         );
 
         await this.processCommitPhase(
+          ctx,
           commitRange.fromBlock,
           commitRange.toBlock,
         );
 
         await this.processApprovalPhase(
+          ctx,
           commitRange.fromBlock,
           commitRange.toBlock,
         );
 
         await this.processDistributionPhase(
+          ctx,
           commitRange.fromBlock,
           commitRange.toBlock,
         );
 
-        this.logger.log(
+        ctx.logger.debug(
           `✅ Block-triggered workflow completed for ${commitRange.fromBlock}-${commitRange.toBlock}`,
         );
       } else {
         const lastRewardedBlock =
-          await this.contractService.getLastRewardedBlock();
+          await this.contractService.getLastRewardedBlock(ctx);
         const blocksSinceLastReward = currentBlock - lastRewardedBlock;
 
-        this.logger.debug(
+        ctx.logger.debug(
           `📊 Block status: current=${currentBlock}, lastRewarded=${lastRewardedBlock}, gap=${blocksSinceLastReward}/${this.blockInterval}`,
         );
 
         if (blocksSinceLastReward < this.blockInterval) {
-          this.logger.debug(
+          ctx.logger.debug(
             `⏳ Waiting for more blocks (${this.blockInterval - blocksSinceLastReward} remaining)`,
           );
         }
       }
     } catch (error) {
-      this.logger.error(`Block interval processing failed: ${error.message}`);
+      ctx.logger.error({ error }, `Block interval processing failed`);
       this.currentPhase = 'idle';
     } finally {
       this.isProcessing = false;
@@ -122,12 +129,13 @@ export class BlockSchedulerService {
   }
 
   private async processCommitPhase(
+    ctx: Context,
     fromBlock: number,
     toBlock: number,
   ): Promise<void> {
     try {
       this.currentPhase = 'commit';
-      this.logger.log(
+      ctx.logger.debug(
         `📝 Phase 1: Committing Merkle root for ${fromBlock}-${toBlock}`,
       );
 
@@ -136,7 +144,7 @@ export class BlockSchedulerService {
         toBlock,
       );
       if (isCommitted) {
-        this.logger.log(`✅ Range ${fromBlock}-${toBlock} already committed`);
+        ctx.logger.debug(`✅ Range ${fromBlock}-${toBlock} already committed`);
         this.lastCommittedRange = { fromBlock, toBlock };
         return;
       }
@@ -151,18 +159,19 @@ export class BlockSchedulerService {
       const canCommit =
         await this.contractService.canCommit(distributorAddress);
       if (!canCommit) {
-        this.logger.warn(
+        ctx.logger.warn(
           `⚠️  Cannot commit right now (not our turn in round-robin)`,
         );
         return;
       }
 
-      this.logger.log(`🧮 Calculating rewards for ${fromBlock}-${toBlock}...`);
+      ctx.logger.debug(`🧮 Calculating rewards for ${fromBlock}-${toBlock}...`);
 
       const skipSignatureValidation =
         this.configService.get('rewards.skipSignatureValidation') || false;
       const calculationResult =
         await this.rewardsCalculatorService.calculateRewardsDetailed(
+          ctx,
           fromBlock,
           toBlock,
           skipSignatureValidation,
@@ -171,7 +180,7 @@ export class BlockSchedulerService {
       const workers = calculationResult.workers;
 
       if (workers.length === 0) {
-        this.logger.warn(
+        ctx.logger.warn(
           `⚠️  No workers found for range ${fromBlock}-${toBlock}, skipping commit`,
         );
         return;
@@ -183,7 +192,7 @@ export class BlockSchedulerService {
       ].generateMerkleTree(workers, 50);
 
       // commit the root to contract
-      this.logger.log(
+      ctx.logger.debug(
         `📤 Committing Merkle root ${merkleTree.root} with ${merkleTree.totalBatches} batches...`,
       );
 
@@ -196,24 +205,25 @@ export class BlockSchedulerService {
       );
 
       if (txHash) {
-        this.logger.log(`✅ Committed successfully: ${txHash}`);
+        ctx.logger.debug(`✅ Committed successfully: ${txHash}`);
         this.lastCommittedRange = { fromBlock, toBlock };
       } else {
         throw new Error('Commit transaction failed');
       }
     } catch (error) {
-      this.logger.error(`❌ Commit phase failed: ${error.message}`);
+      ctx.logger.error({ error }, `❌ Commit phase failed`);
       throw error;
     }
   }
 
   private async processApprovalPhase(
+    ctx: Context,
     fromBlock: number,
     toBlock: number,
   ): Promise<void> {
     try {
       this.currentPhase = 'approve';
-      this.logger.log(
+      ctx.logger.debug(
         `✅ Phase 2: Checking approvals for ${fromBlock}-${toBlock}`,
       );
 
@@ -230,7 +240,7 @@ export class BlockSchedulerService {
       const requiredApprovals = 1; // TODO: get from contract configuration
       const currentApprovals = Number(latestCommitment.approvalCount);
 
-      this.logger.log(
+      ctx.logger.debug(
         `📊 Approval status: ${currentApprovals}/${requiredApprovals} required`,
       );
 
@@ -240,7 +250,7 @@ export class BlockSchedulerService {
           'blockchain.distributor.address',
         );
 
-        this.logger.log(
+        ctx.logger.debug(
           `📝 Approving commitment for ${fromBlock}-${toBlock}...`,
         );
         const txHash = await this.contractService.approveRoot(
@@ -249,20 +259,21 @@ export class BlockSchedulerService {
         );
 
         if (txHash) {
-          this.logger.log(`✅ Approved successfully: ${txHash}`);
+          ctx.logger.debug(`✅ Approved successfully: ${txHash}`);
         } else {
-          this.logger.warn(`⚠️  Approval may have failed or was already done`);
+          ctx.logger.warn(`⚠️  Approval may have failed or was already done`);
         }
       } else {
-        this.logger.log(`✅ Sufficient approvals already received`);
+        ctx.logger.debug(`✅ Sufficient approvals already received`);
       }
     } catch (error) {
-      this.logger.error(`❌ Approval phase failed: ${error.message}`);
+      ctx.logger.error({ error }, `❌ Approval phase failed`);
       throw error;
     }
   }
 
   private async processDistributionPhase(
+    ctx: Context,
     fromBlock: number,
     toBlock: number,
   ): Promise<void> {
@@ -274,12 +285,12 @@ export class BlockSchedulerService {
 
     try {
       this.currentPhase = 'distribute';
-      this.logger.log(
+      ctx.logger.debug(
         `💰 Phase 3: Distributing rewards for ${fromBlock}-${toBlock}`,
       );
 
       // get network metrics for logging
-      const activeWorkerCount = await this.web3Service.getActiveWorkerCount();
+      const activeWorkerCount = await this.web3Service.getActiveWorkerCount(ctx);
       const networkCapacity = await this.contractService.getTargetCapacity();
 
       // use the existing distribution service which handles Merkle proof generation and batch distribution
@@ -293,10 +304,10 @@ export class BlockSchedulerService {
       if (distributionStatus.status === 'completed') {
         isCommitSuccess = true;
 
-        this.logger.log(`✅ Distribution completed successfully:`);
-        this.logger.log(`   - Workers: ${distributionStatus.totalWorkers}`);
-        this.logger.log(`   - Batches: ${distributionStatus.totalBatches}`);
-        this.logger.log(
+        ctx.logger.debug(`✅ Distribution completed successfully:`);
+        ctx.logger.debug(`   - Workers: ${distributionStatus.totalWorkers}`);
+        ctx.logger.debug(`   - Batches: ${distributionStatus.totalBatches}`);
+        ctx.logger.debug(
           `   - Total Rewards: ${Number(distributionStatus.totalRewards) / 1e18} SQD`,
         );
 
@@ -329,11 +340,11 @@ export class BlockSchedulerService {
         throw new Error(`Distribution failed: ${distributionStatus.error}`);
       }
     } catch (error) {
-      this.logger.error(`❌ Distribution phase failed: ${error.message}`);
+      ctx.logger.error({ error }, `❌ Distribution phase failed`);
 
       // log failed distribution
       try {
-        const activeWorkerCount = await this.web3Service.getActiveWorkerCount();
+        const activeWorkerCount = await this.web3Service.getActiveWorkerCount(ctx);
         const networkCapacity = await this.contractService.getTargetCapacity();
         const currentCapacity = Number(activeWorkerCount) * 200;
         const targetCapacity = Number(networkCapacity) / 1e9;
@@ -353,21 +364,21 @@ export class BlockSchedulerService {
           totalReward: 0n,
         });
       } catch (logError) {
-        this.logger.error(`Failed to log error metrics: ${logError.message}`);
+        ctx.logger.error({ error: logError }, `Failed to log error metrics`);
       }
 
       throw error;
     }
   }
 
-  private async getCommitRange(): Promise<{
+  private async getCommitRange(ctx: Context): Promise<{
     fromBlock: number;
     toBlock: number;
   }> {
     try {
-      const currentBlock = await this.web3Service.getL1BlockNumber();
+      const currentBlock = await this.web3Service.getL1BlockNumber(ctx);
       const lastRewardedBlock =
-        await this.contractService.getLastRewardedBlock();
+        await this.contractService.getLastRewardedBlock(ctx);
       const lastConfirmedBlock = currentBlock - this.confirmationBlocks;
 
       const blocksSinceLastReward = currentBlock - lastRewardedBlock;
@@ -390,7 +401,7 @@ export class BlockSchedulerService {
 
       return { fromBlock, toBlock };
     } catch (error) {
-      this.logger.error(`Failed to get commit range: ${error.message}`);
+      ctx.logger.error({ error }, `Failed to get commit range`);
       return { fromBlock: 0, toBlock: 0 };
     }
   }
@@ -408,25 +419,27 @@ export class BlockSchedulerService {
   }
 
   async triggerManualCheck(): Promise<boolean> {
+    const ctx = new TaskContext('block-scheduler:manual-trigger');
     try {
-      this.logger.log('🔄 Manual trigger initiated');
-      await this.processBlockInterval();
+      ctx.logger.debug('🔄 Manual trigger initiated');
+      await this.processBlockInterval(ctx);
       return true;
     } catch (error) {
-      this.logger.error(`Manual trigger failed: ${error.message}`);
+      ctx.logger.error({ error }, `Manual trigger failed`);
       return false;
     }
   }
 
   // Force a specific phase for testing/admin use
   async forceCommit(fromBlock: number, toBlock: number): Promise<boolean> {
+    const ctx = new TaskContext(`block-scheduler:force-commit:${fromBlock}-${toBlock}`);
     try {
-      this.logger.log(`🔧 Force commit initiated for ${fromBlock}-${toBlock}`);
+      ctx.logger.debug(`🔧 Force commit initiated for ${fromBlock}-${toBlock}`);
       this.isProcessing = true;
-      await this.processCommitPhase(fromBlock, toBlock);
+      await this.processCommitPhase(ctx, fromBlock, toBlock);
       return true;
     } catch (error) {
-      this.logger.error(`Force commit failed: ${error.message}`);
+      ctx.logger.error({ error }, `Force commit failed`);
       return false;
     } finally {
       this.isProcessing = false;
@@ -438,15 +451,16 @@ export class BlockSchedulerService {
     fromBlock: number,
     toBlock: number,
   ): Promise<boolean> {
+    const ctx = new TaskContext(`block-scheduler:force-distribution:${fromBlock}-${toBlock}`);
     try {
-      this.logger.log(
+      ctx.logger.debug(
         `🔧 Force distribution initiated for ${fromBlock}-${toBlock}`,
       );
       this.isProcessing = true;
-      await this.processDistributionPhase(fromBlock, toBlock);
+      await this.processDistributionPhase(ctx, fromBlock, toBlock);
       return true;
     } catch (error) {
-      this.logger.error(`Force distribution failed: ${error.message}`);
+      ctx.logger.error({ error }, `Force distribution failed`);
       return false;
     } finally {
       this.isProcessing = false;

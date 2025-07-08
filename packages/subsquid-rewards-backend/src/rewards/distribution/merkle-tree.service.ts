@@ -1,5 +1,7 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { keccak256, encodePacked } from 'viem';
+import { Context } from '../../common';
+import { TaskContext } from '../../common/task-context';
 
 export interface MerkleLeaf {
   recipients: bigint[];
@@ -16,7 +18,6 @@ export interface MerkleTreeResult {
 
 @Injectable()
 export class MerkleTreeService {
-  private readonly logger = new Logger(MerkleTreeService.name);
 
   async generateMerkleTree(
     workers: Array<{
@@ -26,7 +27,7 @@ export class MerkleTreeService {
     }>,
     batchSize: number = 50,
   ): Promise<MerkleTreeResult> {
-    this.logger.log(
+    const treeCtx1 = new TaskContext("merkle-tree:generate"); treeCtx1.logger.debug(
       `Generating Merkle tree for ${workers.length} workers with batch size ${batchSize}`,
     );
 
@@ -41,7 +42,7 @@ export class MerkleTreeService {
       });
     }
 
-    this.logger.log(
+    const treeCtx2 = new TaskContext("merkle-tree:batches"); treeCtx2.logger.debug(
       `Created ${batches.length} batches from ${workers.length} workers`,
     );
 
@@ -54,7 +55,7 @@ export class MerkleTreeService {
         ),
       );
 
-      this.logger.debug(
+      const treeCtx3 = new TaskContext("merkle-tree:hash"); treeCtx3.logger.debug(
         `Batch ${index}: ${batch.recipients.length} workers, hash: ${hash}`,
       );
       return hash;
@@ -63,7 +64,7 @@ export class MerkleTreeService {
     // build Merkle tree
     const { root, proofs } = this.buildMerkleTree(leafHashes);
 
-    this.logger.log(
+    const treeCtx4 = new TaskContext("merkle-tree:complete"); treeCtx4.logger.debug(
       `✅ Merkle tree generated: root=${root}, ${batches.length} leaves`,
     );
 

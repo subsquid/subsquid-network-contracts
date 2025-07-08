@@ -1,8 +1,9 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Web3Service } from './web3.service';
 import { FordefiService } from './fordefi/fordefi.service';
 import { ClickHouseService } from '../database/clickhouse.service';
+import { Context, TaskContext } from '../common';
 import {
   Address,
   Hex,
@@ -40,7 +41,6 @@ export interface CommitmentInfo {
 
 @Injectable()
 export class ContractService {
-  private readonly logger = new Logger(ContractService.name);
 
   constructor(
     private configService: ConfigService,
@@ -49,7 +49,7 @@ export class ContractService {
     private clickHouseService: ClickHouseService,
   ) {}
 
-  async getCurrentApy(): Promise<bigint> {
+  async getCurrentApy(ctx: Context): Promise<bigint> {
     try {
       try {
         const networkName =
@@ -76,14 +76,14 @@ export class ContractService {
 
           if (resultArray.length > 0 && resultArray[0].base_apr !== undefined) {
             const apr = BigInt(resultArray[0].base_apr);
-            this.logger.log(
+            ctx.logger.debug(
               `Retrieved APR from ClickHouse: ${apr} basis points`,
             );
             return apr;
           }
         }
       } catch (error) {
-        this.logger.warn(`Failed to get APR from ClickHouse: ${error.message}`);
+        ctx.logger.warn({ error }, `Failed to get APR from ClickHouse`);
       }
 
       // try to get from contract
@@ -102,28 +102,29 @@ export class ContractService {
             client: this.web3Service.client,
           });
 
-          this.logger.log(
+          ctx.logger.debug(
             'Contract APY calculation not available in current ABIs',
           );
           return BigInt('2000'); // 20% default
         } catch (error) {
-          this.logger.warn(
-            `Failed to calculate APY from contract: ${error.message}`,
+          ctx.logger.warn(
+            { error },
+            `Failed to calculate APY from contract`,
           );
         }
       }
 
       // Default: return 20% APY (2000 basis points)
       const defaultApy = BigInt('2000');
-      this.logger.log('Using default APY (20%)');
+      ctx.logger.debug('Using default APY (20%)');
       return defaultApy;
     } catch (error) {
-      this.logger.error(`Failed to get current APY: ${error.message}`);
+      ctx.logger.error({ error }, `Failed to get current APY`);
       throw error;
     }
   }
 
-  async getEpochLength(blockNumber?: bigint): Promise<number> {
+  async getEpochLength(ctx: Context, blockNumber?: bigint): Promise<number> {
     const configuredLength = this.configService.get(
       'blockchain.rewardEpochLength',
     );
@@ -144,7 +145,7 @@ export class ContractService {
 
       return Number(await contract.read.epochLength({ blockNumber }));
     } catch (error) {
-      this.logger.error(`Failed to get epoch length: ${error.message}`);
+      ctx.logger.error({ error }, `Failed to get epoch length`);
       return 7000; // Default
     }
   }
@@ -163,7 +164,7 @@ export class ContractService {
 
       return Number(await contract.read.nextEpoch({ blockNumber }));
     } catch (error) {
-      this.logger.error(`Failed to get next epoch: ${error.message}`);
+      const ctx = new TaskContext("error-handling"); ctx.logger.error(`Failed to get next epoch: ${error.message}`);
       return 1;
     }
   }
@@ -175,20 +176,20 @@ export class ContractService {
       ) as Address;
 
       if (!stakingAddress) {
-        this.logger.warn('Staking contract address not configured');
+        const ctx = new TaskContext("warning"); ctx.logger.warn('Staking contract address not configured');
       }
 
       // for dev: return mock bond amount
       const mockBondAmount = BigInt('100000000000000000000000'); // 100k SQD
-      this.logger.log('Using mock bond amount (100k SQD) for development');
+      const ctx = new TaskContext("method-call"); ctx.logger.debug('Using mock bond amount (100k SQD) for development');
       return mockBondAmount;
     } catch (error) {
-      this.logger.error(`Failed to get bond amount: ${error.message}`);
+      const ctx = new TaskContext("error-handling"); ctx.logger.error(`Failed to get bond amount: ${error.message}`);
       throw error;
     }
   }
 
-  async getLastRewardedBlock(): Promise<number> {
+  async getLastRewardedBlock(ctx: Context): Promise<number> {
     try {
       const rewardsDistributionAddress = this.configService.get(
         'blockchain.contracts.rewardsDistribution',
@@ -202,7 +203,7 @@ export class ContractService {
 
       return Number(await contract.read.lastBlockRewarded());
     } catch (error) {
-      this.logger.error(`Failed to get last rewarded block: ${error.message}`);
+      const ctx = new TaskContext("error-handling"); ctx.logger.error(`Failed to get last rewarded block: ${error.message}`);
       return 0;
     }
   }
@@ -230,7 +231,7 @@ export class ContractService {
       const commitment = await contract.read.commitments([commitmentKey]);
       return commitment[0]; // exists field
     } catch (error) {
-      this.logger.error(`Failed to check if committed: ${error.message}`);
+      const ctx = new TaskContext("error-handling"); ctx.logger.error(`Failed to check if committed: ${error.message}`);
       return false;
     }
   }
@@ -249,7 +250,7 @@ export class ContractService {
 
       return await contract.read.canCommit([address]);
     } catch (error) {
-      this.logger.error(`Failed to check if can commit: ${error.message}`);
+      const ctx = new TaskContext("error-handling"); ctx.logger.error(`Failed to check if can commit: ${error.message}`);
       return false;
     }
   }
@@ -268,7 +269,7 @@ export class ContractService {
 
       return await contract.read.targetCapacity({ blockNumber });
     } catch (error) {
-      this.logger.error(`Failed to get target capacity: ${error.message}`);
+      const ctx = new TaskContext("error-handling"); ctx.logger.error(`Failed to get target capacity: ${error.message}`);
       const configValue = this.configService.get('rewards.targetCapacityGB');
       return BigInt(configValue || 30000) * BigInt(1e9);
     }
@@ -288,7 +289,7 @@ export class ContractService {
 
       return Number(await contract.read.storagePerWorkerInGb({ blockNumber }));
     } catch (error) {
-      this.logger.error(`Failed to get storage per worker: ${error.message}`);
+      const ctx = new TaskContext("error-handling"); ctx.logger.error(`Failed to get storage per worker: ${error.message}`);
       return 200; // default 200GB
     }
   }
@@ -309,7 +310,7 @@ export class ContractService {
         await contract.read.registeredWorkersCount({ blockNumber }),
       );
     } catch (error) {
-      this.logger.error(
+      const ctx = new TaskContext("error-handling"); ctx.logger.error(
         `Failed to get registered workers count: ${error.message}`,
       );
       return 0;
@@ -331,7 +332,7 @@ export class ContractService {
       });
 
       if (logs.length === 0) {
-        this.logger.warn('No commitment logs found');
+        const ctx = new TaskContext("warning"); ctx.logger.warn('No commitment logs found');
         return undefined;
       }
 
@@ -344,7 +345,7 @@ export class ContractService {
         latestLog.args.toBlock === undefined ||
         latestLog.args.merkleRoot === undefined
       ) {
-        this.logger.warn(
+        const ctx = new TaskContext("warning"); ctx.logger.warn(
           'Latest commitment log found but arguments are incomplete.',
         );
         return undefined;
@@ -380,7 +381,7 @@ export class ContractService {
         exists: commitmentData[0] || false, // Assuming 1st element is exists flag
       };
     } catch (error) {
-      this.logger.error(`Failed to get latest commitment: ${error.message}`);
+      const ctx = new TaskContext("error-handling"); ctx.logger.error(`Failed to get latest commitment: ${error.message}`);
       return undefined;
     }
   }
@@ -396,11 +397,11 @@ export class ContractService {
         'blockchain.contracts.capedStaking',
       ) as Address;
 
-      this.logger.log(
+      const logCtx1 = new TaskContext("method-call"); logCtx1.logger.debug(
         `🔍 Fetching stakes for ${workerIds.length} workers from contracts...`,
       );
-      this.logger.log(`📍 Staking address: ${stakingAddress}`);
-      this.logger.log(`📍 CapedStaking address: ${capedStakingAddress}`);
+      const logCtx2 = new TaskContext("method-call"); logCtx2.logger.debug(`📍 Staking address: ${stakingAddress}`);
+      const logCtx3 = new TaskContext("method-call"); logCtx3.logger.debug(`📍 CapedStaking address: ${capedStakingAddress}`);
 
       if (!stakingAddress) {
         throw new Error('STAKING_ADDRESS not configured in environment');
@@ -411,8 +412,9 @@ export class ContractService {
       }
 
       // get worker contract IDs first
+      const ctx = new TaskContext("contract-service:get-stakes");
       const workerIdMapping =
-        await this.web3Service.preloadWorkerIds(workerIds);
+        await this.web3Service.preloadWorkerIds(ctx, workerIds);
 
       // create a list of valid workers that are registered on-chain
       const validWorkers = workerIds
@@ -420,7 +422,7 @@ export class ContractService {
         .filter(({ contractId }) => contractId && contractId !== 0n);
 
       if (validWorkers.length === 0) {
-        this.logger.warn(
+        const warnCtx = new TaskContext("warning"); warnCtx.logger.warn(
           'No registered workers found among the provided peer IDs.',
         );
         // Return zero stakes for all workers
@@ -431,7 +433,7 @@ export class ContractService {
         return [emptyResults, emptyResults];
       }
 
-      this.logger.log(
+      const logCtx4 = new TaskContext("method-call"); logCtx4.logger.debug(
         `🎯 Found ${validWorkers.length} registered workers to query for stakes.`,
       );
 
@@ -451,7 +453,7 @@ export class ContractService {
       }));
 
       // execute the multicalls
-      this.logger.log(`📞 Executing multicalls for stakes...`);
+      const logCtx5 = new TaskContext("method-call"); logCtx5.logger.debug(`📞 Executing multicalls for stakes...`);
       const [capedStakesResults, totalStakesResults] = await Promise.all([
         this.web3Service.client.multicall({
           contracts: capedStakeCalls,
@@ -497,20 +499,20 @@ export class ContractService {
         (s) => s.status === 'success' && s.result && s.result > 0n,
       ).length;
 
-      this.logger.log(`✅ Successfully mapped stakes for workers:`);
-      this.logger.log(
+      const logCtx6 = new TaskContext("method-call"); logCtx6.logger.debug(`✅ Successfully mapped stakes for workers:`);
+      const logCtx7 = new TaskContext("method-call"); logCtx7.logger.debug(
         `   - Caped stakes: ${successfulCaped}/${workerIds.length} workers with stakes > 0`,
       );
-      this.logger.log(
+      const logCtx8 = new TaskContext("method-call"); logCtx8.logger.debug(
         `   - Total stakes: ${successfulTotal}/${workerIds.length} workers with stakes > 0`,
       );
 
       return [finalCapedStakes, finalTotalStakes];
     } catch (error) {
-      this.logger.error(
+      const errCtx1 = new TaskContext("error-handling"); errCtx1.logger.error(
         `❌ Failed to get stakes from contracts: ${error.message}`,
       );
-      this.logger.error(`Stack trace: ${error.stack}`);
+      const errCtx2 = new TaskContext("error-handling"); errCtx2.logger.error(`Stack trace: ${error.stack}`);
 
       throw new Error(`Contract stake fetching failed: ${error.message}`);
     }
@@ -561,12 +563,12 @@ export class ContractService {
 
       const totalStakes = capedStakes; // For now, same as caped stakes
 
-      this.logger.log(
+      const ctx = new TaskContext("method-call"); ctx.logger.debug(
         `Retrieved stakes from ClickHouse for ${resultArray.length} workers`,
       );
       return [capedStakes, totalStakes];
     } catch (error) {
-      this.logger.warn(
+      const ctx = new TaskContext("warning"); ctx.logger.warn(
         `Failed to get stakes from ClickHouse: ${error.message}`,
       );
       throw error;
@@ -587,7 +589,7 @@ export class ContractService {
       ) as Address;
 
       if (!this.fordefiService.isConfigured()) {
-        this.logger.error('Fordefi is not properly configured');
+        const ctx = new TaskContext("error-handling"); ctx.logger.error('Fordefi is not properly configured');
         return undefined;
       }
 
@@ -611,10 +613,10 @@ export class ContractService {
         { priority_level: 'high' },
       );
 
-      this.logger.log(`Root committed successfully: ${txHash}`);
+      const ctx = new TaskContext("method-call"); ctx.logger.debug(`Root committed successfully: ${txHash}`);
       return txHash;
     } catch (error) {
-      this.logger.error(`Failed to commit root: ${error.message}`);
+      const ctx = new TaskContext("error-handling"); ctx.logger.error(`Failed to commit root: ${error.message}`);
       return undefined;
     }
   }
@@ -629,7 +631,7 @@ export class ContractService {
       ) as Address;
 
       if (!this.fordefiService.isConfigured()) {
-        this.logger.error('Fordefi is not properly configured');
+        const ctx = new TaskContext("error-handling"); ctx.logger.error('Fordefi is not properly configured');
         return undefined;
       }
 
@@ -648,10 +650,10 @@ export class ContractService {
         { priority_level: 'high' },
       );
 
-      this.logger.log(`Root approved successfully: ${txHash}`);
+      const ctx = new TaskContext("method-call"); ctx.logger.debug(`Root approved successfully: ${txHash}`);
       return txHash;
     } catch (error) {
-      this.logger.error(`Failed to approve root: ${error.message}`);
+      const ctx = new TaskContext("error-handling"); ctx.logger.error(`Failed to approve root: ${error.message}`);
       return undefined;
     }
   }
@@ -670,7 +672,7 @@ export class ContractService {
       ) as Address;
 
       if (!this.fordefiService.isConfigured()) {
-        this.logger.error('Fordefi is not properly configured');
+        const ctx = new TaskContext("error-handling"); ctx.logger.error('Fordefi is not properly configured');
         return undefined;
       }
 
@@ -695,10 +697,10 @@ export class ContractService {
         { priority_level: 'medium' },
       );
 
-      this.logger.log(`Batch distributed successfully: ${txHash}`);
+      const ctx = new TaskContext("method-call"); ctx.logger.debug(`Batch distributed successfully: ${txHash}`);
       return txHash;
     } catch (error) {
-      this.logger.error(`Failed to distribute batch: ${error.message}`);
+      const ctx = new TaskContext("error-handling"); ctx.logger.error(`Failed to distribute batch: ${error.message}`);
       return undefined;
     }
   }
@@ -729,7 +731,7 @@ export class ContractService {
 
       return await contract.read.processed([commitmentKey, leafHash]);
     } catch (error) {
-      this.logger.error(
+      const ctx = new TaskContext("error-handling"); ctx.logger.error(
         `Failed to check if batch is processed: ${error.message}`,
       );
       return false;
@@ -744,7 +746,7 @@ export class ContractService {
     workerRewards: bigint[],
     stakerRewards: bigint[],
   ): Promise<Hex | undefined> {
-    this.logger.warn(
+    const ctx = new TaskContext("warning"); ctx.logger.warn(
       'commitRewards (legacy) not implemented - use commitRoot instead',
     );
     return undefined;
@@ -757,7 +759,7 @@ export class ContractService {
     workerRewards: bigint[],
     stakerRewards: bigint[],
   ): Promise<Hex | undefined> {
-    this.logger.warn(
+    const ctx = new TaskContext("warning"); ctx.logger.warn(
       'approveRewards (legacy) not implemented - use approveRoot instead',
     );
     return undefined;

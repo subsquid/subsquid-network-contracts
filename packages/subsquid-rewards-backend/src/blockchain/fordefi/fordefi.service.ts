@@ -1,8 +1,10 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { TaskContext } from '../../common/task-context';
 import { Hex } from 'viem';
 import * as crypto from 'crypto';
 import * as fs from 'fs';
+import { Context } from '../../common';
 
 export interface FordefiTransactionRequest {
   signer_type: string;
@@ -39,7 +41,6 @@ export interface FordefiTransactionStatus {
 
 @Injectable()
 export class FordefiService {
-  private readonly logger = new Logger(FordefiService.name);
   private readonly gatewayHost = 'api.fordefi.com';
   private readonly maxTimeout = 30000; // 30 seconds
   private readonly initialTimeout = 250; // 250ms
@@ -77,7 +78,7 @@ export class FordefiService {
       const data = await response.json();
       return data.address as Hex;
     } catch (error) {
-      this.logger.error(`Failed to get vault address: ${error.message}`);
+      const ctx = new TaskContext("error-handling"); ctx.logger.error(`Failed to get vault address: ${error.message}`);
       throw error;
     }
   }
@@ -97,16 +98,16 @@ export class FordefiService {
     const request = this.createTransactionRequest(to, data, name, gasOptions);
 
     try {
-      this.logger.log(`Sending Fordefi transaction: ${name}`);
+      const logCtx1 = new TaskContext("fordefi:send-transaction"); logCtx1.logger.debug(`Sending Fordefi transaction: ${name}`);
       const transactionId = await this.submitTransaction(request);
 
-      this.logger.log(`Transaction submitted with ID: ${transactionId}`);
+      const logCtx2 = new TaskContext("fordefi:transaction-submitted"); logCtx2.logger.debug(`Transaction submitted with ID: ${transactionId}`);
       const txHash = await this.waitForTransaction(transactionId);
 
-      this.logger.log(`Transaction completed: ${txHash}`);
+      const logCtx3 = new TaskContext("fordefi:transaction-completed"); logCtx3.logger.debug(`Transaction completed: ${txHash}`);
       return txHash;
     } catch (error) {
-      this.logger.error(`Fordefi transaction failed: ${error.message}`);
+      const ctx = new TaskContext("error-handling"); ctx.logger.error(`Fordefi transaction failed: ${error.message}`);
       throw error;
     }
   }
@@ -204,7 +205,7 @@ export class FordefiService {
       const result = await response.json();
       return result.id;
     } catch (error) {
-      this.logger.error(`Failed to submit transaction: ${error.message}`);
+      const ctx = new TaskContext("error-handling"); ctx.logger.error(`Failed to submit transaction: ${error.message}`);
       throw error;
     }
   }
@@ -260,7 +261,7 @@ export class FordefiService {
         await this.sleep(timeout);
         timeout = Math.min(timeout * 2, 5000); // Cap at 5 seconds
       } catch (error) {
-        this.logger.warn(`Error checking transaction status: ${error.message}`);
+        const ctx = new TaskContext("warning"); ctx.logger.warn(`Error checking transaction status: ${error.message}`);
         await this.sleep(timeout);
         timeout = Math.min(timeout * 2, 5000);
       }
