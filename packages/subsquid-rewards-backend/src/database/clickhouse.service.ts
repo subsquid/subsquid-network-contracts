@@ -285,8 +285,8 @@ export class ClickHouseService implements OnModuleInit {
   }
 
   async getActiveWorkers(
-    fromBlock: number,
-    toBlock: number,
+    startTime: Date,
+    endTime: Date,
     skipSignatureValidation = false,
   ): Promise<WorkerQueryData[]> {
     if (skipSignatureValidation) {
@@ -301,13 +301,16 @@ export class ClickHouseService implements OnModuleInit {
         SELECT ${columns.join(',')}
         FROM ${this.logsTableName}
         WHERE
-          from_block >= ${fromBlock} AND
-          to_block <= ${toBlock}
+          ${this.logsTableName}.worker_timestamp >= '${this.formatDate(startTime)}' AND  
+          ${this.logsTableName}.worker_timestamp <= '${this.formatDate(endTime)}' AND
+          (toUnixTimestamp64Micro(collector_timestamp) - toUnixTimestamp64Micro(worker_timestamp)) / 60000000 < 20
         GROUP BY worker_id
       `;
 
       try {
         this.logger.log(`🔍 Executing ClickHouse Query:`);
+        this.logger.log(`   FROM: ${this.formatDate(startTime)}`);
+        this.logger.log(`   TO: ${this.formatDate(endTime)}`);
         this.logger.log(`${query}`);
 
         const resultSet = await this.client.query({
@@ -316,10 +319,11 @@ export class ClickHouseService implements OnModuleInit {
         });
 
         const results = await resultSet.json<WorkerQueryData>();
+        const resultArray = Array.isArray(results) ? results : [results];
         this.logger.log(
-          `✅ Processed ${Array.isArray(results) ? results.length : 1} workers with signature validation skipped`,
+          `✅ Processed ${resultArray.length} workers`,
         );
-        return Array.isArray(results) ? results : [results];
+        return resultArray;
       } catch (error) {
         this.logger.error(`Failed to fetch active workers: ${error.message}`);
         throw error;

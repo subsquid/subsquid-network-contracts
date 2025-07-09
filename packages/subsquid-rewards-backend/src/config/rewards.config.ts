@@ -20,6 +20,7 @@ export const rewardsConfig = registerAs('rewards', () => ({
   // - 'dynamic': Use dynamic APR based on network utilization and stake factors
   aprCalculationMethod: process.env.APR_CALCULATION_METHOD || 'contracts',
 
+  batchNumber: process.env.BATCH_NUMBER ? parseInt(process.env.BATCH_NUMBER, 10) : undefined,
   totalBatches: parseInt(process.env.TOTAL_BATCHES || '4', 10),
   maxBatchSize: parseInt(process.env.MAX_BATCH_SIZE || '100', 10),
   maxGasPerBatch: parseInt(process.env.MAX_GAS_PER_BATCH || '10000000', 10),

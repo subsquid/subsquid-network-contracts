@@ -3,7 +3,7 @@ import { registerAs } from '@nestjs/config';
 export default registerAs('blockchain', () => ({
   network: {
     l2RpcUrl: process.env.L2_RPC_URL,
-    l1RpcUrl: process.env.L1_RPC_URL || 'https://rpc.ankr.com/eth',
+    l1RpcUrl: process.env.L1_RPC_URL,
     networkName: process.env.NETWORK_NAME || 'localhost',
   },
   contracts: {
