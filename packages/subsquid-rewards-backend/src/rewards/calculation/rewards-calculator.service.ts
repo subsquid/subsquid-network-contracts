@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
   ClickHouseService,
@@ -7,6 +7,7 @@ import {
 import { Web3Service } from '../../blockchain/web3.service';
 import { ContractService } from '../../blockchain/contract.service';
 import { MetricsLoggerService } from '../../common/metrics-logger.service';
+import { Context } from '../../common';
 
 export interface WorkerReward {
   workerId: bigint;
@@ -15,6 +16,7 @@ export interface WorkerReward {
   stakerReward: bigint;
   stake: bigint;
   totalStake: bigint;
+  calculationTime: number;
 }
 
 export interface RewardCalculationResult {
@@ -25,7 +27,6 @@ export interface RewardCalculationResult {
 
 @Injectable()
 export class RewardsCalculatorService {
-  private readonly logger = new Logger(RewardsCalculatorService.name);
 
   constructor(
     private configService: ConfigService,
@@ -36,6 +37,7 @@ export class RewardsCalculatorService {
   ) {}
 
   async calculateEpochRewards(
+    ctx: Context,
     fromBlock: number,
     toBlock: number,
     skipSignatureValidation?: boolean,
@@ -47,12 +49,13 @@ export class RewardsCalculatorService {
       this.configService.get('rewards.skipSignatureValidation', true);
 
     if (shouldSkipValidation) {
-      this.logger.warn(
+      ctx.logger.warn(
         '🚨 Signature validation is DISABLED - this is for development/testing only',
       );
     }
 
     const result = await this.calculateRewardsDetailed(
+      ctx,
       fromBlock,
       toBlock,
       shouldSkipValidation,
@@ -63,6 +66,7 @@ export class RewardsCalculatorService {
   }
 
   async calculateRewardsDetailed(
+    ctx: Context,
     fromBlock: number,
     toBlock: number,
     skipSignatureValidation?: boolean,
@@ -73,10 +77,11 @@ export class RewardsCalculatorService {
       skipSignatureValidation ??
       this.configService.get('rewards.skipSignatureValidation', true);
 
-    return this.calculateRewards(fromBlock, toBlock, shouldSkipValidation, batchNumberOverride, totalBatchesOverride);
+    return this.calculateRewards(ctx, fromBlock, toBlock, shouldSkipValidation, batchNumberOverride, totalBatchesOverride);
   }
 
   private async calculateRewards(
+    ctx: Context,
     fromBlock: number,
     toBlock: number,
     skipSignatureValidation = true,
@@ -85,28 +90,30 @@ export class RewardsCalculatorService {
   ): Promise<RewardCalculationResult> {
     try {
       // get block timestamps
-      const startTime = await this.web3Service.getBlockTimestamp(fromBlock);
-      const endTime = await this.web3Service.getBlockTimestamp(toBlock);
+      const startTime = await this.web3Service.getBlockTimestamp(ctx, fromBlock);
+      const endTime = await this.web3Service.getBlockTimestamp(ctx, toBlock);
 
-      this.logger.log(
+      ctx.logger.debug(
         `\n🎯 Calculating rewards for blocks ${fromBlock} - ${toBlock}`,
       );
-      this.logger.log(
+      ctx.logger.debug(
         `   Period: ${startTime.toISOString()} to ${endTime.toISOString()}`,
       );
 
       // get active workers from ClickHouse
       const totalQueries = await this.clickHouseService.logTotalQueries(
+        ctx,
         startTime,
         endTime,
       );
       const activeWorkerData = await this.clickHouseService.getActiveWorkers(
+        ctx,
         startTime,
         endTime,
         skipSignatureValidation,
       );
 
-      this.logger.log(
+      ctx.logger.debug(
         `✅ Found ${activeWorkerData.length} active workers with ${totalQueries} total queries`,
       );
 
@@ -115,20 +122,21 @@ export class RewardsCalculatorService {
         (w) => Number(w.totalRequests) > 0,
       );
 
-      this.logger.log(
+      ctx.logger.debug(
         `✅ ${validWorkers.length} workers have valid traffic data`,
       );
 
       if (validWorkers.length === 0) {
-        this.logger.warn('No workers found with query data in this epoch');
+        ctx.logger.warn('No workers found with query data in this epoch');
         return this.createEmptyResult(fromBlock, toBlock, startTime, endTime);
       }
 
       // get worker contract IDs and filter out unregistered workers
-      this.logger.log(
+      ctx.logger.debug(
         `🔍 Getting contract worker IDs for ${validWorkers.length} workers`,
       );
       const workerIdMapping = await this.web3Service.preloadWorkerIds(
+        ctx,
         validWorkers.map((w) => w.worker_id),
       );
 
@@ -138,45 +146,46 @@ export class RewardsCalculatorService {
         return contractId && contractId !== 0n;
       });
 
-      this.logger.log(
+      ctx.logger.debug(
         `✅ Found ${registeredWorkers.length} registered workers out of ${validWorkers.length} active workers`,
       );
 
       if (registeredWorkers.length === 0) {
-        this.logger.warn('No registered workers found for this epoch');
+        ctx.logger.warn('No registered workers found for this epoch');
         return this.createEmptyResult(fromBlock, toBlock, startTime, endTime);
       }
 
       // get on-chain stake data for all active workers (not just registered ones)
-      this.logger.log(
+      ctx.logger.debug(
         `💰 Fetching stakes for ${activeWorkerData.length} active workers...`,
       );
       const [capedStakes, totalStakes] = await this.contractService.getStakes(
         activeWorkerData.map((w) => w.worker_id),
       );
-      this.logger.log(
+      ctx.logger.debug(
         `✅ Retrieved stakes from contracts for ${capedStakes.length} workers`,
       );
 
       // get bond amount from WorkerRegistration contract
       let bondAmount: bigint;
       try {
-        bondAmount = await this.web3Service.getBondAmount();
-        this.logger.log(
+        bondAmount = await this.web3Service.getBondAmount(ctx);
+        ctx.logger.debug(
           `✅ Retrieved bond amount from WorkerRegistration contract: ${Number(bondAmount) / 1e18} SQD`,
         );
       } catch (error) {
-        this.logger.warn(
-          `Failed to get bond amount from WorkerRegistration: ${error.message}`,
+        ctx.logger.warn(
+          { error },
+          `Failed to get bond amount from WorkerRegistration`,
         );
         // fallback to contract service
         try {
           bondAmount = await this.contractService.getBondAmount();
-          this.logger.log('Using bond amount from fallback contract service');
+          ctx.logger.debug('Using bond amount from fallback contract service');
         } catch (fallbackError) {
-          this.logger.warn(`Fallback also failed: ${fallbackError.message}`);
+          ctx.logger.warn({ error: fallbackError }, `Fallback also failed`);
           bondAmount = BigInt('100000000000000000000000'); // 100k SQD default
-          this.logger.log(
+          ctx.logger.debug(
             'Using default bond amount (100k SQD) for development testing',
           );
         }
@@ -185,6 +194,7 @@ export class RewardsCalculatorService {
       // calc liveness factors
       const livenessFactor =
         await this.clickHouseService.calculateLivenessFactor(
+          ctx,
           startTime,
           endTime,
         );
@@ -194,12 +204,12 @@ export class RewardsCalculatorService {
       const aprMethod =
         this.configService.get('rewards.aprCalculationMethod') || 'clickhouse';
 
-      this.logger.log(`🧮 Using APR calculation method: "${aprMethod}"`);
+      ctx.logger.debug(`🧮 Using APR calculation method: "${aprMethod}"`);
 
       try {
         switch (aprMethod) {
           case 'contracts':
-            this.logger.log('🔗 Using old rewards calculator method (contracts)');
+            ctx.logger.debug('🔗 Using old rewards calculator method (contracts)');
             return await this.calculateRewardsOldMethod(
               fromBlock,
               toBlock,
@@ -213,20 +223,21 @@ export class RewardsCalculatorService {
 
           case 'clickhouse':
             const aprFromClickHouse = await this.getAPRFromClickHouse(
+              ctx,
               startTime,
               endTime,
             );
             if (aprFromClickHouse !== null) {
               baseApr = aprFromClickHouse;
-              this.logger.log(
+              ctx.logger.debug(
                 `✅ Using ClickHouse APR: ${(baseApr * 100).toFixed(2)}%`,
               );
             } else {
-              this.logger.warn(
+              ctx.logger.warn(
                 'No ClickHouse APR data found, falling back to contracts method',
               );
-              baseApr = await this.getAPRFromContracts();
-              this.logger.log(
+              baseApr = await this.getAPRFromContracts(ctx);
+              ctx.logger.debug(
                 `✅ Fallback to contract APR: ${(baseApr * 100).toFixed(2)}%`,
               );
             }
@@ -234,41 +245,44 @@ export class RewardsCalculatorService {
 
           case 'dynamic':
             const { targetCapacity, actualCapacity } =
-              await this.calculateNetworkCapacity();
+              await this.calculateNetworkCapacity(ctx);
             const { totalStakedSupply, totalSupply } =
-              await this.getStakeMetrics();
+              await this.getStakeMetrics(ctx);
             baseApr = await this.calculateDynamicAPR(
+              ctx,
               totalStakedSupply,
               totalSupply,
               targetCapacity,
               actualCapacity,
             );
-            this.logger.log(
+            ctx.logger.debug(
               `✅ Using dynamic APR: ${(baseApr * 100).toFixed(2)}%`,
             );
             break;
 
           default:
-            this.logger.warn(
+            ctx.logger.warn(
               `Unknown APR method "${aprMethod}", falling back to clickhouse`,
             );
             const aprFromClickHouseDefault = await this.getAPRFromClickHouse(
+              ctx,
               startTime,
               endTime,
             );
             baseApr = aprFromClickHouseDefault || 0.2; // 20% default
-            this.logger.log(
+            ctx.logger.debug(
               `✅ Using fallback APR: ${(baseApr * 100).toFixed(2)}%`,
             );
         }
       } catch (error) {
-        this.logger.error(
-          `Failed to calculate APR using method '${aprMethod}': ${error.message}`,
+        ctx.logger.error(
+          { error },
+          `Failed to calculate APR using method '${aprMethod}'`,
         );
 
         // final fallback: use realistic production APR
         baseApr = 0.2; // 20% APR as default
-        this.logger.log(`Using hardcoded APR (20%) as final fallback`);
+        ctx.logger.debug(`Using hardcoded APR (20%) as final fallback`);
       }
 
       // filter workers that have stakes > 0 (these are the ones actually registered and staked)
@@ -285,16 +299,17 @@ export class RewardsCalculatorService {
         );
       });
 
-      this.logger.log(
+      ctx.logger.debug(
         `🎯 Found ${stakedWorkers.length} workers with actual stakes out of ${activeWorkerData.length} active workers`,
       );
 
       if (stakedWorkers.length === 0) {
-        this.logger.warn('No workers with stakes found for this epoch');
+        ctx.logger.warn('No workers with stakes found for this epoch');
         return this.createEmptyResult(fromBlock, toBlock, startTime, endTime);
       }
 
       const workers = await this.calculateIndividualRewards(
+        ctx,
         stakedWorkers,
         capedStakes,
         totalStakes,
@@ -309,7 +324,7 @@ export class RewardsCalculatorService {
       const stakeFactor = this.calculateStakeFactor(workers);
       const rAPR = baseApr; // for now, same as base APR
 
-      this.logger.log(
+      ctx.logger.debug(
         `✅ Calculated rewards for ${workers.length} workers, total: ${workers.reduce((sum, w) => sum + w.workerReward, 0n)} wei`,
       );
 
@@ -319,12 +334,13 @@ export class RewardsCalculatorService {
         calculationTime: (endTime.getTime() - startTime.getTime()) / 1000,
       };
     } catch (error) {
-      this.logger.error(`Failed to calculate epoch rewards: ${error.message}`);
+      ctx.logger.error({ error }, `Failed to calculate epoch rewards`);
       throw error;
     }
   }
 
   async calculateIndividualRewards(
+    ctx: Context,
     workerData: WorkerQueryData[],
     capedStakes: any[],
     totalStakes: any[],
@@ -337,14 +353,14 @@ export class RewardsCalculatorService {
   ): Promise<WorkerReward[]> {
     const rewards: WorkerReward[] = [];
 
-    this.logger.log(`\n=== Calculating Individual Rewards ===`);
-    this.logger.log(`Worker data length: ${workerData.length}`);
-    this.logger.log(`Caped stakes length: ${capedStakes.length}`);
-    this.logger.log(`Total stakes length: ${totalStakes.length}`);
+    ctx.logger.debug(`\n=== Calculating Individual Rewards ===`);
+    ctx.logger.debug(`Worker data length: ${workerData.length}`);
+    ctx.logger.debug(`Caped stakes length: ${capedStakes.length}`);
+    ctx.logger.debug(`Total stakes length: ${totalStakes.length}`);
 
     // @dev: we process all workers and use -> hash-based ID for calculations
     // @dev: the actual contract worker ID mapping will be done during dist phase
-    this.logger.log(`Processing rewards for ${workerData.length} workers`);
+    ctx.logger.debug(`Processing rewards for ${workerData.length} workers`);
 
     for (let i = 0; i < workerData.length; i++) {
       const worker = workerData[i];
@@ -355,7 +371,7 @@ export class RewardsCalculatorService {
       // use the actual contract worker ID
       const contractWorkerId = workerIdMapping[worker.worker_id];
       if (!contractWorkerId || contractWorkerId === 0n) {
-        this.logger.warn(
+        ctx.logger.warn(
           `Worker ${worker.worker_id} not found in contract mapping, skipping`,
         );
         continue;
@@ -364,13 +380,14 @@ export class RewardsCalculatorService {
       const liveness = livenessFactor[worker.worker_id]?.livenessFactor || 0;
 
       // calculate traffic factor based on chunks read and bytes sent
-      const trafficFactor = this.calculateTrafficFactor(worker, workerData);
+      const trafficFactor = this.calculateTrafficFactor(ctx, worker, workerData);
 
       // calculate tenure factor (simplified for now)
       const tenureFactor = 1.0; // plch - would need historical data
 
       // calculate base staking reward (before performance factors)
       const baseStakingReward = this.calculateStakingReward(
+        ctx,
         capedStake,
         totalStake,
         baseApr,
@@ -394,6 +411,7 @@ export class RewardsCalculatorService {
           const delegatedStake = totalStake - capedStake;
           // calculate staker reward based on delegated stake only
           const delegatedStakeReward = this.calculateStakingReward(
+            ctx,
             delegatedStake,
             delegatedStake, // Use delegated stake as "total" for this calculation
             baseApr,
@@ -405,8 +423,9 @@ export class RewardsCalculatorService {
           calculatedStakerReward = 0n;
         }
       } catch (error) {
-        this.logger.error(
-          `BigInt calculation error in staker reward: ${error.message}`,
+        ctx.logger.error(
+          { error },
+          `BigInt calculation error in staker reward`,
         );
         calculatedStakerReward = 0n;
       }
@@ -433,44 +452,44 @@ export class RewardsCalculatorService {
 
       // log details for first 3 workers to debug
       if (i < 3) {
-        this.logger.log(
+        ctx.logger.debug(
           `\n--- Worker ${i + 1}: ${worker.worker_id.slice(0, 20)}... ---`,
         );
-        this.logger.log(`  Input data:`);
-        this.logger.log(`    - Chunks read: ${worker.num_read_chunks}`);
-        this.logger.log(`    - Bytes sent: ${worker.output_size}`);
-        this.logger.log(`    - Total requests: ${worker.totalRequests}`);
-        this.logger.log(`  Stakes:`);
-        this.logger.log(
+        ctx.logger.debug(`  Input data:`);
+        ctx.logger.debug(`    - Chunks read: ${worker.num_read_chunks}`);
+        ctx.logger.debug(`    - Bytes sent: ${worker.output_size}`);
+        ctx.logger.debug(`    - Total requests: ${worker.totalRequests}`);
+        ctx.logger.debug(`  Stakes:`);
+        ctx.logger.debug(
           `    - Capped stake: ${capedStake} wei (${Number(capedStake) / 1e18} SQD)`,
         );
-        this.logger.log(
+        ctx.logger.debug(
           `    - Total stake: ${totalStake} wei (${Number(totalStake) / 1e18} SQD)`,
         );
-        this.logger.log(`  Performance factors:`);
-        this.logger.log(`    - Liveness: ${liveness}`);
-        this.logger.log(`    - Traffic factor: ${trafficFactor}`);
-        this.logger.log(`    - Tenure factor: ${tenureFactor}`);
-        this.logger.log(`    - Combined multiplier: ${performanceMultiplier}`);
-        this.logger.log(
+        ctx.logger.debug(`  Performance factors:`);
+        ctx.logger.debug(`    - Liveness: ${liveness}`);
+        ctx.logger.debug(`    - Traffic factor: ${trafficFactor}`);
+        ctx.logger.debug(`    - Tenure factor: ${tenureFactor}`);
+        ctx.logger.debug(`    - Combined multiplier: ${performanceMultiplier}`);
+        ctx.logger.debug(
           `    - Multiplier as BigInt: ${performanceMultiplierBigInt}/1,000,000`,
         );
-        this.logger.log(`  Reward calculation:`);
-        this.logger.log(
+        ctx.logger.debug(`  Reward calculation:`);
+        ctx.logger.debug(
           `    - Base staking reward: ${baseStakingReward} wei (${Number(baseStakingReward) / 1e18} SQD)`,
         );
-        this.logger.log(
+        ctx.logger.debug(
           `    - Final worker reward: ${finalWorkerReward} wei (${Number(finalWorkerReward) / 1e18} SQD)`,
         );
-        this.logger.log(
+        ctx.logger.debug(
           `    - Staker reward: ${calculatedStakerReward} wei (${Number(calculatedStakerReward) / 1e18} SQD)`,
         );
-        this.logger.log(`  Structured logging:`);
-        this.logger.log(`    - Worker APR: ${(workerApr * 100).toFixed(2)}%`);
-        this.logger.log(
+        ctx.logger.debug(`  Structured logging:`);
+        ctx.logger.debug(`    - Worker APR: ${(workerApr * 100).toFixed(2)}%`);
+        ctx.logger.debug(
           `    - Delegator APR: ${(delegatorApr * 100).toFixed(2)}%`,
         );
-        this.logger.log(`    - Stake factor: ${stakeFactor.toFixed(6)}`);
+        ctx.logger.debug(`    - Stake factor: ${stakeFactor.toFixed(6)}`);
       }
 
       rewards.push({
@@ -480,15 +499,16 @@ export class RewardsCalculatorService {
         stakerReward: calculatedStakerReward,
         stake: capedStake,
         totalStake,
+        calculationTime: (endTime.getTime() - startTime.getTime()) / 1000,
       });
     }
 
     const totalRewards = rewards.reduce((sum, w) => sum + w.workerReward, 0n);
-    this.logger.log(`\n=== Calculation Summary ===`);
-    this.logger.log(
+    ctx.logger.debug(`\n=== Calculation Summary ===`);
+    ctx.logger.debug(
       `Total rewards calculated: ${totalRewards} wei (${Number(totalRewards) / 1e18} SQD)`,
     );
-    this.logger.log(
+    ctx.logger.debug(
       `Average reward per worker: ${Number(totalRewards) / rewards.length / 1e18} SQD`,
     );
 
@@ -496,6 +516,7 @@ export class RewardsCalculatorService {
   }
 
   private calculateTrafficFactor(
+    ctx: Context,
     worker: WorkerQueryData,
     allWorkers: WorkerQueryData[],
   ): number {
@@ -524,17 +545,17 @@ export class RewardsCalculatorService {
     const trafficFactor = (bytesFactor + chunksFactor) / 2;
 
     if (allWorkers.indexOf(worker) < 3) {
-      this.logger.debug(
+      ctx.logger.debug(
         `Traffic calc for worker ${worker.worker_id.slice(0, 20)}:`,
       );
-      this.logger.debug(
+      ctx.logger.debug(
         `  Worker: ${workerChunks} chunks, ${workerBytes} bytes`,
       );
-      this.logger.debug(`  Total: ${totalChunks} chunks, ${totalBytes} bytes`);
-      this.logger.debug(
+      ctx.logger.debug(`  Total: ${totalChunks} chunks, ${totalBytes} bytes`);
+      ctx.logger.debug(
         `  Factors: chunks=${chunksFactor.toFixed(6)}, bytes=${bytesFactor.toFixed(6)}`,
       );
-      this.logger.debug(`  Final traffic factor: ${trafficFactor.toFixed(6)}`);
+      ctx.logger.debug(`  Final traffic factor: ${trafficFactor.toFixed(6)}`);
     }
 
     // cap between reasonable bounds (0.001 to 2.0)
@@ -542,6 +563,7 @@ export class RewardsCalculatorService {
   }
 
   private calculateStakingReward(
+    ctx: Context,
     capedStake: bigint,
     totalStake: bigint,
     baseApr: number,
@@ -564,16 +586,17 @@ export class RewardsCalculatorService {
         (capedStake * aprScaled * durationBigInt) /
         (yearSecondsBigInt * scalingFactor);
 
-      this.logger.debug(
+      ctx.logger.debug(
         `Staking reward calc: stake=${capedStake}, APR=${baseApr}, duration=${duration}s, result=${rewardScaled}`,
       );
 
       return rewardScaled;
     } catch (error) {
-      this.logger.error(
-        `BigInt calculation error in calculateStakingReward: ${error.message}`,
+      ctx.logger.error(
+        { error },
+        `BigInt calculation error in calculateStakingReward`,
       );
-      this.logger.error(
+      ctx.logger.error(
         `  capedStake: ${capedStake}, baseApr: ${baseApr}, duration: ${duration}, yearSeconds: ${yearSeconds}`,
       );
       return 0n; // Return 0 on error to prevent crash
@@ -616,7 +639,7 @@ export class RewardsCalculatorService {
     endTime: Date,
     activeWorkerData: WorkerQueryData[],
   ): RewardCalculationResult {
-    this.logger.log('Creating sample result for development testing');
+    // Creating sample result for development testing
 
     //  sample rewards for active workers
     const sampleWorkers: WorkerReward[] = activeWorkerData
@@ -635,6 +658,7 @@ export class RewardsCalculatorService {
           stakerReward: stakerReward,
           stake: BigInt('10000000000000000000'), // 10 SQD default stake
           totalStake: BigInt('10000000000000000000'),
+          calculationTime: (endTime.getTime() - startTime.getTime()) / 1000,
         };
       });
 
@@ -643,9 +667,7 @@ export class RewardsCalculatorService {
       0n,
     );
 
-    this.logger.log(
-      `📋 Generated ${sampleWorkers.length} sample workers with ${totalRewards} wei total rewards`,
-    );
+    // Generated ${sampleWorkers.length} sample workers with ${totalRewards} wei total rewards
 
     return {
       workers: sampleWorkers,
@@ -655,6 +677,7 @@ export class RewardsCalculatorService {
   }
 
   async filterWorkersBatch(
+    ctx: Context,
     workers: WorkerReward[],
     batchNumber: number,
     totalBatches: number,
@@ -664,7 +687,7 @@ export class RewardsCalculatorService {
     const filtered = workers.filter(
       (_, index) => index % totalBatches === batchNumber,
     );
-    this.logger.log(
+    ctx.logger.debug(
       `Filtered ${filtered.length} workers for batch ${batchNumber}/${totalBatches}`,
     );
     return filtered;
@@ -675,6 +698,7 @@ export class RewardsCalculatorService {
    * following Tokenomics 2.1 specification
    */
   private async calculateDynamicAPR(
+    ctx: Context,
     totalStakedSupply: bigint,
     totalSupply: bigint,
     targetCapacity: number,
@@ -690,13 +714,13 @@ export class RewardsCalculatorService {
     const stakeFactor =
       totalSupply > 0n ? Number(totalStakedSupply) / Number(totalSupply) : 0;
 
-    this.logger.log(`📊 APR Calculation Inputs:`);
-    this.logger.log(
+    ctx.logger.debug(`📊 APR Calculation Inputs:`);
+    ctx.logger.debug(
       `  Utilization rate: ${(utilizationRate * 100).toFixed(2)}%`,
     );
-    this.logger.log(`  Stake factor: ${(stakeFactor * 100).toFixed(2)}%`);
-    this.logger.log(`  Target capacity: ${targetCapacity} TB`);
-    this.logger.log(`  Actual capacity: ${actualCapacity} TB`);
+    ctx.logger.debug(`  Stake factor: ${(stakeFactor * 100).toFixed(2)}%`);
+    ctx.logger.debug(`  Target capacity: ${targetCapacity} TB`);
+    ctx.logger.debug(`  Actual capacity: ${actualCapacity} TB`);
 
     // base APR calculation: balanced at 20%, scales 5%-70% based on utilization
     const baseAPR = this.calculateBaseAPR(utilizationRate);
@@ -707,10 +731,10 @@ export class RewardsCalculatorService {
     // final APR
     const finalAPR = baseAPR * discountFactor;
 
-    this.logger.log(`📈 APR Calculation Results:`);
-    this.logger.log(`  Base APR: ${(baseAPR * 100).toFixed(2)}%`);
-    this.logger.log(`  Discount factor: ${discountFactor.toFixed(4)}`);
-    this.logger.log(`  Final APR: ${(finalAPR * 100).toFixed(2)}%`);
+    ctx.logger.debug(`📈 APR Calculation Results:`);
+    ctx.logger.debug(`  Base APR: ${(baseAPR * 100).toFixed(2)}%`);
+    ctx.logger.debug(`  Discount factor: ${discountFactor.toFixed(4)}`);
+    ctx.logger.debug(`  Final APR: ${(finalAPR * 100).toFixed(2)}%`);
 
     return finalAPR;
   }
@@ -757,13 +781,13 @@ export class RewardsCalculatorService {
    * calculate network capacity metrics for APR calculation
    * Following Tokenomics 2.1 specification
    */
-  private async calculateNetworkCapacity(): Promise<{
+  private async calculateNetworkCapacity(ctx: Context): Promise<{
     targetCapacity: number;
     actualCapacity: number;
   }> {
     try {
       // Get current active worker count from contract
-      const activeWorkerCount = await this.web3Service.getActiveWorkerCount();
+      const activeWorkerCount = await this.web3Service.getActiveWorkerCount(ctx);
 
       // Network parameters from tokenomics
       const WORKER_CAPACITY_TB = 1; // 1TB per worker
@@ -786,7 +810,7 @@ export class RewardsCalculatorService {
       } catch (error) {
         // Estimate: assume network wants 50% more capacity than current active workers provide
         targetCapacity = Number(activeWorkerCount) * WORKER_CAPACITY_TB * 1.5;
-        this.logger.warn(`Using estimated target capacity: ${error.message}`);
+        ctx.logger.warn({ error }, `Using estimated target capacity`);
       }
 
       // Ensure target capacity is reasonable
@@ -794,27 +818,25 @@ export class RewardsCalculatorService {
         targetCapacity = actualCapacity * 1.2; // Default to 20% more than actual
       }
 
-      this.logger.log(`🏗️ Network Capacity (per Tokenomics 2.1):`);
-      this.logger.log(`  Active workers: ${activeWorkerCount}`);
-      this.logger.log(`  Worker capacity: ${WORKER_CAPACITY_TB} TB`);
-      this.logger.log(`  Churn factor: ${CHURN_FACTOR}`);
-      this.logger.log(`  Actual capacity: ${actualCapacity.toFixed(2)} TB`);
-      this.logger.log(`  Target capacity: ${targetCapacity.toFixed(2)} TB`);
-      this.logger.log(
+      ctx.logger.debug(`🏗️ Network Capacity (per Tokenomics 2.1):`);
+      ctx.logger.debug(`  Active workers: ${activeWorkerCount}`);
+      ctx.logger.debug(`  Worker capacity: ${WORKER_CAPACITY_TB} TB`);
+      ctx.logger.debug(`  Churn factor: ${CHURN_FACTOR}`);
+      ctx.logger.debug(`  Actual capacity: ${actualCapacity.toFixed(2)} TB`);
+      ctx.logger.debug(`  Target capacity: ${targetCapacity.toFixed(2)} TB`);
+      ctx.logger.debug(
         `  Utilization rate: ${(((targetCapacity - actualCapacity) / targetCapacity) * 100).toFixed(2)}%`,
       );
 
       return { targetCapacity, actualCapacity };
     } catch (error) {
-      this.logger.warn(
-        `Failed to calculate network capacity: ${error.message}`,
-      );
+      ctx.logger.warn({ error }, `Failed to calculate network capacity`);
       // Fallback values for development
       return { targetCapacity: 100, actualCapacity: 80 };
     }
   }
 
-  private async getStakeMetrics(): Promise<{
+  private async getStakeMetrics(ctx: Context): Promise<{
     totalStakedSupply: bigint;
     totalSupply: bigint;
   }> {
@@ -851,15 +873,15 @@ export class RewardsCalculatorService {
             // Total supply: 1 billion SQD (from tokenomics)
             const totalSupply = BigInt('1000000000') * BigInt(1e18);
 
-            this.logger.log(`💰 Stake Metrics (from ClickHouse):`);
-            this.logger.log(
+            ctx.logger.debug(`💰 Stake Metrics (from ClickHouse):`);
+            ctx.logger.debug(
               `  Total staked: ${Number(totalStakedSupply) / 1e18} SQD`,
             );
-            this.logger.log(`  Worker count: ${workerCount}`);
-            this.logger.log(
+            ctx.logger.debug(`  Worker count: ${workerCount}`);
+            ctx.logger.debug(
               `  Total supply: ${Number(totalSupply) / 1e18} SQD`,
             );
-            this.logger.log(
+            ctx.logger.debug(
               `  Stake percentage: ${((Number(totalStakedSupply) / Number(totalSupply)) * 100).toFixed(2)}%`,
             );
 
@@ -867,14 +889,15 @@ export class RewardsCalculatorService {
           }
         }
       } catch (error) {
-        this.logger.warn(
-          `Failed to fetch stake data from ClickHouse: ${error.message}`,
+        ctx.logger.warn(
+          { error },
+          `Failed to fetch stake data from ClickHouse`,
         );
       }
 
       // Fallback to estimation if ClickHouse query fails
-      const activeWorkerCount = await this.web3Service.getActiveWorkerCount();
-      const bondAmount = await this.web3Service.getBondAmount();
+      const activeWorkerCount = await this.web3Service.getActiveWorkerCount(ctx);
+      const bondAmount = await this.web3Service.getBondAmount(ctx);
 
       // estimate: bonded amount + delegated stake (assume 2x bond on average)
       const estimatedTotalStaked = activeWorkerCount * bondAmount * 3n; // 3x multiplier for delegation
@@ -882,11 +905,11 @@ export class RewardsCalculatorService {
       // total supply: 1 billion SQD
       const estimatedTotalSupply = BigInt('1000000000') * BigInt(1e18);
 
-      this.logger.log(`💰 Stake Metrics (estimated):`);
-      this.logger.log(
+      ctx.logger.debug(`💰 Stake Metrics (estimated):`);
+      ctx.logger.debug(
         `  Estimated total staked: ${Number(estimatedTotalStaked) / 1e18} SQD`,
       );
-      this.logger.log(
+      ctx.logger.debug(
         `  Estimated total supply: ${Number(estimatedTotalSupply) / 1e18} SQD`,
       );
 
@@ -895,7 +918,7 @@ export class RewardsCalculatorService {
         totalSupply: estimatedTotalSupply,
       };
     } catch (error) {
-      this.logger.warn(`Failed to get stake metrics: ${error.message}`);
+      ctx.logger.warn({ error }, `Failed to get stake metrics`);
       // fallback values for development
       return {
         totalStakedSupply: BigInt('100000000') * BigInt(1e18), // 100M SQD staked
@@ -908,6 +931,7 @@ export class RewardsCalculatorService {
    * Get APR from ClickHouse rewards_stats table
    */
   private async getAPRFromClickHouse(
+    ctx: Context,
     startTime: Date,
     endTime: Date,
   ): Promise<number | null> {
@@ -926,11 +950,11 @@ export class RewardsCalculatorService {
         LIMIT 1
       `;
 
-      this.logger.log(`🔍 Fetching latest APR from ClickHouse rewards_stats`);
+      ctx.logger.debug(`🔍 Fetching latest APR from ClickHouse rewards_stats`);
 
       const client = (this.clickHouseService as any).client;
       if (!client) {
-        this.logger.warn('ClickHouse client not available');
+        ctx.logger.warn('ClickHouse client not available');
         return null;
       }
 
@@ -944,16 +968,16 @@ export class RewardsCalculatorService {
 
       if (resultArray.length > 0 && resultArray[0].apr !== undefined) {
         const apr = parseFloat(resultArray[0].apr);
-        this.logger.log(
+        ctx.logger.debug(
           `✅ Found latest APR in rewards_stats: ${(apr * 100).toFixed(2)}%`,
         );
         return apr;
       }
 
-      this.logger.log('No APR data found in rewards_stats');
+      ctx.logger.debug('No APR data found in rewards_stats');
       return null;
     } catch (error) {
-      this.logger.warn(`Failed to fetch APR from ClickHouse: ${error.message}`);
+      ctx.logger.warn({ error }, `Failed to fetch APR from ClickHouse`);
       return null;
     }
   }
@@ -1143,9 +1167,9 @@ export class RewardsCalculatorService {
    * Get APR from contracts using the old rewards calculator approach
    * This mimics the currentApy() function from packages/rewards-calculator/src/chain.ts
    */
-  private async getAPRFromContracts(): Promise<number> {
+  private async getAPRFromContracts(ctx: Context): Promise<number> {
     try {
-      this.logger.log(`🔗 Calculating APR from contracts (old backend method)`);
+      ctx.logger.debug(`🔗 Calculating APR from contracts (old backend method)`);
 
       // Get current block for consistent reads
       const currentBlock = await this.web3Service.getLatestL2Block();
@@ -1159,7 +1183,7 @@ export class RewardsCalculatorService {
       );
 
       if (!rewardCalculationAddress || !networkControllerAddress) {
-        this.logger.warn(
+        ctx.logger.warn(
           'Contract addresses not configured, using fallback APR',
         );
         return 0.2; // 20% fallback like old backend
@@ -1172,33 +1196,34 @@ export class RewardsCalculatorService {
         // For now, since we don't have access to the exact same contract methods,
         // we'll use the contract service's getCurrentApy method which tries to get from contracts
         const currentApyBasisPoints =
-          await this.contractService.getCurrentApy();
+          await this.contractService.getCurrentApy(ctx);
         const aprDecimal = Number(currentApyBasisPoints) / 10000; // Convert basis points to decimal
 
-        this.logger.log(
+        ctx.logger.debug(
           `📊 Contract APY calculation result: ${(aprDecimal * 100).toFixed(2)}%`,
         );
 
         // Apply the same min logic as old backend (min of 20% or calculated)
         const finalApr = Math.min(0.2, aprDecimal);
 
-        this.logger.log(
+        ctx.logger.debug(
           `✅ Final contract-based APR (min 20%): ${(finalApr * 100).toFixed(2)}%`,
         );
         return finalApr;
       } catch (contractError) {
-        this.logger.warn(
-          `Contract APY calculation failed: ${contractError.message}`,
+        ctx.logger.warn(
+          { error: contractError },
+          `Contract APY calculation failed`,
         );
 
         // Fallback: use 20% default like old backend did when TVL = 0
-        this.logger.log(
+        ctx.logger.debug(
           'Using 20% fallback APR (same as old backend when TVL = 0)',
         );
         return 0.2;
       }
     } catch (error) {
-      this.logger.error(`Failed to get APR from contracts: ${error.message}`);
+      ctx.logger.error({ error }, `Failed to get APR from contracts`);
       return 0.2; // 20% fallback
     }
   }

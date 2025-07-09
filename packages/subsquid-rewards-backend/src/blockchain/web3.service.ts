@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
   createPublicClient,
@@ -10,6 +10,7 @@ import {
 } from 'viem';
 import { arbitrum, arbitrumSepolia, mainnet, sepolia } from 'viem/chains';
 import { WorkerRegistrationABI } from './contracts/abis';
+import { Context } from '../common';
 const bs58 = require('bs58');
 
 export interface Registrations {
@@ -22,7 +23,6 @@ export interface Registrations {
 
 @Injectable()
 export class Web3Service {
-  private readonly logger = new Logger(Web3Service.name);
   private publicClient: PublicClient;
   private l1Client: PublicClient;
   private lastKnownBlockPair: { l1Block: bigint; l2Block: bigint } | undefined;
@@ -138,7 +138,7 @@ export class Web3Service {
     return targetL2Block;
   }
 
-  async getRegistrations(): Promise<Registrations[]> {
+  async getRegistrations(ctx: Context): Promise<Registrations[]> {
     const workerRegistrationAddress = this.configService.get(
       'blockchain.contracts.workerRegistration',
     ) as Address;
@@ -160,7 +160,7 @@ export class Web3Service {
           args.registeredAt === undefined ||
           args.metadata === undefined
         ) {
-          this.logger.warn(
+          ctx.logger.warn(
             'WorkerRegistered log with missing arguments, skipping.',
           );
           return null;
@@ -197,9 +197,7 @@ export class Web3Service {
         })
         .then((logs) => logs.map(({ blockNumber }) => blockNumber));
 
-      this.logger.log(
-        `Fetched Distributed logs from ${fromBlock} to ${toBlock}: [${distributionBlocks.join(', ')}]`,
-      );
+              // Log moved to calling context
 
       if (distributionBlocks.length > 0) {
         return distributionBlocks[distributionBlocks.length - 1];
@@ -215,17 +213,17 @@ export class Web3Service {
     return await this.publicClient.getBlockNumber();
   }
 
-  async getL1BlockNumber(): Promise<number> {
+  async getL1BlockNumber(ctx: Context): Promise<number> {
     try {
       return Number(await this.l1Client.getBlockNumber());
     } catch (error) {
-      this.logger.error(`Failed to get L1 block number: ${error.message}`);
+      ctx.logger.error({ error }, `Failed to get L1 block number`);
       // fallback to L2 block for testing
       return Number(await this.publicClient.getBlockNumber());
     }
   }
 
-  async getBlockTimestamp(blockNumber: number): Promise<Date> {
+  async getBlockTimestamp(ctx: Context, blockNumber: number): Promise<Date> {
     const blockBigInt = BigInt(blockNumber);
     // Use L1 client for L1 block timestamps
     const block = await this.l1Client.getBlock({ blockNumber: blockBigInt });
@@ -233,6 +231,7 @@ export class Web3Service {
   }
 
   async preloadWorkerIds(
+    ctx: Context,
     workers: string[],
     blockNumber?: bigint,
   ): Promise<Record<string, bigint>> {
@@ -247,7 +246,7 @@ export class Web3Service {
         address: workerRegistrationAddress,
         abi: WorkerRegistrationABI,
         functionName: 'workerIds' as const,
-        args: [this.fromBase58(workerId)] as const,
+        args: [this.fromBase58(ctx, workerId)] as const,
       }));
 
       const results = await this.publicClient.multicall({
@@ -268,7 +267,7 @@ export class Web3Service {
             successCount++;
             if (successCount <= 3) {
               // Log first 3 successful mappings
-              this.logger.log(
+              ctx.logger.debug(
                 `✅ Worker ${workerId.slice(0, 20)}... -> Contract ID ${contractId}`,
               );
             }
@@ -279,7 +278,7 @@ export class Web3Service {
           errorCount++;
           if (errorCount <= 3) {
             // Log first 3 errors only
-            this.logger.warn(
+            ctx.logger.warn(
               `Failed to get workerId for peer ${workerId.slice(0, 20)}...: ${results[i].error?.message || 'Unknown error'}`,
             );
           }
@@ -287,17 +286,17 @@ export class Web3Service {
         }
       });
 
-      this.logger.log(
+      ctx.logger.debug(
         `📊 Worker ID mapping results: ${successCount} successful, ${notRegisteredCount} unregistered, ${errorCount} errors (total: ${workers.length})`,
       );
       if (errorCount > 3) {
-        this.logger.warn(
+        ctx.logger.warn(
           `... and ${errorCount - 3} more errors (suppressed for brevity)`,
         );
       }
       return workerIds;
     } catch (error) {
-      this.logger.error(`Failed to preload worker IDs: ${error.message}`);
+      ctx.logger.error({ error }, `Failed to preload worker IDs`);
       // return empty mapping on error - workers without IDs will be filtered out
       return {};
     }
@@ -307,22 +306,23 @@ export class Web3Service {
    * Convert base58 peer ID string to hex bytes format for smart contract calls
    * Uses the same implementation as the old rewards-calculator for consistency
    */
-  private fromBase58(value: string): Hex {
+  private fromBase58(ctx: Context, value: string): Hex {
     try {
       // same implementation as packages/rewards-calculator/src/utils.ts
       const { decode } = bs58;
       const hexValue = `0x${Buffer.from(decode(value)).toString('hex')}` as Hex;
-      this.logger.debug(
+      ctx.logger.debug(
         `Converted peer ID ${value.slice(0, 20)}... to ${hexValue.slice(0, 20)}...`,
       );
       return hexValue;
     } catch (error) {
-      this.logger.error(
-        `Failed to convert peer ID ${value} from base58: ${error.message}`,
+      ctx.logger.error(
+        { error },
+        `Failed to convert peer ID ${value} from base58`,
       );
       // fallback: encode the string as UTF-8 bytes
       const fallbackHex = `0x${Buffer.from(value, 'utf8').toString('hex')}` as Hex;
-      this.logger.warn(
+      ctx.logger.warn(
         `Using UTF-8 fallback for ${value.slice(0, 20)}...: ${fallbackHex.slice(0, 20)}...`,
       );
       return fallbackHex;
@@ -332,7 +332,7 @@ export class Web3Service {
   /**
    * Get the current bond amount from WorkerRegistration contract
    */
-  async getBondAmount(blockNumber?: bigint): Promise<bigint> {
+  async getBondAmount(ctx: Context, blockNumber?: bigint): Promise<bigint> {
     const workerRegistrationAddress = this.configService.get(
       'blockchain.contracts.workerRegistration',
     ) as Address;
@@ -345,12 +345,12 @@ export class Web3Service {
         blockNumber,
       });
 
-      this.logger.log(
+      ctx.logger.debug(
         `Current bond amount: ${bondAmount} wei (${Number(bondAmount) / 1e18} SQD)`,
       );
       return bondAmount;
     } catch (error) {
-      this.logger.error(`Failed to get bond amount: ${error.message}`);
+      ctx.logger.error({ error }, `Failed to get bond amount`);
       throw error;
     }
   }
@@ -358,7 +358,7 @@ export class Web3Service {
   /**
    * Get active worker count from WorkerRegistration contract
    */
-  async getActiveWorkerCount(blockNumber?: bigint): Promise<bigint> {
+  async getActiveWorkerCount(ctx: Context, blockNumber?: bigint): Promise<bigint> {
     const workerRegistrationAddress = this.configService.get(
       'blockchain.contracts.workerRegistration',
     ) as Address;
@@ -371,21 +371,21 @@ export class Web3Service {
         blockNumber,
       });
 
-      this.logger.log(`Active worker count: ${count}`);
+      ctx.logger.debug(`Active worker count: ${count}`);
       return count;
     } catch (error) {
-      this.logger.error(`Failed to get active worker count: ${error.message}`);
+      ctx.logger.error({ error }, `Failed to get active worker count`);
       throw error;
     }
   }
 
-  async healthCheck(): Promise<boolean> {
+  async healthCheck(ctx: Context): Promise<boolean> {
     try {
       await this.publicClient.getBlockNumber();
       await this.l1Client.getBlockNumber();
       return true;
     } catch (error) {
-      this.logger.error(`Web3 health check failed: ${error.message}`);
+      ctx.logger.error({ error }, `Web3 health check failed`);
       return false;
     }
   }

@@ -1,8 +1,9 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Injectable, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ClickHouseClient, createClient } from '@clickhouse/client';
 import * as dayjs from 'dayjs';
 import * as utc from 'dayjs/plugin/utc';
+import { Context } from '../common';
 
 dayjs.extend(utc);
 
@@ -56,7 +57,6 @@ export interface NetworkStatsEntry {
 
 @Injectable()
 export class ClickHouseService implements OnModuleInit {
-  private readonly logger = new Logger(ClickHouseService.name);
   private client: ClickHouseClient;
   private config: any;
   private logsTableName: string;
@@ -79,9 +79,9 @@ export class ClickHouseService implements OnModuleInit {
       });
 
       await this.ping();
-      this.logger.log('ClickHouse connection established');
+      console.log('ClickHouse connection established');
     } catch (error) {
-      this.logger.error('Failed to initialize ClickHouse connection', error);
+      console.error('Failed to initialize ClickHouse connection', error);
       throw error;
     }
   }
@@ -91,7 +91,7 @@ export class ClickHouseService implements OnModuleInit {
       await this.client.query({ query: 'SELECT 1' });
       return true;
     } catch (error) {
-      this.logger.error('ClickHouse ping failed', error);
+      console.error('ClickHouse ping failed', error);
       return false;
     }
   }
@@ -101,6 +101,7 @@ export class ClickHouseService implements OnModuleInit {
   }
 
   async getWorkerStats(
+    ctx: Context,
     fromTimestamp: Date,
     toTimestamp: Date,
     workerIds?: string[],
@@ -175,12 +176,13 @@ export class ClickHouseService implements OnModuleInit {
         trafficWeight: this.calculateTrafficWeight(row),
       }));
     } catch (error) {
-      this.logger.error('Failed to get worker stats', error);
+      ctx.logger.error({ error }, 'Failed to get worker stats');
       throw error;
     }
   }
 
   async getWorkerPings(
+    ctx: Context,
     fromTimestamp: Date,
     toTimestamp: Date,
     workerId?: string,
@@ -217,12 +219,13 @@ export class ClickHouseService implements OnModuleInit {
 
       return rows as WorkerPing[];
     } catch (error) {
-      this.logger.error('Failed to get worker pings', error);
+      ctx.logger.error({ error }, 'Failed to get worker pings');
       throw error;
     }
   }
 
   async getWorkerLiveness(
+    ctx: Context,
     fromTimestamp: Date,
     toTimestamp: Date,
     workerId: string,
@@ -249,7 +252,7 @@ export class ClickHouseService implements OnModuleInit {
 
       return (rows[0] as any)?.liveness_ratio || 0;
     } catch (error) {
-      this.logger.error('Failed to get worker liveness', error);
+      ctx.logger.error({ error }, 'Failed to get worker liveness');
       return 0;
     }
   }
@@ -278,13 +281,15 @@ export class ClickHouseService implements OnModuleInit {
   }
 
   async getWorkerStatsForEpoch(
+    ctx: Context,
     startTime: Date,
     endTime: Date,
   ): Promise<WorkerStats[]> {
-    return this.getWorkerStats(startTime, endTime);
+    return this.getWorkerStats(ctx, startTime, endTime);
   }
 
   async getActiveWorkers(
+    ctx: Context,
     startTime: Date,
     endTime: Date,
     skipSignatureValidation = false,
@@ -308,10 +313,10 @@ export class ClickHouseService implements OnModuleInit {
       `;
 
       try {
-        this.logger.log(`🔍 Executing ClickHouse Query:`);
-        this.logger.log(`   FROM: ${this.formatDate(startTime)}`);
-        this.logger.log(`   TO: ${this.formatDate(endTime)}`);
-        this.logger.log(`${query}`);
+        ctx.logger.debug(`🔍 Executing ClickHouse Query:`);
+        ctx.logger.debug(`   FROM: ${this.formatDate(startTime)}`);
+        ctx.logger.debug(`   TO: ${this.formatDate(endTime)}`);
+        ctx.logger.debug(`${query}`);
 
         const resultSet = await this.client.query({
           query,
@@ -320,12 +325,13 @@ export class ClickHouseService implements OnModuleInit {
 
         const results = await resultSet.json<WorkerQueryData>();
         const resultArray = Array.isArray(results) ? results : [results];
-        this.logger.log(
+        ctx.logger.debug(
           `✅ Processed ${resultArray.length} workers`,
+
         );
         return resultArray;
       } catch (error) {
-        this.logger.error(`Failed to fetch active workers: ${error.message}`);
+        ctx.logger.error({ error }, `Failed to fetch active workers`);
         throw error;
       }
     }
@@ -334,7 +340,7 @@ export class ClickHouseService implements OnModuleInit {
     throw new Error('Full signature validation not yet implemented');
   }
 
-  async getPings(from: Date, to: Date): Promise<Record<string, number[]>> {
+  async getPings(ctx: Context, from: Date, to: Date): Promise<Record<string, number[]>> {
     const query = `
       SELECT
         worker_id,
@@ -349,8 +355,7 @@ export class ClickHouseService implements OnModuleInit {
     `;
 
     try {
-      this.logger.log(`🔍 Executing ClickHouse Pings Query:`);
-      this.logger.log(`${query}`);
+      ctx.logger.debug(`🔍 Executing ClickHouse Pings Query: ${query}`);
 
       const resultSet = await this.client.query({
         query,
@@ -369,17 +374,17 @@ export class ClickHouseService implements OnModuleInit {
         pings[row.worker_id] = row.timestamps;
       }
 
-      this.logger.log(
+      ctx.logger.debug(
         `✅ Retrieved pings for ${Object.keys(pings).length} workers`,
       );
       return pings;
     } catch (error) {
-      this.logger.error(`Failed to fetch pings: ${error.message}`);
+      ctx.logger.error({ error }, `Failed to fetch pings`);
       throw error;
     }
   }
 
-  async getTotalDelegation(): Promise<{
+  async getTotalDelegation(ctx: Context): Promise<{
     totalDelegation: number;
     workerCount: number;
   }> {
@@ -396,12 +401,12 @@ export class ClickHouseService implements OnModuleInit {
       const result = await resultSet.json<any>();
       return result.data[0];
     } catch (error) {
-      this.logger.error(`Failed to fetch total delegation: ${error.message}`);
+      ctx.logger.error({ error }, `Failed to fetch total delegation`);
       throw error;
     }
   }
 
-  async logTotalQueries(from: Date, to: Date): Promise<number> {
+  async logTotalQueries(ctx: Context, from: Date, to: Date): Promise<number> {
     const query = `
       SELECT COUNT(*) as total 
       FROM ${this.logsTableName} 
@@ -410,8 +415,7 @@ export class ClickHouseService implements OnModuleInit {
     `;
 
     try {
-      this.logger.log(`🔍 Executing ClickHouse Total Queries Count:`);
-      this.logger.log(`${query}`);
+      ctx.logger.debug(`🔍 Executing ClickHouse Total Queries Count: ${query}`);
 
       const resultSet = await this.client.query({
         query,
@@ -421,19 +425,20 @@ export class ClickHouseService implements OnModuleInit {
       const result = await resultSet.json<{ total: number }>();
       const resultArray = Array.isArray(result) ? result : [result];
       const total = resultArray[0]?.total || 0;
-      this.logger.log(`✅ Processing queries: ${total}`);
+      ctx.logger.debug(`✅ Processing queries: ${total}`);
       return total;
     } catch (error) {
-      this.logger.error(`Failed to count queries: ${error.message}`);
+      ctx.logger.error({ error }, `Failed to count queries`);
       throw error;
     }
   }
 
   async calculateLivenessFactor(
+    ctx: Context,
     from: Date,
     to: Date,
   ): Promise<Record<string, NetworkStatsEntry>> {
-    const pings = await this.getPings(from, to);
+    const pings = await this.getPings(ctx, from, to);
     const totalPeriodSeconds = dayjs(to).diff(dayjs(from), 'second');
     const workerOfflineThreshold =
       this.configService.get('rewards.workerOfflineThreshold') || 65;

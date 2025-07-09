@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import {
@@ -9,6 +9,7 @@ import { Web3Service } from '../blockchain/web3.service';
 import { ContractService } from '../blockchain/contract.service';
 import { Hex } from 'viem';
 import { DistributionService } from '../rewards/distribution/distribution.service';
+import { TaskContext, Context } from '../common';
 
 export interface EpochRange {
   fromBlock: number;
@@ -19,7 +20,6 @@ export interface EpochRange {
 
 @Injectable()
 export class EpochProcessorService {
-  private readonly logger = new Logger(EpochProcessorService.name);
   private readonly TOTAL_BATCHES: number;
   private readonly workTimeout: number;
   private readonly commitTimeout: number;
@@ -42,7 +42,7 @@ export class EpochProcessorService {
   }
 
   public startBot(distributorAddress: Hex, distributorIndex: number) {
-    this.logger.log(
+    new TaskContext('epoch-processor:start-bot').logger.debug(
       `Starting reward bot with distributor ${distributorAddress} (index: ${distributorIndex})`,
     );
 
@@ -75,14 +75,14 @@ export class EpochProcessorService {
     distributorIndex: number,
   ) {
     if (this.isProcessing) {
-      this.logger.debug('Already processing, skipping commit check');
+      new TaskContext(`epoch-processor:commit-if-possible:${distributorAddress}`).logger.debug('Already processing, skipping commit check');
       return;
     }
 
     try {
       this.isProcessing = true;
 
-      const epochRange = await this.getCommitRange();
+      const epochRange = await this.getCommitRange(new TaskContext(`epoch-processor:get-commit-range:${distributorAddress}`));
 
       if (
         await this.canCommit(
@@ -91,7 +91,7 @@ export class EpochProcessorService {
           epochRange.toBlock,
         )
       ) {
-        this.logger.log(
+        new TaskContext("epoch-processor:can-commit").logger.debug(
           `Can commit ${epochRange.fromBlock} — ${epochRange.toBlock} from ${distributorAddress}`,
         );
 
@@ -101,8 +101,10 @@ export class EpochProcessorService {
         const calculationStartBlock =
           epochRange.toBlock - epochRange.epochLength * this.TOTAL_BATCHES;
 
+        const commitCtx = new TaskContext(`epoch-processor:commit-rewards:${epochRange.fromBlock}-${epochRange.toBlock}`);
         const rewardResult =
           await this.rewardsCalculatorService.calculateEpochRewards(
+            commitCtx,
             calculationStartBlock,
             epochRange.toBlock,
             skipSignatureValidation,
@@ -111,6 +113,7 @@ export class EpochProcessorService {
         // filter workers for this batch
         const batchWorkers =
           await this.rewardsCalculatorService.filterWorkersBatch(
+            commitCtx,
             rewardResult,
             epochRange.batchNumber,
             this.TOTAL_BATCHES,
@@ -124,12 +127,12 @@ export class EpochProcessorService {
           distributorIndex,
         );
       } else {
-        this.logger.debug(
+        new TaskContext("method-call").logger.debug(
           `Nothing to commit ${epochRange.fromBlock} — ${epochRange.toBlock}`,
         );
       }
     } catch (error) {
-      this.logger.error(`Commit process failed: ${error.message}`);
+      new TaskContext("error-handling").logger.error(`Commit process failed: ${error.message}`);
     } finally {
       this.isProcessing = false;
     }
@@ -147,7 +150,7 @@ export class EpochProcessorService {
         !(await this.contractService.isCommitted(fromBlock, toBlock))
       );
     } catch (error) {
-      this.logger.error(`Failed to check if can commit: ${error.message}`);
+      new TaskContext("error-handling").logger.error(`Failed to check if can commit: ${error.message}`);
       return false;
     }
   }
@@ -176,7 +179,7 @@ export class EpochProcessorService {
         const totalStake = workers.reduce((sum, w) => sum + w.totalStake, 0n);
         const capedStake = workers.reduce((sum, w) => sum + w.stake, 0n);
 
-        this.logger.log(
+        new TaskContext("method-call").logger.debug(
           JSON.stringify({
             time: new Date(),
             type: 'rewards_committed',
@@ -192,14 +195,14 @@ export class EpochProcessorService {
       }
     } catch (error: any) {
       if (error.message?.includes('Already approved')) {
-        this.logger.debug('Rewards already approved, skipping');
+        new TaskContext("method-call").logger.debug('Rewards already approved, skipping');
         return;
       }
       if (error.message?.includes('not all blocks covered')) {
-        this.logger.debug('Not all blocks covered, skipping');
+        new TaskContext("method-call").logger.debug('Not all blocks covered, skipping');
         return;
       }
-      this.logger.error(`Failed to commit rewards: ${error.message}`);
+      new TaskContext("error-handling").logger.error(`Failed to commit rewards: ${error.message}`);
     }
   }
 
@@ -211,7 +214,8 @@ export class EpochProcessorService {
       const approvalInfo = await this.getApprovalRanges();
 
       if (approvalInfo.shouldApprove) {
-        this.logger.log(
+        const ctx = new TaskContext("method-call");
+        ctx.logger.debug(
           `Approving rewards for ${approvalInfo.fromBlock} — ${approvalInfo.toBlock}`,
         );
 
@@ -222,6 +226,7 @@ export class EpochProcessorService {
 
         const rewardResult =
           await this.rewardsCalculatorService.calculateEpochRewards(
+            ctx,
             calculationStartBlock,
             approvalInfo.toBlock,
             skipSignatureValidation,
@@ -230,6 +235,7 @@ export class EpochProcessorService {
         // filter workers for this batch
         const batchWorkers =
           await this.rewardsCalculatorService.filterWorkersBatch(
+            ctx,
             rewardResult,
             approvalInfo.batchNumber,
             this.TOTAL_BATCHES,
@@ -248,7 +254,7 @@ export class EpochProcessorService {
         );
 
         if (txHash) {
-          this.logger.log(
+          new TaskContext("method-call").logger.debug(
             JSON.stringify({
               time: new Date(),
               type: 'rewards_approved',
@@ -262,28 +268,28 @@ export class EpochProcessorService {
         }
       }
     } catch (error) {
-      this.logger.error(`Approve process failed: ${error.message}`);
+      new TaskContext("error-handling").logger.error(`Approve process failed: ${error.message}`);
     }
   }
 
-  private async getCommitRange(): Promise<EpochRange> {
+  private async getCommitRange(ctx: Context): Promise<EpochRange> {
     try {
-      const epochLength = await this.contractService.getEpochLength();
+      const epochLength = await this.contractService.getEpochLength(ctx);
       const maxEpochsPerCommit =
         this.configService.get('blockchain.maxEpochsPerCommit') || 1;
       const maxCommitBlocksCovered = epochLength * maxEpochsPerCommit;
 
-      let lastRewardedBlock = await this.contractService.getLastRewardedBlock();
+      let lastRewardedBlock = await this.contractService.getLastRewardedBlock(ctx);
 
       if (lastRewardedBlock === 0) {
-        this.logger.error('Last reward block is 0!');
-        const registrations = await this.web3Service.getRegistrations();
+        ctx.logger.error('Last reward block is 0!');
+        const registrations = await this.web3Service.getRegistrations(ctx);
         lastRewardedBlock = Math.min(
           ...registrations.map((r) => Number(r.registeredAt)),
         );
       }
 
-      const currentBlock = await this.web3Service.getL1BlockNumber();
+      const currentBlock = await this.web3Service.getL1BlockNumber(ctx);
       const epochConfirmationBlocks =
         this.configService.get('blockchain.epochConfirmationBlocks') || 150;
       const lastConfirmedBlock = currentBlock - epochConfirmationBlocks;
@@ -305,7 +311,7 @@ export class EpochProcessorService {
         batchNumber: this.getBatchNumber(toBlock, epochLength),
       };
     } catch (error) {
-      this.logger.error(`Failed to get commit range: ${error.message}`);
+      new TaskContext("error-handling").logger.error(`Failed to get commit range: ${error.message}`);
       return { fromBlock: 0, toBlock: 0, epochLength: 7000, batchNumber: 0 };
     }
   }
@@ -325,6 +331,7 @@ export class EpochProcessorService {
         commitment?: Hex;
       }
   > {
+    const ctx = new TaskContext('epoch-processor:get-approval-ranges');
     try {
       const latestCommitment = await this.contractService.getLatestCommitment();
 
@@ -336,7 +343,7 @@ export class EpochProcessorService {
       const fromBlock = Number(latestCommitment.fromBlock);
       const toBlock = Number(latestCommitment.toBlock);
 
-      const epochLength = await this.contractService.getEpochLength();
+      const epochLength = await this.contractService.getEpochLength(ctx);
       const batchNumber = this.getBatchNumber(fromBlock, epochLength);
 
       // check if this needs approval
@@ -353,7 +360,7 @@ export class EpochProcessorService {
         commitment,
       };
     } catch (error) {
-      this.logger.error(`Failed to get approval ranges: ${error.message}`);
+      new TaskContext("error-handling").logger.error(`Failed to get approval ranges: ${error.message}`);
       return { shouldApprove: false };
     }
   }
@@ -367,7 +374,7 @@ export class EpochProcessorService {
       await this.commitIfPossible(distributorAddress, distributorIndex);
       return true;
     } catch (error) {
-      this.logger.error(`Manual commit failed: ${error.message}`);
+      new TaskContext("error-handling").logger.error(`Manual commit failed: ${error.message}`);
       return false;
     }
   }
@@ -380,7 +387,7 @@ export class EpochProcessorService {
       await this.approveIfNecessary(distributorAddress, distributorIndex);
       return true;
     } catch (error) {
-      this.logger.error(`Manual approve failed: ${error.message}`);
+      new TaskContext("error-handling").logger.error(`Manual approve failed: ${error.message}`);
       return false;
     }
   }
@@ -391,7 +398,7 @@ export class EpochProcessorService {
     toBlock: number,
   ): Promise<boolean> {
     try {
-      this.logger.log(
+      new TaskContext("method-call").logger.debug(
         `🌳 Using Merkle tree distribution for epoch ${fromBlock}-${toBlock}`,
       );
 
@@ -404,23 +411,23 @@ export class EpochProcessorService {
         );
 
       if (distributionStatus.status === 'completed') {
-        this.logger.log(
+        new TaskContext("epoch-processor:distribution-completed").logger.debug(
           `✅ Merkle tree distribution completed for epoch ${fromBlock}-${toBlock}`,
         );
-        this.logger.log(`   Workers: ${distributionStatus.totalWorkers}`);
-        this.logger.log(`   Batches: ${distributionStatus.totalBatches}`);
-        this.logger.log(
+        new TaskContext("epoch-processor:distribution-stats").logger.debug(`   Workers: ${distributionStatus.totalWorkers}`);
+        new TaskContext("epoch-processor:distribution-stats").logger.debug(`   Batches: ${distributionStatus.totalBatches}`);
+        new TaskContext("epoch-processor:distribution-stats").logger.debug(
           `   Total Rewards: ${Number(distributionStatus.totalRewards) / 1e18} SQD`,
         );
         return true;
       } else {
-        this.logger.error(
+        new TaskContext("error-handling").logger.error(
           `❌ Merkle tree distribution failed: ${distributionStatus.error}`,
         );
         return false;
       }
     } catch (error) {
-      this.logger.error(
+      new TaskContext("error-handling").logger.error(
         `Failed to process epoch with Merkle tree: ${error.message}`,
       );
       return false;
@@ -435,7 +442,7 @@ export class EpochProcessorService {
       const [fromBlock, toBlock] = await this.getEpochRange();
 
       if (fromBlock >= toBlock) {
-        this.logger.warn('No new blocks to process');
+        new TaskContext("warning").logger.warn('No new blocks to process');
         return true;
       }
 
@@ -452,7 +459,7 @@ export class EpochProcessorService {
         return await this.processEpochLegacy(fromBlock, toBlock);
       }
     } catch (error) {
-      this.logger.error(
+      new TaskContext("error-handling").logger.error(
         `Epoch processing failed: ${error.message}`,
         error.stack,
       );
@@ -465,7 +472,7 @@ export class EpochProcessorService {
     fromBlock: number,
     toBlock: number,
   ): Promise<boolean> {
-    this.logger.warn(
+    new TaskContext('epoch-processor:legacy-warning').logger.warn(
       'Using legacy batch distribution - consider migrating to Merkle tree',
     );
     // for now, delegate to the new Merkle tree method
@@ -474,11 +481,12 @@ export class EpochProcessorService {
 
   // get the next epoch range for processing
   private async getEpochRange(): Promise<[number, number]> {
+    const ctx = new TaskContext('epoch-processor:get-epoch-range');
     try {
-      const epochLength = await this.contractService.getEpochLength();
+      const epochLength = await this.contractService.getEpochLength(ctx);
       const lastRewardedBlock =
-        await this.contractService.getLastRewardedBlock();
-      const currentBlock = await this.web3Service.getL1BlockNumber();
+        await this.contractService.getLastRewardedBlock(ctx);
+      const currentBlock = await this.web3Service.getL1BlockNumber(ctx);
       const confirmationBlocks =
         this.configService.get('blockchain.epochConfirmationBlocks') || 150;
 
@@ -488,7 +496,7 @@ export class EpochProcessorService {
 
       return [fromBlock, toBlock];
     } catch (error) {
-      this.logger.error(`Failed to get epoch range: ${error.message}`);
+      new TaskContext("error-handling").logger.error(`Failed to get epoch range: ${error.message}`);
       return [0, 0];
     }
   }

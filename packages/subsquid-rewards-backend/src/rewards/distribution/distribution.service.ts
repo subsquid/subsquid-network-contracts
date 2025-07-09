@@ -1,5 +1,6 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { TaskContext } from '../../common/task-context';
 import { Web3Service } from '../../blockchain/web3.service';
 import { MerkleTreeService, MerkleTreeResult } from './merkle-tree.service';
 import {
@@ -55,7 +56,6 @@ export interface GasSimulationResult {
 
 @Injectable()
 export class DistributionService {
-  private readonly logger = new Logger(DistributionService.name);
   private readonly publicClient;
   private readonly walletClient;
   private readonly contractAddress: Address;
@@ -159,22 +159,22 @@ export class DistributionService {
       transport: http(rpcUrl),
     });
 
-    this.logger.log(
+    new TaskContext("distribution:init").logger.debug(
       `Distribution service initialized with contract: ${this.contractAddress}`,
     );
-    this.logger.log(`Using distributor address: ${account.address}`);
-    this.logger.log(`RPC URL: ${rpcUrl}`);
-    this.logger.log(`Gas simulation configuration:`);
-    this.logger.log(
+    new TaskContext("distribution:config").logger.debug(`Using distributor address: ${account.address}`);
+    new TaskContext("distribution:config").logger.debug(`RPC URL: ${rpcUrl}`);
+    new TaskContext("distribution:config").logger.debug(`Gas simulation configuration:`);
+    new TaskContext("distribution:config").logger.debug(
       `  - Enabled: ${this.gasSimulationConfig.enablePreflightSimulation}`,
     );
-    this.logger.log(
+    new TaskContext("distribution:config").logger.debug(
       `  - Max optimization attempts: ${this.gasSimulationConfig.maxOptimizationAttempts}`,
     );
-    this.logger.log(
+    new TaskContext("distribution:config").logger.debug(
       `  - Min batch size: ${this.gasSimulationConfig.minBatchSize}`,
     );
-    this.logger.log(
+    new TaskContext("distribution:config").logger.debug(
       `  - Gas reduction factor: ${this.gasSimulationConfig.gasReductionFactor}`,
     );
   }
@@ -199,31 +199,33 @@ export class DistributionService {
     };
 
     try {
-      this.logger.log(`🚀 Starting distribution for epoch ${epochId}`);
+      const startCtx = new TaskContext(`distribution:start-epoch-${epochId}`);
+      startCtx.logger.debug(`🚀 Starting distribution for epoch ${epochId}`);
 
       // check bond amount and contract state
       try {
-        const bondAmount = await this.web3Service.getBondAmount();
-        const activeWorkerCount = await this.web3Service.getActiveWorkerCount();
-        this.logger.log(`📋 Pre-distribution checks:`);
-        this.logger.log(`   - Bond amount: ${Number(bondAmount) / 1e18} SQD`);
-        this.logger.log(
+        const bondAmount = await this.web3Service.getBondAmount(startCtx);
+        const activeWorkerCount = await this.web3Service.getActiveWorkerCount(startCtx);
+        new TaskContext("distribution:pre-checks").logger.debug(`📋 Pre-distribution checks:`);
+        new TaskContext("distribution:pre-checks").logger.debug(`   - Bond amount: ${Number(bondAmount) / 1e18} SQD`);
+        new TaskContext("distribution:pre-checks").logger.debug(
           `   - Active workers in contract: ${activeWorkerCount}`,
         );
       } catch (error) {
-        this.logger.warn(`Failed to get contract state: ${error.message}`);
+        new TaskContext("distribution:warning").logger.warn(`Failed to get contract state: ${error.message}`);
       }
 
       // calc rewards for all workers from ClickHouse
       status.status = 'calculating';
       const calculationResult =
         await this.rewardsCalculatorService.calculateRewardsDetailed(
+          startCtx,
           fromBlock,
           toBlock,
           true, // skip signature validation for development
         );
 
-      this.logger.log(
+      new TaskContext("distribution:calculation-results").logger.debug(
         `✅ Calculated rewards for ${calculationResult.workers.length} workers from ClickHouse`,
       );
 
@@ -237,7 +239,7 @@ export class DistributionService {
         0n,
       );
 
-      this.logger.log(
+      new TaskContext("method-call").logger.debug(
         `✅ Mapped to ${status.totalWorkers} registered workers, total: ${Number(status.totalRewards) / 1e18} SQD`,
       );
 
@@ -247,7 +249,7 @@ export class DistributionService {
       let totalGasSimulations = 0;
 
       if (this.gasSimulationConfig.enablePreflightSimulation) {
-        this.logger.log(`🔧 Optimizing batch size for gas efficiency...`);
+        new TaskContext("method-call").logger.debug(`🔧 Optimizing batch size for gas efficiency...`);
 
         const optimizationResult = await this.optimizeBatchSize(
           fromBlock,
@@ -260,14 +262,14 @@ export class DistributionService {
         totalGasSimulations = optimizationResult.gasSimulations;
 
         if (optimizedBatchSize !== batchSize) {
-          this.logger.warn(
+          new TaskContext("warning").logger.warn(
             `⚠️ Batch size adjusted from ${batchSize} to ${optimizedBatchSize} based on gas simulation`,
           );
         } else {
-          this.logger.log(`✅ Original batch size ${batchSize} is optimal`);
+          new TaskContext("method-call").logger.debug(`✅ Original batch size ${batchSize} is optimal`);
         }
       } else {
-        this.logger.log(
+        new TaskContext("method-call").logger.debug(
           `⚠️ Gas simulation disabled, using original batch size ${batchSize}`,
         );
       }
@@ -289,7 +291,7 @@ export class DistributionService {
       status.totalBatches = merkleTree.totalBatches;
       status.merkleRoot = merkleTree.root;
 
-      this.logger.log(
+      new TaskContext("method-call").logger.debug(
         `✅ Generated optimized Merkle tree: root=${merkleTree.root}, batches=${merkleTree.totalBatches} (gas simulations: ${totalGasSimulations})`,
       );
 
@@ -302,7 +304,7 @@ export class DistributionService {
         merkleTree.totalBatches,
       );
 
-      this.logger.log(`✅ Committed Merkle root to contract`);
+      new TaskContext("method-call").logger.debug(`✅ Committed Merkle root to contract`);
 
       // distribute in batches
       status.status = 'distributing';
@@ -312,7 +314,7 @@ export class DistributionService {
       status.status = 'completed';
       status.completedAt = new Date();
 
-      this.logger.log(`🎉 Distribution completed for epoch ${epochId}`);
+      new TaskContext("method-call").logger.debug(`🎉 Distribution completed for epoch ${epochId}`);
 
       // log gas optimization summary
       if (status.gasOptimizations) {
@@ -321,7 +323,7 @@ export class DistributionService {
 
       return status;
     } catch (error) {
-      this.logger.error(
+      new TaskContext("error-handling").logger.error(
         `❌ Distribution failed for epoch ${epochId}: ${error.message}`,
       );
       status.status = 'failed';
@@ -347,7 +349,7 @@ export class DistributionService {
 
     while (!commitSuccess && retryCount < MAX_RETRIES) {
       try {
-        this.logger.log(
+        new TaskContext("method-call").logger.debug(
           `🔍 Attempting to commit for block range [${currentFromBlock}, ${currentToBlock}]`,
         );
 
@@ -378,7 +380,7 @@ export class DistributionService {
 
           if (commitment && commitment[0]) {
             // exists field
-            this.logger.warn(
+            new TaskContext("warning").logger.warn(
               `Block range [${currentFromBlock}, ${currentToBlock}] already committed`,
             );
             // try next block range
@@ -388,7 +390,7 @@ export class DistributionService {
             continue;
           }
         } catch (commitmentCheckError) {
-          this.logger.warn(
+          new TaskContext("warning").logger.warn(
             `Could not check commitment status: ${commitmentCheckError.message}`,
           );
         }
@@ -414,23 +416,23 @@ export class DistributionService {
           hash,
         });
 
-        this.logger.log(
+        new TaskContext("method-call").logger.debug(
           `✅ Merkle root committed: tx=${receipt.transactionHash} for blocks [${currentFromBlock}, ${currentToBlock}]`,
         );
         commitSuccess = true;
       } catch (error) {
         const errorStr = String(error?.message || error);
-        this.logger.error(
+        new TaskContext("error-handling").logger.error(
           `Commit attempt ${retryCount + 1} failed: ${errorStr}`,
         );
 
-        if (
-          errorStr.includes('ALREADY_COMMITTED') ||
-          errorStr.includes('MerkleRootAlreadyCommitted')
-        ) {
-          this.logger.warn(
-            `Root already committed for block range [${currentFromBlock}, ${currentToBlock}]. Trying next range...`,
-          );
+                  if (
+            errorStr.includes('ALREADY_COMMITTED') ||
+            errorStr.includes('MerkleRootAlreadyCommitted')
+          ) {
+            new TaskContext("warning").logger.warn(
+              `Root already committed for block range [${currentFromBlock}, ${currentToBlock}]. Trying next range...`,
+            );
           currentFromBlock += 100;
           currentToBlock += 100;
           retryCount++;
@@ -465,7 +467,7 @@ export class DistributionService {
     proof: string[],
   ): Promise<GasSimulationResult> {
     try {
-      this.logger.debug(
+      new TaskContext("method-call").logger.debug(
         `🧪 Simulating distribution for ${recipients.length} workers...`,
       );
 
@@ -499,7 +501,7 @@ export class DistributionService {
         ],
       });
 
-      this.logger.debug(
+      new TaskContext("method-call").logger.debug(
         `✅ Gas simulation successful: ${gasEstimate} gas for ${recipients.length} workers`,
       );
 
@@ -509,7 +511,7 @@ export class DistributionService {
       };
     } catch (error) {
       const errorMessage = error?.message || String(error);
-      this.logger.warn(
+      new TaskContext("warning").logger.warn(
         `❌ Gas simulation failed for ${recipients.length} workers: ${errorMessage}`,
       );
 
@@ -548,7 +550,7 @@ export class DistributionService {
     }>,
     initialBatchSize: number,
   ): Promise<{ optimizedBatchSize: number; gasSimulations: number }> {
-    this.logger.log(
+    new TaskContext("method-call").logger.debug(
       `🔧 Optimizing batch size starting with ${initialBatchSize} workers per batch...`,
     );
 
@@ -566,7 +568,7 @@ export class DistributionService {
         testBatch.length === 0 ||
         testBatchSize < this.gasSimulationConfig.minBatchSize
       ) {
-        this.logger.warn(
+        new TaskContext("warning").logger.warn(
           `⚠️ Test batch size reduced below minimum (${this.gasSimulationConfig.minBatchSize}), using minimum size`,
         );
         return {
@@ -581,7 +583,7 @@ export class DistributionService {
       );
 
       if (testMerkleTree.leaves.length === 0) {
-        this.logger.warn('⚠️ No leaves generated for test batch');
+        new TaskContext("warning").logger.warn('⚠️ No leaves generated for test batch');
         return { optimizedBatchSize: 1, gasSimulations };
       }
 
@@ -600,12 +602,12 @@ export class DistributionService {
       );
 
       if (simulationResult.success) {
-        this.logger.log(
+        new TaskContext("method-call").logger.debug(
           `✅ Optimal batch size found: ${testBatchSize} workers (${gasSimulations} simulations)`,
         );
         return { optimizedBatchSize: testBatchSize, gasSimulations };
       } else {
-        this.logger.warn(
+        new TaskContext("warning").logger.warn(
           `❌ Batch size ${testBatchSize} failed simulation: ${simulationResult.error}`,
         );
 
@@ -624,13 +626,13 @@ export class DistributionService {
           );
         }
 
-        this.logger.log(
+        new TaskContext("method-call").logger.debug(
           `🔄 Retrying with reduced batch size: ${testBatchSize}`,
         );
       }
     }
 
-    this.logger.warn(
+    new TaskContext("warning").logger.warn(
       `⚠️ Could not find optimal batch size after ${maxAttempts} attempts, defaulting to minimum size ${this.gasSimulationConfig.minBatchSize}`,
     );
     return {
@@ -644,7 +646,7 @@ export class DistributionService {
     toBlock: number,
     merkleTree: MerkleTreeResult,
   ): Promise<void> {
-    this.logger.log(
+    new TaskContext("method-call").logger.debug(
       `Distributing ${merkleTree.totalBatches} batches with gas simulation...`,
     );
 
@@ -653,7 +655,7 @@ export class DistributionService {
       const proof = merkleTree.proofs[i];
 
       try {
-        this.logger.log(
+        new TaskContext("method-call").logger.debug(
           `📦 Processing batch ${i + 1}/${merkleTree.totalBatches} with ${leaf.recipients.length} workers`,
         );
 
@@ -669,12 +671,12 @@ export class DistributionService {
           );
 
           if (!gasSimulation.success) {
-            this.logger.error(
+            new TaskContext("error-handling").logger.error(
               `❌ Pre-flight simulation failed for batch ${i + 1}: ${gasSimulation.error}`,
             );
 
             if (leaf.recipients.length > 1) {
-              this.logger.warn(
+              new TaskContext("warning").logger.warn(
                 `🔄 Attempting to split failing batch ${i + 1} into smaller chunks...`,
               );
               await this.distributeBatchInChunks(
@@ -693,7 +695,7 @@ export class DistributionService {
             }
           }
 
-          this.logger.log(
+          new TaskContext("method-call").logger.debug(
             `🧪 Pre-flight simulation passed for batch ${i + 1}, estimated gas: ${gasSimulation.estimatedGas}`,
           );
         }
@@ -718,18 +720,18 @@ export class DistributionService {
           hash,
         });
 
-        this.logger.log(
+        new TaskContext("method-call").logger.debug(
           `✅ Batch ${i + 1} distributed successfully: tx=${receipt.transactionHash}, gas used: ${receipt.gasUsed}`,
         );
       } catch (error) {
-        this.logger.error(
+        new TaskContext("error-handling").logger.error(
           `❌ Failed to distribute batch ${i + 1}: ${error.message}`,
         );
         throw error;
       }
     }
 
-    this.logger.log(
+    new TaskContext("method-call").logger.debug(
       `🎉 All ${merkleTree.totalBatches} batches distributed successfully`,
     );
   }
@@ -749,7 +751,7 @@ export class DistributionService {
       1,
       Math.floor(originalLeaf.recipients.length / 2),
     );
-    this.logger.log(
+    new TaskContext("method-call").logger.debug(
       `📦 Splitting batch ${batchNumber} into chunks of ${chunkSize} workers each`,
     );
 
@@ -779,7 +781,7 @@ export class DistributionService {
       const chunkIndex = Math.floor(chunkStart / chunkSize) + 1;
       const totalChunks = Math.ceil(originalLeaf.recipients.length / chunkSize);
 
-      this.logger.log(
+      new TaskContext("method-call").logger.debug(
         `📦 Processing chunk ${chunkIndex}/${totalChunks} of batch ${batchNumber} with ${chunkRecipients.length} workers`,
       );
 
@@ -795,12 +797,12 @@ export class DistributionService {
         );
 
         if (!chunkSimulation.success) {
-          this.logger.error(
+          new TaskContext("error-handling").logger.error(
             `❌ Chunk ${chunkIndex} simulation failed: ${chunkSimulation.error}`,
           );
 
           if (chunkRecipients.length === 1) {
-            this.logger.error(
+            new TaskContext("error-handling").logger.error(
               `❌ Single worker chunk failed - skipping worker ${chunkRecipients[0]}`,
             );
             continue;
@@ -821,7 +823,7 @@ export class DistributionService {
           }
         }
 
-        this.logger.log(
+        new TaskContext("method-call").logger.debug(
           `🧪 Chunk ${chunkIndex} simulation passed, estimated gas: ${chunkSimulation.estimatedGas}`,
         );
 
@@ -845,11 +847,11 @@ export class DistributionService {
           hash,
         });
 
-        this.logger.log(
+        new TaskContext("method-call").logger.debug(
           `✅ Chunk ${chunkIndex}/${totalChunks} of batch ${batchNumber} distributed: tx=${receipt.transactionHash}, gas used: ${receipt.gasUsed}`,
         );
       } catch (error) {
-        this.logger.error(
+        new TaskContext("error-handling").logger.error(
           `❌ Failed to distribute chunk ${chunkIndex} of batch ${batchNumber}: ${error.message}`,
         );
         throw error;
@@ -883,7 +885,7 @@ export class DistributionService {
         ipfsLink: commitment[5],
       };
     } catch (error) {
-      this.logger.error(`Failed to get distribution status: ${error.message}`);
+      new TaskContext("error-handling").logger.error(`Failed to get distribution status: ${error.message}`);
       throw error;
     }
   }
@@ -908,18 +910,18 @@ export class DistributionService {
     finalBatchSize: number;
     batchesAdjusted: number;
     totalGasSimulations: number;
-  }): void {
-    this.logger.log(`📊 Gas Optimization Summary:`);
-    this.logger.log(
+  }  ): void {
+    new TaskContext("method-call").logger.debug(`📊 Gas Optimization Summary:`);
+    new TaskContext("method-call").logger.debug(
       `   - Original batch size: ${gasOptimizations.originalBatchSize} workers`,
     );
-    this.logger.log(
+    new TaskContext("method-call").logger.debug(
       `   - Final batch size: ${gasOptimizations.finalBatchSize} workers`,
     );
-    this.logger.log(
+    new TaskContext("method-call").logger.debug(
       `   - Batches adjusted: ${gasOptimizations.batchesAdjusted}`,
     );
-    this.logger.log(
+    new TaskContext("method-call").logger.debug(
       `   - Total gas simulations: ${gasOptimizations.totalGasSimulations}`,
     );
 
@@ -932,7 +934,7 @@ export class DistributionService {
           gasOptimizations.originalBatchSize) *
         100
       ).toFixed(1);
-      this.logger.log(`   - Batch size reduction: ${reduction}%`);
+      new TaskContext("method-call").logger.debug(`   - Batch size reduction: ${reduction}%`);
     }
   }
 
