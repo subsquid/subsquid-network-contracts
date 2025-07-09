@@ -71,7 +71,7 @@ export class ClickHouseService implements OnModuleInit {
   async onModuleInit() {
     try {
       this.client = createClient({
-        host: this.config.host,
+        url: this.config.url,
         username: this.config.username,
         password: this.config.password,
         database: this.config.database,

@@ -4,7 +4,7 @@ export default registerAs('database', () => {
   const database = process.env.CLICKHOUSE_DATABASE || 'testnet';
   return {
     clickhouse: {
-      host: process.env.CLICKHOUSE_HOST,
+      url: process.env.CLICKHOUSE_URL,
       username: process.env.CLICKHOUSE_USERNAME,
       password: process.env.CLICKHOUSE_PASSWORD,
       database,

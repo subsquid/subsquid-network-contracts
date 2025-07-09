@@ -7,7 +7,7 @@ import { rewardsConfig } from './rewards.config';
 // validate critical environment variables
 const validateConfig = (config: Record<string, unknown>) => {
   const requiredVars = [
-    'CLICKHOUSE_HOST',
+    'CLICKHOUSE_URL',
     'CLICKHOUSE_USERNAME',
     'CLICKHOUSE_PASSWORD',
     'L2_RPC_URL',
