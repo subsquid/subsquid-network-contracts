@@ -1,8 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Hex } from 'viem';
-import * as crypto from 'crypto';
 import * as fs from 'fs';
+
+const crypto = require('crypto');
 
 export interface FordefiTransactionRequest {
   signer_type: string;
@@ -74,8 +75,8 @@ export class FordefiService {
         throw new Error(`HTTP ${response.status}: ${await response.text()}`);
       }
 
-      const data = await response.json();
-      return data.address as Hex;
+      const data = await response.json() as { address: Hex };
+      return data.address;
     } catch (error) {
       this.logger.error(`Failed to get vault address: ${error.message}`);
       throw error;
@@ -201,7 +202,7 @@ export class FordefiService {
         throw new Error(`HTTP ${response.status}: ${errorText}`);
       }
 
-      const result = await response.json();
+      const result = await response.json() as { id: string };
       return result.id;
     } catch (error) {
       this.logger.error(`Failed to submit transaction: ${error.message}`);
@@ -236,7 +237,7 @@ export class FordefiService {
           throw new Error(`HTTP ${response.status}: ${await response.text()}`);
         }
 
-        const transaction: FordefiTransactionStatus = await response.json();
+        const transaction = await response.json() as FordefiTransactionStatus;
 
         // check if transaction is successfully mined
         if (
@@ -306,7 +307,7 @@ export class FordefiService {
       throw new Error(`HTTP ${response.status}: ${await response.text()}`);
     }
 
-    return await response.json();
+    return await response.json() as FordefiTransactionStatus;
   }
 
   private sleep(ms: number): Promise<void> {
