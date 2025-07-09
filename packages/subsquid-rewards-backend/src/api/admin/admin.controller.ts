@@ -100,7 +100,7 @@ export class AdminController {
         })),
       };
     } catch (error) {
-      ctx.logger.error({ error }, `Failed to calculate rewards`);
+      new TaskContext("error-handling").logger.error({ error }, `Failed to calculate rewards`);
       return {
         success: false,
         error: error.message,
@@ -196,8 +196,7 @@ export class AdminController {
         status: this.formatStatus(initialStatus),
       };
     } catch (error) {
-      const ctx = new TaskContext(`admin:distribution-error:${epochId}`);
-      ctx.logger.error({ error }, `Failed to start distribution`);
+      new TaskContext("error-handling").logger.error({ error }, `Failed to start distribution`);
       return {
         success: false,
         error: error.message,
@@ -225,8 +224,7 @@ export class AdminController {
         status: this.formatStatus(status),
       };
     } catch (error) {
-      const ctx = new TaskContext('admin:distribution-status-error');
-      ctx.logger.error({ error }, `Failed to get distribution status`);
+      new TaskContext("error-handling").logger.error({ error }, `Failed to get distribution status`);
       return {
         success: false,
         error: error.message,
@@ -263,8 +261,7 @@ export class AdminController {
         returned: result.length,
       };
     } catch (error) {
-      const ctx = new TaskContext('admin:distributions-error');
-      ctx.logger.error({ error }, `Failed to get distributions`);
+      new TaskContext("error-handling").logger.error({ error }, `Failed to get distributions`);
       return {
         success: false,
         error: error.message,
@@ -296,7 +293,7 @@ export class AdminController {
         epoch: `${fromBlockNum}-${toBlockNum}`,
       };
     } catch (error) {
-      const ctx = new TaskContext("error-handling"); ctx.logger.error(`Failed to get contract status: ${error.message}`);
+      new TaskContext("error-handling").logger.error(`Failed to get contract status: ${error.message}`);
       return {
         success: false,
         error: error.message,
@@ -328,7 +325,7 @@ export class AdminController {
         ),
       };
     } catch (error) {
-      const ctx = new TaskContext("error-handling"); ctx.logger.error(
+      new TaskContext("error-handling").logger.error(
         `Failed to get WorkerRegistration status: ${error.message}`,
       );
       return {
@@ -388,7 +385,7 @@ export class AdminController {
         }
       }
 
-      const logCtx = new TaskContext("method-call"); logCtx.logger.debug(`Cleaned up ${cleanedCount} old distributions`);
+      new TaskContext("method-call").logger.debug(`Cleaned up ${cleanedCount} old distributions`);
 
       return {
         success: true,
@@ -397,7 +394,7 @@ export class AdminController {
         cutoffAge: `${maxAgeHours} hours`,
       };
     } catch (error) {
-      const ctx = new TaskContext("error-handling"); ctx.logger.error(`Cleanup failed: ${error.message}`);
+      new TaskContext("error-handling").logger.error(`Cleanup failed: ${error.message}`);
       return {
         success: false,
         error: error.message,
@@ -435,7 +432,7 @@ export class AdminController {
         timestamp: new Date().toISOString(),
       };
     } catch (error) {
-      const ctx = new TaskContext("error-handling"); ctx.logger.error(`Failed to get system status: ${error.message}`);
+      new TaskContext("error-handling").logger.error(`Failed to get system status: ${error.message}`);
       return {
         success: false,
         error: error.message,
@@ -472,7 +469,7 @@ export class AdminController {
         true,
       ); //for now
       const sampleWorkers = allWorkers.slice(0, size);
-      const logCtx1 = new TaskContext("method-call"); logCtx1.logger.debug(
+      new TaskContext("method-call").logger.debug(
         `🔍 Debugging ${size} workers from ClickHouse (out of ${allWorkers.length} total)`,
       );
 
@@ -501,13 +498,13 @@ export class AdminController {
       const registeredCount = debugInfo.filter((w) => w.isRegistered).length;
       const totalClickHouseWorkers = allWorkers.length;
 
-      const logCtx2 = new TaskContext("method-call"); logCtx2.logger.debug(`📊 Registration Summary:`);
-      const logCtx3 = new TaskContext("method-call"); logCtx3.logger.debug(
+      new TaskContext("method-call").logger.debug(`📊 Registration Summary:`);
+      new TaskContext("method-call").logger.debug(
         `  Total workers in ClickHouse: ${totalClickHouseWorkers}`,
       );
-      const logCtx4 = new TaskContext("method-call"); logCtx4.logger.debug(`  Sample checked: ${debugInfo.length}`);
-      const logCtx5 = new TaskContext("method-call"); logCtx5.logger.debug(`  Registered in contract: ${registeredCount}`);
-      const logCtx6 = new TaskContext("method-call"); logCtx6.logger.debug(
+      new TaskContext("method-call").logger.debug(`  Sample checked: ${debugInfo.length}`);
+      new TaskContext("method-call").logger.debug(`  Registered in contract: ${registeredCount}`);
+      new TaskContext("method-call").logger.debug(
         `  Registration rate: ${((registeredCount / debugInfo.length) * 100).toFixed(1)}%`,
       );
 
@@ -525,7 +522,7 @@ export class AdminController {
             : `✅ Found ${registeredCount} registered workers that can receive rewards`,
       };
     } catch (error) {
-      const ctx = new TaskContext("error-handling"); ctx.logger.error(`Failed to debug worker states: ${error.message}`);
+      new TaskContext("error-handling").logger.error(`Failed to debug worker states: ${error.message}`);
       throw new Error(`Debug failed: ${error.message}`);
     }
   }
@@ -536,14 +533,12 @@ export class AdminController {
       const maxResults = limit ? parseInt(limit) : 50;
 
       // Get recent registration events from the blockchain
-      const ctx = new TaskContext('admin:debug-recent-registrations');
-      const registrations = await this.web3Service.getRegistrations(ctx);
+      const registrations = await this.web3Service.getRegistrations(new TaskContext('admin:debug-recent-registrations'));
       const recentRegistrations = registrations
         .sort((a, b) => Number(b.registeredAt) - Number(a.registeredAt))
         .slice(0, maxResults);
 
-      const logCtx2 = new TaskContext('admin:debug-recent-registrations-results');
-      const logCtx = new TaskContext("method-call"); logCtx.logger.debug(
+      new TaskContext("method-call").logger.debug(
         `📋 Found ${recentRegistrations.length} recent registrations (out of ${registrations.length} total)`,
       );
 
@@ -571,7 +566,7 @@ export class AdminController {
         note: "These are workers that have registered at some point. Check if they're still active with /debug/worker-states",
       };
     } catch (error) {
-      const ctx = new TaskContext("error-handling"); ctx.logger.error(
+      new TaskContext("error-handling").logger.error(
         `Failed to debug recent registrations: ${error.message}`,
       );
       throw new Error(`Debug failed: ${error.message}`);
@@ -604,7 +599,7 @@ export class AdminController {
 
       return result || alphabet[0];
     } catch (error) {
-      const ctx = new TaskContext("error-handling"); ctx.logger.error(`Failed to convert hex to base58: ${error.message}`);
+      new TaskContext("error-handling").logger.error(`Failed to convert hex to base58: ${error.message}`);
       return hex; // return original hex on error
     }
   }
@@ -633,7 +628,7 @@ export class AdminController {
         },
       };
     } catch (error) {
-      const ctx = new TaskContext("error-handling"); ctx.logger.error(`Failed to get scheduler status: ${error.message}`);
+      new TaskContext("error-handling").logger.error(`Failed to get scheduler status: ${error.message}`);
       return {
         success: false,
         error: error.message,
@@ -647,7 +642,7 @@ export class AdminController {
   @Post('scheduler/trigger')
   async triggerSchedulerCheck() {
     try {
-      const logCtx = new TaskContext("method-call"); logCtx.logger.debug('🔄 Manual scheduler trigger requested');
+      new TaskContext("method-call").logger.debug('🔄 Manual scheduler trigger requested');
       const result = await this.blockSchedulerService.triggerManualCheck();
 
       return {
@@ -658,7 +653,7 @@ export class AdminController {
           : 'Block check completed - no distribution needed',
       };
     } catch (error) {
-      const ctx = new TaskContext("error-handling"); ctx.logger.error(`Failed to trigger scheduler: ${error.message}`);
+      new TaskContext("error-handling").logger.error(`Failed to trigger scheduler: ${error.message}`);
       return {
         success: false,
         error: error.message,
@@ -673,7 +668,7 @@ export class AdminController {
   async forceCommit(@Body() body: { fromBlock: number; toBlock: number }) {
     try {
       const { fromBlock, toBlock } = body;
-      const logCtx = new TaskContext("method-call"); logCtx.logger.debug(`🔧 Force commit requested for ${fromBlock}-${toBlock}`);
+      new TaskContext("method-call").logger.debug(`🔧 Force commit requested for ${fromBlock}-${toBlock}`);
 
       const result = await this.blockSchedulerService.forceCommit(
         fromBlock,
@@ -687,7 +682,7 @@ export class AdminController {
           : 'Commit failed',
       };
     } catch (error) {
-      const ctx = new TaskContext("error-handling"); ctx.logger.error(`Force commit failed: ${error.message}`);
+      new TaskContext("error-handling").logger.error(`Force commit failed: ${error.message}`);
       return {
         success: false,
         error: error.message,
@@ -704,7 +699,7 @@ export class AdminController {
   ) {
     try {
       const { fromBlock, toBlock } = body;
-      const logCtx = new TaskContext("method-call"); logCtx.logger.debug(
+      new TaskContext("method-call").logger.debug(
         `🔧 Force distribution requested for ${fromBlock}-${toBlock}`,
       );
 
@@ -720,7 +715,7 @@ export class AdminController {
           : 'Distribution failed',
       };
     } catch (error) {
-      const ctx = new TaskContext("error-handling"); ctx.logger.error(`Force distribution failed: ${error.message}`);
+      new TaskContext("error-handling").logger.error(`Force distribution failed: ${error.message}`);
       return {
         success: false,
         error: error.message,
@@ -732,7 +727,7 @@ export class AdminController {
   async getAPRMetrics() {
     try {
       const ctx = new TaskContext('admin:get-apr-metrics');
-      const logCtx1 = new TaskContext("method-call"); logCtx1.logger.debug('📊 Calculating current APR metrics...');
+      new TaskContext("method-call").logger.debug('📊 Calculating current APR metrics...');
 
       // get network capacity metrics
       const activeWorkerCount = await this.web3Service.getActiveWorkerCount(ctx);
@@ -764,7 +759,7 @@ export class AdminController {
       const discountFactor = this.calculateStakeDiscountFactor(stakeFactor);
       const finalAPR = baseAPR * discountFactor;
 
-      const logCtx2 = new TaskContext("method-call"); logCtx2.logger.debug(`✅ APR metrics calculated successfully`);
+      new TaskContext("method-call").logger.debug(`✅ APR metrics calculated successfully`);
 
       return {
         success: true,
@@ -801,7 +796,7 @@ export class AdminController {
         },
       };
     } catch (error) {
-      const ctx = new TaskContext("error-handling"); ctx.logger.error(`Failed to get APR metrics: ${error.message}`);
+      new TaskContext("error-handling").logger.error(`Failed to get APR metrics: ${error.message}`);
       return {
         success: false,
         error: error.message,

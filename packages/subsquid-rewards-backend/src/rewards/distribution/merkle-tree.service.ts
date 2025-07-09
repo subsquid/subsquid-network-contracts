@@ -27,7 +27,7 @@ export class MerkleTreeService {
     }>,
     batchSize: number = 50,
   ): Promise<MerkleTreeResult> {
-    const treeCtx1 = new TaskContext("merkle-tree:generate"); treeCtx1.logger.debug(
+    new TaskContext("merkle-tree:generate").logger.debug(
       `Generating Merkle tree for ${workers.length} workers with batch size ${batchSize}`,
     );
 
@@ -42,7 +42,7 @@ export class MerkleTreeService {
       });
     }
 
-    const treeCtx2 = new TaskContext("merkle-tree:batches"); treeCtx2.logger.debug(
+    new TaskContext("merkle-tree:batches").logger.debug(
       `Created ${batches.length} batches from ${workers.length} workers`,
     );
 
@@ -55,7 +55,7 @@ export class MerkleTreeService {
         ),
       );
 
-      const treeCtx3 = new TaskContext("merkle-tree:hash"); treeCtx3.logger.debug(
+      new TaskContext("merkle-tree:hash").logger.debug(
         `Batch ${index}: ${batch.recipients.length} workers, hash: ${hash}`,
       );
       return hash;
@@ -64,7 +64,7 @@ export class MerkleTreeService {
     // build Merkle tree
     const { root, proofs } = this.buildMerkleTree(leafHashes);
 
-    const treeCtx4 = new TaskContext("merkle-tree:complete"); treeCtx4.logger.debug(
+    new TaskContext("merkle-tree:complete").logger.debug(
       `✅ Merkle tree generated: root=${root}, ${batches.length} leaves`,
     );
 

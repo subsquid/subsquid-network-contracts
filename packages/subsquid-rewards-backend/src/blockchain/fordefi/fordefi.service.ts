@@ -78,7 +78,7 @@ export class FordefiService {
       const data = await response.json();
       return data.address as Hex;
     } catch (error) {
-      const ctx = new TaskContext("error-handling"); ctx.logger.error(`Failed to get vault address: ${error.message}`);
+      new TaskContext("error-handling").logger.error(`Failed to get vault address: ${error.message}`);
       throw error;
     }
   }
@@ -98,16 +98,16 @@ export class FordefiService {
     const request = this.createTransactionRequest(to, data, name, gasOptions);
 
     try {
-      const logCtx1 = new TaskContext("fordefi:send-transaction"); logCtx1.logger.debug(`Sending Fordefi transaction: ${name}`);
+      new TaskContext("fordefi:send-transaction").logger.debug(`Sending Fordefi transaction: ${name}`);
       const transactionId = await this.submitTransaction(request);
 
-      const logCtx2 = new TaskContext("fordefi:transaction-submitted"); logCtx2.logger.debug(`Transaction submitted with ID: ${transactionId}`);
+      new TaskContext("fordefi:transaction-submitted").logger.debug(`Transaction submitted with ID: ${transactionId}`);
       const txHash = await this.waitForTransaction(transactionId);
 
-      const logCtx3 = new TaskContext("fordefi:transaction-completed"); logCtx3.logger.debug(`Transaction completed: ${txHash}`);
+      new TaskContext("fordefi:transaction-completed").logger.debug(`Transaction completed: ${txHash}`);
       return txHash;
     } catch (error) {
-      const ctx = new TaskContext("error-handling"); ctx.logger.error(`Fordefi transaction failed: ${error.message}`);
+      new TaskContext("error-handling").logger.error(`Fordefi transaction failed: ${error.message}`);
       throw error;
     }
   }
@@ -205,7 +205,7 @@ export class FordefiService {
       const result = await response.json();
       return result.id;
     } catch (error) {
-      const ctx = new TaskContext("error-handling"); ctx.logger.error(`Failed to submit transaction: ${error.message}`);
+      new TaskContext("error-handling").logger.error(`Failed to submit transaction: ${error.message}`);
       throw error;
     }
   }
@@ -261,7 +261,7 @@ export class FordefiService {
         await this.sleep(timeout);
         timeout = Math.min(timeout * 2, 5000); // Cap at 5 seconds
       } catch (error) {
-        const ctx = new TaskContext("warning"); ctx.logger.warn(`Error checking transaction status: ${error.message}`);
+        new TaskContext("warning").logger.warn(`Error checking transaction status: ${error.message}`);
         await this.sleep(timeout);
         timeout = Math.min(timeout * 2, 5000);
       }
