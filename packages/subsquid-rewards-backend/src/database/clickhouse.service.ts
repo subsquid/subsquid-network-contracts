@@ -71,7 +71,7 @@ export class ClickHouseService implements OnModuleInit {
   async onModuleInit() {
     try {
       this.client = createClient({
-        host: this.config.host,
+        url: this.config.url,
         username: this.config.username,
         password: this.config.password,
         database: this.config.database,
@@ -290,8 +290,8 @@ export class ClickHouseService implements OnModuleInit {
 
   async getActiveWorkers(
     ctx: Context,
-    fromBlock: number,
-    toBlock: number,
+    startTime: Date,
+    endTime: Date,
     skipSignatureValidation = false,
   ): Promise<WorkerQueryData[]> {
     if (skipSignatureValidation) {
@@ -306,13 +306,17 @@ export class ClickHouseService implements OnModuleInit {
         SELECT ${columns.join(',')}
         FROM ${this.logsTableName}
         WHERE
-          from_block >= ${fromBlock} AND
-          to_block <= ${toBlock}
+          ${this.logsTableName}.worker_timestamp >= '${this.formatDate(startTime)}' AND  
+          ${this.logsTableName}.worker_timestamp <= '${this.formatDate(endTime)}' AND
+          (toUnixTimestamp64Micro(collector_timestamp) - toUnixTimestamp64Micro(worker_timestamp)) / 60000000 < 20
         GROUP BY worker_id
       `;
 
       try {
-        ctx.logger.debug(`🔍 Executing ClickHouse Query: ${query}`);
+        ctx.logger.debug(`🔍 Executing ClickHouse Query:`);
+        ctx.logger.debug(`   FROM: ${this.formatDate(startTime)}`);
+        ctx.logger.debug(`   TO: ${this.formatDate(endTime)}`);
+        ctx.logger.debug(`${query}`);
 
         const resultSet = await this.client.query({
           query,
@@ -320,10 +324,12 @@ export class ClickHouseService implements OnModuleInit {
         });
 
         const results = await resultSet.json<WorkerQueryData>();
+        const resultArray = Array.isArray(results) ? results : [results];
         ctx.logger.debug(
-          `✅ Processed ${Array.isArray(results) ? results.length : 1} workers with signature validation skipped`,
+          `✅ Processed ${resultArray.length} workers`,
+
         );
-        return Array.isArray(results) ? results : [results];
+        return resultArray;
       } catch (error) {
         ctx.logger.error({ error }, `Failed to fetch active workers`);
         throw error;

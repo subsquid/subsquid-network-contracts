@@ -452,7 +452,8 @@ export class AdminController {
         : Date.now() - status.startedAt.getTime(),
     };
   }
-
+  
+/* turned off for now
   @Get('debug/worker-states')
   async debugWorkerStates(@Query('sampleSize') sampleSize?: string) {
     try {
@@ -572,7 +573,7 @@ export class AdminController {
       throw new Error(`Debug failed: ${error.message}`);
     }
   }
-
+*/
   private hexToBase58(hex: string): string {
     try {
       // Remove 0x prefix and convert to Buffer

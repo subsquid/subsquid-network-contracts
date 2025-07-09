@@ -41,6 +41,8 @@ export class RewardsCalculatorService {
     fromBlock: number,
     toBlock: number,
     skipSignatureValidation?: boolean,
+    batchNumberOverride?: number,
+    totalBatchesOverride?: number,
   ): Promise<WorkerReward[]> {
     const shouldSkipValidation =
       skipSignatureValidation ??
@@ -57,6 +59,8 @@ export class RewardsCalculatorService {
       fromBlock,
       toBlock,
       shouldSkipValidation,
+      batchNumberOverride,
+      totalBatchesOverride,
     );
     return result.workers;
   }
@@ -66,12 +70,14 @@ export class RewardsCalculatorService {
     fromBlock: number,
     toBlock: number,
     skipSignatureValidation?: boolean,
+    batchNumberOverride?: number,
+    totalBatchesOverride?: number,
   ): Promise<RewardCalculationResult> {
     const shouldSkipValidation =
       skipSignatureValidation ??
       this.configService.get('rewards.skipSignatureValidation', true);
 
-    return this.calculateRewards(ctx, fromBlock, toBlock, shouldSkipValidation);
+    return this.calculateRewards(ctx, fromBlock, toBlock, shouldSkipValidation, batchNumberOverride, totalBatchesOverride);
   }
 
   private async calculateRewards(
@@ -79,6 +85,8 @@ export class RewardsCalculatorService {
     fromBlock: number,
     toBlock: number,
     skipSignatureValidation = true,
+    batchNumberOverride?: number,
+    totalBatchesOverride?: number,
   ): Promise<RewardCalculationResult> {
     try {
       // get block timestamps
@@ -100,8 +108,8 @@ export class RewardsCalculatorService {
       );
       const activeWorkerData = await this.clickHouseService.getActiveWorkers(
         ctx,
-        fromBlock,
-        toBlock,
+        startTime,
+        endTime,
         skipSignatureValidation,
       );
 
@@ -201,9 +209,15 @@ export class RewardsCalculatorService {
       try {
         switch (aprMethod) {
           case 'contracts':
-            baseApr = await this.getAPRFromContracts(ctx);
-            ctx.logger.debug(
-              `✅ Using contract-based APR: ${(baseApr * 100).toFixed(2)}%`,
+            ctx.logger.debug('🔗 Using old rewards calculator method (contracts)');
+            return await this.calculateRewardsOldMethod(
+              fromBlock,
+              toBlock,
+              startTime,
+              endTime,
+              skipSignatureValidation,
+              batchNumberOverride,
+              totalBatchesOverride,
             );
             break;
 
@@ -966,6 +980,187 @@ export class RewardsCalculatorService {
       ctx.logger.warn({ error }, `Failed to fetch APR from ClickHouse`);
       return null;
     }
+  }
+
+  private async calculateRewardsOldMethod(
+    fromBlock: number,
+    toBlock: number,
+    startTime: Date,
+    endTime: Date,
+    skipSignatureValidation: boolean,
+    batchNumberOverride?: number,
+    totalBatchesOverride?: number,
+  ): Promise<RewardCalculationResult> {
+    this.logger.log('🔄 Starting EXACT old rewards calculator method...');
+
+    const { 
+      OldWorkers, 
+      calculateLivenessFactor, 
+      getHistoricalLiveness 
+    } = await import('./old-rewards-calculator');
+
+    const oldWorkers = new OldWorkers(startTime, endTime);
+
+    const activeWorkerData = await this.getWorkersFromClickHouse(
+      startTime,
+      endTime,
+      skipSignatureValidation,
+    );
+
+    if (activeWorkerData.length === 0) {
+      this.logger.warn('No workers found in ClickHouse data');
+      return this.createEmptyResult(fromBlock, toBlock, startTime, endTime);
+    }
+
+    this.logger.log(`📊 Found ${activeWorkerData.length} workers from ClickHouse`);
+
+    for (const workerData of activeWorkerData) {
+      const worker = oldWorkers.add(workerData.worker_id);
+
+      await worker.processQuery({
+        output_size: workerData.output_size,
+        num_read_chunks: workerData.num_read_chunks,
+      });
+
+      worker.totalRequests = workerData.totalRequests;
+    }
+
+    this.logger.log(`✅ Added ${oldWorkers.count()} workers to old backend calculator`);
+
+    const workerIdMapping = await this.web3Service.preloadWorkerIds(
+      activeWorkerData.map((w) => w.worker_id),
+    );
+    await oldWorkers.clearUnknownWorkers(workerIdMapping);
+
+    if (oldWorkers.count() === 0) {
+      this.logger.warn('No known workers found in contract mapping');
+      return this.createEmptyResult(fromBlock, toBlock, startTime, endTime);
+    }
+
+    this.logger.log(`🎯 Filtered to ${oldWorkers.count()} known workers`);
+
+    const workerPeerIds = oldWorkers.getWorkerPeerIds();
+    const [capedStakes, totalStakes] = await this.contractService.getStakes(
+      workerPeerIds,
+    );
+    await oldWorkers.setStakes(
+      capedStakes, 
+      totalStakes, 
+      workerPeerIds
+    );
+
+    const bondAmount = await this.web3Service.getBondAmount();
+    await oldWorkers.fetchCurrentBond(bondAmount);
+
+    oldWorkers.getT();
+
+    oldWorkers.getDTraffic();
+
+    const livenessFactor = await calculateLivenessFactor(
+      this.clickHouseService,
+      startTime,
+      endTime,
+    );
+    await oldWorkers.getLiveness(livenessFactor);
+
+    const historicalLiveness = await getHistoricalLiveness(
+      this.clickHouseService,
+      [startTime, endTime], 
+    );
+    await oldWorkers.getDTenure(historicalLiveness);
+
+    const baseApr = await this.getAPRFromContracts();
+    await oldWorkers.calculateRewards(baseApr);
+
+    oldWorkers.logDebugInfo();
+
+    let finalWorkers = oldWorkers;
+    let batchNumber = batchNumberOverride ?? this.configService.get('rewards.batchNumber');
+    const totalBatches = totalBatchesOverride ?? this.configService.get('rewards.totalBatches');
+    
+    if (batchNumber === undefined && totalBatches !== undefined) {
+      const epochLength = 7000;
+      batchNumber = Math.ceil(toBlock / epochLength) % totalBatches;
+      this.logger.log(`🧮 Auto-calculated batch number: Math.ceil(${toBlock} / ${epochLength}) % ${totalBatches} = ${batchNumber}`);
+    }
+    
+    if (batchNumber !== undefined && totalBatches !== undefined) {
+      this.logger.log(`🔄 Applying batch filtering: ${batchNumber}/${totalBatches}`);
+      finalWorkers = oldWorkers.filterBatch(batchNumber, totalBatches);
+      this.logger.log(`✅ Filtered to ${finalWorkers.count()} workers for batch ${batchNumber}`);
+    } else {
+      this.logger.log(`⚠️  No batch filtering configured - processing ALL workers`);
+      this.logger.log(`   💡 To enable batch filtering, set BATCH_NUMBER and TOTAL_BATCHES environment variables`);
+      this.logger.log(`   📊 For block ${toBlock}: suggested batch = ${Math.ceil(toBlock / 7000) % (totalBatches || 4)}`);
+    }
+
+    const oldRewards = await finalWorkers.rewards();
+    const workers: WorkerReward[] = [];
+
+    for (const [peerId, reward] of Object.entries(oldRewards)) {
+      workers.push({
+        workerId: reward.id,
+        id: reward.id,
+        workerReward: reward.workerReward,
+        stakerReward: reward.stakerReward,
+        stake: 0n, 
+        totalStake: 0n,
+      });
+    }
+
+    const totalRewards = workers.reduce((sum, w) => sum + w.workerReward, 0n);
+
+    this.logger.log(`✅ EXACT old method calculated rewards for ${workers.length} workers`);
+    this.logger.log(`💰 Total rewards: ${Number(totalRewards) / 1e18} SQD`);
+
+    return {
+      workers,
+      totalRewards,
+      calculationTime: (endTime.getTime() - startTime.getTime()) / 1000,
+    };
+  }
+
+  private async getWorkersFromClickHouse(
+    startTime: Date,
+    endTime: Date,
+    skipSignatureValidation: boolean,
+  ): Promise<any[]> {
+    const networkName = this.configService.get('blockchain.network.networkName') || 'mainnet';
+    
+    if (skipSignatureValidation) {
+      const query = `
+        SELECT 
+          worker_id,
+          sum(num_read_chunks) as num_read_chunks,
+          sum(output_size) as output_size,
+          count(*) as totalRequests
+        FROM ${networkName}.worker_query_logs
+        WHERE
+          ${networkName}.worker_query_logs.worker_timestamp >= '${this.formatDateForClickHouse(startTime)}' AND  
+          ${networkName}.worker_query_logs.worker_timestamp <= '${this.formatDateForClickHouse(endTime)}' AND
+          (toUnixTimestamp64Micro(collector_timestamp) - toUnixTimestamp64Micro(worker_timestamp)) / 60000000 < 20
+        GROUP BY worker_id
+      `;
+
+      this.logger.log(`🔍 ClickHouse Query (EXACT old backend format):`);
+      this.logger.log(`   FROM: ${this.formatDateForClickHouse(startTime)}`);
+      this.logger.log(`   TO: ${this.formatDateForClickHouse(endTime)}`);
+
+      const client = (this.clickHouseService as any).client;
+      const resultSet = await client.query({ query, format: 'JSONEachRow' });
+      const results = await resultSet.json();
+      const resultArray = Array.isArray(results) ? results : [results];
+      
+      this.logger.log(`📊 ClickHouse returned ${resultArray.length} workers`);
+      
+      return resultArray;
+    } else {
+      throw new Error('Signature validation mode not implemented in new backend');
+    }
+  }
+
+  private formatDateForClickHouse(date: Date): string {
+    return date.toISOString().slice(0, 19).replace('T', ' ');
   }
 
   /**

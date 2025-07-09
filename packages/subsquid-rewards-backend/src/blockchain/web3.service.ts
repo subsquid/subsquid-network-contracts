@@ -215,12 +215,7 @@ export class Web3Service {
 
   async getL1BlockNumber(ctx: Context): Promise<number> {
     try {
-      const l1Client = createPublicClient({
-        chain: mainnet,
-        transport: http(this.configService.get('blockchain.l1RpcUrl')),
-      });
-
-      return Number(await l1Client.getBlockNumber());
+      return Number(await this.l1Client.getBlockNumber());
     } catch (error) {
       ctx.logger.error({ error }, `Failed to get L1 block number`);
       // fallback to L2 block for testing
