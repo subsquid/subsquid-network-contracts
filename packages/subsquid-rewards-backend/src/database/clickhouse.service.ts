@@ -1,6 +1,6 @@
 import { Injectable, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { ClickHouseClient, createClient } from '@clickhouse/client';
+import { ClickHouse } from 'clickhouse';
 import * as dayjs from 'dayjs';
 import * as utc from 'dayjs/plugin/utc';
 import { Context } from '../common';
@@ -57,7 +57,7 @@ export interface NetworkStatsEntry {
 
 @Injectable()
 export class ClickHouseService implements OnModuleInit {
-  private client: ClickHouseClient;
+  private client: any;
   private config: any;
   private logsTableName: string;
   private pingsTableName: string;
@@ -70,12 +70,13 @@ export class ClickHouseService implements OnModuleInit {
 
   async onModuleInit() {
     try {
-      this.client = createClient({
+      this.client = new ClickHouse({
         url: this.config.url,
-        username: this.config.username,
-        password: this.config.password,
-        database: this.config.database,
-        ...this.config.options,
+        basicAuth: {
+          username: this.config.username,
+          password: this.config.password,
+        },
+        format: "json",
       });
 
       await this.ping();
@@ -88,7 +89,7 @@ export class ClickHouseService implements OnModuleInit {
 
   async ping(): Promise<boolean> {
     try {
-      await this.client.query({ query: 'SELECT 1' });
+      await this.client.query('SELECT 1').toPromise();
       return true;
     } catch (error) {
       console.error('ClickHouse ping failed', error);
@@ -157,8 +158,7 @@ export class ClickHouseService implements OnModuleInit {
     `;
 
     try {
-      const result = await this.client.query({ query, format: 'JSONEachRow' });
-      const rows = await result.json();
+      const rows = await this.client.query(query).toPromise();
 
       if (!Array.isArray(rows)) {
         throw new Error('Unexpected response format from ClickHouse');
@@ -210,8 +210,7 @@ export class ClickHouseService implements OnModuleInit {
     `;
 
     try {
-      const result = await this.client.query({ query, format: 'JSONEachRow' });
-      const rows = await result.json();
+      const rows = await this.client.query(query).toPromise();
 
       if (!Array.isArray(rows)) {
         throw new Error('Unexpected response format from ClickHouse');
@@ -243,8 +242,7 @@ export class ClickHouseService implements OnModuleInit {
     `;
 
     try {
-      const result = await this.client.query({ query, format: 'JSONEachRow' });
-      const rows = await result.json();
+      const rows = await this.client.query(query).toPromise();
 
       if (!Array.isArray(rows) || rows.length === 0) {
         return 0;
@@ -318,12 +316,7 @@ export class ClickHouseService implements OnModuleInit {
         ctx.logger.debug(`   TO: ${this.formatDate(endTime)}`);
         ctx.logger.debug(`${query}`);
 
-        const resultSet = await this.client.query({
-          query,
-          format: 'JSONEachRow',
-        });
-
-        const results = await resultSet.json<WorkerQueryData>();
+        const results = await this.client.query(query).toPromise();
         const resultArray = Array.isArray(results) ? results : [results];
         ctx.logger.debug(
           `✅ Processed ${resultArray.length} workers`,
@@ -357,15 +350,7 @@ export class ClickHouseService implements OnModuleInit {
     try {
       ctx.logger.debug(`🔍 Executing ClickHouse Pings Query: ${query}`);
 
-      const resultSet = await this.client.query({
-        query,
-        format: 'JSONEachRow',
-      });
-
-      const results = await resultSet.json<{
-        worker_id: string;
-        timestamps: number[];
-      }>();
+      const results = await this.client.query(query).toPromise();
 
       const pings: Record<string, number[]> = {};
       const resultArray = Array.isArray(results) ? results : [results];
@@ -397,9 +382,8 @@ export class ClickHouseService implements OnModuleInit {
     `;
 
     try {
-      const resultSet = await this.client.query({ query, format: 'JSON' });
-      const result = await resultSet.json<any>();
-      return result.data[0];
+      const result = await this.client.query(query).toPromise();
+      return Array.isArray(result) ? result[0] : result;
     } catch (error) {
       ctx.logger.error({ error }, `Failed to fetch total delegation`);
       throw error;
@@ -417,12 +401,7 @@ export class ClickHouseService implements OnModuleInit {
     try {
       ctx.logger.debug(`🔍 Executing ClickHouse Total Queries Count: ${query}`);
 
-      const resultSet = await this.client.query({
-        query,
-        format: 'JSONEachRow',
-      });
-
-      const result = await resultSet.json<{ total: number }>();
+      const result = await this.client.query(query).toPromise();
       const resultArray = Array.isArray(result) ? result : [result];
       const total = resultArray[0]?.total || 0;
       ctx.logger.debug(`✅ Processing queries: ${total}`);
