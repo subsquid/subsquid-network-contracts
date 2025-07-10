@@ -233,10 +233,24 @@ export const RewardCalculationABI = [
   },
   {
     type: 'function',
-    name: 'currentAPY',
+    name: 'currentApy',
     inputs: [],
     outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }],
     stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    name: 'INITIAL_REWARD_POOL_SIZE',
+    inputs: [],
+    outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    name: 'boostFactor',
+    inputs: [{ name: 'duration', type: 'uint256', internalType: 'uint256' }],
+    outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }],
+    stateMutability: 'pure',
   },
 ] as const;
 
@@ -330,6 +344,13 @@ export const NetworkControllerABI = [
   {
     type: 'function',
     name: 'nextEpoch',
+    inputs: [],
+    outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    name: 'yearlyRewardCapCoefficient',
     inputs: [],
     outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }],
     stateMutability: 'view',

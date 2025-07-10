@@ -27,6 +27,13 @@ export interface RewardCalculationResult {
 
 @Injectable()
 export class RewardsCalculatorService {
+  private readonly logger = {
+    log: (msg: string) => console.log(`[RewardsCalculator] ${msg}`),
+    warn: (msg: string) => console.warn(`[RewardsCalculator] ⚠️  ${msg}`),
+    error: (msg: string) => console.error(`[RewardsCalculator] ❌ ${msg}`),
+  };
+  
+  private workerIdMapping: Record<string, { peerId: string; contractId: bigint }> = {};
 
   constructor(
     private configService: ConfigService,
@@ -211,6 +218,7 @@ export class RewardsCalculatorService {
           case 'contracts':
             ctx.logger.debug('🔗 Using old rewards calculator method (contracts)');
             return await this.calculateRewardsOldMethod(
+              ctx,
               fromBlock,
               toBlock,
               startTime,
@@ -351,168 +359,256 @@ export class RewardsCalculatorService {
     endTime: Date,
     workerIdMapping: Record<string, bigint>,
   ): Promise<WorkerReward[]> {
-    const rewards: WorkerReward[] = [];
-
-    ctx.logger.debug(`\n=== Calculating Individual Rewards ===`);
+    ctx.logger.debug(`\n=== EXACT Old Backend Calculation Flow ===`);
     ctx.logger.debug(`Worker data length: ${workerData.length}`);
-    ctx.logger.debug(`Caped stakes length: ${capedStakes.length}`);
-    ctx.logger.debug(`Total stakes length: ${totalStakes.length}`);
+    ctx.logger.debug(`Base APR input: ${baseApr} (${(baseApr * 100).toFixed(2)}%)`);
 
-    // @dev: we process all workers and use -> hash-based ID for calculations
-    // @dev: the actual contract worker ID mapping will be done during dist phase
-    ctx.logger.debug(`Processing rewards for ${workerData.length} workers`);
+    const validWorkers: Array<{
+      worker: WorkerQueryData;
+      capedStake: bigint;
+      totalStake: bigint;
+      contractWorkerId: bigint;
+    }> = [];
 
+    this.workerIdMapping = {};
+    
     for (let i = 0; i < workerData.length; i++) {
       const worker = workerData[i];
-      // ensure stakes are properly converted to bigint
       const capedStake = BigInt(capedStakes[i]?.result || 0);
       const totalStake = BigInt(totalStakes[i]?.result || 0);
 
-      // use the actual contract worker ID
       const contractWorkerId = workerIdMapping[worker.worker_id];
       if (!contractWorkerId || contractWorkerId === 0n) {
-        ctx.logger.warn(
-          `Worker ${worker.worker_id} not found in contract mapping, skipping`,
-        );
         continue;
       }
+      
+      this.workerIdMapping[worker.worker_id] = {
+        peerId: worker.worker_id,
+        contractId: contractWorkerId,
+      };
 
-      const liveness = livenessFactor[worker.worker_id]?.livenessFactor || 0;
-
-      // calculate traffic factor based on chunks read and bytes sent
-      const trafficFactor = this.calculateTrafficFactor(ctx, worker, workerData);
-
-      // calculate tenure factor (simplified for now)
-      const tenureFactor = 1.0; // plch - would need historical data
-
-      // calculate base staking reward (before performance factors)
-      const baseStakingReward = this.calculateStakingReward(
-        ctx,
+      validWorkers.push({
+        worker,
         capedStake,
         totalStake,
-        baseApr,
-        (endTime.getTime() - startTime.getTime()) / 1000,
-        365 * 24 * 60 * 60,
-      );
+        contractWorkerId,
+      });
+    }
 
-      const performanceMultiplier = liveness * trafficFactor * tenureFactor;
-      const performanceMultiplierBigInt = BigInt(
-        Math.floor(performanceMultiplier * 1_000_000),
-      );
+    ctx.logger.debug(`✅ Filtered to ${validWorkers.length} valid workers`);
 
-      // worker reward: caped stake * base reward * performance multiplier
-      const finalWorkerReward =
-        (baseStakingReward * performanceMultiplierBigInt) / 1_000_000n;
+    if (validWorkers.length === 0) {
+      return [];
+    }
 
-      // staker reward: delegated stake * base reward (no performance multiplier for stakers)
-      let calculatedStakerReward: bigint;
-      try {
-        if (totalStake > capedStake && totalStake !== 0n) {
-          const delegatedStake = totalStake - capedStake;
-          // calculate staker reward based on delegated stake only
-          const delegatedStakeReward = this.calculateStakingReward(
-            ctx,
-            delegatedStake,
-            delegatedStake, // Use delegated stake as "total" for this calculation
-            baseApr,
-            (endTime.getTime() - startTime.getTime()) / 1000,
-            365 * 24 * 60 * 60,
-          );
-          calculatedStakerReward = delegatedStakeReward;
-        } else {
-          calculatedStakerReward = 0n;
-        }
-      } catch (error) {
-        ctx.logger.error(
-          { error },
-          `BigInt calculation error in staker reward`,
-        );
-        calculatedStakerReward = 0n;
+    const totalBytesSent = validWorkers.reduce((sum, { worker }) => sum + Number(worker.output_size), 0);
+    const totalChunksRead = validWorkers.reduce((sum, { worker }) => sum + Number(worker.num_read_chunks), 0);
+    
+    ctx.logger.debug(`Total traffic: ${totalBytesSent} bytes, ${totalChunksRead} chunks`);
+
+    const totalWorkerStakes = validWorkers.reduce((sum, { capedStake }) => sum + capedStake, 0n);
+    const totalBonds = bondAmount * BigInt(validWorkers.length);
+    const totalSupply = totalBonds + totalWorkerStakes;
+    
+    ctx.logger.debug(`Total supply: ${totalSupply} wei (${Number(totalSupply) / 1e18} SQD)`);
+
+    const duration = Math.floor((endTime.getTime() - startTime.getTime()) / 1000);
+    const YEAR = 365 * 24 * 60 * 60;
+    
+    const rMax = (baseApr * duration) / YEAR;
+    
+    ctx.logger.debug(`Duration: ${duration}s, Base APR: ${(baseApr * 100).toFixed(2)}%, rMax: ${rMax}`);
+
+    const epochLengthInBlocks = await this.contractService.getEpochLength(ctx);
+    const SECONDS_PER_BLOCK = 12;
+    const epochLengthSeconds = epochLengthInBlocks * SECONDS_PER_BLOCK;
+    const TENURE_EPOCH_COUNT = 10;
+    
+    const epochStartBlocks = [...new Array(TENURE_EPOCH_COUNT + 1)].map(
+      (_, idx) => new Date(startTime.getTime() - ((TENURE_EPOCH_COUNT - idx) * epochLengthSeconds * 1000))
+    );
+    
+    const historicalLiveness = await this.getHistoricalLiveness(epochStartBlocks);
+    ctx.logger.debug(`✅ Historical liveness calculated for ${Object.keys(historicalLiveness).length} workers`);
+
+    const rewards: WorkerReward[] = [];
+
+    for (let i = 0; i < validWorkers.length; i++) {
+      const { worker, capedStake, totalStake, contractWorkerId } = validWorkers[i];
+
+      const bytesFactor = totalBytesSent > 0 ? Number(worker.output_size) / totalBytesSent : 0;
+      const chunksFactor = totalChunksRead > 0 ? Number(worker.num_read_chunks) / totalChunksRead : 0;
+      const trafficWeight = Math.sqrt(bytesFactor * chunksFactor);
+
+      const workerSupply = bondAmount + capedStake;
+      const supplyRatio = totalSupply > 0n ? Number(workerSupply) / Number(totalSupply) : 0;
+      const dTrafficAlpha = 0.1;
+      const dTraffic = supplyRatio > 0 ? Math.min(1.0, Math.pow(trafficWeight / supplyRatio, dTrafficAlpha)) : 0;
+
+      const networkStats = livenessFactor[worker.worker_id] || { livenessFactor: 0 };
+      const { livenessFactor: rawLiveness } = networkStats;
+      let livenessCoefficient = 0;
+      if (rawLiveness >= 0.95) {
+        livenessCoefficient = 1;
+      } else if (rawLiveness >= 0.9) {
+        livenessCoefficient = 2 * rawLiveness - 0.9;
+      } else if (rawLiveness >= 0.8) {
+        livenessCoefficient = 9 * rawLiveness - 7.2;
+      } else {
+        livenessCoefficient = 0;
       }
 
-      // calculate APR metrics for worker logging
-      const stakeFactor = Number(capedStake) / Number(totalStake || 1n);
-      const workerApr = baseApr * performanceMultiplier;
-      const delegatorApr = totalStake > capedStake ? baseApr : 0; // only delegators get base APR
+      const historicalLivenessData = historicalLiveness[worker.worker_id] ?? [];
+      const LIVENESS_THRESHOLD = 0.9;
+      const liveEpochs = historicalLivenessData.filter(liveness => liveness >= LIVENESS_THRESHOLD).length;
+      const dTenure = 0.5 + Math.floor((liveEpochs / 2) + 0.05) * 0.1;
 
-      // log worker report in the expected format
+      const actualYield = rMax * livenessCoefficient * dTraffic * dTenure;
+
+      const bondDecimal = Number(bondAmount) / 1e18;
+      const stakeDecimal = Number(capedStake) / 1e18;
+      
+      const workerRewardDecimal = actualYield * (bondDecimal + stakeDecimal / 2);
+      const stakerRewardDecimal = actualYield * (stakeDecimal / 2);
+      
+
+      const finalWorkerReward = BigInt(Math.floor(workerRewardDecimal * 1e18));
+      const finalStakerReward = BigInt(Math.floor(stakerRewardDecimal * 1e18));
+
+      // Debug logging for first few workers
+      if (i < 3) {
+        ctx.logger.debug(`\n--- Worker ${i + 1}: ${worker.worker_id.slice(0, 20)}... ---`);
+        ctx.logger.debug(`  Traffic: bytes=${worker.output_size}, chunks=${worker.num_read_chunks}`);
+        ctx.logger.debug(`  Traffic weight: ${trafficWeight.toFixed(8)}`);
+        ctx.logger.debug(`  Supply ratio: ${supplyRatio.toFixed(8)}`);
+        ctx.logger.debug(`  dTraffic: ${dTraffic.toFixed(8)}`);
+        ctx.logger.debug(`  Raw liveness: ${rawLiveness.toFixed(4)}`);
+        ctx.logger.debug(`  Liveness coefficient: ${livenessCoefficient.toFixed(8)}`);
+        ctx.logger.debug(`  dTenure: ${dTenure.toFixed(8)}`);
+        ctx.logger.debug(`  Actual yield: ${actualYield.toFixed(12)}`);
+        ctx.logger.debug(`  Bond: ${bondDecimal} SQD, Stake: ${stakeDecimal} SQD`);
+        ctx.logger.debug(`  Worker reward: ${workerRewardDecimal.toFixed(18)} SQD = ${finalWorkerReward} wei`);
+        ctx.logger.debug(`  Staker reward: ${stakerRewardDecimal.toFixed(18)} SQD = ${finalStakerReward} wei`);
+      }
+
       this.metricsLoggerService.logWorkerReport({
-        workerId: worker.worker_id, // use peer ID for worker_id field
-        trafficWeight: trafficFactor,
-        stakeWeight: stakeFactor,
-        rewardWeight: performanceMultiplier,
-        workerApr,
-        delegatorApr,
+        workerId: worker.worker_id,
+        trafficWeight: trafficWeight,
+        stakeWeight: Number(capedStake) / Number(totalStake || 1n),
+        rewardWeight: livenessCoefficient * dTraffic * dTenure,
+        workerApr: baseApr * livenessCoefficient * dTraffic * dTenure,
+        delegatorApr: totalStake > capedStake ? baseApr : 0,
         workerReward: finalWorkerReward,
-        stakerReward: calculatedStakerReward,
+        stakerReward: finalStakerReward,
         stake: capedStake,
         bytesSent: Number(worker.output_size),
         chunksRead: Number(worker.num_read_chunks),
       });
 
-      // log details for first 3 workers to debug
-      if (i < 3) {
-        ctx.logger.debug(
-          `\n--- Worker ${i + 1}: ${worker.worker_id.slice(0, 20)}... ---`,
-        );
-        ctx.logger.debug(`  Input data:`);
-        ctx.logger.debug(`    - Chunks read: ${worker.num_read_chunks}`);
-        ctx.logger.debug(`    - Bytes sent: ${worker.output_size}`);
-        ctx.logger.debug(`    - Total requests: ${worker.totalRequests}`);
-        ctx.logger.debug(`  Stakes:`);
-        ctx.logger.debug(
-          `    - Capped stake: ${capedStake} wei (${Number(capedStake) / 1e18} SQD)`,
-        );
-        ctx.logger.debug(
-          `    - Total stake: ${totalStake} wei (${Number(totalStake) / 1e18} SQD)`,
-        );
-        ctx.logger.debug(`  Performance factors:`);
-        ctx.logger.debug(`    - Liveness: ${liveness}`);
-        ctx.logger.debug(`    - Traffic factor: ${trafficFactor}`);
-        ctx.logger.debug(`    - Tenure factor: ${tenureFactor}`);
-        ctx.logger.debug(`    - Combined multiplier: ${performanceMultiplier}`);
-        ctx.logger.debug(
-          `    - Multiplier as BigInt: ${performanceMultiplierBigInt}/1,000,000`,
-        );
-        ctx.logger.debug(`  Reward calculation:`);
-        ctx.logger.debug(
-          `    - Base staking reward: ${baseStakingReward} wei (${Number(baseStakingReward) / 1e18} SQD)`,
-        );
-        ctx.logger.debug(
-          `    - Final worker reward: ${finalWorkerReward} wei (${Number(finalWorkerReward) / 1e18} SQD)`,
-        );
-        ctx.logger.debug(
-          `    - Staker reward: ${calculatedStakerReward} wei (${Number(calculatedStakerReward) / 1e18} SQD)`,
-        );
-        ctx.logger.debug(`  Structured logging:`);
-        ctx.logger.debug(`    - Worker APR: ${(workerApr * 100).toFixed(2)}%`);
-        ctx.logger.debug(
-          `    - Delegator APR: ${(delegatorApr * 100).toFixed(2)}%`,
-        );
-        ctx.logger.debug(`    - Stake factor: ${stakeFactor.toFixed(6)}`);
-      }
-
       rewards.push({
-        workerId: contractWorkerId, // actual contract worker ID
-        id: contractWorkerId, // use contract ID for identification
+        workerId: contractWorkerId,
+        id: contractWorkerId,
         workerReward: finalWorkerReward,
-        stakerReward: calculatedStakerReward,
+        stakerReward: finalStakerReward,
         stake: capedStake,
         totalStake,
-        calculationTime: (endTime.getTime() - startTime.getTime()) / 1000,
+        calculationTime: duration,
       });
     }
 
     const totalRewards = rewards.reduce((sum, w) => sum + w.workerReward, 0n);
-    ctx.logger.debug(`\n=== Calculation Summary ===`);
-    ctx.logger.debug(
-      `Total rewards calculated: ${totalRewards} wei (${Number(totalRewards) / 1e18} SQD)`,
-    );
-    ctx.logger.debug(
-      `Average reward per worker: ${Number(totalRewards) / rewards.length / 1e18} SQD`,
-    );
+    ctx.logger.debug(`\n=== Final Results ===`);
+    ctx.logger.debug(`Total workers: ${rewards.length}`);
+    ctx.logger.debug(`Total worker rewards: ${Number(totalRewards) / 1e18} SQD`);
+    ctx.logger.debug(`Average reward: ${Number(totalRewards) / rewards.length / 1e18} SQD`);
 
     return rewards;
+  }
+
+
+
+
+
+  private splitPingsByEpochs(timestamps: number[], epochTimestamps: number[]): number[][] {
+    // replicates the splitLogs function from old backend
+    const sortedTimestamps = [...timestamps].sort((a, b) => a - b);
+    const splits: number[][] = [[epochTimestamps[0]]];
+    let index = 1;
+    
+    for (const timestamp of sortedTimestamps) {
+      while (index < epochTimestamps.length && timestamp > epochTimestamps[index]) {
+        splits[splits.length - 1].push(epochTimestamps[index]);
+        splits.push([epochTimestamps[index]]);
+        index++;
+      }
+      splits[splits.length - 1].push(timestamp);
+    }
+    
+    return splits;
+  }
+
+  private calculateLivenessFromPings(timestamps: number[], epochDuration: number): number {
+    if (timestamps.length < 2) {
+      return 0;
+    }
+    
+    const diffs = timestamps.slice(1).map((timestamp, i) => timestamp - timestamps[i]);
+    
+    const WORKER_OFFLINE_THRESHOLD = 65;
+    const totalOfflineTime = diffs
+      .filter(diff => diff > WORKER_OFFLINE_THRESHOLD)
+      .reduce((sum, diff) => sum + diff, 0);
+    
+    const livenessFactor = Math.max(0, 1 - totalOfflineTime / epochDuration);
+    
+    return livenessFactor;
+  }
+
+  private calculateDTrafficFactor(
+    ctx: Context,
+    capedStake: bigint,
+    bondAmount: bigint,
+    worker: WorkerQueryData,
+    allWorkers: WorkerQueryData[],
+    allCapedStakes: any[],
+    allTotalStakes: any[],
+  ): number {
+    const workerCount = allCapedStakes.length;
+    const totalBond = bondAmount * BigInt(workerCount);
+    
+    const totalStakes = allCapedStakes.reduce((sum, stake, i) => {
+      const capedStakeValue = BigInt(stake?.result || 0);
+      return sum + capedStakeValue;
+    }, 0n);
+    
+    const totalSupply = totalBond + totalStakes;
+    
+    if (totalSupply === 0n) {
+      return 1.0;
+    }
+    
+    const workerSupply = bondAmount + capedStake;
+    const supplyRatio = Number(workerSupply) / Number(totalSupply);
+    
+    if (supplyRatio === 0) {
+      return 0.001;
+    }
+    
+    const trafficWeight = this.calculateTrafficFactor(ctx, worker, allWorkers);
+    
+    const dTrafficAlpha = 0.1;
+    const dTraffic = Math.min(1.0, Math.pow(trafficWeight / supplyRatio, dTrafficAlpha));
+    
+    const workerIndex = allWorkers.indexOf(worker);
+    if (workerIndex < 3) {
+      ctx.logger.debug(`DTraffic calc for worker ${worker.worker_id.slice(0, 20)}:`);
+      ctx.logger.debug(`  Traffic weight: ${trafficWeight.toFixed(6)}`);
+      ctx.logger.debug(`  Supply ratio: ${supplyRatio.toFixed(6)}`);
+      ctx.logger.debug(`  DTraffic alpha: ${dTrafficAlpha}`);
+      ctx.logger.debug(`  Final dTraffic: ${dTraffic.toFixed(6)}`);
+    }
+    
+    return Math.max(0.001, Math.min(1.0, dTraffic));
   }
 
   private calculateTrafficFactor(
@@ -541,8 +637,7 @@ export class RewardsCalculatorService {
     const bytesFactor = workerBytes / totalBytes;
     const chunksFactor = workerChunks / totalChunks;
 
-    // average the two factors
-    const trafficFactor = (bytesFactor + chunksFactor) / 2;
+    const trafficFactor = Math.sqrt(bytesFactor * chunksFactor);
 
     if (allWorkers.indexOf(worker) < 3) {
       ctx.logger.debug(
@@ -682,13 +777,38 @@ export class RewardsCalculatorService {
     batchNumber: number,
     totalBatches: number,
   ): Promise<WorkerReward[]> {
-    //  batch filtering based on peer ID modulo like in the original
-    // for now, simple modulo on worker ID
-    const filtered = workers.filter(
-      (_, index) => index % totalBatches === batchNumber,
-    );
+    const bs58 = await import('bs58');
+    
+    if (totalBatches > 64) {
+      throw new Error('Total batches cannot exceed 64');
+    }
+    
+    const filtered = workers.filter((worker) => {
+      try {
+        const workerData = Object.values(this.workerIdMapping || {}).find(
+          (data) => data.contractId === worker.workerId
+        );
+        
+        if (!workerData?.peerId) {
+          const workerIdBytes = Buffer.from(worker.workerId.toString(16).padStart(32, '0'), 'hex');
+          const group = workerIdBytes[workerIdBytes.length - 1] % totalBatches;
+          return batchNumber === group;
+        }
+        
+        const peerIdBytes = bs58.default.decode(workerData.peerId);
+        const group = peerIdBytes[peerIdBytes.length - 1] % totalBatches;
+        return batchNumber === group;
+      } catch (error) {
+        ctx.logger.warn(
+          `Failed to determine batch for worker ${worker.workerId}: ${error.message}`,
+        );
+        const fallbackIndex = workers.indexOf(worker);
+        return fallbackIndex % totalBatches === batchNumber;
+      }
+    });
+    
     ctx.logger.debug(
-      `Filtered ${filtered.length} workers for batch ${batchNumber}/${totalBatches}`,
+      `Stable batch filtering: ${filtered.length} workers for batch ${batchNumber}/${totalBatches}`,
     );
     return filtered;
   }
@@ -842,13 +962,13 @@ export class RewardsCalculatorService {
   }> {
     try {
       // Try to get real delegation data from ClickHouse
-      const networkName =
-        this.configService.get('blockchain.network.networkName') || 'mainnet';
+      const databaseName =
+        this.configService.get('database.clickhouse.database') || 'testnet';
       const query = `
         SELECT 
           SUM(stake) as totalStake,
           COUNT(DISTINCT worker_id) as workerCount
-        FROM ${networkName}.worker_stats 
+        FROM ${databaseName}.worker_stats 
         WHERE time >= NOW() - INTERVAL 1 DAY
           AND stake > 0
         ORDER BY time DESC
@@ -936,15 +1056,15 @@ export class RewardsCalculatorService {
     endTime: Date,
   ): Promise<number | null> {
     try {
-      const networkName =
-        this.configService.get('blockchain.network.networkName') || 'mainnet';
+      const databaseName =
+        this.configService.get('database.clickhouse.database') || 'testnet';
 
       // Get the latest successful APR from rewards_stats
       // This is more robust than trying to filter by time range
       const query = `
         SELECT 
           base_apr / 10000 as apr
-        FROM ${networkName}.rewards_stats
+        FROM ${databaseName}.rewards_stats
         WHERE is_commit_success = true
         ORDER BY epoch_end DESC
         LIMIT 1
@@ -983,6 +1103,7 @@ export class RewardsCalculatorService {
   }
 
   private async calculateRewardsOldMethod(
+    ctx: Context,
     fromBlock: number,
     toBlock: number,
     startTime: Date,
@@ -991,18 +1112,28 @@ export class RewardsCalculatorService {
     batchNumberOverride?: number,
     totalBatchesOverride?: number,
   ): Promise<RewardCalculationResult> {
-    this.logger.log('🔄 Starting EXACT old rewards calculator method...');
+    console.log('🔄 Starting EXACT old rewards calculator method...');
 
     const { 
       OldWorkers, 
-      calculateLivenessFactor, 
-      getHistoricalLiveness 
+      calculateLivenessFactor,
     } = await import('./old-rewards-calculator');
 
-    const oldWorkers = new OldWorkers(startTime, endTime);
+    const epochLength = await this.contractService.getEpochLength(ctx);
+    const totalBatchesForWindow = totalBatchesOverride ?? this.configService.get('rewards.totalBatches') ?? 4;
+    
+    const calculationStartBlock = toBlock - (epochLength * totalBatchesForWindow);
+    const calculationStartTime = await this.web3Service.getBlockTimestamp(ctx, calculationStartBlock);
+    
+    console.log(`📊 Using four-epoch window for calculation:`);
+    console.log(`   Single epoch: ${fromBlock} - ${toBlock} (${startTime.toISOString()} - ${endTime.toISOString()})`);
+    console.log(`   Calculation window: ${calculationStartBlock} - ${toBlock} (${calculationStartTime.toISOString()} - ${endTime.toISOString()})`);
+    console.log(`   Epoch length: ${epochLength} blocks, Total batches: ${totalBatchesForWindow}`);
+
+    const oldWorkers = new OldWorkers(calculationStartTime, endTime);
 
     const activeWorkerData = await this.getWorkersFromClickHouse(
-      startTime,
+      calculationStartTime,
       endTime,
       skipSignatureValidation,
     );
@@ -1012,7 +1143,7 @@ export class RewardsCalculatorService {
       return this.createEmptyResult(fromBlock, toBlock, startTime, endTime);
     }
 
-    this.logger.log(`📊 Found ${activeWorkerData.length} workers from ClickHouse`);
+    ctx.logger.debug(`📊 Found ${activeWorkerData.length} workers from ClickHouse`);
 
     for (const workerData of activeWorkerData) {
       const worker = oldWorkers.add(workerData.worker_id);
@@ -1025,9 +1156,10 @@ export class RewardsCalculatorService {
       worker.totalRequests = workerData.totalRequests;
     }
 
-    this.logger.log(`✅ Added ${oldWorkers.count()} workers to old backend calculator`);
+    ctx.logger.debug(`✅ Added ${oldWorkers.count()} workers to old backend calculator`);
 
     const workerIdMapping = await this.web3Service.preloadWorkerIds(
+      ctx,
       activeWorkerData.map((w) => w.worker_id),
     );
     await oldWorkers.clearUnknownWorkers(workerIdMapping);
@@ -1037,7 +1169,7 @@ export class RewardsCalculatorService {
       return this.createEmptyResult(fromBlock, toBlock, startTime, endTime);
     }
 
-    this.logger.log(`🎯 Filtered to ${oldWorkers.count()} known workers`);
+    console.log(`🎯 Filtered to ${oldWorkers.count()} known workers`);
 
     const workerPeerIds = oldWorkers.getWorkerPeerIds();
     const [capedStakes, totalStakes] = await this.contractService.getStakes(
@@ -1049,7 +1181,7 @@ export class RewardsCalculatorService {
       workerPeerIds
     );
 
-    const bondAmount = await this.web3Service.getBondAmount();
+    const bondAmount = await this.web3Service.getBondAmount(ctx);
     await oldWorkers.fetchCurrentBond(bondAmount);
 
     oldWorkers.getT();
@@ -1058,18 +1190,24 @@ export class RewardsCalculatorService {
 
     const livenessFactor = await calculateLivenessFactor(
       this.clickHouseService,
-      startTime,
+      calculationStartTime,
       endTime,
     );
     await oldWorkers.getLiveness(livenessFactor);
 
-    const historicalLiveness = await getHistoricalLiveness(
-      this.clickHouseService,
-      [startTime, endTime], 
+    const epochLengthInBlocks = await this.contractService.getEpochLength(ctx);
+    const SECONDS_PER_BLOCK = 12;
+    const epochLengthSeconds = epochLengthInBlocks * SECONDS_PER_BLOCK;
+    const TENURE_EPOCH_COUNT = 10;
+    
+    const epochStartBlocks = [...new Array(TENURE_EPOCH_COUNT + 1)].map(
+      (_, i) => new Date(calculationStartTime.getTime() - ((TENURE_EPOCH_COUNT - i) * epochLengthSeconds * 1000))
     );
+    
+    const historicalLiveness = await this.getHistoricalLiveness(epochStartBlocks);
     await oldWorkers.getDTenure(historicalLiveness);
 
-    const baseApr = await this.getAPRFromContracts();
+    const baseApr = await this.getAPRFromContracts(ctx);
     await oldWorkers.calculateRewards(baseApr);
 
     oldWorkers.logDebugInfo();
@@ -1081,21 +1219,22 @@ export class RewardsCalculatorService {
     if (batchNumber === undefined && totalBatches !== undefined) {
       const epochLength = 7000;
       batchNumber = Math.ceil(toBlock / epochLength) % totalBatches;
-      this.logger.log(`🧮 Auto-calculated batch number: Math.ceil(${toBlock} / ${epochLength}) % ${totalBatches} = ${batchNumber}`);
+      console.log(`🧮 Auto-calculated batch number: Math.ceil(${toBlock} / ${epochLength}) % ${totalBatches} = ${batchNumber}`);
     }
     
     if (batchNumber !== undefined && totalBatches !== undefined) {
-      this.logger.log(`🔄 Applying batch filtering: ${batchNumber}/${totalBatches}`);
+      console.log(`🔄 Applying batch filtering: ${batchNumber}/${totalBatches}`);
       finalWorkers = oldWorkers.filterBatch(batchNumber, totalBatches);
-      this.logger.log(`✅ Filtered to ${finalWorkers.count()} workers for batch ${batchNumber}`);
+      console.log(`✅ Filtered to ${finalWorkers.count()} workers for batch ${batchNumber}`);
     } else {
-      this.logger.log(`⚠️  No batch filtering configured - processing ALL workers`);
-      this.logger.log(`   💡 To enable batch filtering, set BATCH_NUMBER and TOTAL_BATCHES environment variables`);
-      this.logger.log(`   📊 For block ${toBlock}: suggested batch = ${Math.ceil(toBlock / 7000) % (totalBatches || 4)}`);
+      console.log(`⚠️  No batch filtering configured - processing ALL workers`);
+      console.log(`   💡 To enable batch filtering, set BATCH_NUMBER and TOTAL_BATCHES environment variables`);
+      console.log(`   📊 For block ${toBlock}: suggested batch = ${Math.ceil(toBlock / 7000) % (totalBatches || 4)}`);
     }
 
     const oldRewards = await finalWorkers.rewards();
     const workers: WorkerReward[] = [];
+    const calculationTime = Date.now();
 
     for (const [peerId, reward] of Object.entries(oldRewards)) {
       workers.push({
@@ -1105,13 +1244,14 @@ export class RewardsCalculatorService {
         stakerReward: reward.stakerReward,
         stake: 0n, 
         totalStake: 0n,
+        calculationTime,
       });
     }
 
     const totalRewards = workers.reduce((sum, w) => sum + w.workerReward, 0n);
 
-    this.logger.log(`✅ EXACT old method calculated rewards for ${workers.length} workers`);
-    this.logger.log(`💰 Total rewards: ${Number(totalRewards) / 1e18} SQD`);
+    console.log(`✅ EXACT old method calculated rewards for ${workers.length} workers`);
+    console.log(`💰 Total rewards: ${Number(totalRewards) / 1e18} SQD`);
 
     return {
       workers,
@@ -1125,7 +1265,7 @@ export class RewardsCalculatorService {
     endTime: Date,
     skipSignatureValidation: boolean,
   ): Promise<any[]> {
-    const networkName = this.configService.get('blockchain.network.networkName') || 'mainnet';
+    const databaseName = this.configService.get('database.clickhouse.database') || 'testnet';
     
     if (skipSignatureValidation) {
       const query = `
@@ -1134,24 +1274,24 @@ export class RewardsCalculatorService {
           sum(num_read_chunks) as num_read_chunks,
           sum(output_size) as output_size,
           count(*) as totalRequests
-        FROM ${networkName}.worker_query_logs
-        WHERE
-          ${networkName}.worker_query_logs.worker_timestamp >= '${this.formatDateForClickHouse(startTime)}' AND  
-          ${networkName}.worker_query_logs.worker_timestamp <= '${this.formatDateForClickHouse(endTime)}' AND
+        FROM ${databaseName}.worker_query_logs
+                WHERE
+          ${databaseName}.worker_query_logs.worker_timestamp >= '${this.formatDateForClickHouse(startTime)}' AND
+          ${databaseName}.worker_query_logs.worker_timestamp <= '${this.formatDateForClickHouse(endTime)}' AND
           (toUnixTimestamp64Micro(collector_timestamp) - toUnixTimestamp64Micro(worker_timestamp)) / 60000000 < 20
         GROUP BY worker_id
       `;
 
-      this.logger.log(`🔍 ClickHouse Query (EXACT old backend format):`);
-      this.logger.log(`   FROM: ${this.formatDateForClickHouse(startTime)}`);
-      this.logger.log(`   TO: ${this.formatDateForClickHouse(endTime)}`);
+      console.log(`🔍 ClickHouse Query (EXACT old backend format):`);
+      console.log(`   FROM: ${this.formatDateForClickHouse(startTime)}`);
+      console.log(`   TO: ${this.formatDateForClickHouse(endTime)}`);
 
       const client = (this.clickHouseService as any).client;
       const resultSet = await client.query({ query, format: 'JSONEachRow' });
       const results = await resultSet.json();
       const resultArray = Array.isArray(results) ? results : [results];
       
-      this.logger.log(`📊 ClickHouse returned ${resultArray.length} workers`);
+      console.log(`📊 ClickHouse returned ${resultArray.length} workers`);
       
       return resultArray;
     } else {
@@ -1163,9 +1303,188 @@ export class RewardsCalculatorService {
     return date.toISOString().slice(0, 19).replace('T', ' ');
   }
 
+  private async getHistoricalLiveness(epochRanges: Date[]): Promise<Record<string, number[]>> {
+    const sortedEpochRanges = epochRanges.sort(
+      (a, b) => a.getTime() - b.getTime(),
+    );
+    const from = sortedEpochRanges[0];
+    const to = sortedEpochRanges.at(-1)!;
+    const pings = await this.getPingsFromClickHouse(from, to);
+    const epochRangesTimestamps = sortedEpochRanges.map((date) =>
+      Math.floor(date.getTime() / 1000),
+    );
+    const splittedPings = Object.entries(pings).map(([workerId, timestamps]) => {
+      return [workerId, this.splitLogs(timestamps, epochRangesTimestamps)] as const;
+    });
+    const _networkStats = splittedPings.map(
+      ([workerId, splits]) =>
+        [
+          workerId,
+          splits.map((split, i) => {
+            return this.networkStats(
+              split,
+              epochRangesTimestamps[i + 1] - epochRangesTimestamps[i],
+            ).livenessFactor;
+          }),
+        ] as const,
+    );
+    return Object.fromEntries(_networkStats);
+  }
+
+  private async getPingsFromClickHouse(from: Date, to: Date): Promise<Record<string, number[]>> {
+    const databaseName = this.configService.get('database.clickhouse.database') || 'testnet';
+    const query = `
+      SELECT
+        worker_id,
+        arrayConcat(
+          [toUnixTimestamp('${this.formatDateForClickHouse(from)}')],
+          arraySort(groupArray(toUnixTimestamp(timestamp))),
+          [toUnixTimestamp('${this.formatDateForClickHouse(to)}')]
+        ) as timestamps 
+      FROM ${databaseName}.worker_pings_v2 
+      WHERE timestamp >= '${this.formatDateForClickHouse(from)}' 
+        AND timestamp <= '${this.formatDateForClickHouse(to)}' 
+      GROUP BY worker_id
+    `;
+
+    const client = (this.clickHouseService as any).client;
+    if (!client) {
+      return {};
+    }
+
+    try {
+      const resultSet = await client.query({ query, format: 'JSONEachRow' });
+      const results = await resultSet.json();
+      const resultArray = Array.isArray(results) ? results : [results];
+      
+      const pings: Record<string, number[]> = {};
+      for (const row of resultArray) {
+        if (row.worker_id && row.timestamps) {
+          pings[row.worker_id] = row.timestamps;
+        }
+      }
+      return pings;
+    } catch (error) {
+      console.warn(`Failed to get pings from ClickHouse: ${error}`);
+      return {};
+    }
+  }
+
+  private splitLogs(timestamps: number[], epochRanges: number[]): number[][] {
+    const sortedTimestamps = timestamps.sort();
+    const splits: number[][] = [[epochRanges[0]]];
+    let index = 1;
+    for (const timestamp of sortedTimestamps) {
+      while (index < epochRanges.length && timestamp > epochRanges[index]) {
+        splits.at(-1)!.push(epochRanges[index]);
+        splits.push([epochRanges[index]]);
+        index++;
+      }
+      const lastSplit = splits.at(-1)!;
+      lastSplit.push(timestamp);
+    }
+    return splits;
+  }
+
+  private secondDiffs(dates: number[]): number[] {
+    return dates
+      .map((date, i) => {
+        if (i === 0) return 0;
+        return date - dates[i - 1];
+      })
+      .slice(1);
+  }
+
+  private totalOfflineSeconds(diffs: number[]): number {
+    const WORKER_OFFLINE_THRESHOLD = 600;
+    return diffs
+      .filter((diff) => diff > WORKER_OFFLINE_THRESHOLD)
+      .reduce((sum, diff) => sum + diff, 0);
+  }
+
+  private networkStats(pingTimestamps: number[], epochLength: number): { totalPings: number; totalTimeOffline: number; livenessFactor: number } {
+    const diffs = this.secondDiffs(pingTimestamps);
+    const totalTimeOffline = this.totalOfflineSeconds(diffs);
+
+    return {
+      totalPings: diffs.length - 1,
+      totalTimeOffline: totalTimeOffline,
+      livenessFactor: 1 - totalTimeOffline / epochLength,
+    };
+  }
+
+  private calculateLivenessCoefficient(networkStats: { livenessFactor: number; totalPings: number; totalTimeOffline: number }): number {
+    if (!networkStats) return 0;
+    const { livenessFactor } = networkStats;
+    if (livenessFactor < 0.8) {
+      return 0;
+    } else if (livenessFactor < 0.9) {
+      return 9 * livenessFactor - 7.2;
+    } else if (livenessFactor < 0.95) {
+      return 2 * livenessFactor - 0.9;
+    } else {
+      return 1;
+    }
+  }
+
+  private calculateAllTrafficFactors(ctx: Context, workerData: WorkerQueryData[]): number[] {
+    const totalBytes = workerData.reduce((sum, w) => sum + Number(w.output_size), 0);
+    const totalChunks = workerData.reduce((sum, w) => sum + Number(w.num_read_chunks), 0);
+
+    if (totalBytes === 0 || totalChunks === 0) {
+      return workerData.map(() => 1.0);
+    }
+
+    return workerData.map((worker) => {
+      const workerBytes = Number(worker.output_size);
+      const workerChunks = Number(worker.num_read_chunks);
+      const bytesFactor = workerBytes / totalBytes;
+      const chunksFactor = workerChunks / totalChunks;
+      const trafficFactor = Math.sqrt(bytesFactor * chunksFactor);
+      return Math.max(0.001, Math.min(2.0, trafficFactor));
+    });
+  }
+
+  private calculateAllDTrafficFactors(
+    ctx: Context,
+    validWorkers: Array<{
+      worker: WorkerQueryData;
+      capedStake: bigint;
+      totalStake: bigint;
+    }>,
+    bondAmount: bigint,
+  ): number[] {
+    const workerCount = validWorkers.length;
+    const totalBond = bondAmount * BigInt(workerCount);
+    
+    const totalStakes = validWorkers.reduce((sum, { capedStake }) => sum + capedStake, 0n);
+    const totalSupply = totalBond + totalStakes;
+    
+    if (totalSupply === 0n) {
+      return validWorkers.map(() => 1.0);
+    }
+
+    const trafficFactors = this.calculateAllTrafficFactors(ctx, validWorkers.map(w => w.worker));
+
+    return validWorkers.map(({ capedStake }, index) => {
+      const workerSupply = bondAmount + capedStake;
+      const supplyRatio = Number(workerSupply) / Number(totalSupply);
+      
+      if (supplyRatio === 0) {
+        return 0.001;
+      }
+      
+      const trafficWeight = trafficFactors[index];
+      const dTrafficAlpha = 0.1;
+      const dTraffic = Math.min(1.0, Math.pow(trafficWeight / supplyRatio, dTrafficAlpha));
+      
+      return Math.max(0.001, Math.min(1.0, dTraffic));
+    });
+  }
+
   /**
    * Get APR from contracts using the old rewards calculator approach
-   * This mimics the currentApy() function from packages/rewards-calculator/src/chain.ts
+   * This replicates the currentApy() function from packages/rewards-calculator/src/chain.ts
    */
   private async getAPRFromContracts(ctx: Context): Promise<number> {
     try {
@@ -1174,51 +1493,38 @@ export class RewardsCalculatorService {
       // Get current block for consistent reads
       const currentBlock = await this.web3Service.getLatestL2Block();
 
-      // Try to get contract addresses
-      const rewardCalculationAddress = this.configService.get(
-        'blockchain.contracts.rewardCalculation',
-      );
-      const networkControllerAddress = this.configService.get(
-        'blockchain.contracts.networkController',
-      );
-
-      if (!rewardCalculationAddress || !networkControllerAddress) {
-        ctx.logger.warn(
-          'Contract addresses not configured, using fallback APR',
-        );
-        return 0.2; // 20% fallback like old backend
-      }
-
-      // Try to implement the old backend's currentApy calculation
-      // The old logic was: min(20%, (yearlyRewardCapCoefficient * initialRewardPoolsSize) / effectiveTVL)
-
       try {
-        // For now, since we don't have access to the exact same contract methods,
-        // we'll use the contract service's getCurrentApy method which tries to get from contracts
-        const currentApyBasisPoints =
-          await this.contractService.getCurrentApy(ctx);
-        const aprDecimal = Number(currentApyBasisPoints) / 10000; // Convert basis points to decimal
+        const tvl = await this.contractService.getEffectiveTVL(ctx, currentBlock);
+        ctx.logger.debug(`TVL: ${tvl.toString()}`);
+        
+        if (tvl === 0n) {
+          ctx.logger.debug('TVL is 0, returning 20% APR as per old backend logic');
+          return 0.2; 
+        }
+
+        const initialRewardPoolSize = await this.contractService.getInitialRewardPoolSize(ctx, currentBlock);
+        ctx.logger.debug(`Initial Reward Pool Size: ${initialRewardPoolSize.toString()}`);
+
+        const yearlyRewardCapCoefficient = await this.contractService.getYearlyRewardCapCoefficient(ctx, currentBlock);
+        ctx.logger.debug(`Yearly Reward Cap Coefficient: ${yearlyRewardCapCoefficient.toString()}`);
+
+
+        const apyCap = (yearlyRewardCapCoefficient * initialRewardPoolSize) / tvl;
+        ctx.logger.debug(`APY Cap: ${apyCap.toString()}`);
+
+        const finalApyBasisPoints = apyCap < 2000n ? apyCap : 2000n;
+
+        const finalApr = Number(finalApyBasisPoints) / 10000;
 
         ctx.logger.debug(
-          `📊 Contract APY calculation result: ${(aprDecimal * 100).toFixed(2)}%`,
-        );
-
-        // Apply the same min logic as old backend (min of 20% or calculated)
-        const finalApr = Math.min(0.2, aprDecimal);
-
-        ctx.logger.debug(
-          `✅ Final contract-based APR (min 20%): ${(finalApr * 100).toFixed(2)}%`,
+          `✅ Contract-based APR calculation: ${(finalApr * 100).toFixed(2)}% (${finalApyBasisPoints} basis points)`,
         );
         return finalApr;
+
       } catch (contractError) {
         ctx.logger.warn(
           { error: contractError },
-          `Contract APY calculation failed`,
-        );
-
-        // Fallback: use 20% default like old backend did when TVL = 0
-        ctx.logger.debug(
-          'Using 20% fallback APR (same as old backend when TVL = 0)',
+          `Contract APR calculation failed, using 20% fallback`,
         );
         return 0.2;
       }

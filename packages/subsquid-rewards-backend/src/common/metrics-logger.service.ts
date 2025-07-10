@@ -90,7 +90,7 @@ export class MetricsLoggerService {
     };
 
     // Output as structured JSON log that the parser can consume
-    this.logger.log(JSON.stringify(report));
+    console.log(JSON.stringify(report));
   }
 
   /**
@@ -128,7 +128,7 @@ export class MetricsLoggerService {
     };
 
     // Output as structured JSON log that the parser can consume
-    this.logger.log(JSON.stringify(report));
+    console.log(JSON.stringify(report));
   }
 
   /**

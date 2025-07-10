@@ -49,7 +49,103 @@ export class ContractService {
     private clickHouseService: ClickHouseService,
   ) {}
 
-  async getCurrentApy(ctx: Context): Promise<bigint> {
+  async getEffectiveTVL(ctx: Context, blockNumber?: bigint): Promise<bigint> {
+    try {
+      const rewardCalculationAddress = this.configService.get(
+        'blockchain.contracts.rewardCalculation',
+      ) as Address;
+
+      if (!rewardCalculationAddress) {
+        throw new Error('RewardCalculation contract address not configured');
+      }
+
+      const contract = getContract({
+        address: rewardCalculationAddress,
+        abi: RewardCalculationABI,
+        client: this.web3Service.client,
+      });
+
+      return await contract.read.effectiveTVL({ blockNumber });
+    } catch (error) {
+      ctx.logger.error({ error }, `Failed to get effective TVL from contract`);
+      throw error;
+    }
+  }
+
+  async getInitialRewardPoolSize(ctx: Context, blockNumber?: bigint): Promise<bigint> {
+    try {
+      const rewardCalculationAddress = this.configService.get(
+        'blockchain.contracts.rewardCalculation',
+      ) as Address;
+
+      if (!rewardCalculationAddress) {
+        throw new Error('RewardCalculation contract address not configured');
+      }
+
+      const contract = getContract({
+        address: rewardCalculationAddress,
+        abi: RewardCalculationABI,
+        client: this.web3Service.client,
+      });
+
+      return await contract.read.INITIAL_REWARD_POOL_SIZE({ blockNumber });
+    } catch (error) {
+      ctx.logger.error({ error }, `Failed to get initial reward pool size from contract`);
+      throw error;
+    }
+  }
+
+  async getYearlyRewardCapCoefficient(ctx: Context, blockNumber?: bigint): Promise<bigint> {
+    try {
+      const networkControllerAddress = this.configService.get(
+        'blockchain.contracts.networkController',
+      ) as Address;
+
+      if (!networkControllerAddress) {
+        throw new Error('NetworkController contract address not configured');
+      }
+
+      const contract = getContract({
+        address: networkControllerAddress,
+        abi: NetworkControllerABI,
+        client: this.web3Service.client,
+      });
+
+      return await contract.read.yearlyRewardCapCoefficient({ blockNumber });
+    } catch (error) {
+      ctx.logger.error({ error }, `Failed to get yearly reward cap coefficient from contract`);
+      throw error;
+    }
+  }
+
+  async getBoostFactor(ctx: Context, duration: bigint): Promise<bigint> {
+    try {
+      const rewardCalculationAddress = this.configService.get(
+        'blockchain.contracts.rewardCalculation',
+      ) as Address;
+
+      if (!rewardCalculationAddress) {
+        throw new Error('RewardCalculation contract address not configured');
+      }
+
+      const contract = getContract({
+        address: rewardCalculationAddress,
+        abi: RewardCalculationABI,
+        client: this.web3Service.client,
+      });
+
+      const boostFactor = await contract.read.boostFactor([duration]);
+      ctx.logger.debug(
+        `Retrieved boost factor from contract: ${boostFactor} basis points for duration ${duration}`,
+      );
+      return boostFactor;
+    } catch (error) {
+      ctx.logger.error({ error }, `Failed to get boost factor from contract`);
+      return 10000n;
+    }
+  }
+
+  async getCurrentApy(ctx: Context, blockNumber?: bigint): Promise<bigint> {
     try {
       try {
         const networkName =
@@ -86,32 +182,30 @@ export class ContractService {
         ctx.logger.warn({ error }, `Failed to get APR from ClickHouse`);
       }
 
-      // try to get from contract
-      const rewardCalculationAddress = this.configService.get(
-        'blockchain.contracts.rewardCalculation',
-      ) as Address;
-      const networkControllerAddress = this.configService.get(
-        'blockchain.contracts.networkController',
-      ) as Address;
 
-      if (rewardCalculationAddress) {
-        try {
-          const contract = getContract({
-            address: rewardCalculationAddress,
-            abi: RewardCalculationABI,
-            client: this.web3Service.client,
-          });
-
-          ctx.logger.debug(
-            'Contract APY calculation not available in current ABIs',
-          );
-          return BigInt('2000'); // 20% default
-        } catch (error) {
-          ctx.logger.warn(
-            { error },
-            `Failed to calculate APY from contract`,
-          );
+      try {
+        const tvl = await this.getEffectiveTVL(ctx, blockNumber);
+        ctx.logger.debug(`TVL: ${tvl.toString()}`);
+        
+        if (tvl === 0n) {
+          return 2000n;
         }
+
+        const initialRewardPoolSize = await this.getInitialRewardPoolSize(ctx, blockNumber);
+        ctx.logger.debug(`Initial Reward Pool Size: ${initialRewardPoolSize.toString()}`);
+
+        const yearlyRewardCapCoefficient = await this.getYearlyRewardCapCoefficient(ctx, blockNumber);
+        ctx.logger.debug(`Yearly Reward Cap Coefficient: ${yearlyRewardCapCoefficient.toString()}`);
+
+        const apyCap = (yearlyRewardCapCoefficient * initialRewardPoolSize) / tvl;
+        ctx.logger.debug(`APY Cap: ${apyCap.toString()}`);
+
+
+        const finalApr = 2000n > apyCap ? apyCap : 2000n;
+        ctx.logger.debug(`Final APR: ${finalApr} basis points`);
+        return finalApr;
+      } catch (error) {
+        ctx.logger.warn({ error }, `Failed to calculate APY from contract`);
       }
 
       // Default: return 20% APY (2000 basis points)

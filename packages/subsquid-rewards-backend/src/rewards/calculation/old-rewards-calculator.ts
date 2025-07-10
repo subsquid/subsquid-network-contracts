@@ -4,7 +4,6 @@ import utc from 'dayjs/plugin/utc';
 import { Logger } from '@nestjs/common';
 
 dayjs.extend(utc);
-
 Decimal.set({ precision: 28, minE: -9 });
 
 const YEAR = 365 * 24 * 60 * 60;
@@ -193,7 +192,7 @@ export class OldWorkers {
     filteredWorkers.stakeFactor = this.stakeFactor;
     filteredWorkers.rAPR = this.rAPR;
 
-    this.logger.log(`🔄 Filtered batch ${batchNumber}/${totalBatches}: ${Object.keys(newWorkers).length} workers`);
+    console.log(`🔄 Filtered batch ${batchNumber}/${totalBatches}: ${Object.keys(newWorkers).length} workers`);
     
     return filteredWorkers;
   }
@@ -295,7 +294,7 @@ export class OldWorkers {
     this.stakeFactor = this.calculateStakeFactor();
     this.rAPR = this.baseApr;
 
-    const rMax = this.rAPR.mul(duration).div(YEAR).div(10_000);
+    const rMax = this.rAPR.mul(duration).div(YEAR);
     this.map((worker) => worker.getRewards(rMax));
   }
 
@@ -337,25 +336,25 @@ export class OldWorkers {
   }
 
   public logDebugInfo() {
-    this.logger.log(`=== Old Backend Calculation Debug ===`);
-    this.logger.log(`Total workers: ${this.count()}`);
-    this.logger.log(`Bond amount: ${this.bond.toString()}`);
-    this.logger.log(`Base APR: ${this.baseApr.toString()}`);
-    this.logger.log(`Total bytes sent: ${this.totalBytesSent()}`);
-    this.logger.log(`Total chunks read: ${this.totalChunksRead()}`);
-    this.logger.log(`Total supply: ${this.totalSupply().toString()}`);
+    console.log(`=== Old Backend Calculation Debug ===`);
+    console.log(`Total workers: ${this.count()}`);
+    console.log(`Bond amount: ${this.bond.toString()}`);
+    console.log(`Base APR: ${this.baseApr.toString()}`);
+    console.log(`Total bytes sent: ${this.totalBytesSent()}`);
+    console.log(`Total chunks read: ${this.totalChunksRead()}`);
+    console.log(`Total supply: ${this.totalSupply().toString()}`);
 
     const workerArray = Object.values(this.workers);
     for (let i = 0; i < Math.min(3, workerArray.length); i++) {
       const worker = workerArray[i];
-      this.logger.log(`\n--- Worker ${i + 1}: ${worker.peerId.slice(0, 20)}... ---`);
-      this.logger.log(`  Traffic weight: ${worker.trafficWeight.toString()}`);
-      this.logger.log(`  dTraffic: ${worker.dTraffic.toString()}`);
-      this.logger.log(`  Liveness: ${worker.livenessCoefficient.toString()}`);
-      this.logger.log(`  dTenure: ${worker.dTenure.toString()}`);
-      this.logger.log(`  Actual yield: ${worker.actualYield.toString()}`);
-      this.logger.log(`  Worker reward: ${worker.workerReward.toString()} (${worker.workerReward.div(1e18).toString()} SQD)`);
-      this.logger.log(`  Staker reward: ${worker.stakerReward.toString()} (${worker.stakerReward.div(1e18).toString()} SQD)`);
+      console.log(`\n--- Worker ${i + 1}: ${worker.peerId.slice(0, 20)}... ---`);
+      console.log(`  Traffic weight: ${worker.trafficWeight.toString()}`);
+      console.log(`  dTraffic: ${worker.dTraffic.toString()}`);
+      console.log(`  Liveness: ${worker.livenessCoefficient.toString()}`);
+      console.log(`  dTenure: ${worker.dTenure.toString()}`);
+      console.log(`  Actual yield: ${worker.actualYield.toString()}`);
+      console.log(`  Worker reward: ${worker.workerReward.toString()} (${worker.workerReward.div(1e18).toString()} SQD)`);
+      console.log(`  Staker reward: ${worker.stakerReward.toString()} (${worker.stakerReward.div(1e18).toString()} SQD)`);
     }
   }
 }
@@ -424,18 +423,6 @@ export async function calculateLivenessFactor(
     return res;
   } catch (error) {
     console.warn(`Failed to get liveness factor: ${error.message}`);
-    return {};
-  }
-}
-
-export async function getHistoricalLiveness(
-  clickHouseService: any,
-  epochRanges: Date[],
-): Promise<Record<string, number[]>> {
-  try {
-    return {};
-  } catch (error) {
-    console.warn(`Failed to get historical liveness: ${error.message}`);
     return {};
   }
 }
