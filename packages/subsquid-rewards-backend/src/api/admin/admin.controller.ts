@@ -46,7 +46,6 @@ export interface DebugRegistrationInfo {
 
 @Controller('admin')
 export class AdminController {
-
   // Store active distributions in memory for demo purposes
   private activeDistributions = new Map<string, DistributionStatus>();
 
@@ -67,7 +66,9 @@ export class AdminController {
     @Param('toBlock') toBlock: string,
     @Query('limit') limit?: string,
   ) {
-    const ctx = new TaskContext(`admin:calculate-rewards:${fromBlock}-${toBlock}`);
+    const ctx = new TaskContext(
+      `admin:calculate-rewards:${fromBlock}-${toBlock}`,
+    );
     const fromBlockNum = parseInt(fromBlock, 10);
     const toBlockNum = parseInt(toBlock, 10);
     const limitNum = limit ? parseInt(limit, 10) : undefined;
@@ -100,7 +101,10 @@ export class AdminController {
         })),
       };
     } catch (error) {
-      new TaskContext("error-handling").logger.error({ error }, `Failed to calculate rewards`);
+      new TaskContext('error-handling').logger.error(
+        { error },
+        `Failed to calculate rewards`,
+      );
       return {
         success: false,
         error: error.message,
@@ -196,7 +200,10 @@ export class AdminController {
         status: this.formatStatus(initialStatus),
       };
     } catch (error) {
-      new TaskContext("error-handling").logger.error({ error }, `Failed to start distribution`);
+      new TaskContext('error-handling').logger.error(
+        { error },
+        `Failed to start distribution`,
+      );
       return {
         success: false,
         error: error.message,
@@ -224,7 +231,10 @@ export class AdminController {
         status: this.formatStatus(status),
       };
     } catch (error) {
-      new TaskContext("error-handling").logger.error({ error }, `Failed to get distribution status`);
+      new TaskContext('error-handling').logger.error(
+        { error },
+        `Failed to get distribution status`,
+      );
       return {
         success: false,
         error: error.message,
@@ -261,7 +271,10 @@ export class AdminController {
         returned: result.length,
       };
     } catch (error) {
-      new TaskContext("error-handling").logger.error({ error }, `Failed to get distributions`);
+      new TaskContext('error-handling').logger.error(
+        { error },
+        `Failed to get distributions`,
+      );
       return {
         success: false,
         error: error.message,
@@ -293,7 +306,9 @@ export class AdminController {
         epoch: `${fromBlockNum}-${toBlockNum}`,
       };
     } catch (error) {
-      new TaskContext("error-handling").logger.error(`Failed to get contract status: ${error.message}`);
+      new TaskContext('error-handling').logger.error(
+        `Failed to get contract status: ${error.message}`,
+      );
       return {
         success: false,
         error: error.message,
@@ -311,9 +326,9 @@ export class AdminController {
       const bondAmount =
         await this.rewardsCalculatorService['web3Service'].getBondAmount(ctx);
       const activeWorkerCount =
-        await this.rewardsCalculatorService[
-          'web3Service'
-        ].getActiveWorkerCount(ctx);
+        await this.rewardsCalculatorService['web3Service'].getActiveWorkerCount(
+          ctx,
+        );
 
       return {
         success: true,
@@ -325,7 +340,7 @@ export class AdminController {
         ),
       };
     } catch (error) {
-      new TaskContext("error-handling").logger.error(
+      new TaskContext('error-handling').logger.error(
         `Failed to get WorkerRegistration status: ${error.message}`,
       );
       return {
@@ -385,7 +400,9 @@ export class AdminController {
         }
       }
 
-      new TaskContext("method-call").logger.debug(`Cleaned up ${cleanedCount} old distributions`);
+      new TaskContext('method-call').logger.debug(
+        `Cleaned up ${cleanedCount} old distributions`,
+      );
 
       return {
         success: true,
@@ -394,7 +411,9 @@ export class AdminController {
         cutoffAge: `${maxAgeHours} hours`,
       };
     } catch (error) {
-      new TaskContext("error-handling").logger.error(`Cleanup failed: ${error.message}`);
+      new TaskContext('error-handling').logger.error(
+        `Cleanup failed: ${error.message}`,
+      );
       return {
         success: false,
         error: error.message,
@@ -432,7 +451,9 @@ export class AdminController {
         timestamp: new Date().toISOString(),
       };
     } catch (error) {
-      new TaskContext("error-handling").logger.error(`Failed to get system status: ${error.message}`);
+      new TaskContext('error-handling').logger.error(
+        `Failed to get system status: ${error.message}`,
+      );
       return {
         success: false,
         error: error.message,
@@ -452,8 +473,8 @@ export class AdminController {
         : Date.now() - status.startedAt.getTime(),
     };
   }
-  
-/* turned off for now
+
+  /* turned off for now
   @Get('debug/worker-states')
   async debugWorkerStates(@Query('sampleSize') sampleSize?: string) {
     try {
@@ -600,7 +621,9 @@ export class AdminController {
 
       return result || alphabet[0];
     } catch (error) {
-      new TaskContext("error-handling").logger.error(`Failed to convert hex to base58: ${error.message}`);
+      new TaskContext('error-handling').logger.error(
+        `Failed to convert hex to base58: ${error.message}`,
+      );
       return hex; // return original hex on error
     }
   }
@@ -629,7 +652,9 @@ export class AdminController {
         },
       };
     } catch (error) {
-      new TaskContext("error-handling").logger.error(`Failed to get scheduler status: ${error.message}`);
+      new TaskContext('error-handling').logger.error(
+        `Failed to get scheduler status: ${error.message}`,
+      );
       return {
         success: false,
         error: error.message,
@@ -643,7 +668,9 @@ export class AdminController {
   @Post('scheduler/trigger')
   async triggerSchedulerCheck() {
     try {
-      new TaskContext("method-call").logger.debug('🔄 Manual scheduler trigger requested');
+      new TaskContext('method-call').logger.debug(
+        '🔄 Manual scheduler trigger requested',
+      );
       const result = await this.blockSchedulerService.triggerManualCheck();
 
       return {
@@ -654,7 +681,9 @@ export class AdminController {
           : 'Block check completed - no distribution needed',
       };
     } catch (error) {
-      new TaskContext("error-handling").logger.error(`Failed to trigger scheduler: ${error.message}`);
+      new TaskContext('error-handling').logger.error(
+        `Failed to trigger scheduler: ${error.message}`,
+      );
       return {
         success: false,
         error: error.message,
@@ -669,7 +698,9 @@ export class AdminController {
   async forceCommit(@Body() body: { fromBlock: number; toBlock: number }) {
     try {
       const { fromBlock, toBlock } = body;
-      new TaskContext("method-call").logger.debug(`🔧 Force commit requested for ${fromBlock}-${toBlock}`);
+      new TaskContext('method-call').logger.debug(
+        `🔧 Force commit requested for ${fromBlock}-${toBlock}`,
+      );
 
       const result = await this.blockSchedulerService.forceCommit(
         fromBlock,
@@ -683,7 +714,9 @@ export class AdminController {
           : 'Commit failed',
       };
     } catch (error) {
-      new TaskContext("error-handling").logger.error(`Force commit failed: ${error.message}`);
+      new TaskContext('error-handling').logger.error(
+        `Force commit failed: ${error.message}`,
+      );
       return {
         success: false,
         error: error.message,
@@ -700,7 +733,7 @@ export class AdminController {
   ) {
     try {
       const { fromBlock, toBlock } = body;
-      new TaskContext("method-call").logger.debug(
+      new TaskContext('method-call').logger.debug(
         `🔧 Force distribution requested for ${fromBlock}-${toBlock}`,
       );
 
@@ -716,7 +749,9 @@ export class AdminController {
           : 'Distribution failed',
       };
     } catch (error) {
-      new TaskContext("error-handling").logger.error(`Force distribution failed: ${error.message}`);
+      new TaskContext('error-handling').logger.error(
+        `Force distribution failed: ${error.message}`,
+      );
       return {
         success: false,
         error: error.message,
@@ -728,10 +763,13 @@ export class AdminController {
   async getAPRMetrics() {
     try {
       const ctx = new TaskContext('admin:get-apr-metrics');
-      new TaskContext("method-call").logger.debug('📊 Calculating current APR metrics...');
+      new TaskContext('method-call').logger.debug(
+        '📊 Calculating current APR metrics...',
+      );
 
       // get network capacity metrics
-      const activeWorkerCount = await this.web3Service.getActiveWorkerCount(ctx);
+      const activeWorkerCount =
+        await this.web3Service.getActiveWorkerCount(ctx);
       const bondAmount = await this.web3Service.getBondAmount(ctx);
 
       // calc network capacity
@@ -760,7 +798,9 @@ export class AdminController {
       const discountFactor = this.calculateStakeDiscountFactor(stakeFactor);
       const finalAPR = baseAPR * discountFactor;
 
-      new TaskContext("method-call").logger.debug(`✅ APR metrics calculated successfully`);
+      new TaskContext('method-call').logger.debug(
+        `✅ APR metrics calculated successfully`,
+      );
 
       return {
         success: true,
@@ -797,7 +837,9 @@ export class AdminController {
         },
       };
     } catch (error) {
-      new TaskContext("error-handling").logger.error(`Failed to get APR metrics: ${error.message}`);
+      new TaskContext('error-handling').logger.error(
+        `Failed to get APR metrics: ${error.message}`,
+      );
       return {
         success: false,
         error: error.message,

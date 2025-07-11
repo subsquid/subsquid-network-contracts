@@ -18,7 +18,6 @@ export interface MerkleTreeResult {
 
 @Injectable()
 export class MerkleTreeService {
-
   async generateMerkleTree(
     workers: Array<{
       workerId: bigint;
@@ -27,7 +26,7 @@ export class MerkleTreeService {
     }>,
     batchSize: number = 50,
   ): Promise<MerkleTreeResult> {
-    new TaskContext("merkle-tree:generate").logger.debug(
+    new TaskContext('merkle-tree:generate').logger.debug(
       `Generating Merkle tree for ${workers.length} workers with batch size ${batchSize}`,
     );
 
@@ -42,7 +41,7 @@ export class MerkleTreeService {
       });
     }
 
-    new TaskContext("merkle-tree:batches").logger.debug(
+    new TaskContext('merkle-tree:batches').logger.debug(
       `Created ${batches.length} batches from ${workers.length} workers`,
     );
 
@@ -55,7 +54,7 @@ export class MerkleTreeService {
         ),
       );
 
-      new TaskContext("merkle-tree:hash").logger.debug(
+      new TaskContext('merkle-tree:hash').logger.debug(
         `Batch ${index}: ${batch.recipients.length} workers, hash: ${hash}`,
       );
       return hash;
@@ -64,7 +63,7 @@ export class MerkleTreeService {
     // build Merkle tree
     const { root, proofs } = this.buildMerkleTree(leafHashes);
 
-    new TaskContext("merkle-tree:complete").logger.debug(
+    new TaskContext('merkle-tree:complete').logger.debug(
       `✅ Merkle tree generated: root=${root}, ${batches.length} leaves`,
     );
 

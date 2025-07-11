@@ -197,7 +197,7 @@ export class Web3Service {
         })
         .then((logs) => logs.map(({ blockNumber }) => blockNumber));
 
-              // Log moved to calling context
+      // Log moved to calling context
 
       if (distributionBlocks.length > 0) {
         return distributionBlocks[distributionBlocks.length - 1];
@@ -310,22 +310,22 @@ export class Web3Service {
     try {
       // same implementation as packages/rewards-calculator/src/utils.ts
       const { decode } = bs58;
-      const hexValue = `0x${Buffer.from(decode(value)).toString('hex')}` as Hex;
+      const hexValue = `0x${Buffer.from(decode(value)).toString('hex')}`;
       ctx.logger.debug(
         `Converted peer ID ${value.slice(0, 20)}... to ${hexValue.slice(0, 20)}...`,
       );
-      return hexValue;
+      return hexValue as `0x${string}`;
     } catch (error) {
       ctx.logger.error(
         { error },
         `Failed to convert peer ID ${value} from base58`,
       );
       // fallback: encode the string as UTF-8 bytes
-      const fallbackHex = `0x${Buffer.from(value, 'utf8').toString('hex')}` as Hex;
+      const fallbackHex = `0x${Buffer.from(value, 'utf8').toString('hex')}`;
       ctx.logger.warn(
         `Using UTF-8 fallback for ${value.slice(0, 20)}...: ${fallbackHex.slice(0, 20)}...`,
       );
-      return fallbackHex;
+      return fallbackHex as `0x${string}`;
     }
   }
 
@@ -358,7 +358,10 @@ export class Web3Service {
   /**
    * Get active worker count from WorkerRegistration contract
    */
-  async getActiveWorkerCount(ctx: Context, blockNumber?: bigint): Promise<bigint> {
+  async getActiveWorkerCount(
+    ctx: Context,
+    blockNumber?: bigint,
+  ): Promise<bigint> {
     const workerRegistrationAddress = this.configService.get(
       'blockchain.contracts.workerRegistration',
     ) as Address;

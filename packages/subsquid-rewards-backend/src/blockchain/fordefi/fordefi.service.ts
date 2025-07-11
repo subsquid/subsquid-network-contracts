@@ -76,10 +76,12 @@ export class FordefiService {
         throw new Error(`HTTP ${response.status}: ${await response.text()}`);
       }
 
-      const data = await response.json() as { address: Hex };
+      const data = (await response.json()) as { address: Hex };
       return data.address;
     } catch (error) {
-      new TaskContext("error-handling").logger.error(`Failed to get vault address: ${error.message}`);
+      new TaskContext('error-handling').logger.error(
+        `Failed to get vault address: ${error.message}`,
+      );
       throw error;
     }
   }
@@ -99,16 +101,24 @@ export class FordefiService {
     const request = this.createTransactionRequest(to, data, name, gasOptions);
 
     try {
-      new TaskContext("fordefi:send-transaction").logger.debug(`Sending Fordefi transaction: ${name}`);
+      new TaskContext('fordefi:send-transaction').logger.debug(
+        `Sending Fordefi transaction: ${name}`,
+      );
       const transactionId = await this.submitTransaction(request);
 
-      new TaskContext("fordefi:transaction-submitted").logger.debug(`Transaction submitted with ID: ${transactionId}`);
+      new TaskContext('fordefi:transaction-submitted').logger.debug(
+        `Transaction submitted with ID: ${transactionId}`,
+      );
       const txHash = await this.waitForTransaction(transactionId);
 
-      new TaskContext("fordefi:transaction-completed").logger.debug(`Transaction completed: ${txHash}`);
+      new TaskContext('fordefi:transaction-completed').logger.debug(
+        `Transaction completed: ${txHash}`,
+      );
       return txHash;
     } catch (error) {
-      new TaskContext("error-handling").logger.error(`Fordefi transaction failed: ${error.message}`);
+      new TaskContext('error-handling').logger.error(
+        `Fordefi transaction failed: ${error.message}`,
+      );
       throw error;
     }
   }
@@ -203,10 +213,12 @@ export class FordefiService {
         throw new Error(`HTTP ${response.status}: ${errorText}`);
       }
 
-      const result = await response.json() as { id: string };
+      const result = (await response.json()) as { id: string };
       return result.id;
     } catch (error) {
-      new TaskContext("error-handling").logger.error(`Failed to submit transaction: ${error.message}`);
+      new TaskContext('error-handling').logger.error(
+        `Failed to submit transaction: ${error.message}`,
+      );
       throw error;
     }
   }
@@ -238,7 +250,7 @@ export class FordefiService {
           throw new Error(`HTTP ${response.status}: ${await response.text()}`);
         }
 
-        const transaction = await response.json() as FordefiTransactionStatus;
+        const transaction = (await response.json()) as FordefiTransactionStatus;
 
         // check if transaction is successfully mined
         if (
@@ -262,7 +274,9 @@ export class FordefiService {
         await this.sleep(timeout);
         timeout = Math.min(timeout * 2, 5000); // Cap at 5 seconds
       } catch (error) {
-        new TaskContext("warning").logger.warn(`Error checking transaction status: ${error.message}`);
+        new TaskContext('warning').logger.warn(
+          `Error checking transaction status: ${error.message}`,
+        );
         await this.sleep(timeout);
         timeout = Math.min(timeout * 2, 5000);
       }
@@ -308,7 +322,7 @@ export class FordefiService {
       throw new Error(`HTTP ${response.status}: ${await response.text()}`);
     }
 
-    return await response.json() as FordefiTransactionStatus;
+    return (await response.json()) as FordefiTransactionStatus;
   }
 
   private sleep(ms: number): Promise<void> {

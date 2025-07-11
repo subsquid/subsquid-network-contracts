@@ -90,4 +90,4 @@ export const nestJsLogger = {
     loggerInstance.debug({ message, params: optionalParams });
   },
   setLogLevels(levels: LogLevel[]): any {},
-}; 
+};

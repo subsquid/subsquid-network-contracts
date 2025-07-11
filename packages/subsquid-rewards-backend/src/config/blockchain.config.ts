@@ -13,6 +13,7 @@ export default registerAs('blockchain', () => ({
     staking: process.env.STAKING_ADDRESS,
     capedStaking: process.env.CAPED_STAKING_ADDRESS,
     sqd: process.env.SQD_TOKEN_ADDRESS,
+    rewardCalculation: process.env.REWARD_CALCULATION_ADDRESS,
   },
   distributor: {
     address: process.env.DISTRIBUTOR_ADDRESS,

@@ -1,8 +1,8 @@
 import { Injectable, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ClickHouse } from 'clickhouse';
-import * as dayjs from 'dayjs';
-import * as utc from 'dayjs/plugin/utc';
+import dayjs from 'dayjs';
+import utc from 'dayjs/plugin/utc';
 import { Context } from '../common';
 
 dayjs.extend(utc);
@@ -76,7 +76,7 @@ export class ClickHouseService implements OnModuleInit {
           username: this.config.username,
           password: this.config.password,
         },
-        format: "json",
+        format: 'json',
       });
 
       await this.ping();
@@ -248,7 +248,7 @@ export class ClickHouseService implements OnModuleInit {
         return 0;
       }
 
-      return (rows[0] as any)?.liveness_ratio || 0;
+      return rows[0]?.liveness_ratio || 0;
     } catch (error) {
       ctx.logger.error({ error }, 'Failed to get worker liveness');
       return 0;
@@ -318,10 +318,7 @@ export class ClickHouseService implements OnModuleInit {
 
         const results = await this.client.query(query).toPromise();
         const resultArray = Array.isArray(results) ? results : [results];
-        ctx.logger.debug(
-          `✅ Processed ${resultArray.length} workers`,
-
-        );
+        ctx.logger.debug(`✅ Processed ${resultArray.length} workers`);
         return resultArray;
       } catch (error) {
         ctx.logger.error({ error }, `Failed to fetch active workers`);
@@ -333,18 +330,21 @@ export class ClickHouseService implements OnModuleInit {
     throw new Error('Full signature validation not yet implemented');
   }
 
-  async getPings(ctx: Context, from: Date, to: Date): Promise<Record<string, number[]>> {
-    const query = `
-      SELECT
-        worker_id,
-        arrayConcat(
-          [toUnixTimestamp('${this.formatDate(from)}')],
-          arraySort(groupArray(toUnixTimestamp(timestamp))),
-          [toUnixTimestamp('${this.formatDate(to)}')]
-        ) as timestamps 
-      FROM ${this.pingsTableName} 
-      WHERE timestamp >= '${this.formatDate(from)}' AND timestamp <= '${this.formatDate(to)}' 
-      GROUP BY worker_id
+  async getPings(
+    ctx: Context,
+    from: Date,
+    to: Date,
+  ): Promise<Record<string, number[]>> {
+    const query = `select
+       worker_id,
+       arrayConcat(
+         [toUnixTimestamp('${this.formatDate(from)}')],
+         arraySort(groupArray(toUnixTimestamp(timestamp))),
+         [toUnixTimestamp('${this.formatDate(to)}')]
+       ) as timestamps 
+       from ${this.pingsTableName} 
+       where timestamp >= '${this.formatDate(from)}' and timestamp <= '${this.formatDate(to)}' 
+       group by worker_id
     `;
 
     try {

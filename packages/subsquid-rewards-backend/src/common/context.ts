@@ -1,4 +1,8 @@
-import { ArgumentsHost, createParamDecorator, ExecutionContext } from '@nestjs/common';
+import {
+  ArgumentsHost,
+  createParamDecorator,
+  ExecutionContext,
+} from '@nestjs/common';
 import { snakeCase } from 'lodash';
 import pinoms from 'pino-multi-stream';
 import { Logger } from './logger';
@@ -37,13 +41,15 @@ export class Context {
   }
 }
 
-export const RequestContext = createParamDecorator((data: unknown, context: ExecutionContext) =>
-  extractContext(context),
+export const RequestContext = createParamDecorator(
+  (data: unknown, context: ExecutionContext) => extractContext(context),
 );
 
-export function extractContext(context: ExecutionContext | ArgumentsHost): Context | undefined {
+export function extractContext(
+  context: ExecutionContext | ArgumentsHost,
+): Context | undefined {
   if (context.getType() === 'http') {
     return context.switchToHttp().getRequest().ctx;
   }
   return undefined;
-} 
+}

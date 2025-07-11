@@ -30,4 +30,4 @@ export function contextMiddleware(
   res.header('X-Req-Id', requestId);
 
   next();
-} 
+}

@@ -290,7 +290,8 @@ export class BlockSchedulerService {
       );
 
       // get network metrics for logging
-      const activeWorkerCount = await this.web3Service.getActiveWorkerCount(ctx);
+      const activeWorkerCount =
+        await this.web3Service.getActiveWorkerCount(ctx);
       const networkCapacity = await this.contractService.getTargetCapacity();
 
       // use the existing distribution service which handles Merkle proof generation and batch distribution
@@ -344,7 +345,8 @@ export class BlockSchedulerService {
 
       // log failed distribution
       try {
-        const activeWorkerCount = await this.web3Service.getActiveWorkerCount(ctx);
+        const activeWorkerCount =
+          await this.web3Service.getActiveWorkerCount(ctx);
         const networkCapacity = await this.contractService.getTargetCapacity();
         const currentCapacity = Number(activeWorkerCount) * 200;
         const targetCapacity = Number(networkCapacity) / 1e9;
@@ -432,7 +434,9 @@ export class BlockSchedulerService {
 
   // Force a specific phase for testing/admin use
   async forceCommit(fromBlock: number, toBlock: number): Promise<boolean> {
-    const ctx = new TaskContext(`block-scheduler:force-commit:${fromBlock}-${toBlock}`);
+    const ctx = new TaskContext(
+      `block-scheduler:force-commit:${fromBlock}-${toBlock}`,
+    );
     try {
       ctx.logger.debug(`🔧 Force commit initiated for ${fromBlock}-${toBlock}`);
       this.isProcessing = true;
@@ -451,7 +455,9 @@ export class BlockSchedulerService {
     fromBlock: number,
     toBlock: number,
   ): Promise<boolean> {
-    const ctx = new TaskContext(`block-scheduler:force-distribution:${fromBlock}-${toBlock}`);
+    const ctx = new TaskContext(
+      `block-scheduler:force-distribution:${fromBlock}-${toBlock}`,
+    );
     try {
       ctx.logger.debug(
         `🔧 Force distribution initiated for ${fromBlock}-${toBlock}`,

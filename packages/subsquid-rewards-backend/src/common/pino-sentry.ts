@@ -1,5 +1,11 @@
 import stream from 'stream';
-import { captureException, captureMessage, init, NodeOptions, withScope } from '@sentry/node';
+import {
+  captureException,
+  captureMessage,
+  init,
+  NodeOptions,
+  withScope,
+} from '@sentry/node';
 import { SeverityLevel } from '@sentry/types';
 
 type ValueOf<T> = T extends any[] ? T[number] : T[keyof T];
@@ -66,12 +72,15 @@ export class PinoSentryTransport {
     const message = chunk[this.messageAttributeKey];
     const stack = chunk.error?.stack || chunk.err?.stack || chunk.stack || '';
 
-    withScope(scope => {
+    withScope((scope) => {
       scope.clear();
       scope.setExtras(chunk);
 
       if (this.isSentryException(severity)) {
-        const error = message instanceof Error ? message : new ExtendedError({ message, stack });
+        const error =
+          message instanceof Error
+            ? message
+            : new ExtendedError({ message, stack });
         captureException(error);
         cb();
       } else {
@@ -84,17 +93,22 @@ export class PinoSentryTransport {
   private validateOptions(options: SentryOptions): PinoSentryOptions {
     const dsn = options.dsn || process.env.SENTRY_DSN;
     if (!dsn) {
-      console.log('Warning: [pino-sentry] Sentry DSN not supplied, logs will not be reported.');
+      console.log(
+        'Warning: [pino-sentry] Sentry DSN not supplied, logs will not be reported.',
+      );
     }
     if (options.level) {
       const allowedLevels = Object.keys(SeverityIota);
       if (allowedLevels.includes(options.level) === false) {
-        throw new Error(`[pino-sentry] Option 'level' must be one of: ${allowedLevels.join(', ')}.`);
+        throw new Error(
+          `[pino-sentry] Option 'level' must be one of: ${allowedLevels.join(', ')}.`,
+        );
       }
       this.minimumLogLevel = SeverityIota[options.level];
     }
 
-    this.messageAttributeKey = options.messageAttributeKey ?? this.messageAttributeKey;
+    this.messageAttributeKey =
+      options.messageAttributeKey ?? this.messageAttributeKey;
 
     return {
       dsn,
@@ -124,4 +138,4 @@ export function createSentryTransport(options?: SentryOptions) {
       transport.send(JSON.parse(chunk.toString('utf-8')), cb);
     },
   });
-} 
+}
