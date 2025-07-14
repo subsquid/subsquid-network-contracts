@@ -3,7 +3,11 @@ FROM ghcr.io/foundry-rs/foundry:v1.2.3
 WORKDIR /usr/src/app
 
 USER root
-RUN apt update && apt -y install nodejs yarn npm bash
+RUN apt update && apt -y install bash curl gnupg
+RUN curl -sL https://deb.nodesource.com/setup_22.x | bash
+RUN curl -sS https://dl.yarnpkg.com/debian/pubkey.gpg | apt-key add -
+RUN echo "deb https://dl.yarnpkg.com/debian/ rc main" > /etc/apt/sources.list.d/yarn.list
+RUN apt update && apt -y install yarn nodejs
 
 COPY packages/contracts/foundry.toml ./contracts/foundry.toml
 COPY packages/contracts/deployments ./contracts/deployments
