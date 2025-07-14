@@ -131,6 +131,17 @@ export async function getLatestDistributionBlock() {
 
 // export const currentApy = withCache(_currentApy)
 
+async function getYearlyRewardCapCoefficient(blockNumber: bigint): Promise<number> {
+  const envValue = process.env.YEARLY_REWARD_CAP_COEFFICIENT;
+  if (envValue !== undefined) {
+    const parsed = Number(envValue);
+    if (!isNaN(parsed)) {
+      return parsed;
+    }
+  }
+  return contracts.networkController.read.yearlyRewardCapCoefficient({ blockNumber });
+}
+
 export async function currentApy(blockNumber: bigint) {
   const tvl = await contracts.rewardCalculation.read.effectiveTVL({ blockNumber });
   logger.log(`TVL: ${tvl.toString()}`);
@@ -141,7 +152,7 @@ export async function currentApy(blockNumber: bigint) {
   const initialRewardPoolsSize = await contracts.rewardCalculation.read.INITIAL_REWARD_POOL_SIZE({ blockNumber });
   logger.log(`Initial Reward Pool Size: ${initialRewardPoolsSize.toString()}`);
 
-  const yearlyRewardCapCoefficient = await contracts.networkController.read.yearlyRewardCapCoefficient({ blockNumber });
+  const yearlyRewardCapCoefficient = await getYearlyRewardCapCoefficient(blockNumber);
   logger.log(`Yearly Reward Cap Coefficient: ${yearlyRewardCapCoefficient.toString()}`);
 
   const apyCap = (yearlyRewardCapCoefficient * initialRewardPoolsSize) / tvl;
