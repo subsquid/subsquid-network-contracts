@@ -1,8 +1,10 @@
-FROM ghcr.io/foundry-rs/foundry:stable
+FROM ghcr.io/foundry-rs/foundry:v1.2.3
 
 WORKDIR /usr/src/app
 
-RUN apk add nodejs-current yarn npm bash
+USER root
+RUN apt update && apt -y install nodejs yarn npm bash
+
 COPY packages/contracts/foundry.toml ./contracts/foundry.toml
 COPY packages/contracts/deployments ./contracts/deployments
 COPY packages/contracts/src ./contracts/src
