@@ -131,12 +131,12 @@ export async function getLatestDistributionBlock() {
 
 // export const currentApy = withCache(_currentApy)
 
-async function getYearlyRewardCapCoefficient(blockNumber: bigint): Promise<number> {
+async function getYearlyRewardCapCoefficient(blockNumber: bigint): Promise<bigint> {
   const envValue = process.env.YEARLY_REWARD_CAP_COEFFICIENT;
   if (envValue !== undefined) {
     const parsed = Number(envValue);
     if (!isNaN(parsed)) {
-      return parsed;
+      return BigInt(parsed);
     }
   }
   return contracts.networkController.read.yearlyRewardCapCoefficient({ blockNumber });
