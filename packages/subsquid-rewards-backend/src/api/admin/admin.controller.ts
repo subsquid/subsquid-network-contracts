@@ -74,31 +74,18 @@ export class AdminController {
     const limitNum = limit ? parseInt(limit, 10) : undefined;
 
     try {
-      const rewards = await this.rewardsCalculatorService.calculateEpochRewards(
+      const result = await this.rewardsCalculatorService.calculateRewardsFormatted(
         ctx,
         fromBlockNum,
         toBlockNum,
-        true, // skip signature validation for development
+        true,
       );
 
-      const result = limitNum ? rewards.slice(0, limitNum) : rewards;
+      const workers = limitNum ? result.workers.slice(0, limitNum) : result.workers;
 
       return {
-        success: true,
-        fromBlock: fromBlockNum,
-        toBlock: toBlockNum,
-        totalWorkers: rewards.length,
-        returnedWorkers: result.length,
-        totalRewards: rewards
-          .reduce((sum, w) => sum + w.workerReward, 0n)
-          .toString(),
-        workers: result.map((w) => ({
-          workerId: w.workerId.toString(),
-          workerReward: w.workerReward.toString(),
-          stakerReward: w.stakerReward.toString(),
-          stake: w.stake.toString(),
-          totalStake: w.totalStake.toString(),
-        })),
+        totalRewards: result.totalRewards,
+        workers: workers,
       };
     } catch (error) {
       new TaskContext('error-handling').logger.error(

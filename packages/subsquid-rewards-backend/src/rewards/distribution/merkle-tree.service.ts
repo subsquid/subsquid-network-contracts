@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { keccak256, encodePacked } from 'viem';
+import { keccak256, encodeAbiParameters, parseAbiParameters } from 'viem';
 import { Context } from '../../common';
 import { TaskContext } from '../../common/task-context';
 
@@ -45,11 +45,11 @@ export class MerkleTreeService {
       `Created ${batches.length} batches from ${workers.length} workers`,
     );
 
-    // generate leaf hashes
+    // generate leaf hashes - use ABI encoding to match contract
     const leafHashes = batches.map((batch, index) => {
       const hash = keccak256(
-        encodePacked(
-          ['uint256[]', 'uint256[]', 'uint256[]'],
+        encodeAbiParameters(
+          parseAbiParameters('uint256[], uint256[], uint256[]'),
           [batch.recipients, batch.workerRewards, batch.stakerRewards],
         ),
       );
@@ -98,11 +98,15 @@ export class MerkleTreeService {
           i + 1 < currentLevel.length ? currentLevel[i + 1] : left
         ) as `0x${string}`;
 
-        // sort hashes to ensure deterministic tree
+        // sort hashes using strict comparison to match OpenZeppelin
         const [sortedLeft, sortedRight] =
-          left <= right ? [left, right] : [right, left];
+          left < right ? [left, right] : [right, left];
+        
         const combined = keccak256(
-          encodePacked(['bytes32', 'bytes32'], [sortedLeft, sortedRight]),
+          encodeAbiParameters(
+            parseAbiParameters('bytes32, bytes32'),
+            [sortedLeft, sortedRight],
+          ),
         );
         nextLevel.push(combined);
       }
@@ -149,15 +153,15 @@ export class MerkleTreeService {
     let computedHash = leaf;
 
     for (const proofElement of proof) {
-      // sort hashes to match tree construction
+      // sort hashes using strict comparison to match OpenZeppelin
       const [left, right] =
-        computedHash <= proofElement
+        computedHash < proofElement
           ? [computedHash, proofElement]
           : [proofElement, computedHash];
 
       computedHash = keccak256(
-        encodePacked(
-          ['bytes32', 'bytes32'],
+        encodeAbiParameters(
+          parseAbiParameters('bytes32, bytes32'),
           [left as `0x${string}`, right as `0x${string}`],
         ),
       );

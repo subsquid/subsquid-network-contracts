@@ -92,6 +92,198 @@ export class RewardsCalculatorService {
     );
   }
 
+  async calculateRewardsFormatted(
+    ctx: Context,
+    fromBlock: number,
+    toBlock: number,
+    skipSignatureValidation?: boolean,
+    batchNumberOverride?: number,
+    totalBatchesOverride?: number,
+  ): Promise<{
+    totalRewards: {
+      worker: string;
+      staker: string;
+    };
+    workers: any[];
+  }> {
+    const shouldSkipValidation: boolean =
+      skipSignatureValidation ??
+      this.configService.get('rewards.skipSignatureValidation', true);
+
+    if (shouldSkipValidation) {
+      ctx.logger.warn(
+        '🚨 Signature validation is DISABLED - this is for development/testing only',
+      );
+    }
+
+    try {
+      const startTime = await this.web3Service.getBlockTimestamp(
+        ctx,
+        fromBlock,
+      );
+      const endTime = await this.web3Service.getBlockTimestamp(ctx, toBlock);
+
+      ctx.logger.debug('🔄 Starting old rewards calculator method...');
+
+      const { OldWorkers, calculateLivenessFactor, historicalLiveness } =
+        await import('./old-rewards-calculator');
+
+      const oldWorkers = new OldWorkers(startTime, endTime);
+
+      const activeWorkerData = await this.clickHouseService.getActiveWorkers(
+        ctx,
+        startTime,
+        endTime,
+        shouldSkipValidation,
+      );
+
+      if (activeWorkerData.length === 0) {
+        ctx.logger.warn('No workers found in ClickHouse data');
+        return { totalRewards: { worker: '0', staker: '0' }, workers: [] };
+      }
+
+      for (const workerData of activeWorkerData) {
+        const worker = oldWorkers.add(workerData.worker_id);
+        await worker.processQuery({
+          output_size: Number(workerData.output_size),
+          num_read_chunks: Number(workerData.num_read_chunks),
+        }, shouldSkipValidation);
+        worker.totalRequests = Number(workerData.totalRequests);
+      }
+
+      await oldWorkers.getNextDistributionStartBlockNumber(BigInt(toBlock));
+
+      const workerIdMapping = await this.web3Service.preloadWorkerIds(
+        ctx,
+        activeWorkerData.map((w) => w.worker_id),
+      );
+      await oldWorkers.clearUnknownWorkers(workerIdMapping);
+
+      if (oldWorkers.count() === 0) {
+        ctx.logger.warn('No known workers found in contract mapping');
+        return { totalRewards: { worker: '0', staker: '0' }, workers: [] };
+      }
+
+      const workerPeerIds = oldWorkers.getWorkerPeerIds();
+      const [capedStakes, totalStakes] = await this.contractService.getStakes(workerPeerIds);
+      await oldWorkers.setStakes(capedStakes, totalStakes, workerPeerIds);
+
+      oldWorkers.getT();
+
+      const bondAmount = await this.web3Service.getBondAmount(ctx);
+      await oldWorkers.fetchCurrentBond(bondAmount);
+
+      const Decimal = (await import('decimal.js')).default;
+      oldWorkers.getDTraffic(new Decimal(0.1));
+
+      const livenessFactor = await calculateLivenessFactor(
+        this.clickHouseService,
+        startTime,
+        endTime,
+      );
+      await oldWorkers.getLiveness(livenessFactor);
+
+      const epochLengthInBlocks = await this.contractService.getEpochLength(ctx);
+      const TENURE_EPOCH_COUNT = this.configService.get('rewards.tenureEpochCount', 10);
+      const tenureStartBlock = fromBlock - epochLengthInBlocks * TENURE_EPOCH_COUNT;
+      const epochStartBlockNumbers = [...new Array(TENURE_EPOCH_COUNT + 1)].map(
+        (_, i) => tenureStartBlock + i * epochLengthInBlocks,
+      );
+
+      const epochStartTimestamps = await Promise.all(
+        epochStartBlockNumbers.map(async (blockNumber) => {
+          try {
+            return await this.web3Service.getBlockTimestamp(ctx, blockNumber);
+          } catch (error) {
+            const estimatedTime = new Date(startTime.getTime() - (fromBlock - blockNumber) * 12 * 1000);
+            return estimatedTime;
+          }
+        }),
+      );
+
+      const historicalLivenessData = await historicalLiveness(
+        this.clickHouseService,
+        epochStartTimestamps,
+      );
+      await oldWorkers.getDTenure(historicalLivenessData);
+
+      const baseApr = await this.getAPRFromContracts(ctx);
+      await oldWorkers.calculateRewards(baseApr);
+
+      await oldWorkers.logStats();
+      await oldWorkers.logDebugInfo();
+
+      let finalWorkers = oldWorkers;
+      let batchNumber = batchNumberOverride ?? this.configService.get('rewards.batchNumber');
+      const totalBatches = totalBatchesOverride ?? this.configService.get('rewards.totalBatches');
+
+      if (batchNumber === undefined && totalBatches !== undefined) {
+        const epochNumber = Math.ceil(toBlock / epochLengthInBlocks);
+        batchNumber = epochNumber % totalBatches;
+      }
+
+      if (batchNumber !== undefined && totalBatches !== undefined) {
+        finalWorkers = oldWorkers.filterBatch(batchNumber, totalBatches);
+      }
+
+      const bn = (value: { toString(): string }) =>
+        BigInt(Math.floor(Number(value.toString())));
+
+      const duration = Math.floor(
+        (endTime.getTime() - startTime.getTime()) / 1000,
+      );
+
+      const workerStats = finalWorkers.map((worker: any) => {
+        const aprData = worker.apr(duration, 365 * 24 * 60 * 60);
+
+        return {
+          id: worker.peerId,
+          workerReward: bn(worker.workerReward).toString(),
+          stakerReward: bn(worker.stakerReward).toString(),
+          apr: {
+            worker_apr: aprData.worker_apr,
+            delegator_apr: aprData.delegator_apr,
+          },
+          traffic: {
+            bytesSent: worker.bytesSent,
+            chunksRead: worker.chunksRead,
+            trafficWeight: worker.trafficWeight.toNumber(),
+            dTraffic: worker.dTraffic.toNumber(),
+            validRequests: worker.requestsProcessed,
+            totalRequests: worker.totalRequests,
+            requestErrorRate: 1 - worker.requestsProcessed / worker.totalRequests,
+          },
+          delegation: {
+            totalDelegated: bn(worker.totalStake).toString(),
+            effectiveStake: bn(worker.stake).toString(),
+          },
+          liveness: {
+            livenessCoefficient: worker.livenessCoefficient.toNumber(),
+            tenure: worker.dTenure.toNumber(),
+          },
+        };
+      });
+
+      const totalWorkerReward = workerStats
+        .map((worker) => BigInt(worker.workerReward))
+        .reduce((a, b) => a + b, 0n);
+      const totalStakerReward = workerStats
+        .map((worker) => BigInt(worker.stakerReward))
+        .reduce((a, b) => a + b, 0n);
+
+      return {
+        totalRewards: {
+          worker: totalWorkerReward.toString(),
+          staker: totalStakerReward.toString(),
+        },
+        workers: workerStats,
+      };
+    } catch (error) {
+      ctx.logger.error({ error }, `Failed to calculate formatted rewards`);
+      throw error;
+    }
+  }
+
   private async calculateRewards(
     ctx: Context,
     fromBlock: number,

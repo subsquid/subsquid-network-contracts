@@ -12,6 +12,8 @@ import {
   encodeFunctionData,
   keccak256,
   encodePacked,
+  encodeAbiParameters,
+  parseAbiParameters,
 } from 'viem';
 import {
   DistributedRewardsDistributionABI,
@@ -352,10 +354,10 @@ export class ContractService {
         client: this.web3Service.client,
       });
 
-      // create the commitment key
+      // create the commitment key using abi.encode to match contract
       const commitmentKey = keccak256(
-        encodePacked(
-          ['uint256', 'uint256'],
+        encodeAbiParameters(
+          parseAbiParameters('uint256, uint256'),
           [BigInt(fromBlock), BigInt(toBlock)],
         ),
       );
@@ -893,10 +895,10 @@ export class ContractService {
         client: this.web3Service.client,
       });
 
-      // create the commitment key
+      // create the commitment key using abi.encode to match contract
       const commitmentKey = keccak256(
-        encodePacked(
-          ['uint256', 'uint256'],
+        encodeAbiParameters(
+          parseAbiParameters('uint256, uint256'),
           [BigInt(fromBlock), BigInt(toBlock)],
         ),
       );
