@@ -61,13 +61,12 @@ export class OldWorker {
     this.contractId = contractId;
   }
 
-  public async processQuery(query: QueryLog, shouldSkipSignatureValidation: boolean = false) {
-    this.totalRequests++;
-    if (!shouldSkipSignatureValidation) {
-    }
+  public async processQuery(
+    query: QueryLog,
+    shouldSkipSignatureValidation: boolean = false,
+  ) {
     this.bytesSent += query.output_size;
     this.chunksRead += query.num_read_chunks;
-    this.requestsProcessed++;
     return true;
   }
 
@@ -352,7 +351,7 @@ export class OldWorkers {
     this.stakeFactor = this.calculateStakeFactor();
     this.rAPR = this.baseApr;
 
-    console.log("--- DEBUG rMax CALCULATION ---");
+    console.log('--- DEBUG rMax CALCULATION ---');
     console.log(`rAPR (basis points): ${this.rAPR.toString()}`);
     console.log(`duration (seconds): ${duration}`);
     console.log(`YEAR (seconds): ${YEAR}`);
@@ -360,7 +359,7 @@ export class OldWorkers {
     const rMax = this.rAPR.mul(duration).div(YEAR).div(10_000);
 
     console.log(`Calculated rMax: ${rMax.toString()}`);
-    console.log("------------------------------");
+    console.log('------------------------------');
 
     this.map((worker) => worker.getRewards(rMax));
   }
@@ -414,7 +413,7 @@ export class OldWorkers {
         const stakerRewardWei = worker.stakerReward;
         const contractId = await worker.getId();
         const displayKey = `${worker.peerId} (ID: ${contractId})`;
-        
+
         const baseStats = this.keysToFixed({
           t: worker.trafficWeight.mul(100),
           dTraffic: worker.dTraffic.mul(100),
@@ -422,18 +421,22 @@ export class OldWorkers {
           dLiveness: worker.livenessCoefficient.mul(100),
           dTenure: worker.dTenure.mul(100),
         });
-        
+
         return [
           displayKey,
           {
             ...baseStats,
-            workerReward: workerRewardWei.eq(0) ? '' : workerRewardWei.toFixed(0),
-            stakerReward: stakerRewardWei.eq(0) ? '' : stakerRewardWei.toFixed(0),
+            workerReward: workerRewardWei.eq(0)
+              ? ''
+              : workerRewardWei.toFixed(0),
+            stakerReward: stakerRewardWei.eq(0)
+              ? ''
+              : stakerRewardWei.toFixed(0),
           },
         ];
       }),
     );
-    
+
     const stats = Object.fromEntries(statsEntries);
     const totalUnlocked = await this.rUnlocked();
     const totalReward = this.decimalSum(
@@ -560,7 +563,9 @@ export async function calculateLivenessFactor(
   endTime: Date,
 ): Promise<Record<string, NetworkStatsEntry>> {
   try {
-    const databaseName = (clickHouseService as any).configService?.get('database.clickhouse.database') || 'testnet';
+    const databaseName =
+      clickHouseService.configService?.get('database.clickhouse.database') ||
+      'testnet';
     const query = `
       SELECT
         worker_id,
@@ -653,7 +658,9 @@ async function getPings(
   from: Date,
   to: Date,
 ): Promise<Record<string, number[]>> {
-  const databaseName = (clickhouseService as any).configService?.get('database.clickhouse.database') || 'testnet';
+  const databaseName =
+    clickhouseService.configService?.get('database.clickhouse.database') ||
+    'testnet';
   const query = `
     SELECT
       worker_id,

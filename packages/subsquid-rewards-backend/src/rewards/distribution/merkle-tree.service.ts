@@ -101,12 +101,12 @@ export class MerkleTreeService {
         // sort hashes using strict comparison to match OpenZeppelin
         const [sortedLeft, sortedRight] =
           left < right ? [left, right] : [right, left];
-        
+
         const combined = keccak256(
-          encodeAbiParameters(
-            parseAbiParameters('bytes32, bytes32'),
-            [sortedLeft, sortedRight],
-          ),
+          encodeAbiParameters(parseAbiParameters('bytes32, bytes32'), [
+            sortedLeft,
+            sortedRight,
+          ]),
         );
         nextLevel.push(combined);
       }
@@ -160,10 +160,10 @@ export class MerkleTreeService {
           : [proofElement, computedHash];
 
       computedHash = keccak256(
-        encodeAbiParameters(
-          parseAbiParameters('bytes32, bytes32'),
-          [left as `0x${string}`, right as `0x${string}`],
-        ),
+        encodeAbiParameters(parseAbiParameters('bytes32, bytes32'), [
+          left as `0x${string}`,
+          right as `0x${string}`,
+        ]),
       );
     }
 

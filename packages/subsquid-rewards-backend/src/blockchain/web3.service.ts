@@ -392,4 +392,41 @@ export class Web3Service {
       return false;
     }
   }
+
+  /**
+   * get L1 block information
+   */
+  async getL1Block(
+    ctx: Context,
+    blockNumber: bigint,
+  ): Promise<{ timestamp: bigint; number: bigint }> {
+    try {
+      const block = await this.l1Client.getBlock({ blockNumber });
+      return {
+        timestamp: block.timestamp,
+        number: block.number,
+      };
+    } catch (error) {
+      ctx.logger.error({ error }, `Failed to get L1 block ${blockNumber}`);
+      throw error;
+    }
+  }
+
+  /**
+   * get latest L2 block with L1 block number
+   */
+  async getBlock(
+    ctx: Context,
+  ): Promise<{ number: bigint; l1BlockNumber: bigint }> {
+    try {
+      const block = await this.publicClient.getBlock();
+      return {
+        number: block.number,
+        l1BlockNumber: BigInt((block as any).l1BlockNumber),
+      };
+    } catch (error) {
+      ctx.logger.error({ error }, `Failed to get latest block`);
+      throw error;
+    }
+  }
 }

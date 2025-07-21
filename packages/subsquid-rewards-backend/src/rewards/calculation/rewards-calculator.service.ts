@@ -144,11 +144,17 @@ export class RewardsCalculatorService {
 
       for (const workerData of activeWorkerData) {
         const worker = oldWorkers.add(workerData.worker_id);
-        await worker.processQuery({
-          output_size: Number(workerData.output_size),
-          num_read_chunks: Number(workerData.num_read_chunks),
-        }, shouldSkipValidation);
+        await worker.processQuery(
+          {
+            output_size: Number(workerData.output_size),
+            num_read_chunks: Number(workerData.num_read_chunks),
+          },
+          shouldSkipValidation,
+        );
         worker.totalRequests = Number(workerData.totalRequests);
+        if (shouldSkipValidation) {
+          worker.requestsProcessed = Number(workerData.totalRequests);
+        }
       }
 
       await oldWorkers.getNextDistributionStartBlockNumber(BigInt(toBlock));
@@ -165,7 +171,8 @@ export class RewardsCalculatorService {
       }
 
       const workerPeerIds = oldWorkers.getWorkerPeerIds();
-      const [capedStakes, totalStakes] = await this.contractService.getStakes(workerPeerIds);
+      const [capedStakes, totalStakes] =
+        await this.contractService.getStakes(workerPeerIds);
       await oldWorkers.setStakes(capedStakes, totalStakes, workerPeerIds);
 
       oldWorkers.getT();
@@ -183,9 +190,14 @@ export class RewardsCalculatorService {
       );
       await oldWorkers.getLiveness(livenessFactor);
 
-      const epochLengthInBlocks = await this.contractService.getEpochLength(ctx);
-      const TENURE_EPOCH_COUNT = this.configService.get('rewards.tenureEpochCount', 10);
-      const tenureStartBlock = fromBlock - epochLengthInBlocks * TENURE_EPOCH_COUNT;
+      const epochLengthInBlocks =
+        await this.contractService.getEpochLength(ctx);
+      const TENURE_EPOCH_COUNT = this.configService.get(
+        'rewards.tenureEpochCount',
+        10,
+      );
+      const tenureStartBlock =
+        fromBlock - epochLengthInBlocks * TENURE_EPOCH_COUNT;
       const epochStartBlockNumbers = [...new Array(TENURE_EPOCH_COUNT + 1)].map(
         (_, i) => tenureStartBlock + i * epochLengthInBlocks,
       );
@@ -195,7 +207,9 @@ export class RewardsCalculatorService {
           try {
             return await this.web3Service.getBlockTimestamp(ctx, blockNumber);
           } catch (error) {
-            const estimatedTime = new Date(startTime.getTime() - (fromBlock - blockNumber) * 12 * 1000);
+            const estimatedTime = new Date(
+              startTime.getTime() - (fromBlock - blockNumber) * 12 * 1000,
+            );
             return estimatedTime;
           }
         }),
@@ -214,8 +228,10 @@ export class RewardsCalculatorService {
       await oldWorkers.logDebugInfo();
 
       let finalWorkers = oldWorkers;
-      let batchNumber = batchNumberOverride ?? this.configService.get('rewards.batchNumber');
-      const totalBatches = totalBatchesOverride ?? this.configService.get('rewards.totalBatches');
+      let batchNumber =
+        batchNumberOverride ?? this.configService.get('rewards.batchNumber');
+      const totalBatches =
+        totalBatchesOverride ?? this.configService.get('rewards.totalBatches');
 
       if (batchNumber === undefined && totalBatches !== undefined) {
         const epochNumber = Math.ceil(toBlock / epochLengthInBlocks);
@@ -235,6 +251,13 @@ export class RewardsCalculatorService {
 
       const workerStats = finalWorkers.map((worker: any) => {
         const aprData = worker.apr(duration, 365 * 24 * 60 * 60);
+        
+        // debug log for request counts
+        if (worker.totalRequests > 0) {
+          ctx.logger.debug(
+            `Worker ${worker.peerId.slice(0, 10)}... - totalRequests: ${worker.totalRequests}, requestsProcessed: ${worker.requestsProcessed}, errorRate: ${(1 - worker.requestsProcessed / worker.totalRequests).toFixed(4)}`
+          );
+        }
 
         return {
           id: worker.peerId,
@@ -251,7 +274,8 @@ export class RewardsCalculatorService {
             dTraffic: worker.dTraffic.toNumber(),
             validRequests: worker.requestsProcessed,
             totalRequests: worker.totalRequests,
-            requestErrorRate: 1 - worker.requestsProcessed / worker.totalRequests,
+            requestErrorRate:
+              1 - worker.requestsProcessed / worker.totalRequests,
           },
           delegation: {
             totalDelegated: bn(worker.totalStake).toString(),
@@ -377,7 +401,6 @@ export class RewardsCalculatorService {
     return filtered;
   }
 
-
   private async calculateRewardsOldMethod(
     ctx: Context,
     fromBlock: number,
@@ -418,13 +441,20 @@ export class RewardsCalculatorService {
       const worker = oldWorkers.add(workerData.worker_id);
 
       // process query data with signature validation setting
-      await worker.processQuery({
-        output_size: Number(workerData.output_size),
-        num_read_chunks: Number(workerData.num_read_chunks),
-      }, skipSignatureValidation);
+      await worker.processQuery(
+        {
+          output_size: Number(workerData.output_size),
+          num_read_chunks: Number(workerData.num_read_chunks),
+        },
+        skipSignatureValidation,
+      );
 
       // set total requests
       worker.totalRequests = Number(workerData.totalRequests);
+      
+      if (skipSignatureValidation) {
+        worker.requestsProcessed = Number(workerData.totalRequests);
+      }
     }
 
     ctx.logger.debug(
@@ -469,7 +499,9 @@ export class RewardsCalculatorService {
         { error },
         `❌ Failed to get bond amount from WorkerRegistration contract`,
       );
-      throw new Error(`Cannot proceed without bond amount from contract: ${error.message}`);
+      throw new Error(
+        `Cannot proceed without bond amount from contract: ${error.message}`,
+      );
     }
     await oldWorkers.fetchCurrentBond(bondAmount);
 
@@ -486,10 +518,14 @@ export class RewardsCalculatorService {
 
     // get dTenure with historical liveness
     const epochLengthInBlocks = await this.contractService.getEpochLength(ctx);
-    const TENURE_EPOCH_COUNT = this.configService.get('rewards.tenureEpochCount', 10); 
+    const TENURE_EPOCH_COUNT = this.configService.get(
+      'rewards.tenureEpochCount',
+      10,
+    );
 
     // Calculate actual historical block numbers (like the old backend)
-    const tenureStartBlock = fromBlock - epochLengthInBlocks * TENURE_EPOCH_COUNT;
+    const tenureStartBlock =
+      fromBlock - epochLengthInBlocks * TENURE_EPOCH_COUNT;
     const epochStartBlockNumbers = [...new Array(TENURE_EPOCH_COUNT + 1)].map(
       (_, i) => tenureStartBlock + i * epochLengthInBlocks,
     );
@@ -508,7 +544,9 @@ export class RewardsCalculatorService {
             `Failed to get timestamp for block ${blockNumber}, using estimated time`,
           );
           // fallback: estimate based on 12-second block time
-          const estimatedTime = new Date(startTime.getTime() - (fromBlock - blockNumber) * 12 * 1000);
+          const estimatedTime = new Date(
+            startTime.getTime() - (fromBlock - blockNumber) * 12 * 1000,
+          );
           return estimatedTime;
         }
       }),
@@ -605,7 +643,6 @@ export class RewardsCalculatorService {
       calculationTime: (endTime.getTime() - startTime.getTime()) / 1000,
     };
   }
-
 
   /**
    * Get APR from contracts using the old rewards calculator approach

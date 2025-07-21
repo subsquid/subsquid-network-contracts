@@ -260,16 +260,16 @@ export class ContractService {
         client: this.web3Service.client,
       });
 
-      const contractEpochLength = Number(await contract.read.epochLength({ blockNumber }));
+      const contractEpochLength = Number(
+        await contract.read.epochLength({ blockNumber }),
+      );
       ctx.logger.debug(
         `📏 Retrieved epoch length from contract: ${contractEpochLength} blocks`,
       );
       return contractEpochLength;
     } catch (error) {
       ctx.logger.error({ error }, `Failed to get epoch length from contract`);
-      ctx.logger.debug(
-        `📏 Using default epoch length: 7000 blocks`,
-      );
+      ctx.logger.debug(`📏 Using default epoch length: 7000 blocks`);
       return 7000; // Default
     }
   }
@@ -356,10 +356,10 @@ export class ContractService {
 
       // create the commitment key using abi.encode to match contract
       const commitmentKey = keccak256(
-        encodeAbiParameters(
-          parseAbiParameters('uint256, uint256'),
-          [BigInt(fromBlock), BigInt(toBlock)],
-        ),
+        encodeAbiParameters(parseAbiParameters('uint256, uint256'), [
+          BigInt(fromBlock),
+          BigInt(toBlock),
+        ]),
       );
 
       const commitment = await contract.read.commitments([commitmentKey]);
@@ -897,10 +897,10 @@ export class ContractService {
 
       // create the commitment key using abi.encode to match contract
       const commitmentKey = keccak256(
-        encodeAbiParameters(
-          parseAbiParameters('uint256, uint256'),
-          [BigInt(fromBlock), BigInt(toBlock)],
-        ),
+        encodeAbiParameters(parseAbiParameters('uint256, uint256'), [
+          BigInt(fromBlock),
+          BigInt(toBlock),
+        ]),
       );
 
       return await contract.read.processed([commitmentKey, leafHash]);

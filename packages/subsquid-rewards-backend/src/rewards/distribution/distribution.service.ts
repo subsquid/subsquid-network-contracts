@@ -79,7 +79,10 @@ function formatAmount(amount: bigint): string {
 }
 
 function generateSessionId(): string {
-  return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+  return (
+    Math.random().toString(36).substring(2, 15) +
+    Math.random().toString(36).substring(2, 15)
+  );
 }
 
 @Injectable()
@@ -246,9 +249,7 @@ export class DistributionService {
           `   - Active workers in contract: ${activeWorkerCount.toString()}`,
         );
       } catch (error) {
-        startCtx.logger.warn(
-          `Failed to get contract state: ${error.message}`,
-        );
+        startCtx.logger.warn(`Failed to get contract state: ${error.message}`);
       }
 
       status.status = 'calculating';
@@ -355,11 +356,23 @@ export class DistributionService {
       status.completedAt = new Date();
 
       const sessionDuration = Date.now() - sessionStartTime;
-      const totalWorkerRewards = workerRewards.reduce((sum, w) => sum + w.workerReward, 0n);
-      const totalStakerRewards = workerRewards.reduce((sum, w) => sum + w.stakerReward, 0n);
+      const totalWorkerRewards = workerRewards.reduce(
+        (sum, w) => sum + w.workerReward,
+        0n,
+      );
+      const totalStakerRewards = workerRewards.reduce(
+        (sum, w) => sum + w.stakerReward,
+        0n,
+      );
       const totalRewards = totalWorkerRewards + totalStakerRewards;
-      const totalGasUsed = transactionLogs.reduce((sum, log) => sum + log.gasUsed, 0n);
-      const totalGasCost = transactionLogs.reduce((sum, log) => sum + (log.gasUsed * log.gasPrice), 0n);
+      const totalGasUsed = transactionLogs.reduce(
+        (sum, log) => sum + log.gasUsed,
+        0n,
+      );
+      const totalGasCost = transactionLogs.reduce(
+        (sum, log) => sum + log.gasUsed * log.gasPrice,
+        0n,
+      );
 
       sessionCtx.logger.info(
         `🎉 Distribution session ${sessionId} completed successfully!`,
@@ -369,16 +382,32 @@ export class DistributionService {
       summaryCtx.logger.info(`📊 === DISTRIBUTION SUMMARY ===`);
       summaryCtx.logger.info(`🎯 Session ID: ${sessionId}`);
       summaryCtx.logger.info(`📅 Block Range: ${fromBlock} → ${toBlock}`);
-      summaryCtx.logger.info(`👥 Total Workers: ${status.totalWorkers.toString()}`);
-      summaryCtx.logger.info(`📦 Total Batches: ${status.totalBatches.toString()}`);
-      summaryCtx.logger.info(`⏱️ Duration: ${(sessionDuration / 1000).toFixed(2)}s`);
-      summaryCtx.logger.info(`💰 Worker Rewards: ${formatAmount(totalWorkerRewards)}`);
-      summaryCtx.logger.info(`🏦 Staker Rewards: ${formatAmount(totalStakerRewards)}`);
+      summaryCtx.logger.info(
+        `👥 Total Workers: ${status.totalWorkers.toString()}`,
+      );
+      summaryCtx.logger.info(
+        `📦 Total Batches: ${status.totalBatches.toString()}`,
+      );
+      summaryCtx.logger.info(
+        `⏱️ Duration: ${(sessionDuration / 1000).toFixed(2)}s`,
+      );
+      summaryCtx.logger.info(
+        `💰 Worker Rewards: ${formatAmount(totalWorkerRewards)}`,
+      );
+      summaryCtx.logger.info(
+        `🏦 Staker Rewards: ${formatAmount(totalStakerRewards)}`,
+      );
       summaryCtx.logger.info(`💎 Total Rewards: ${formatAmount(totalRewards)}`);
       summaryCtx.logger.info(`⛽ Total Gas Used: ${totalGasUsed.toString()}`);
-      summaryCtx.logger.info(`💸 Total Gas Cost: ${formatAmount(totalGasCost)}`);
-      summaryCtx.logger.info(`🏆 Successful Transactions: ${transactionLogs.filter(t => t.status === 'success').length}`);
-      summaryCtx.logger.info(`❌ Failed Transactions: ${transactionLogs.filter(t => t.status === 'failed').length}`);
+      summaryCtx.logger.info(
+        `💸 Total Gas Cost: ${formatAmount(totalGasCost)}`,
+      );
+      summaryCtx.logger.info(
+        `🏆 Successful Transactions: ${transactionLogs.filter((t) => t.status === 'success').length}`,
+      );
+      summaryCtx.logger.info(
+        `❌ Failed Transactions: ${transactionLogs.filter((t) => t.status === 'failed').length}`,
+      );
 
       if (status.gasOptimizations) {
         this.logGasOptimizationSummary(status.gasOptimizations);
@@ -406,7 +435,7 @@ export class DistributionService {
   ): Promise<TransactionLog | null> {
     const startTime = Date.now();
     const commitCtx = new TaskContext(`distribution:commit-${sessionId}`);
-    
+
     commitCtx.logger.info(
       `🚀 [${sessionId}] Starting merkle root commit for blocks [${fromBlock}, ${toBlock}]`,
     );
@@ -415,11 +444,11 @@ export class DistributionService {
     let retryCount = 0;
     const MAX_RETRIES = 3;
     let transactionLog: TransactionLog | null = null;
-    
+
     while (!commitSuccess && retryCount < MAX_RETRIES) {
       const attemptStartTime = Date.now();
       const ipfsLink = `ipfs://rewards-${fromBlock}-${toBlock}`;
-      
+
       try {
         commitCtx.logger.info(
           `🔄 [${sessionId}] Commit attempt ${retryCount + 1}/${MAX_RETRIES}`,
@@ -437,7 +466,7 @@ export class DistributionService {
         }
 
         const commitmentKey = this.generateCommitmentKey(fromBlock, toBlock);
-        
+
         try {
           const commitment = await this.publicClient.readContract({
             address: this.contractAddress,
@@ -449,21 +478,21 @@ export class DistributionService {
           if (commitment && commitment[0]) {
             const existingMerkleRoot = commitment[1];
             const existingTotalBatches = commitment[2];
-            
-            const isMatchingCommitment = 
-              existingMerkleRoot === merkleRoot && 
+
+            const isMatchingCommitment =
+              existingMerkleRoot === merkleRoot &&
               Number(existingTotalBatches) === totalBatches;
 
             if (isMatchingCommitment) {
               commitCtx.logger.info(
                 `✅ [${sessionId}] Block range already committed with matching parameters - skipping`,
               );
-              
+
               commitSuccess = true;
               break;
             } else {
               throw new Error(
-                `Block range already committed with different parameters`
+                `Block range already committed with different parameters`,
               );
             }
           }
@@ -489,11 +518,9 @@ export class DistributionService {
         });
 
         const hash = await this.walletClient.writeContract(request);
-        
-        commitCtx.logger.info(
-          `📤 [${sessionId}] Commit TX submitted: ${hash}`,
-        );
-        
+
+        commitCtx.logger.info(`📤 [${sessionId}] Commit TX submitted: ${hash}`);
+
         const receipt = await this.publicClient.waitForTransactionReceipt({
           hash,
         });
@@ -516,11 +543,10 @@ export class DistributionService {
         };
 
         commitSuccess = true;
-        
       } catch (error) {
         const duration = Date.now() - attemptStartTime;
         const errorStr = String(error?.message || error);
-        
+
         commitCtx.logger.error(
           `❌ [${sessionId}] Commit attempt ${retryCount + 1}/${MAX_RETRIES} failed (${duration}ms): ${errorStr}`,
         );
@@ -537,16 +563,16 @@ export class DistributionService {
             status: 'failed',
             error: errorStr,
           };
-          
+
           throw new Error(
             `Failed to commit Merkle root after ${MAX_RETRIES} attempts: ${errorStr}`,
           );
         } else {
-          const retryDelay = 2000 + (retryCount * 1000);
+          const retryDelay = 2000 + retryCount * 1000;
           commitCtx.logger.warn(
             `🔄 [${sessionId}] Retrying commit in ${retryDelay}ms`,
           );
-          
+
           retryCount++;
           await new Promise((resolve) => setTimeout(resolve, retryDelay));
         }
@@ -565,7 +591,7 @@ export class DistributionService {
     proof: string[],
   ): Promise<GasSimulationResult> {
     const gasCtx = new TaskContext(`distribution:gas-simulation`);
-    
+
     try {
       gasCtx.logger.debug(
         `🧪 Simulating distribution for ${recipients.length} workers...`,
@@ -645,7 +671,7 @@ export class DistributionService {
     initialBatchSize: number,
   ): Promise<{ optimizedBatchSize: number; gasSimulations: number }> {
     const gasCtx = new TaskContext(`distribution:gas-optimization`);
-    
+
     gasCtx.logger.debug(
       `🔧 Optimizing batch size starting with ${initialBatchSize} workers per batch...`,
     );
@@ -721,7 +747,9 @@ export class DistributionService {
           );
         }
 
-        gasCtx.logger.debug(`🔄 Retrying with reduced batch size: ${testBatchSize}`);
+        gasCtx.logger.debug(
+          `🔄 Retrying with reduced batch size: ${testBatchSize}`,
+        );
       }
     }
 
@@ -741,7 +769,7 @@ export class DistributionService {
     sessionId: string,
   ): Promise<TransactionLog[]> {
     const batchCtx = new TaskContext(`distribution:batches-${sessionId}`);
-    
+
     batchCtx.logger.info(
       `📦 [${sessionId}] Starting distribution of ${merkleTree.totalBatches} batches`,
     );
@@ -824,11 +852,11 @@ export class DistributionService {
         });
 
         const hash = await this.walletClient.writeContract(request);
-        
+
         batchCtx.logger.info(
           `📤 [${sessionId}] Batch ${batchNumber} TX submitted: ${hash}`,
         );
-        
+
         const receipt = await this.publicClient.waitForTransactionReceipt({
           hash,
         });
@@ -851,7 +879,6 @@ export class DistributionService {
           status: 'success',
         };
         transactionLogs.push(log);
-
       } catch (error) {
         const errorStr = String(error?.message || error);
         batchCtx.logger.error(
@@ -899,7 +926,7 @@ export class DistributionService {
       Math.floor(originalLeaf.recipients.length / 2),
     );
     const chunkCtx = new TaskContext(`distribution:chunks-${sessionId}`);
-    
+
     chunkCtx.logger.info(
       `📦 [${sessionId}] Splitting batch ${batchNumber} into chunks of ${chunkSize} workers each`,
     );
@@ -955,7 +982,7 @@ export class DistributionService {
             chunkCtx.logger.error(
               `❌ [${sessionId}] Single worker chunk failed - skipping worker ${chunkRecipients[0].toString()}`,
             );
-            
+
             const failedLog: TransactionLog = {
               type: 'distribute',
               hash: 'failed',
@@ -1004,11 +1031,11 @@ export class DistributionService {
         });
 
         const hash = await this.walletClient.writeContract(request);
-        
+
         chunkCtx.logger.info(
           `📤 [${sessionId}] Chunk ${chunkIndex} TX submitted: ${hash}`,
         );
-        
+
         const receipt = await this.publicClient.waitForTransactionReceipt({
           hash,
         });
@@ -1031,13 +1058,12 @@ export class DistributionService {
           status: 'success',
         };
         chunkLogs.push(log);
-
       } catch (error) {
         const errorStr = String(error?.message || error);
         chunkCtx.logger.error(
           `❌ [${sessionId}] Failed to distribute chunk ${chunkIndex} of batch ${batchNumber}: ${errorStr}`,
         );
-        
+
         const failedLog: TransactionLog = {
           type: 'distribute',
           hash: 'failed',
@@ -1063,7 +1089,7 @@ export class DistributionService {
     toBlock: number,
   ): Promise<any> {
     const statusCtx = new TaskContext('distribution:status');
-    
+
     try {
       const key = this.generateCommitmentKey(fromBlock, toBlock);
 
@@ -1108,7 +1134,7 @@ export class DistributionService {
     totalGasSimulations: number;
   }): void {
     const gasCtx = new TaskContext('distribution:gas-summary');
-    
+
     gasCtx.logger.debug(`📊 Gas Optimization Summary:`);
     gasCtx.logger.debug(
       `   - Original batch size: ${gasOptimizations.originalBatchSize} workers`,

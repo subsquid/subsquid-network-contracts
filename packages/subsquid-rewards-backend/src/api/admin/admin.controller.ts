@@ -74,14 +74,17 @@ export class AdminController {
     const limitNum = limit ? parseInt(limit, 10) : undefined;
 
     try {
-      const result = await this.rewardsCalculatorService.calculateRewardsFormatted(
-        ctx,
-        fromBlockNum,
-        toBlockNum,
-        true,
-      );
+      const result =
+        await this.rewardsCalculatorService.calculateRewardsFormatted(
+          ctx,
+          fromBlockNum,
+          toBlockNum,
+          true,
+        );
 
-      const workers = limitNum ? result.workers.slice(0, limitNum) : result.workers;
+      const workers = limitNum
+        ? result.workers.slice(0, limitNum)
+        : result.workers;
 
       return {
         totalRewards: result.totalRewards,
@@ -135,14 +138,6 @@ export class AdminController {
       const ctx = new TaskContext(`admin:distribution:${epochId}`);
       ctx.logger.debug(`🚀 Starting distribution for epoch ${epochId}`);
 
-      // Start distribution in background
-      const distributionPromise =
-        this.distributionService.distributeEpochRewards(
-          fromBlock,
-          toBlock,
-          batchSize,
-        );
-
       // Store initial status
       const initialStatus: DistributionStatus = {
         epochId,
@@ -158,34 +153,46 @@ export class AdminController {
 
       this.activeDistributions.set(epochId, initialStatus);
 
-      // Update status when complete
-      distributionPromise
-        .then((finalStatus) => {
-          this.activeDistributions.set(epochId, finalStatus);
-          ctx.logger.debug(
-            `✅ Distribution completed for epoch ${epochId}: ${finalStatus.status}`,
-          );
-        })
-        .catch((error) => {
-          const errorStatus: DistributionStatus = {
-            ...initialStatus,
-            status: 'failed',
-            error: error.message,
-            completedAt: new Date(),
-          };
-          this.activeDistributions.set(epochId, errorStatus);
-          ctx.logger.error(
-            { error },
-            `❌ Distribution failed for epoch ${epochId}`,
-          );
-        });
+      try {
+        // wait for distribution to complete
+        const finalStatus = await this.distributionService.distributeEpochRewards(
+          fromBlock,
+          toBlock,
+          batchSize,
+        );
 
-      return {
-        success: true,
-        message: 'Distribution started successfully',
-        epochId,
-        status: this.formatStatus(initialStatus),
-      };
+        // update with final status
+        this.activeDistributions.set(epochId, finalStatus);
+        
+        ctx.logger.debug(
+          `✅ Distribution completed for epoch ${epochId}: ${finalStatus.status}`,
+        );
+
+        return {
+          success: true,
+          message: 'Distribution completed successfully',
+          epochId,
+          status: this.formatStatus(finalStatus),
+        };
+      } catch (error) {
+        const errorStatus: DistributionStatus = {
+          ...initialStatus,
+          status: 'failed',
+          error: error.message,
+          completedAt: new Date(),
+        };
+        this.activeDistributions.set(epochId, errorStatus);
+        
+        ctx.logger.error(
+          { error },
+          `❌ Distribution failed for epoch ${epochId}`,
+        );
+        
+        throw new HttpException(
+          `Distribution failed: ${error.message}`,
+          HttpStatus.INTERNAL_SERVER_ERROR,
+        );
+      }
     } catch (error) {
       new TaskContext('error-handling').logger.error(
         { error },
