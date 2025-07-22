@@ -7,6 +7,7 @@ export interface MerkleLeaf {
   recipients: bigint[];
   workerRewards: bigint[];
   stakerRewards: bigint[];
+  leafHash: string;
 }
 
 export interface MerkleTreeResult {
@@ -26,44 +27,61 @@ export class MerkleTreeService {
     }>,
     batchSize: number = 50,
   ): Promise<MerkleTreeResult> {
-    new TaskContext('merkle-tree:generate').logger.debug(
+    const ctx = new TaskContext('merkle-tree:generate');
+    ctx.logger.debug(
       `Generating Merkle tree for ${workers.length} workers with batch size ${batchSize}`,
     );
 
+    // CRITICAL: Sort workers deterministically by workerId to ensure consistent merkle tree
+    const sortedWorkers = [...workers].sort((a, b) => {
+      if (a.workerId < b.workerId) return -1;
+      if (a.workerId > b.workerId) return 1;
+      return 0;
+    });
+
+    ctx.logger.debug(
+      `Sorted ${sortedWorkers.length} workers deterministically by workerId`,
+    );
+
     const batches: MerkleLeaf[] = [];
-    for (let i = 0; i < workers.length; i += batchSize) {
-      const batch = workers.slice(i, i + batchSize);
+    const leafHashes: string[] = [];
+    
+    for (let i = 0; i < sortedWorkers.length; i += batchSize) {
+      const batch = sortedWorkers.slice(i, i + batchSize);
+
+      const leafHash = keccak256(
+        encodeAbiParameters(
+          parseAbiParameters('uint256[], uint256[], uint256[]'),
+          [
+            batch.map((w) => w.workerId),
+            batch.map((w) => w.workerReward),
+            batch.map((w) => w.stakerReward),
+          ],
+        ),
+      );
 
       batches.push({
         recipients: batch.map((w) => w.workerId),
         workerRewards: batch.map((w) => w.workerReward),
         stakerRewards: batch.map((w) => w.stakerReward),
+        leafHash,
       });
+      
+      leafHashes.push(leafHash);
+
+      ctx.logger.debug(
+        `Batch ${batches.length - 1}: ${batch.length} workers, hash: ${leafHash}`,
+      );
     }
 
-    new TaskContext('merkle-tree:batches').logger.debug(
-      `Created ${batches.length} batches from ${workers.length} workers`,
+    ctx.logger.debug(
+      `Created ${batches.length} batches from ${sortedWorkers.length} workers`,
     );
-
-    // generate leaf hashes - use ABI encoding to match contract
-    const leafHashes = batches.map((batch, index) => {
-      const hash = keccak256(
-        encodeAbiParameters(
-          parseAbiParameters('uint256[], uint256[], uint256[]'),
-          [batch.recipients, batch.workerRewards, batch.stakerRewards],
-        ),
-      );
-
-      new TaskContext('merkle-tree:hash').logger.debug(
-        `Batch ${index}: ${batch.recipients.length} workers, hash: ${hash}`,
-      );
-      return hash;
-    });
 
     // build Merkle tree
     const { root, proofs } = this.buildMerkleTree(leafHashes);
 
-    new TaskContext('merkle-tree:complete').logger.debug(
+    ctx.logger.info(
       `✅ Merkle tree generated: root=${root}, ${batches.length} leaves`,
     );
 

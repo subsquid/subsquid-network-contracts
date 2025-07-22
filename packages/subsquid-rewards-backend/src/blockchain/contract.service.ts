@@ -333,11 +333,35 @@ export class ContractService {
         client: this.web3Service.client,
       });
 
-      return Number(await contract.read.lastBlockRewarded());
+      const lastBlock = Number(await contract.read.lastBlockRewarded());
+      
+      // if lastBlockRewarded is 0, use the configured starting block
+      if (lastBlock === 0) {
+        const startingBlock = this.configService.get('rewards.distributionStartingBlock') || 0;
+        if (startingBlock > 0) {
+          ctx.logger.info(
+            `Using configured starting block: ${startingBlock} (lastBlockRewarded = 0)`
+          );
+          // return startingBlock - 1 so the first distribution starts at startingBlock
+          return startingBlock - 1;
+        }
+      }
+      
+      return lastBlock;
     } catch (error) {
       new TaskContext('error-handling').logger.error(
         `Failed to get last rewarded block: ${error.message}`,
       );
+      
+      // on error, also check for starting block
+      const startingBlock = this.configService.get('rewards.distributionStartingBlock') || 0;
+      if (startingBlock > 0) {
+        ctx.logger.info(
+          `Using configured starting block due to error: ${startingBlock}`
+        );
+        return startingBlock - 1;
+      }
+      
       return 0;
     }
   }
@@ -909,6 +933,125 @@ export class ContractService {
         `Failed to check if batch is processed: ${error.message}`,
       );
       return false;
+    }
+  }
+
+  /**
+   * get commitment info for a block range from the contract
+   */
+  async getCommitment(
+    ctx: Context,
+    fromBlock: number,
+    toBlock: number,
+  ): Promise<{
+    exists: boolean;
+    merkleRoot: string;
+    totalBatches: number;
+    processedBatches: number;
+    approvalCount: number;
+    ipfsLink: string;
+  }> {
+    try {
+      const rewardsDistributionAddress = this.configService.get(
+        'blockchain.contracts.rewardsDistribution',
+      ) as Address;
+
+      const contract = getContract({
+        address: rewardsDistributionAddress,
+        abi: DistributedRewardsDistributionABI,
+        client: this.web3Service.client,
+      });
+
+      const commitmentKey = keccak256(
+        encodeAbiParameters(parseAbiParameters('uint256, uint256'), [
+          BigInt(fromBlock),
+          BigInt(toBlock),
+        ]),
+      );
+
+      const commitment = await contract.read.commitments([commitmentKey]);
+      
+      return {
+        exists: commitment[0],
+        merkleRoot: commitment[1],
+        totalBatches: Number(commitment[2]),
+        processedBatches: Number(commitment[3]),
+        approvalCount: Number(commitment[4]),
+        ipfsLink: commitment[5],
+      };
+    } catch (error) {
+      ctx.logger.error(
+        { error },
+        `Failed to get commitment for blocks ${fromBlock}-${toBlock}`,
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * get the last block that completed reward distribution
+   */
+  async getLastBlockRewarded(ctx: Context): Promise<number> {
+    try {
+      const rewardsDistributionAddress = this.configService.get(
+        'blockchain.contracts.rewardsDistribution',
+      ) as Address;
+      
+      ctx.logger.debug(
+        `Getting lastBlockRewarded from contract at ${rewardsDistributionAddress}`
+      );
+
+      const contract = getContract({
+        address: rewardsDistributionAddress,
+        abi: DistributedRewardsDistributionABI,
+        client: this.web3Service.client,
+      });
+
+      const lastBlock = await contract.read.lastBlockRewarded();
+      ctx.logger.debug(`lastBlockRewarded raw value: ${lastBlock}`);
+      
+      return Number(lastBlock);
+    } catch (error: any) {
+      ctx.logger.error(
+        { 
+          error,
+          contract: this.configService.get('blockchain.contracts.rewardsDistribution'),
+          errorMessage: error.message,
+          errorCause: error.cause?.message
+        }, 
+        'Failed to get last block rewarded'
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * Check which batches have been processed for a commitment
+   */
+  async getProcessedBatches(
+    ctx: Context,
+    fromBlock: number,
+    toBlock: number,
+    leafHashes: string[],
+  ): Promise<boolean[]> {
+    try {
+      const results = await Promise.all(
+        leafHashes.map((leafHash) =>
+          this.isBatchProcessed(fromBlock, toBlock, leafHash as Hex),
+        ),
+      );
+      
+      ctx.logger.debug(
+        `Checked ${leafHashes.length} batches: ${results.filter(r => r).length} processed`,
+      );
+      
+      return results;
+    } catch (error) {
+      ctx.logger.error(
+        { error },
+        `Failed to check processed batches for blocks ${fromBlock}-${toBlock}`,
+      );
+      throw error;
     }
   }
 

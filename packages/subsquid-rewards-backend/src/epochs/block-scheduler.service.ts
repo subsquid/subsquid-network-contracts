@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { Web3Service } from '../blockchain/web3.service';
@@ -20,8 +20,9 @@ export interface BlockSchedulerStatus {
 }
 
 @Injectable()
-export class BlockSchedulerService {
+export class BlockSchedulerService implements OnModuleInit {
   private readonly blockInterval: number;
+  private readonly distributionStartingBlock: number;
   private readonly enableAutoDistribution: boolean;
   private readonly confirmationBlocks: number;
   private lastCheckedBlock = 0;
@@ -40,28 +41,60 @@ export class BlockSchedulerService {
   ) {
     this.blockInterval =
       this.configService.get('rewards.distributionBlockInterval') || 600;
+    this.distributionStartingBlock =
+      this.configService.get('rewards.distributionStartingBlock') || 0;
     this.enableAutoDistribution =
-      this.configService.get('rewards.enableAutoDistribution') === 'true';
+      this.configService.get('rewards.enableAutoDistribution') === true;
     this.confirmationBlocks =
       this.configService.get('blockchain.epochConfirmationBlocks') || 150;
 
     const ctx = new TaskContext('block-scheduler-init');
     this.logger = ctx.logger;
 
-    ctx.logger.debug(`🔄 Block Scheduler initialized:`);
-    ctx.logger.debug(
-      `   - Auto distribution: ${this.enableAutoDistribution ? '✅' : '❌'}`,
+    ctx.logger.info(`🔄 Block Scheduler initialized:`);
+    ctx.logger.info(
+      `   - Auto distribution: ${this.enableAutoDistribution ? '✅ ENABLED' : '❌ DISABLED'}`,
     );
-    ctx.logger.debug(`   - Block interval: ${this.blockInterval} blocks`);
-    ctx.logger.debug(`   - Confirmation blocks: ${this.confirmationBlocks}`);
+    ctx.logger.info(`   - Block interval: ${this.blockInterval} blocks`);
+    ctx.logger.info(`   - Starting block: ${this.distributionStartingBlock}`);
+    ctx.logger.info(`   - Confirmation blocks: ${this.confirmationBlocks}`);
+    ctx.logger.info(
+      `   - Config value: ${this.configService.get('rewards.enableAutoDistribution')}`,
+    );
+    ctx.logger.info(
+      `   - ENABLE_AUTO_DISTRIBUTION env: ${process.env.ENABLE_AUTO_DISTRIBUTION}`,
+    );
+  }
+
+  async onModuleInit() {
+    if (this.enableAutoDistribution) {
+      const ctx = new TaskContext('block-scheduler:init');
+      ctx.logger.info('🚀 Auto distribution enabled, performing initial check...');
+
+      setTimeout(() => {
+        this.checkBlockInterval().catch((error) => {
+          ctx.logger.error({ error }, 'Initial block check failed');
+        });
+      }, 5000);
+    }
   }
 
   @Cron(CronExpression.EVERY_MINUTE)
   async checkBlockInterval() {
-    if (!this.enableAutoDistribution || this.isProcessing) {
+    const ctx = new TaskContext('block-scheduler:check');
+    
+    if (!this.enableAutoDistribution) {
+      ctx.logger.debug('Auto distribution is disabled, skipping check');
       return;
     }
-    const ctx = new TaskContext('block-scheduler:check');
+    
+    if (this.isProcessing) {
+      ctx.logger.debug('Already processing, skipping check');
+      return;
+    }
+    
+    ctx.logger.info('🔄 Running block interval check');
+    
     try {
       await this.processBlockInterval(ctx);
     } catch (error) {
@@ -78,8 +111,12 @@ export class BlockSchedulerService {
       this.lastCheckedBlock = currentBlock;
 
       const commitRange = await this.getCommitRange(ctx);
+      ctx.logger.info(
+        `📊 processBlockInterval: commitRange = ${JSON.stringify(commitRange)}`
+      );
+      
       if (commitRange.fromBlock > 0 && commitRange.toBlock > 0) {
-        ctx.logger.debug(
+        ctx.logger.info(
           `🚀 Block interval reached! Processing range ${commitRange.fromBlock}-${commitRange.toBlock}`,
         );
 
@@ -101,7 +138,7 @@ export class BlockSchedulerService {
           commitRange.toBlock,
         );
 
-        ctx.logger.debug(
+        ctx.logger.info(
           `✅ Block-triggered workflow completed for ${commitRange.fromBlock}-${commitRange.toBlock}`,
         );
       } else {
@@ -109,12 +146,12 @@ export class BlockSchedulerService {
           await this.contractService.getLastRewardedBlock(ctx);
         const blocksSinceLastReward = currentBlock - lastRewardedBlock;
 
-        ctx.logger.debug(
+        ctx.logger.info(
           `📊 Block status: current=${currentBlock}, lastRewarded=${lastRewardedBlock}, gap=${blocksSinceLastReward}/${this.blockInterval}`,
         );
 
         if (blocksSinceLastReward < this.blockInterval) {
-          ctx.logger.debug(
+          ctx.logger.info(
             `⏳ Waiting for more blocks (${this.blockInterval - blocksSinceLastReward} remaining)`,
           );
         }
@@ -385,8 +422,16 @@ export class BlockSchedulerService {
 
       const blocksSinceLastReward = currentBlock - lastRewardedBlock;
 
+      ctx.logger.info(
+        `📊 getCommitRange: currentBlock=${currentBlock}, lastRewardedBlock=${lastRewardedBlock}, ` +
+        `blocksSinceLastReward=${blocksSinceLastReward}, blockInterval=${this.blockInterval}`
+      );
+
       // check if interval reached
       if (blocksSinceLastReward < this.blockInterval) {
+        ctx.logger.info(
+          `⏳ Not enough blocks yet: ${blocksSinceLastReward} < ${this.blockInterval}`
+        );
         return { fromBlock: 0, toBlock: 0 };
       }
 
@@ -396,8 +441,16 @@ export class BlockSchedulerService {
         fromBlock + this.blockInterval - 1,
         lastConfirmedBlock,
       );
+      
+      ctx.logger.info(
+        `📊 Range calculation: fromBlock=${fromBlock}, toBlock=${toBlock}, ` +
+        `lastConfirmedBlock=${lastConfirmedBlock}`
+      );
 
-      if (fromBlock >= toBlock) {
+      if (fromBlock > toBlock) {
+        ctx.logger.info(
+          `⏳ Waiting for confirmation: fromBlock=${fromBlock} > toBlock=${toBlock} (need ${this.confirmationBlocks} confirmation blocks)`
+        );
         return { fromBlock: 0, toBlock: 0 };
       }
 

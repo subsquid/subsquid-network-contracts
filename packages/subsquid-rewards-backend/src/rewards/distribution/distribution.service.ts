@@ -2,11 +2,12 @@ import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { TaskContext } from '../../common/task-context';
 import { Web3Service } from '../../blockchain/web3.service';
-import { MerkleTreeService, MerkleTreeResult } from './merkle-tree.service';
+import { MerkleTreeService, MerkleTreeResult, MerkleLeaf } from './merkle-tree.service';
 import {
   RewardsCalculatorService,
   WorkerReward,
 } from '../calculation/rewards-calculator.service';
+import { DistributionRecoveryService } from './distribution-recovery.service';
 import {
   createPublicClient,
   createWalletClient,
@@ -115,6 +116,7 @@ export class DistributionService {
     private web3Service: Web3Service,
     private merkleTreeService: MerkleTreeService,
     private rewardsCalculatorService: RewardsCalculatorService,
+    private recoveryService: DistributionRecoveryService,
   ) {
     const rpcUrl = this.configService.get(
       'blockchain.network.l2RpcUrl',
@@ -141,7 +143,7 @@ export class DistributionService {
       process.env.REWARDS_DISTRIBUTION_ADDRESS ||
       this.configService.get(
         'blockchain.contracts.rewardsDistribution',
-        '0x36fE2E7a1c19F7Be268272540E9A4aB306686506',
+        '0x0E5AE852a0DaF14E53376c86625d2BE24E6dAa3D',
       );
 
     this.contractAddress = contractAddress as Address;
@@ -237,7 +239,82 @@ export class DistributionService {
       );
 
       const startCtx = new TaskContext(`distribution:epoch-${epochId}`);
-      startCtx.logger.debug(`🚀 Starting distribution for epoch ${epochId}`);
+      
+      // check for interrupted distribution
+      const recoveryStatus = await this.recoveryService.checkInterruptedDistribution(
+        startCtx,
+        fromBlock,
+        toBlock,
+      );
+
+      if (recoveryStatus.interrupted && recoveryStatus.commitment) {
+        sessionCtx.logger.info(
+          `🔄 Recovering interrupted distribution: ${recoveryStatus.commitment.processedBatches}/${recoveryStatus.commitment.totalBatches} batches already processed`,
+        );
+
+        // recover merkle tree and verify it matches
+        const recoveredTree = await this.recoveryService.recoverMerkleTree(
+          startCtx,
+          fromBlock,
+          toBlock,
+          batchSize,
+        );
+
+        // check which batches need processing
+        const { remainingBatchIndices } = this.recoveryService.getProcessedAndRemainingBatches(
+          recoveredTree.processedLeaves,
+        );
+
+        if (remainingBatchIndices.length === 0) {
+          sessionCtx.logger.info('✅ All batches already processed, nothing to do');
+          status.status = 'completed';
+          status.totalBatches = recoveredTree.totalBatches;
+          status.processedBatches = recoveredTree.totalBatches;
+          status.completedAt = new Date();
+          return status;
+        }
+
+        // skip to distribution phase with remaining batches
+        sessionCtx.logger.info(
+          `📦 Resuming distribution with ${remainingBatchIndices.length} remaining batches`,
+        );
+
+        status.status = 'distributing';
+        status.totalBatches = recoveredTree.totalBatches;
+        status.processedBatches = recoveredTree.totalBatches - remainingBatchIndices.length;
+
+        // We need the full merkle tree to distribute remaining batches with correct proofs
+        const fullMerkleTree: MerkleTreeResult = {
+          root: recoveredTree.merkleRoot,
+          leaves: recoveredTree.leaves,
+          proofs: [], // These will be generated during distribution
+          totalBatches: recoveredTree.totalBatches,
+        };
+
+        // Distribute only the remaining batches
+        const distributionLogs = await this.distributeRemainingBatches(
+          fromBlock,
+          toBlock,
+          fullMerkleTree,
+          remainingBatchIndices,
+          sessionId,
+        );
+        transactionLogs.push(...distributionLogs);
+
+        status.processedBatches = recoveredTree.totalBatches;
+        status.status = 'completed';
+        status.completedAt = new Date();
+        
+        const sessionDuration = Date.now() - sessionStartTime;
+        sessionCtx.logger.info(
+          `✅ Resumed distribution completed successfully in ${(sessionDuration / 1000).toFixed(2)}s!`,
+        );
+        
+        return status;
+      }
+
+      // normal flow for new distribution
+      startCtx.logger.debug(`🚀 Starting new distribution for epoch ${epochId}`);
 
       try {
         const bondAmount = await this.web3Service.getBondAmount(startCtx);
@@ -1164,5 +1241,146 @@ export class DistributionService {
 
   async getClaimableRewards(workerAddress: Address): Promise<bigint> {
     return 0n;
+  }
+
+  /**
+   * Distribute only the remaining batches during recovery
+   */
+  private async distributeRemainingBatches(
+    fromBlock: number,
+    toBlock: number,
+    merkleTree: MerkleTreeResult,
+    remainingBatchIndices: number[],
+    sessionId: string,
+  ): Promise<TransactionLog[]> {
+    const batchCtx = new TaskContext(`distribution:remaining-batches-${sessionId}`);
+
+    batchCtx.logger.info(
+      `📦 [${sessionId}] Distributing ${remainingBatchIndices.length} remaining batches`,
+    );
+
+    const transactionLogs: TransactionLog[] = [];
+
+    // Generate proofs for all leaves first
+    const leafHashes = merkleTree.leaves.map((leaf) => leaf.leafHash);
+    const { proofs } = this.merkleTreeService['buildMerkleTree'](leafHashes);
+
+    for (const batchIndex of remainingBatchIndices) {
+      const leaf = merkleTree.leaves[batchIndex];
+      const proof = proofs[batchIndex];
+      const batchNumber = batchIndex + 1;
+      const batchStartTime = Date.now();
+
+      try {
+        batchCtx.logger.info(
+          `📋 [${sessionId}] Processing batch ${batchNumber}/${merkleTree.totalBatches} (index ${batchIndex})`,
+        );
+
+        // Get rewards sums for this batch
+        const totalWorkerRewards = leaf.workerRewards.reduce(
+          (sum, reward) => sum + reward,
+          0n,
+        );
+        const totalStakerRewards = leaf.stakerRewards.reduce(
+          (sum, reward) => sum + reward,
+          0n,
+        );
+
+        batchCtx.logger.debug(
+          `💰 [${sessionId}] Batch ${batchNumber}: ${leaf.recipients.length} workers, ${formatAmount(totalWorkerRewards)} worker rewards, ${formatAmount(totalStakerRewards)} staker rewards`,
+        );
+
+        // Gas simulation
+        if (this.gasSimulationConfig.enablePreflightSimulation) {
+          const simulation = await this.simulateDistribution(
+            fromBlock,
+            toBlock,
+            leaf.recipients,
+            leaf.workerRewards,
+            leaf.stakerRewards,
+            proof as `0x${string}`[],
+          );
+
+          if (!simulation.success) {
+            batchCtx.logger.error(
+              `❌ [${sessionId}] Batch ${batchNumber} simulation failed: ${simulation.error}`,
+            );
+            throw new Error(`Gas simulation failed: ${simulation.error}`);
+          }
+
+          batchCtx.logger.debug(
+            `⛽ [${sessionId}] Batch ${batchNumber} gas estimate: ${simulation.estimatedGas}`,
+          );
+        }
+
+        // Execute distribution
+        const request = {
+          account: this.walletClient.account,
+          address: this.contractAddress,
+          abi: this.contractAbi,
+          functionName: 'distribute',
+          args: [
+            [BigInt(fromBlock), BigInt(toBlock)],
+            leaf.recipients,
+            leaf.workerRewards,
+            leaf.stakerRewards,
+            proof as `0x${string}`[],
+          ],
+        };
+
+        const hash = await this.walletClient.writeContract(request);
+
+        batchCtx.logger.info(
+          `📤 [${sessionId}] Batch ${batchNumber} TX submitted: ${hash}`,
+        );
+
+        const receipt = await this.publicClient.waitForTransactionReceipt({
+          hash,
+        });
+
+        const duration = Date.now() - batchStartTime;
+
+        batchCtx.logger.info(
+          `✅ [${sessionId}] Batch ${batchNumber}/${merkleTree.totalBatches} distributed successfully! Block: ${receipt.blockNumber.toString()}, Gas: ${receipt.gasUsed.toString()}, Duration: ${duration}ms`,
+        );
+
+        const log: TransactionLog = {
+          type: 'distribute',
+          hash,
+          blockNumber: Number(receipt.blockNumber),
+          gasUsed: receipt.gasUsed,
+          gasPrice: receipt.effectiveGasPrice || 0n,
+          batchNumber,
+          workerCount: leaf.recipients.length,
+          duration,
+          status: 'success',
+        };
+        transactionLogs.push(log);
+      } catch (error) {
+        const errorStr = String(error?.message || error);
+        batchCtx.logger.error(
+          `❌ [${sessionId}] Failed to distribute batch ${batchNumber}/${merkleTree.totalBatches}: ${errorStr}`,
+        );
+
+        const failedLog: TransactionLog = {
+          type: 'distribute',
+          hash: 'failed',
+          blockNumber: 0,
+          gasUsed: 0n,
+          gasPrice: 0n,
+          batchNumber,
+          workerCount: leaf.recipients.length,
+          duration: Date.now() - batchStartTime,
+          status: 'failed',
+          error: errorStr,
+        };
+        transactionLogs.push(failedLog);
+
+        // Don't continue with remaining batches if one fails
+        throw error;
+      }
+    }
+
+    return transactionLogs;
   }
 }

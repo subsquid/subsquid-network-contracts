@@ -40,5 +40,9 @@ export const rewardsConfig = registerAs('rewards', () => ({
     process.env.DISTRIBUTION_BLOCK_INTERVAL || '600',
     10,
   ), // default 600 blocks
+  distributionStartingBlock: parseInt(
+    process.env.DISTRIBUTION_STARTING_BLOCK || '0',
+    10,
+  ),
   enableAutoDistribution: process.env.ENABLE_AUTO_DISTRIBUTION === 'true',
 }));
