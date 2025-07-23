@@ -327,30 +327,54 @@ export class ContractService {
         'blockchain.contracts.rewardsDistribution',
       ) as Address;
 
-      const contract = getContract({
-        address: rewardsDistributionAddress,
-        abi: DistributedRewardsDistributionABI,
-        client: this.web3Service.client,
-      });
+      ctx.logger.debug(
+        `Getting lastBlockRewarded from contract at ${rewardsDistributionAddress}`
+      );
 
-      const lastBlock = Number(await contract.read.lastBlockRewarded());
-      
-      // if lastBlockRewarded is 0, use the configured starting block
-      if (lastBlock === 0) {
-        const startingBlock = this.configService.get('rewards.distributionStartingBlock') || 0;
-        if (startingBlock > 0) {
-          ctx.logger.info(
-            `Using configured starting block: ${startingBlock} (lastBlockRewarded = 0)`
-          );
-          // return startingBlock - 1 so the first distribution starts at startingBlock
-          return startingBlock - 1;
+      try {
+        const lastBlock = await this.web3Service.client.readContract({
+          address: rewardsDistributionAddress,
+          abi: DistributedRewardsDistributionABI,
+          functionName: 'lastBlockRewarded',
+        });
+        
+        const lastBlockNum = Number(lastBlock);
+        ctx.logger.debug(`lastBlockRewarded value: ${lastBlockNum}`);
+        
+        // if lastBlockRewarded is 0, use the configured starting block
+        if (lastBlockNum === 0) {
+          const startingBlock = this.configService.get('rewards.distributionStartingBlock') || 0;
+          if (startingBlock > 0) {
+            ctx.logger.info(
+              `Using configured starting block: ${startingBlock} (lastBlockRewarded = 0)`
+            );
+            // return startingBlock - 1 so the first distribution starts at startingBlock
+            return startingBlock - 1;
+          }
         }
+        
+        return lastBlockNum;
+      } catch (contractError: any) {
+        ctx.logger.error(
+          {
+            error: contractError,
+            errorMessage: contractError.message,
+            errorDetails: contractError.details,
+            shortMessage: contractError.shortMessage,
+            cause: contractError.cause,
+          },
+          'Contract call failed'
+        );
+        throw contractError;
       }
-      
-      return lastBlock;
-    } catch (error) {
-      new TaskContext('error-handling').logger.error(
-        `Failed to get last rewarded block: ${error.message}`,
+    } catch (error: any) {
+      ctx.logger.error(
+        { 
+          error,
+          contract: this.configService.get('blockchain.contracts.rewardsDistribution'),
+          errorMessage: error.message,
+        }, 
+        'Failed to get last rewarded block'
       );
       
       // on error, also check for starting block
@@ -372,11 +396,10 @@ export class ContractService {
         'blockchain.contracts.rewardsDistribution',
       ) as Address;
 
-      const contract = getContract({
-        address: rewardsDistributionAddress,
-        abi: DistributedRewardsDistributionABI,
-        client: this.web3Service.client,
-      });
+      const ctx = new TaskContext('contract:isCommitted');
+      ctx.logger.debug(
+        `Checking if committed: ${fromBlock}-${toBlock} at contract ${rewardsDistributionAddress}`
+      );
 
       // create the commitment key using abi.encode to match contract
       const commitmentKey = keccak256(
@@ -385,10 +408,35 @@ export class ContractService {
           BigInt(toBlock),
         ]),
       );
+      
+      ctx.logger.debug(`Commitment key: ${commitmentKey}`);
 
-      const commitment = await contract.read.commitments([commitmentKey]);
-      return commitment[0]; // exists field
-    } catch (error) {
+      try {
+        // try direct readContract call for better error handling
+        const commitment = await this.web3Service.client.readContract({
+          address: rewardsDistributionAddress,
+          abi: DistributedRewardsDistributionABI,
+          functionName: 'commitments',
+          args: [commitmentKey],
+        });
+        
+        ctx.logger.debug(`Commitment result: ${JSON.stringify(commitment)}`);
+        return commitment[0]; // exists field
+      } catch (readError: any) {
+        ctx.logger.error(
+          {
+            error: readError,
+            errorMessage: readError.message,
+            shortMessage: readError.shortMessage,
+            commitmentKey,
+            fromBlock,
+            toBlock,
+          },
+          'Failed to read commitment from contract'
+        );
+        throw readError;
+      }
+    } catch (error: any) {
       new TaskContext('error-handling').logger.error(
         `Failed to check if committed: ${error.message}`,
       );
@@ -956,11 +1004,9 @@ export class ContractService {
         'blockchain.contracts.rewardsDistribution',
       ) as Address;
 
-      const contract = getContract({
-        address: rewardsDistributionAddress,
-        abi: DistributedRewardsDistributionABI,
-        client: this.web3Service.client,
-      });
+      if (!rewardsDistributionAddress) {
+        throw new Error('Rewards distribution contract address not configured');
+      }
 
       const commitmentKey = keccak256(
         encodeAbiParameters(parseAbiParameters('uint256, uint256'), [
@@ -969,19 +1015,67 @@ export class ContractService {
         ]),
       );
 
-      const commitment = await contract.read.commitments([commitmentKey]);
-      
-      return {
-        exists: commitment[0],
-        merkleRoot: commitment[1],
-        totalBatches: Number(commitment[2]),
-        processedBatches: Number(commitment[3]),
-        approvalCount: Number(commitment[4]),
-        ipfsLink: commitment[5],
-      };
+      ctx.logger.debug(
+        `Getting commitment for blocks ${fromBlock}-${toBlock}, key: ${commitmentKey}, contract: ${rewardsDistributionAddress}`
+      );
+
+      try {
+
+        const commitment = await this.web3Service.client.readContract({
+          address: rewardsDistributionAddress,
+          abi: DistributedRewardsDistributionABI,
+          functionName: 'commitments',
+          args: [commitmentKey],
+        });
+
+        ctx.logger.debug(
+          `Raw commitment response: ${JSON.stringify(commitment)}`
+        );
+        
+        if (!commitment) {
+          ctx.logger.debug('No commitment found (null/undefined response)');
+          return {
+            exists: false,
+            merkleRoot: '0x0000000000000000000000000000000000000000000000000000000000000000',
+            totalBatches: 0,
+            processedBatches: 0,
+            approvalCount: 0,
+            ipfsLink: '',
+          };
+        }
+
+        return {
+          exists: Boolean(commitment[0]),
+          merkleRoot: (commitment[1] || '0x0000000000000000000000000000000000000000000000000000000000000000') as string,
+          totalBatches: Number(commitment[2] || 0),
+          processedBatches: Number(commitment[3] || 0),
+          approvalCount: Number(commitment[4] || 0),
+          ipfsLink: (commitment[5] || '') as string,
+        };
+      } catch (contractError: any) {
+        if (contractError.message?.includes('returned no data')) {
+          ctx.logger.debug(
+            'Contract returned no data - this likely means no commitment exists yet'
+          );
+          return {
+            exists: false,
+            merkleRoot: '0x0000000000000000000000000000000000000000000000000000000000000000',
+            totalBatches: 0,
+            processedBatches: 0,
+            approvalCount: 0,
+            ipfsLink: '',
+          };
+        }
+        throw contractError;
+      }
     } catch (error) {
       ctx.logger.error(
-        { error },
+        { 
+          error,
+          fromBlock,
+          toBlock,
+          contractAddress: this.configService.get('blockchain.contracts.rewardsDistribution'),
+        },
         `Failed to get commitment for blocks ${fromBlock}-${toBlock}`,
       );
       throw error;
@@ -990,39 +1084,10 @@ export class ContractService {
 
   /**
    * get the last block that completed reward distribution
+   * (alias for getLastRewardedBlock to maintain compatibility)
    */
   async getLastBlockRewarded(ctx: Context): Promise<number> {
-    try {
-      const rewardsDistributionAddress = this.configService.get(
-        'blockchain.contracts.rewardsDistribution',
-      ) as Address;
-      
-      ctx.logger.debug(
-        `Getting lastBlockRewarded from contract at ${rewardsDistributionAddress}`
-      );
-
-      const contract = getContract({
-        address: rewardsDistributionAddress,
-        abi: DistributedRewardsDistributionABI,
-        client: this.web3Service.client,
-      });
-
-      const lastBlock = await contract.read.lastBlockRewarded();
-      ctx.logger.debug(`lastBlockRewarded raw value: ${lastBlock}`);
-      
-      return Number(lastBlock);
-    } catch (error: any) {
-      ctx.logger.error(
-        { 
-          error,
-          contract: this.configService.get('blockchain.contracts.rewardsDistribution'),
-          errorMessage: error.message,
-          errorCause: error.cause?.message
-        }, 
-        'Failed to get last block rewarded'
-      );
-      throw error;
-    }
+    return this.getLastRewardedBlock(ctx);
   }
 
   /**
