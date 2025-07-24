@@ -1,6 +1,6 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Cron, CronExpression } from '@nestjs/schedule';
+import { Cron } from '@nestjs/schedule';
 import { Web3Service } from '../blockchain/web3.service';
 import { ContractService } from '../blockchain/contract.service';
 import { DistributionService } from '../rewards/distribution/distribution.service';
@@ -79,7 +79,7 @@ export class BlockSchedulerService implements OnModuleInit {
     }
   }
 
-  @Cron(CronExpression.EVERY_MINUTE)
+  @Cron('*/2 * * * *') // Every 2 minutes
   async checkBlockInterval() {
     const ctx = new TaskContext('block-scheduler:check');
     
@@ -120,23 +120,35 @@ export class BlockSchedulerService implements OnModuleInit {
           `🚀 Block interval reached! Processing range ${commitRange.fromBlock}-${commitRange.toBlock}`,
         );
 
-        await this.processCommitPhase(
-          ctx,
-          commitRange.fromBlock,
-          commitRange.toBlock,
-        );
+        try {
+          await this.processCommitPhase(
+            ctx,
+            commitRange.fromBlock,
+            commitRange.toBlock,
+          );
+        } catch (error) {
+          ctx.logger.warn(`Commit phase skipped: ${error.message}`);
+        }
 
-        await this.processApprovalPhase(
-          ctx,
-          commitRange.fromBlock,
-          commitRange.toBlock,
-        );
+        try {
+          await this.processApprovalPhase(
+            ctx,
+            commitRange.fromBlock,
+            commitRange.toBlock,
+          );
+        } catch (error) {
+          ctx.logger.debug(`Approval phase skipped: ${error.message}`);
+        }
 
-        await this.processDistributionPhase(
-          ctx,
-          commitRange.fromBlock,
-          commitRange.toBlock,
-        );
+        try {
+          await this.processDistributionPhase(
+            ctx,
+            commitRange.fromBlock,
+            commitRange.toBlock,
+          );
+        } catch (error) {
+          ctx.logger.error(`Distribution phase failed: ${error.message}`);
+        }
 
         ctx.logger.info(
           `✅ Block-triggered workflow completed for ${commitRange.fromBlock}-${commitRange.toBlock}`,
@@ -157,7 +169,9 @@ export class BlockSchedulerService implements OnModuleInit {
         }
       }
     } catch (error) {
-      ctx.logger.error({ error }, `Block interval processing failed`);
+      ctx.logger.error(
+        `Block interval processing failed: ${error.message}`
+      );
       this.currentPhase = 'idle';
     } finally {
       this.isProcessing = false;
@@ -176,15 +190,7 @@ export class BlockSchedulerService implements OnModuleInit {
         `📝 Phase 1: Committing Merkle root for ${fromBlock}-${toBlock}`,
       );
 
-      const isCommitted = await this.contractService.isCommitted(
-        fromBlock,
-        toBlock,
-      );
-      if (isCommitted) {
-        ctx.logger.debug(`✅ Range ${fromBlock}-${toBlock} already committed`);
-        this.lastCommittedRange = { fromBlock, toBlock };
-        return;
-      }
+      ctx.logger.debug(`🔄 Proceeding with commit for ${fromBlock}-${toBlock}`)
 
       const distributorAddress = this.configService.get(
         'blockchain.distributor.address',
@@ -196,8 +202,8 @@ export class BlockSchedulerService implements OnModuleInit {
       const canCommit =
         await this.contractService.canCommit(distributorAddress);
       if (!canCommit) {
-        ctx.logger.warn(
-          `⚠️  Cannot commit right now (not our turn in round-robin)`,
+        ctx.logger.debug(
+          `Not our turn in round-robin, skipping commit`,
         );
         return;
       }
@@ -271,7 +277,10 @@ export class BlockSchedulerService implements OnModuleInit {
         Number(latestCommitment.fromBlock) !== fromBlock ||
         Number(latestCommitment.toBlock) !== toBlock
       ) {
-        throw new Error('No matching commitment found');
+        ctx.logger.debug(
+          `No commitment found for range ${fromBlock}-${toBlock}, skipping approval`
+        );
+        return;
       }
 
       const requiredApprovals = 1; // TODO: get from contract configuration

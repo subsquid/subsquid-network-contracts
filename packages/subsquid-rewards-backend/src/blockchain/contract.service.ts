@@ -355,37 +355,27 @@ export class ContractService {
         
         return lastBlockNum;
       } catch (contractError: any) {
+        if (contractError.message?.includes('returned no data')) {
+          ctx.logger.debug('Contract returned no data for lastBlockRewarded - using starting block');
+          const startingBlock = this.configService.get('rewards.distributionStartingBlock') || 0;
+          if (startingBlock > 0) {
+            ctx.logger.info(`Using configured starting block: ${startingBlock}`);
+            return startingBlock - 1;
+          }
+          return 0;
+        }
+        
         ctx.logger.error(
-          {
-            error: contractError,
-            errorMessage: contractError.message,
-            errorDetails: contractError.details,
-            shortMessage: contractError.shortMessage,
-            cause: contractError.cause,
-          },
-          'Contract call failed'
+          `Contract call failed: ${contractError.shortMessage || contractError.message}`
         );
         throw contractError;
       }
     } catch (error: any) {
-      ctx.logger.error(
-        { 
-          error,
-          contract: this.configService.get('blockchain.contracts.rewardsDistribution'),
-          errorMessage: error.message,
-        }, 
-        'Failed to get last rewarded block'
-      );
-      
-      // on error, also check for starting block
-      const startingBlock = this.configService.get('rewards.distributionStartingBlock') || 0;
-      if (startingBlock > 0) {
-        ctx.logger.info(
-          `Using configured starting block due to error: ${startingBlock}`
-        );
-        return startingBlock - 1;
+      if (typeof error === 'number') {
+        return error;
       }
       
+      ctx.logger.error(`Unexpected error getting last rewarded block: ${error.message}`);
       return 0;
     }
   }
@@ -457,9 +447,16 @@ export class ContractService {
       });
 
       return await contract.read.canCommit([address]);
-    } catch (error) {
-      new TaskContext('error-handling').logger.error(
-        `Failed to check if can commit: ${error.message}`,
+    } catch (error: any) {
+      if (error.message?.includes('returned no data')) {
+        new TaskContext('contract-service:canCommit').logger.debug(
+          'Contract returned no data for canCommit - returning false'
+        );
+        return false;
+      }
+      
+      new TaskContext('contract-service:canCommit').logger.warn(
+        `Failed to check if can commit: ${error.shortMessage || error.message}`
       );
       return false;
     }
@@ -546,7 +543,7 @@ export class ContractService {
       });
 
       if (logs.length === 0) {
-        new TaskContext('warning').logger.warn('No commitment logs found');
+        new TaskContext('contract-service:getLatestCommitment').logger.debug('No commitment logs found');
         return undefined;
       }
 

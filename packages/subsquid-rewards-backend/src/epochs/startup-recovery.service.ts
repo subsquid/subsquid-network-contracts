@@ -93,7 +93,7 @@ export class StartupRecoveryService implements OnModuleInit {
         );
       } else {
         ctx.logger.info(
-          `✅ ${blocksSinceLastReward} blocks since last reward (${(blocksSinceLastReward / epochLength * 100).toFixed(1)}% of epoch)`,
+          `✅ ${blocksSinceLastReward} blocks since last reward`,
         );
       }
       
