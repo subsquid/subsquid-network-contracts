@@ -2,6 +2,13 @@
 // These are copies to ensure our backend has its own stable version
 
 export const DistributedRewardsDistributionABI = [
+  // Errors
+  { type: 'error', name: 'ArrayLengthMismatch', inputs: [] },
+  { type: 'error', name: 'BatchAlreadyProcessed', inputs: [] },
+  { type: 'error', name: 'InvalidMerkleProof', inputs: [] },
+  { type: 'error', name: 'MerkleRootNotCommitted', inputs: [] },
+  { type: 'error', name: 'NotEnoughApprovals', inputs: [] },
+  { type: 'error', name: 'NotAllBlocksCovered', inputs: [] },
   {
     type: 'constructor',
     inputs: [
@@ -93,6 +100,13 @@ export const DistributedRewardsDistributionABI = [
     name: 'lastBlockRewarded',
     inputs: [],
     outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    name: 'lastCommitmentKey',
+    inputs: [],
+    outputs: [{ name: '', type: 'bytes32', internalType: 'bytes32' }],
     stateMutability: 'view',
   },
   {
@@ -351,6 +365,13 @@ export const NetworkControllerABI = [
   {
     type: 'function',
     name: 'yearlyRewardCapCoefficient',
+    inputs: [],
+    outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    name: 'targetCapacityGb',
     inputs: [],
     outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }],
     stateMutability: 'view',

@@ -428,10 +428,10 @@ export class OldWorkers {
             ...baseStats,
             workerReward: workerRewardWei.eq(0)
               ? ''
-              : workerRewardWei.toFixed(0),
+              : workerRewardWei.floor().toFixed(0),
             stakerReward: stakerRewardWei.eq(0)
               ? ''
-              : stakerRewardWei.toFixed(0),
+              : stakerRewardWei.floor().toFixed(0),
           },
         ];
       }),

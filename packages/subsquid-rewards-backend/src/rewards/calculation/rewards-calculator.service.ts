@@ -242,8 +242,14 @@ export class RewardsCalculatorService {
         finalWorkers = oldWorkers.filterBatch(batchNumber, totalBatches);
       }
 
-      const bn = (value: { toString(): string }) =>
-        BigInt(Math.floor(Number(value.toString())));
+      const bn = (value: { toString(): string }) => {
+        const strValue = value.toString();
+        const dotIndex = strValue.indexOf('.');
+        if (dotIndex === -1) {
+          return BigInt(strValue);
+        }
+        return BigInt(strValue.substring(0, dotIndex));
+      };
 
       const duration = Math.floor(
         (endTime.getTime() - startTime.getTime()) / 1000,

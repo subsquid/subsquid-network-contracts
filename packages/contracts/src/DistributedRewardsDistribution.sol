@@ -59,6 +59,7 @@ contract DistributedRewardsDistribution is IRewardsDistribution, AccessControl, 
   mapping(bytes32 => mapping(bytes32 => bool)) public processed;
 
   uint256 public lastBlockRewarded;
+  bytes32 public lastCommitmentKey;
 
   mapping(uint256 => uint256) public accumulatedRewards;
   mapping(uint256 => uint256) public withdrawnRewards;
@@ -173,6 +174,8 @@ contract DistributedRewardsDistribution is IRewardsDistribution, AccessControl, 
     if (root == bytes32(0)) revert Errors.InvalidMerkleRoot();
     if (!canCommit(msg.sender)) revert Errors.NotACommitter();
     if (totalBatches == 0) revert Errors.TotalLeavesCannotBeZero();
+    
+    if (lastBlockRewarded != 0 && fromBlock != lastBlockRewarded + 1) revert Errors.NotAllBlocksCovered();
 
     bytes32 k = _key(fromBlock, toBlock);
     Commitment storage c = commitments[k];
@@ -181,6 +184,7 @@ contract DistributedRewardsDistribution is IRewardsDistribution, AccessControl, 
       c.merkleRoot = root;
       c.totalBatches = totalBatches;
       c.ipfsLink = ipfs;
+      lastCommitmentKey = k; 
       emit NewCommitment(msg.sender, fromBlock, toBlock, root);
     } else if (c.merkleRoot != root) {
       revert Errors.MerkleRootMismatch();
@@ -245,8 +249,6 @@ contract DistributedRewardsDistribution is IRewardsDistribution, AccessControl, 
     bytes32 leaf = keccak256(abi.encode(recipients, workerRewards, stakerRewards));
     if (processed[k][leaf]) revert Errors.BatchAlreadyProcessed();
     if (!MerkleProof.verify(merkleProof, c.merkleRoot, leaf)) revert Errors.InvalidMerkleProof();
-
-    if (lastBlockRewarded != 0 && fromBlock != lastBlockRewarded + 1) revert Errors.NotAllBlocksCovered();
 
     processed[k][leaf] = true;
     c.processedBatches += 1;

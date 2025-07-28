@@ -464,17 +464,18 @@ export class ContractService {
 
   async getTargetCapacity(blockNumber?: bigint): Promise<bigint> {
     try {
-      const workerRegistrationAddress = this.configService.get(
-        'blockchain.contracts.workerRegistration',
+      const networkControllerAddress = this.configService.get(
+        'blockchain.contracts.networkController',
       ) as Address;
 
       const contract = getContract({
-        address: workerRegistrationAddress,
-        abi: WorkerRegistrationABI,
+        address: networkControllerAddress,
+        abi: NetworkControllerABI,
         client: this.web3Service.client,
       });
 
-      return await contract.read.targetCapacity({ blockNumber });
+      const capacityGb = await contract.read.targetCapacityGb({ blockNumber });
+      return BigInt(capacityGb) * BigInt(1e9);
     } catch (error) {
       new TaskContext('error-handling').logger.error(
         `Failed to get target capacity: ${error.message}`,
@@ -585,11 +586,11 @@ export class ContractService {
         fromBlock: commitFromBlock,
         toBlock: commitToBlock,
         merkleRoot: commitMerkleRoot,
-        totalBatches: 0, // plcholder
-        processedBatches: 0, // plcholder
-        approvalCount: BigInt(commitmentData[3] || 0), // ensure bigint conversion
-        ipfsLink: '', // plcholder
-        exists: commitmentData[0] || false, // Assuming 1st element is exists flag
+        totalBatches: Number(commitmentData[2] || 0),
+        processedBatches: Number(commitmentData[3] || 0),
+        approvalCount: BigInt(commitmentData[4] || 0),
+        ipfsLink: (commitmentData[5] || '') as string,
+        exists: Boolean(commitmentData[0])
       };
     } catch (error) {
       new TaskContext('error-handling').logger.error(

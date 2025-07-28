@@ -30,6 +30,8 @@ export class BlockSchedulerService implements OnModuleInit {
   private currentPhase: 'commit' | 'approve' | 'distribute' | 'idle' = 'idle';
   private lastCommittedRange?: { fromBlock: number; toBlock: number };
   private logger: Logger;
+  
+  private internalLastProcessedBlock: number | null = null;
 
   constructor(
     private configService: ConfigService,
@@ -71,10 +73,32 @@ export class BlockSchedulerService implements OnModuleInit {
       const ctx = new TaskContext('block-scheduler:init');
       ctx.logger.info('🚀 Auto distribution enabled, performing initial check...');
 
-      setTimeout(() => {
-        this.checkBlockInterval().catch((error) => {
+      setTimeout(async () => {
+        try {
+          const lastRewardedBlock = await this.contractService.getLastRewardedBlock(ctx);
+          
+          if (lastRewardedBlock === 0) {
+            this.internalLastProcessedBlock = this.distributionStartingBlock - 1;
+            ctx.logger.info(
+              `📊 Initial state: Starting fresh from block ${this.distributionStartingBlock}`,
+            );
+          } else {
+            this.internalLastProcessedBlock = lastRewardedBlock;
+            ctx.logger.info(
+              `📊 Initial state: Continuing from lastBlockRewarded = ${lastRewardedBlock}`,
+            );
+          }
+          
+          const nextFromBlock = this.internalLastProcessedBlock + 1;
+          const nextToBlock = nextFromBlock + this.blockInterval - 1;
+          ctx.logger.info(
+            `📊 Next expected distribution range: ${nextFromBlock}-${nextToBlock}`,
+          );
+          
+          await this.checkBlockInterval();
+        } catch (error) {
           ctx.logger.error({ error }, 'Initial block check failed');
-        });
+        }
       }, 5000);
     }
   }
@@ -96,6 +120,17 @@ export class BlockSchedulerService implements OnModuleInit {
     ctx.logger.info('🔄 Running block interval check');
     
     try {
+      const lastRewardedBlock = await this.contractService.getLastRewardedBlock(ctx);
+      ctx.logger.info(
+        `📊 State check:`,
+      );
+      ctx.logger.info(
+        `   - Internal counter: ${this.internalLastProcessedBlock ?? 'not initialized'}`,
+      );
+      ctx.logger.info(
+        `   - Contract lastBlockRewarded: ${lastRewardedBlock}`,
+      );
+      
       await this.processBlockInterval(ctx);
     } catch (error) {
       ctx.logger.error({ error }, `Block interval check failed`);
@@ -110,63 +145,135 @@ export class BlockSchedulerService implements OnModuleInit {
       const currentBlock = await this.web3Service.getL1BlockNumber(ctx);
       this.lastCheckedBlock = currentBlock;
 
-      const commitRange = await this.getCommitRange(ctx);
-      ctx.logger.info(
-        `📊 processBlockInterval: commitRange = ${JSON.stringify(commitRange)}`
-      );
+      if (this.internalLastProcessedBlock === null) {
+        const lastRewardedBlock = await this.contractService.getLastRewardedBlock(ctx);
+        this.internalLastProcessedBlock = lastRewardedBlock === 0 
+          ? this.distributionStartingBlock - 1
+          : lastRewardedBlock;
+        ctx.logger.info(
+          `📊 Initialized internal counter: ${this.internalLastProcessedBlock}`,
+        );
+      }
       
-      if (commitRange.fromBlock > 0 && commitRange.toBlock > 0) {
+      const blocksSinceLastReward = currentBlock - this.internalLastProcessedBlock;
+
+      ctx.logger.info(
+        `📊 Block status: current=${currentBlock}, internalLastProcessed=${this.internalLastProcessedBlock}, gap=${blocksSinceLastReward}/${this.blockInterval}`,
+      );
+
+      if (blocksSinceLastReward >= this.blockInterval) {
+        const nextFromBlock = this.internalLastProcessedBlock + 1;
+        const nextToBlock = nextFromBlock + this.blockInterval - 1;
+        
         ctx.logger.info(
-          `🚀 Block interval reached! Processing range ${commitRange.fromBlock}-${commitRange.toBlock}`,
+          `📋 Processing distribution range: ${nextFromBlock}-${nextToBlock} (internal counter)`,
+        );
+        
+        const contractLastRewardedBlock = await this.contractService.getLastRewardedBlock(ctx);
+        if (contractLastRewardedBlock >= nextToBlock) {
+          ctx.logger.warn(
+            `🔄 Skipping range ${nextFromBlock}-${nextToBlock} - already processed according to contract (lastBlockRewarded=${contractLastRewardedBlock})`,
+          );
+          this.internalLastProcessedBlock = contractLastRewardedBlock;
+          return;
+        }
+        
+        const existingCommitment = await this.contractService.getCommitment(
+          ctx,
+          nextFromBlock,
+          nextToBlock,
         );
 
-        try {
-          await this.processCommitPhase(
-            ctx,
-            commitRange.fromBlock,
-            commitRange.toBlock,
-          );
-        } catch (error) {
-          ctx.logger.warn(`Commit phase skipped: ${error.message}`);
-        }
-
-        try {
-          await this.processApprovalPhase(
-            ctx,
-            commitRange.fromBlock,
-            commitRange.toBlock,
-          );
-        } catch (error) {
-          ctx.logger.debug(`Approval phase skipped: ${error.message}`);
-        }
-
-        try {
-          await this.processDistributionPhase(
-            ctx,
-            commitRange.fromBlock,
-            commitRange.toBlock,
-          );
-        } catch (error) {
-          ctx.logger.error(`Distribution phase failed: ${error.message}`);
-        }
-
-        ctx.logger.info(
-          `✅ Block-triggered workflow completed for ${commitRange.fromBlock}-${commitRange.toBlock}`,
-        );
-      } else {
-        const lastRewardedBlock =
-          await this.contractService.getLastRewardedBlock(ctx);
-        const blocksSinceLastReward = currentBlock - lastRewardedBlock;
-
-        ctx.logger.info(
-          `📊 Block status: current=${currentBlock}, lastRewarded=${lastRewardedBlock}, gap=${blocksSinceLastReward}/${this.blockInterval}`,
-        );
-
-        if (blocksSinceLastReward < this.blockInterval) {
+        if (existingCommitment.exists) {
           ctx.logger.info(
-            `⏳ Waiting for more blocks (${this.blockInterval - blocksSinceLastReward} remaining)`,
+            `📋 Found existing commitment for ${nextFromBlock}-${nextToBlock}: ${existingCommitment.processedBatches}/${existingCommitment.totalBatches} batches processed`,
+          );
+
+          if (existingCommitment.processedBatches < existingCommitment.totalBatches) {
+            ctx.logger.info(
+              `🔄 Resuming distribution for ${nextFromBlock}-${nextToBlock}`,
+            );
+            
+            try {
+              await this.processDistributionPhase(
+                ctx,
+                nextFromBlock,
+                nextToBlock,
+              );
+            } catch (error) {
+              ctx.logger.error(`Distribution phase failed: ${error.message}`);
+            }
+            
+            return;
+          } else {
+            ctx.logger.info(
+              `✅ Distribution already completed for ${nextFromBlock}-${nextToBlock}`,
+            );
+            this.internalLastProcessedBlock = nextToBlock;
+            ctx.logger.info(
+              `📊 Updated internal counter to ${this.internalLastProcessedBlock}`,
+            );
+            return;
+          }
+        }
+      
+        const commitRange = { fromBlock: nextFromBlock, toBlock: nextToBlock };
+        
+        const lastConfirmedBlock = currentBlock - this.confirmationBlocks;
+        if (nextToBlock > lastConfirmedBlock) {
+          ctx.logger.info(
+            `⏳ Waiting for confirmation: need ${nextToBlock - lastConfirmedBlock} more blocks`,
+          );
+          return;
+        }
+        
+        ctx.logger.info(
+          `📊 processBlockInterval: commitRange = ${JSON.stringify(commitRange)}`
+        );
+        
+        if (commitRange.fromBlock > 0 && commitRange.toBlock > 0) {
+          ctx.logger.info(
+            `🚀 Block interval reached! Processing range ${commitRange.fromBlock}-${commitRange.toBlock}`,
+          );
+
+          try {
+            await this.processCommitPhase(
+              ctx,
+              commitRange.fromBlock,
+              commitRange.toBlock,
+            );
+          } catch (error) {
+            ctx.logger.warn(`Commit phase skipped: ${error.message}`);
+          }
+
+          try {
+            await this.processApprovalPhase(
+              ctx,
+              commitRange.fromBlock,
+              commitRange.toBlock,
+            );
+          } catch (error) {
+            ctx.logger.debug(`Approval phase skipped: ${error.message}`);
+          }
+
+          try {
+            await this.processDistributionPhase(
+              ctx,
+              commitRange.fromBlock,
+              commitRange.toBlock,
+            );
+          } catch (error) {
+            ctx.logger.error(`Distribution phase failed: ${error.message}`);
+          }
+
+          ctx.logger.info(
+            `✅ Block-triggered workflow completed for ${commitRange.fromBlock}-${commitRange.toBlock}`,
           );
         }
+      } else {
+        ctx.logger.info(
+          `⏳ Waiting for more blocks (${this.blockInterval - blocksSinceLastReward} remaining)`,
+        );
       }
     } catch (error) {
       ctx.logger.error(
@@ -292,9 +399,6 @@ export class BlockSchedulerService implements OnModuleInit {
 
       if (currentApprovals < requiredApprovals) {
         // if we haven't approved yet, approve now
-        const distributorAddress = this.configService.get(
-          'blockchain.distributor.address',
-        );
 
         ctx.logger.debug(
           `📝 Approving commitment for ${fromBlock}-${toBlock}...`,
@@ -358,6 +462,31 @@ export class BlockSchedulerService implements OnModuleInit {
           `   - Total Rewards: ${Number(distributionStatus.totalRewards) / 1e18} SQD`,
         );
 
+        this.internalLastProcessedBlock = toBlock;
+        
+        const updatedLastRewardedBlock = await this.contractService.getLastRewardedBlock(ctx);
+        ctx.logger.info(
+          `📊 Distribution completed:`,
+        );
+        ctx.logger.info(
+          `   - Internal counter updated: ${fromBlock - 1} → ${this.internalLastProcessedBlock}`,
+        );
+        ctx.logger.info(
+          `   - Contract lastBlockRewarded: ${updatedLastRewardedBlock} (expected: ${toBlock})`,
+        );
+        
+        if (updatedLastRewardedBlock !== toBlock) {
+          ctx.logger.warn(
+            `⚠️  Contract state mismatch! Using internal counter for next range.`,
+          );
+        }
+        
+        const nextFromBlock = this.internalLastProcessedBlock + 1;
+        const nextToBlock = nextFromBlock + this.blockInterval - 1;
+        ctx.logger.info(
+          `📝 Next distribution range will be: ${nextFromBlock}-${nextToBlock}`,
+        );
+
         // calculate metrics for structured logging
         const currentCapacity = Number(activeWorkerCount) * 200; // 200GB per worker (approximate)
         const targetCapacity = Number(networkCapacity) / 1e9; // convert from bytes to GB
@@ -419,56 +548,13 @@ export class BlockSchedulerService implements OnModuleInit {
     }
   }
 
-  private async getCommitRange(ctx: Context): Promise<{
-    fromBlock: number;
-    toBlock: number;
-  }> {
-    try {
-      const currentBlock = await this.web3Service.getL1BlockNumber(ctx);
-      const lastRewardedBlock =
-        await this.contractService.getLastRewardedBlock(ctx);
-      const lastConfirmedBlock = currentBlock - this.confirmationBlocks;
-
-      const blocksSinceLastReward = currentBlock - lastRewardedBlock;
-
-      ctx.logger.info(
-        `📊 getCommitRange: currentBlock=${currentBlock}, lastRewardedBlock=${lastRewardedBlock}, ` +
-        `blocksSinceLastReward=${blocksSinceLastReward}, blockInterval=${this.blockInterval}`
-      );
-
-      // check if interval reached
-      if (blocksSinceLastReward < this.blockInterval) {
-        ctx.logger.info(
-          `⏳ Not enough blocks yet: ${blocksSinceLastReward} < ${this.blockInterval}`
-        );
-        return { fromBlock: 0, toBlock: 0 };
-      }
-
-      // calculate the range to commit
-      const fromBlock = lastRewardedBlock + 1;
-      const toBlock = Math.min(
-        fromBlock + this.blockInterval - 1,
-        lastConfirmedBlock,
-      );
-      
-      ctx.logger.info(
-        `📊 Range calculation: fromBlock=${fromBlock}, toBlock=${toBlock}, ` +
-        `lastConfirmedBlock=${lastConfirmedBlock}`
-      );
-
-      if (fromBlock > toBlock) {
-        ctx.logger.info(
-          `⏳ Waiting for confirmation: fromBlock=${fromBlock} > toBlock=${toBlock} (need ${this.confirmationBlocks} confirmation blocks)`
-        );
-        return { fromBlock: 0, toBlock: 0 };
-      }
-
-      return { fromBlock, toBlock };
-    } catch (error) {
-      ctx.logger.error({ error }, `Failed to get commit range`);
-      return { fromBlock: 0, toBlock: 0 };
-    }
-  }
+  // dep - range calculation now happens in processBlockInterval
+  // private async getCommitRange(ctx: Context): Promise<{
+  //   fromBlock: number;
+  //   toBlock: number;
+  // }> {
+  //   return { fromBlock: 0, toBlock: 0 };
+  // }
 
   // Public methods for admin control and status
   getStatus(): BlockSchedulerStatus {
