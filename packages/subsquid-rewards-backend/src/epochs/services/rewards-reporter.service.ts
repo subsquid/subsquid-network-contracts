@@ -13,6 +13,7 @@ export interface RewardsReportParams {
   commitErrorMessage?: string;
   networkMetrics: NetworkMetrics;
   rewardMetrics: RewardMetrics;
+  workerRewards?: Array<any>; 
 }
 
 @Injectable()
@@ -51,6 +52,45 @@ export class RewardsReporterService {
         valid_requests: params.rewardMetrics.validRequests,
       })
     );
+    
+    if (params.isCommitSuccess && params.workerRewards && params.workerRewards.length > 0) {
+      const botId = process.env.BOT_NAME || this.configService.get('blockchain.network.networkName');
+      const botWallet = this.configService.get('blockchain.distributor.address')?.toLowerCase() || '0x0';
+      
+      const duration = (params.epochEnd.getTime() - params.epochStart.getTime()) / 1000; 
+      const YEAR = 365 * 24 * 60 * 60;
+      
+      params.workerRewards.forEach(worker => {
+        const workerApr = worker.stake && worker.stake > 0n 
+          ? ((Number(worker.workerReward) * YEAR) / (duration * Number(worker.stake)) * 10000).toFixed(0)
+          : "0";
+        const delegatorApr = worker.stake && worker.stake > 0n
+          ? ((Number(worker.stakerReward) * YEAR) / (duration * Number(worker.stake)) * 10000).toFixed(0)
+          : "0";
+        
+        console.log(
+          JSON.stringify({
+            time: new Date(),
+            type: "worker_report",
+            bot_id: botId,
+            bot_wallet: botWallet,
+            worker_id: worker.peerId || worker.workerId?.toString() || '',
+            t_i: (worker.traffic?.trafficWeight || worker.trafficWeight || 0).toFixed(),
+            s_i: (worker.traffic?.dTraffic || worker.stakeWeight || 0).toFixed(),
+            r_i: (worker.traffic?.dTraffic || worker.actualYield || 0).toFixed(),
+            worker_apr: workerApr,
+            delegator_apr: delegatorApr,
+            worker_reward: (worker.workerReward || 0n).toString(),
+            staker_reward: (worker.stakerReward || 0n).toString(),
+            stake: (worker.stake || 0n).toString(),
+            bytes_sent: worker.traffic?.bytesSent || worker.bytesSent || 0,
+            chunks_read: worker.traffic?.chunksRead || worker.chunksRead || 0,
+            requests: worker.traffic?.totalRequests || worker.totalRequests || 0,
+            valid_requests: worker.traffic?.validRequests || worker.requestsProcessed || 0,
+          })
+        );
+      });
+    }
   }
 
   async logFailedRewardsReport(

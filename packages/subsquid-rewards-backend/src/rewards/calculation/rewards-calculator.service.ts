@@ -243,7 +243,19 @@ export class RewardsCalculatorService {
       }
 
       const bn = (value: { toString(): string }) => {
+        if (value && typeof (value as any).toFixed === 'function') {
+          return BigInt((value as any).toFixed(0));
+        }
+        
         const strValue = value.toString();
+        
+        if (strValue.includes('e') || strValue.includes('E')) {
+          const num = Number(strValue);
+          // convert to fixed notation 
+          const fixedStr = num.toFixed(0);
+          return BigInt(fixedStr);
+        }
+        
         const dotIndex = strValue.indexOf('.');
         if (dotIndex === -1) {
           return BigInt(strValue);

@@ -37,9 +37,9 @@ export const rewardsConfig = registerAs('rewards', () => ({
 
   // block-based distribution scheduling
   distributionBlockInterval: parseInt(
-    process.env.DISTRIBUTION_BLOCK_INTERVAL || '600',
+    process.env.DISTRIBUTION_BLOCK_INTERVAL || '520',
     10,
-  ), // default 600 blocks
+  ), // default 520 blocks
   distributionStartingBlock: parseInt(
     process.env.DISTRIBUTION_STARTING_BLOCK || '0',
     10,

@@ -73,23 +73,28 @@ export class EpochMetricsService {
     // calculate total metrics from stored rewards data (exact same logic as original)
     if (lastCalculatedRewards?.workers) {
       totalBytesSent = lastCalculatedRewards.workers.reduce(
-        (sum: number, w: any) => sum + (w.traffic?.bytesSent || 0), 0
+        (sum: number, w: any) => sum + (w.traffic?.bytesSent || w.bytesSent || 0), 0
       );
       totalChunksRead = lastCalculatedRewards.workers.reduce(
-        (sum: number, w: any) => sum + (w.traffic?.chunksRead || 0), 0
+        (sum: number, w: any) => sum + (w.traffic?.chunksRead || w.chunksRead || 0), 0
       );
       totalRequests = lastCalculatedRewards.workers.reduce(
-        (sum: number, w: any) => sum + (w.traffic?.totalRequests || 0), 0
+        (sum: number, w: any) => sum + (w.traffic?.totalRequests || w.totalRequests || w.requests || 0), 0
       );
       validRequests = lastCalculatedRewards.workers.reduce(
-        (sum: number, w: any) => sum + (w.traffic?.validRequests || 0), 0
+        (sum: number, w: any) => sum + (w.traffic?.validRequests || w.validRequests || w.requestsProcessed || 0), 0
       );
       
       // extract the total rewards that were calculated
       if (lastCalculatedRewards.totalRewards) {
-        const totalWorkerReward = BigInt(lastCalculatedRewards.totalRewards.worker);
-        const totalStakerReward = BigInt(lastCalculatedRewards.totalRewards.staker);
+        const totalWorkerReward = BigInt(lastCalculatedRewards.totalRewards.worker || 0);
+        const totalStakerReward = BigInt(lastCalculatedRewards.totalRewards.staker || 0);
         totalReward = totalWorkerReward + totalStakerReward;
+      } else if (lastCalculatedRewards.workers && lastCalculatedRewards.workers.length > 0) {
+        totalReward = lastCalculatedRewards.workers.reduce(
+          (sum: bigint, w: any) => sum + BigInt(w.workerReward || 0) + BigInt(w.stakerReward || 0),
+          0n
+        );
       }
     }
 

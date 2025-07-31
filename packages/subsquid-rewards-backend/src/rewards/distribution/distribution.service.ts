@@ -9,6 +9,8 @@ import {
 } from '../calculation/rewards-calculator.service';
 import { DistributionRecoveryService } from './distribution-recovery.service';
 import { ErrorDecoderService } from '../../blockchain/error-decoder.service';
+import { RewardsReporterService } from '../../epochs/services/rewards-reporter.service';
+import { EpochMetricsService } from '../../epochs/services/epoch-metrics.service';
 import {
   createPublicClient,
   createWalletClient,
@@ -120,6 +122,8 @@ export class DistributionService {
     private rewardsCalculatorService: RewardsCalculatorService,
     private recoveryService: DistributionRecoveryService,
     private errorDecoder: ErrorDecoderService,
+    private rewardsReporterService: RewardsReporterService,
+    private epochMetricsService: EpochMetricsService,
   ) {
     const rpcUrl = this.configService.get(
       'blockchain.network.l2RpcUrl',
@@ -235,6 +239,7 @@ export class DistributionService {
 
     const sessionStartTime = Date.now();
     const sessionCtx = new TaskContext(`distribution:session-${sessionId}`);
+    let calculationResult: any = null; // Store calculation result for later reporting
 
     try {
       sessionCtx.logger.info(
@@ -262,6 +267,21 @@ export class DistributionService {
           toBlock,
           batchSize,
         );
+        
+        calculationResult = await this.rewardsCalculatorService.calculateRewardsDetailed(
+          startCtx,
+          fromBlock,
+          toBlock,
+          true,
+        );
+
+        const formattedCalculationResult =
+          await this.rewardsCalculatorService.calculateRewardsFormatted(
+            startCtx,
+            fromBlock,
+            toBlock,
+            true,
+          );
 
         // check which batches need processing
         const { remainingBatchIndices } = this.recoveryService.getProcessedAndRemainingBatches(
@@ -313,6 +333,31 @@ export class DistributionService {
           `✅ Resumed distribution completed successfully in ${(sessionDuration / 1000).toFixed(2)}s!`,
         );
         
+        // generate structured rewards report for recovery path
+        try {
+          const summaryCtx = new TaskContext(`distribution:recovery-report-${sessionId}`);
+          const startTime = new Date(sessionStartTime);
+          const endTime = status.completedAt!;
+          
+          const networkMetrics = await this.epochMetricsService.collectNetworkMetrics(summaryCtx);
+          
+          const rewardMetrics = this.epochMetricsService.extractRewardMetrics(formattedCalculationResult);
+          
+          const commitTxHash = transactionLogs.find(log => log.type === 'commit')?.hash || '';
+          
+          await this.rewardsReporterService.logSuccessfulRewardsReport({
+            epochStart: startTime,
+            epochEnd: endTime,
+            isCommitSuccess: true,
+            commitTxHash,
+            networkMetrics,
+            rewardMetrics,
+            workerRewards: formattedCalculationResult.workers, // use formatted workers with traffic data
+          });
+        } catch (reportError) {
+          sessionCtx.logger.warn({ error: reportError }, 'Failed to generate recovery rewards report');
+        }
+        
         return status;
       }
 
@@ -333,8 +378,16 @@ export class DistributionService {
       }
 
       status.status = 'calculating';
-      const calculationResult =
+      calculationResult =
         await this.rewardsCalculatorService.calculateRewardsDetailed(
+          startCtx,
+          fromBlock,
+          toBlock,
+          true,
+        );
+
+      const formattedCalculationResult =
+        await this.rewardsCalculatorService.calculateRewardsFormatted(
           startCtx,
           fromBlock,
           toBlock,
@@ -493,6 +546,30 @@ export class DistributionService {
         this.logGasOptimizationSummary(status.gasOptimizations);
       }
 
+      // generate structured rewards report 
+      try {
+        const startTime = new Date(sessionStartTime);
+        const endTime = status.completedAt!;
+        
+        const networkMetrics = await this.epochMetricsService.collectNetworkMetrics(summaryCtx);
+        
+        const rewardMetrics = this.epochMetricsService.extractRewardMetrics(formattedCalculationResult);
+        
+        const commitTxHash = transactionLogs.find(log => log.type === 'commit')?.hash || '';
+        
+        await this.rewardsReporterService.logSuccessfulRewardsReport({
+          epochStart: startTime,
+          epochEnd: endTime,
+          isCommitSuccess: true,
+          commitTxHash,
+          networkMetrics,
+          rewardMetrics,
+          workerRewards: formattedCalculationResult.workers, // use formatted workers with traffic data
+        });
+      } catch (reportError) {
+        summaryCtx.logger.warn({ error: reportError }, 'Failed to generate rewards report');
+      }
+
       return status;
     } catch (error) {
       const sessionDuration = Date.now() - sessionStartTime;
@@ -515,6 +592,23 @@ export class DistributionService {
       status.status = 'failed';
       status.error = errorMessage;
       status.completedAt = new Date();
+      
+      // log failed distribution 
+      try {
+        const startTime = new Date(sessionStartTime);
+        const endTime = status.completedAt!;
+        
+        await this.rewardsReporterService.logFailedRewardsReport(
+          sessionCtx,
+          startTime,
+          endTime,
+          '',
+          error
+        );
+      } catch (reportError) {
+        sessionCtx.logger.warn({ error: reportError }, 'Failed to generate failed rewards report');
+      }
+      
       return status;
     }
   }

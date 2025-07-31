@@ -188,6 +188,17 @@ export class PublicController {
 
   private bn(value: string | { toString(): string }): string {
     const strValue = typeof value === 'string' ? value : value.toString();
-    return BigInt(Math.floor(Number(strValue))).toString();
+    
+    if (strValue.includes('e') || strValue.includes('E')) {
+      const num = Number(strValue);
+      const fixedStr = num.toFixed(0);
+      return BigInt(fixedStr).toString();
+    }
+    
+    const dotIndex = strValue.indexOf('.');
+    if (dotIndex === -1) {
+      return BigInt(strValue).toString();
+    }
+    return BigInt(strValue.substring(0, dotIndex)).toString();
   }
 }

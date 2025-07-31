@@ -163,40 +163,6 @@ export class ContractService {
 
   async getCurrentApy(ctx: Context, blockNumber?: bigint): Promise<bigint> {
     try {
-      try {
-        const networkName =
-          this.configService.get('blockchain.network.networkName') || 'mainnet';
-        const query = `
-          SELECT 
-            base_apr
-          FROM ${networkName}.rewards_stats
-          WHERE is_commit_success = true
-          ORDER BY epoch_end DESC
-          LIMIT 1
-        `;
-
-        // use the properly injected ClickHouse service
-        const client = (this.clickHouseService as any).client;
-        if (client) {
-          const resultSet = await client.query({
-            query,
-            format: 'JSONEachRow',
-          });
-
-          const results = await resultSet.json();
-          const resultArray = Array.isArray(results) ? results : [results];
-
-          if (resultArray.length > 0 && resultArray[0].base_apr !== undefined) {
-            const apr = BigInt(resultArray[0].base_apr);
-            ctx.logger.debug(
-              `Retrieved APR from ClickHouse: ${apr} basis points`,
-            );
-            return apr;
-          }
-        }
-      } catch (error) {
-        ctx.logger.warn({ error }, `Failed to get APR from ClickHouse`);
-      }
 
       try {
         const tvl = await this.getEffectiveTVL(ctx, blockNumber);
@@ -491,13 +457,13 @@ export class ContractService {
 
   async getStoragePerWorkerInGb(blockNumber?: bigint): Promise<number> {
     try {
-      const workerRegistrationAddress = this.configService.get(
-        'blockchain.contracts.workerRegistration',
+      const networkControllerAddress = this.configService.get(
+        'blockchain.contracts.networkController',
       ) as Address;
 
       const contract = getContract({
-        address: workerRegistrationAddress,
-        abi: WorkerRegistrationABI,
+        address: networkControllerAddress,
+        abi: NetworkControllerABI,
         client: this.web3Service.client,
       });
 
