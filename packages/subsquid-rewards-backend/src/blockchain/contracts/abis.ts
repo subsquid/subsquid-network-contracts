@@ -9,6 +9,7 @@ export const DistributedRewardsDistributionABI = [
   { type: 'error', name: 'MerkleRootNotCommitted', inputs: [] },
   { type: 'error', name: 'NotEnoughApprovals', inputs: [] },
   { type: 'error', name: 'NotAllBlocksCovered', inputs: [] },
+  { type: 'error', name: 'CommitmentAlreadyCompleted', inputs: [] },
   {
     type: 'constructor',
     inputs: [
@@ -76,7 +77,9 @@ export const DistributedRewardsDistributionABI = [
     name: 'commitments',
     inputs: [{ name: '', type: 'bytes32', internalType: 'bytes32' }],
     outputs: [
-      { name: 'exists', type: 'bool', internalType: 'bool' },
+      { name: 'status', type: 'uint8', internalType: 'uint8' },
+      { name: 'fromBlock', type: 'uint256', internalType: 'uint256' },
+      { name: 'toBlock', type: 'uint256', internalType: 'uint256' },
       { name: 'merkleRoot', type: 'bytes32', internalType: 'bytes32' },
       { name: 'totalBatches', type: 'uint16', internalType: 'uint16' },
       { name: 'processedBatches', type: 'uint16', internalType: 'uint16' },
@@ -161,6 +164,56 @@ export const DistributedRewardsDistributionABI = [
     stateMutability: 'nonpayable',
   },
   {
+    type: 'function',
+    name: 'getCommitment',
+    inputs: [
+      { name: 'blockRange', type: 'uint256[2]', internalType: 'uint256[2]' },
+    ],
+    outputs: [
+      { name: 'status', type: 'uint8', internalType: 'uint8' },
+      { name: 'merkleRoot', type: 'bytes32', internalType: 'bytes32' },
+      { name: 'totalBatches', type: 'uint16', internalType: 'uint16' },
+      { name: 'processedBatches', type: 'uint16', internalType: 'uint16' },
+      { name: 'approvalCount', type: 'uint256', internalType: 'uint256' },
+      { name: 'ipfsLink', type: 'string', internalType: 'string' },
+    ],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    name: 'isCommitmentComplete',
+    inputs: [
+      { name: 'blockRange', type: 'uint256[2]', internalType: 'uint256[2]' },
+    ],
+    outputs: [{ name: 'isComplete', type: 'bool', internalType: 'bool' }],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    name: 'canAcceptDistributions',
+    inputs: [
+      { name: 'blockRange', type: 'uint256[2]', internalType: 'uint256[2]' },
+    ],
+    outputs: [{ name: 'canDistribute', type: 'bool', internalType: 'bool' }],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    name: 'clearCommitment',
+    inputs: [
+      { name: 'blockRange', type: 'uint256[2]', internalType: 'uint256[2]' },
+    ],
+    outputs: [],
+    stateMutability: 'nonpayable',
+  },
+  {
+    type: 'function',
+    name: 'setLastRewardedBlock',
+    inputs: [{ name: 'blockNumber', type: 'uint256', internalType: 'uint256' }],
+    outputs: [],
+    stateMutability: 'nonpayable',
+  },
+  {
     type: 'event',
     name: 'NewCommitment',
     inputs: [
@@ -176,6 +229,7 @@ export const DistributedRewardsDistributionABI = [
         indexed: false,
         internalType: 'uint256',
       },
+
       {
         name: 'toBlock',
         type: 'uint256',

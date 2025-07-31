@@ -58,7 +58,46 @@ export class StartupRecoveryService implements OnModuleInit {
 
       ctx.logger.info(`📊 Last block rewarded: ${lastBlockRewarded}`);
 
-      // check for pending distributions
+      // check if there's a last commitment key
+      let lastCommitmentKey: string;
+      try {
+        lastCommitmentKey = await this.contractService.getLastCommitmentKey(ctx);
+        ctx.logger.info(`🔑 Last commitment key: ${lastCommitmentKey}`);
+      } catch (error) {
+        ctx.logger.debug('Could not fetch lastCommitmentKey - might be using older contract');
+        lastCommitmentKey = '0x0000000000000000000000000000000000000000000000000000000000000000';
+      }
+
+      // if we have a last commitment key, check its status
+      if (lastCommitmentKey !== '0x0000000000000000000000000000000000000000000000000000000000000000') {
+        try {
+          // decode the commitment key to get block range
+          // the key is keccak256(abi.encode(fromBlock, toBlock))
+          // we need to check pending distributions to find the range
+          const pendingInfo = await this.recoveryService.checkPendingDistributions(ctx);
+          
+          if (pendingInfo.lastCommitment) {
+            const { fromBlock, toBlock, status, processedBatches, totalBatches } = pendingInfo.lastCommitment;
+            
+            if (status === 1) { // ACTIVE
+              ctx.logger.warn(
+                `⚠️ Found active commitment for blocks ${fromBlock}-${toBlock}: ${processedBatches}/${totalBatches} batches processed`,
+              );
+              ctx.logger.warn(
+                '💡 This distribution needs to be resumed. Use the /admin/distribute endpoint.',
+              );
+            } else if (status === 2) { // COMPLETED
+              ctx.logger.info(
+                `✅ Last commitment (blocks ${fromBlock}-${toBlock}) is completed`,
+              );
+            }
+          }
+        } catch (error) {
+          ctx.logger.debug('Error checking last commitment status:', error);
+        }
+      }
+
+      // check for other pending distributions
       const pendingInfo = await this.recoveryService.checkPendingDistributions(ctx);
       
       if (pendingInfo.pendingRanges.length > 0) {
@@ -75,7 +114,7 @@ export class StartupRecoveryService implements OnModuleInit {
         ctx.logger.warn(
           '💡 Use the /admin/distribute endpoint to resume these distributions',
         );
-      } else {
+      } else if (!pendingInfo.lastCommitment || pendingInfo.lastCommitment.status === 2) {
         ctx.logger.info('✅ No interrupted distributions found');
       }
 

@@ -44,7 +44,7 @@ export class Web3Service {
     const l1Chain = isTestnet ? sepolia : mainnet;
     const l2Chain = isTestnet ? arbitrumSepolia : arbitrum;
 
-    const l2RpcUrl = this.configService.get('blockchain.l2RpcUrl');
+    const l2RpcUrl = this.configService.get('blockchain.network.l2RpcUrl');
     console.log(`Initializing L2 client with RPC URL: ${l2RpcUrl}`);
     console.log(`Network: ${networkName}, Chain: ${l2Chain.name} (${l2Chain.id})`);
 
@@ -64,7 +64,7 @@ export class Web3Service {
 
     this.l1Client = createPublicClient({
       chain: l1Chain,
-      transport: http(this.configService.get('blockchain.l1RpcUrl')),
+      transport: http(this.configService.get('blockchain.network.l1RpcUrl')),
       batch: {
         multicall: true,
       },

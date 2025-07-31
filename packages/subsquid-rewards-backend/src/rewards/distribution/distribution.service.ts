@@ -8,6 +8,7 @@ import {
   WorkerReward,
 } from '../calculation/rewards-calculator.service';
 import { DistributionRecoveryService } from './distribution-recovery.service';
+import { ErrorDecoderService } from '../../blockchain/error-decoder.service';
 import {
   createPublicClient,
   createWalletClient,
@@ -18,6 +19,7 @@ import {
   keccak256,
   encodeAbiParameters,
   parseAbiParameters,
+  BaseError,
 } from 'viem';
 import { arbitrum, foundry } from 'viem/chains';
 import { defineChain } from 'viem';
@@ -117,6 +119,7 @@ export class DistributionService {
     private merkleTreeService: MerkleTreeService,
     private rewardsCalculatorService: RewardsCalculatorService,
     private recoveryService: DistributionRecoveryService,
+    private errorDecoder: ErrorDecoderService,
   ) {
     const rpcUrl = this.configService.get(
       'blockchain.network.l2RpcUrl',
@@ -493,11 +496,24 @@ export class DistributionService {
       return status;
     } catch (error) {
       const sessionDuration = Date.now() - sessionStartTime;
-      sessionCtx.logger.error(
-        `❌ Distribution session ${sessionId} failed after ${(sessionDuration / 1000).toFixed(2)}s: ${error.message}`,
-      );
+      
+      let errorMessage: string;
+      if (error instanceof BaseError) {
+        errorMessage = this.errorDecoder.formatError(error, sessionCtx);
+        const errorContext = this.errorDecoder.getErrorContext(error, sessionCtx);
+        sessionCtx.logger.error(
+          { errorContext },
+          `❌ Distribution session ${sessionId} failed after ${(sessionDuration / 1000).toFixed(2)}s: ${errorMessage}`,
+        );
+      } else {
+        errorMessage = error?.message || String(error);
+        sessionCtx.logger.error(
+          `❌ Distribution session ${sessionId} failed after ${(sessionDuration / 1000).toFixed(2)}s: ${errorMessage}`,
+        );
+      }
+      
       status.status = 'failed';
-      status.error = error.message;
+      status.error = errorMessage;
       status.completedAt = new Date();
       return status;
     }
@@ -622,10 +638,38 @@ export class DistributionService {
         commitSuccess = true;
       } catch (error) {
         const duration = Date.now() - attemptStartTime;
-        const errorStr = String(error?.message || error);
+        
+        let errorMessage: string;
+        let errorContext: Record<string, any> = {};
+        
+        if (error instanceof BaseError) {
+          errorMessage = this.errorDecoder.formatError(error, commitCtx);
+          errorContext = this.errorDecoder.getErrorContext(error, commitCtx);
+          
+          if (this.errorDecoder.isSpecificError(error, 'NotAllBlocksCovered')) {
+            try {
+              const lastBlockRewarded = await this.publicClient.readContract({
+                address: this.contractAddress,
+                abi: this.contractAbi,
+                functionName: 'lastBlockRewarded',
+              });
+              
+              commitCtx.logger.error(
+                `❌ [${sessionId}] Block continuity error: lastBlockRewarded=${lastBlockRewarded}, trying to commit fromBlock=${fromBlock}`,
+              );
+              errorContext.lastBlockRewarded = lastBlockRewarded.toString();
+              errorContext.expectedFromBlock = (Number(lastBlockRewarded) + 1).toString();
+            } catch (e) {
+              commitCtx.logger.debug('Could not fetch lastBlockRewarded for additional context');
+            }
+          }
+        } else {
+          errorMessage = String(error?.message || error);
+        }
 
         commitCtx.logger.error(
-          `❌ [${sessionId}] Commit attempt ${retryCount + 1}/${MAX_RETRIES} failed (${duration}ms): ${errorStr}`,
+          { errorContext },
+          `❌ [${sessionId}] Commit attempt ${retryCount + 1}/${MAX_RETRIES} failed (${duration}ms): ${errorMessage}`,
         );
 
         if (retryCount === MAX_RETRIES - 1) {
@@ -638,11 +682,11 @@ export class DistributionService {
             retryAttempt: retryCount + 1,
             duration,
             status: 'failed',
-            error: errorStr,
+            error: errorMessage,
           };
 
           throw new Error(
-            `Failed to commit Merkle root after ${MAX_RETRIES} attempts: ${errorStr}`,
+            `Failed to commit Merkle root after ${MAX_RETRIES} attempts: ${errorMessage}`,
           );
         } else {
           const retryDelay = 2000 + retryCount * 1000;
@@ -957,9 +1001,26 @@ export class DistributionService {
         };
         transactionLogs.push(log);
       } catch (error) {
-        const errorStr = String(error?.message || error);
+        let errorMessage: string;
+        let errorContext: Record<string, any> = {};
+        
+        if (error instanceof BaseError) {
+          errorMessage = this.errorDecoder.formatError(error, batchCtx);
+          errorContext = this.errorDecoder.getErrorContext(error, batchCtx);
+          
+          if (this.errorDecoder.isSpecificError(error, 'BatchAlreadyProcessed')) {
+            batchCtx.logger.warn(
+              `⚠️ [${sessionId}] Batch ${batchNumber} already processed - skipping`,
+            );
+            continue; 
+          }
+        } else {
+          errorMessage = String(error?.message || error);
+        }
+        
         batchCtx.logger.error(
-          `❌ [${sessionId}] Failed to distribute batch ${batchNumber}/${merkleTree.totalBatches}: ${errorStr}`,
+          { errorContext },
+          `❌ [${sessionId}] Failed to distribute batch ${batchNumber}/${merkleTree.totalBatches}: ${errorMessage}`,
         );
 
         const failedLog: TransactionLog = {
@@ -972,7 +1033,7 @@ export class DistributionService {
           workerCount: leaf.recipients.length,
           duration: 0,
           status: 'failed',
-          error: errorStr,
+          error: errorMessage,
         };
         transactionLogs.push(failedLog);
         throw error;

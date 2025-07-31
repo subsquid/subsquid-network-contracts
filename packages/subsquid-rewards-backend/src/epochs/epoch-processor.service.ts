@@ -516,18 +516,15 @@ export class EpochProcessorService {
   private async getEpochRange(): Promise<[number, number]> {
     const ctx = new TaskContext('epoch-processor:get-epoch-range');
     try {
-      const epochLength = await this.contractService.getEpochLength(ctx);
-      const lastRewardedBlock =
-        await this.contractService.getLastRewardedBlock(ctx);
-      const currentBlock = await this.web3Service.getL1BlockNumber(ctx);
-      const confirmationBlocks =
-        this.configService.get('blockchain.epochConfirmationBlocks') || 150;
-
-      const lastConfirmedBlock = currentBlock - confirmationBlocks;
-      const fromBlock = lastRewardedBlock + 1;
-      const toBlock = Math.min(fromBlock + epochLength - 1, lastConfirmedBlock);
-
-      return [fromBlock, toBlock];
+      // Get distribution status which handles all the logic
+      const status = await this.contractService.getDistributionStatus(ctx);
+      
+      ctx.logger.info(
+        `📊 Distribution status: blocks ${status.nextFromBlock}-${status.nextToBlock}, ` +
+        `ready: ${status.isReadyForDistribution}, has commitment: ${status.hasExistingCommitment}`
+      );
+      
+      return [status.nextFromBlock, status.nextToBlock];
     } catch (error) {
       new TaskContext('error-handling').logger.error(
         `Failed to get epoch range: ${error.message}`,

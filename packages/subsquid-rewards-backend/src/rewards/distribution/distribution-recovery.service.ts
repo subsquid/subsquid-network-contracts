@@ -13,6 +13,15 @@ export interface CommitmentInfo {
   ipfsLink: string;
 }
 
+export interface CommitmentInfoV2 {
+  status: number; // 0=NONEXISTENT, 1=ACTIVE, 2=COMPLETED
+  merkleRoot: string;
+  totalBatches: number;
+  processedBatches: number;
+  approvalCount: number;
+  ipfsLink: string;
+}
+
 export interface RecoveryStatus {
   interrupted: boolean;
   commitment?: CommitmentInfo;
@@ -42,33 +51,82 @@ export class DistributionRecoveryService {
         `🔍 Checking for interrupted distribution for blocks ${fromBlock}-${toBlock}`,
       );
 
-      // get commitment from contract
-      const commitment = await this.contractService.getCommitment(
-        ctx,
-        fromBlock,
-        toBlock,
-      );
-
-      if (!commitment.exists) {
-        ctx.logger.debug('No commitment found - this is a new distribution');
-        return { interrupted: false };
+      // try to get commitment using new method first
+      let commitmentV2: CommitmentInfoV2 | null = null;
+      try {
+        commitmentV2 = await this.contractService.getCommitmentV2(ctx, fromBlock, toBlock);
+      } catch (error) {
+        ctx.logger.debug('Could not use getCommitmentV2, falling back to old method');
       }
 
-      ctx.logger.info(
-        `📋 Found existing commitment: ${commitment.processedBatches}/${commitment.totalBatches} batches processed`,
-      );
+      if (commitmentV2) {
+        // using new contract with status field
+        if (commitmentV2.status === 0) { // NONEXISTENT
+          ctx.logger.debug('No commitment found - this is a new distribution');
+          return { interrupted: false };
+        }
 
-      // check if fully processed
-      if (commitment.processedBatches === commitment.totalBatches) {
-        ctx.logger.info('✅ Distribution already completed');
-        return { interrupted: false, commitment };
+        ctx.logger.info(
+          `📋 Found commitment with status ${commitmentV2.status}: ${commitmentV2.processedBatches}/${commitmentV2.totalBatches} batches processed`,
+        );
+
+        // check if completed
+        if (commitmentV2.status === 2) { // COMPLETED
+          ctx.logger.info('✅ Distribution already completed');
+          return { 
+            interrupted: false, 
+            commitment: {
+              exists: true,
+              merkleRoot: commitmentV2.merkleRoot,
+              totalBatches: commitmentV2.totalBatches,
+              processedBatches: commitmentV2.processedBatches,
+              approvalCount: commitmentV2.approvalCount,
+              ipfsLink: commitmentV2.ipfsLink,
+            }
+          };
+        }
+
+        // status ACTIVE -> distribution was interrupted
+        return {
+          interrupted: true,
+          commitment: {
+            exists: true,
+            merkleRoot: commitmentV2.merkleRoot,
+            totalBatches: commitmentV2.totalBatches,
+            processedBatches: commitmentV2.processedBatches,
+            approvalCount: commitmentV2.approvalCount,
+            ipfsLink: commitmentV2.ipfsLink,
+          },
+        };
+      } else {
+
+        const commitment = await this.contractService.getCommitment(
+          ctx,
+          fromBlock,
+          toBlock,
+        );
+
+        if (!commitment.exists) {
+          ctx.logger.debug('No commitment found - this is a new distribution');
+          return { interrupted: false };
+        }
+
+        ctx.logger.info(
+          `📋 Found existing commitment: ${commitment.processedBatches}/${commitment.totalBatches} batches processed`,
+        );
+
+        // check if fully processed
+        if (commitment.processedBatches === commitment.totalBatches) {
+          ctx.logger.info('✅ Distribution already completed');
+          return { interrupted: false, commitment };
+        }
+
+        // distribution was interrupted
+        return {
+          interrupted: true,
+          commitment,
+        };
       }
-
-      // distribution was interrupted
-      return {
-        interrupted: true,
-        commitment,
-      };
     } catch (error) {
       ctx.logger.error(
         { error },
@@ -206,6 +264,13 @@ export class DistributionRecoveryService {
   async checkPendingDistributions(ctx: Context): Promise<{
     lastBlockRewarded: number;
     pendingRanges: Array<{ fromBlock: number; toBlock: number; status: string }>;
+    lastCommitment?: {
+      fromBlock: number;
+      toBlock: number;
+      status: number;
+      processedBatches: number;
+      totalBatches: number;
+    };
   }> {
     try {
       const lastBlockRewarded = await this.contractService.getLastBlockRewarded(ctx);
@@ -214,9 +279,55 @@ export class DistributionRecoveryService {
         `📊 Last block rewarded: ${lastBlockRewarded}`,
       );
 
+      const pendingRanges: Array<{ fromBlock: number; toBlock: number; status: string }> = [];
+      let lastCommitment: any;
+
+      try {
+        const lastCommitmentKey = await this.contractService.getLastCommitmentKey(ctx);
+        
+        if (lastCommitmentKey !== '0x0000000000000000000000000000000000000000000000000000000000000000') {
+          const epochLength = await this.contractService.getEpochLength(ctx);
+          
+          const possibleRanges = [
+            { fromBlock: Math.max(1, lastBlockRewarded - epochLength + 1), toBlock: lastBlockRewarded },
+            { fromBlock: lastBlockRewarded + 1, toBlock: lastBlockRewarded + epochLength },
+          ];
+
+          for (const range of possibleRanges) {
+            try {
+              const commitment = await this.contractService.getCommitmentV2(ctx, range.fromBlock, range.toBlock);
+              
+              if (commitment.status !== 0) { // Not NONEXISTENT
+                lastCommitment = {
+                  fromBlock: range.fromBlock,
+                  toBlock: range.toBlock,
+                  status: commitment.status,
+                  processedBatches: commitment.processedBatches,
+                  totalBatches: commitment.totalBatches,
+                };
+
+                if (commitment.status === 1) { // ACTIVE
+                  pendingRanges.push({
+                    fromBlock: range.fromBlock,
+                    toBlock: range.toBlock,
+                    status: `ACTIVE (${commitment.processedBatches}/${commitment.totalBatches} batches)`,
+                  });
+                }
+                break;
+              }
+            } catch (e) {
+              ctx.logger.debug(`No commitment found for range ${range.fromBlock}-${range.toBlock}`);
+            }
+          }
+        }
+      } catch (error) {
+        ctx.logger.debug('Could not check last commitment - might be using older contract');
+      }
+
       return {
         lastBlockRewarded,
-        pendingRanges: [],
+        pendingRanges,
+        lastCommitment,
       };
     } catch (error) {
       ctx.logger.error({ error }, 'Failed to check pending distributions');

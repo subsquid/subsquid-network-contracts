@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Web3Service } from './web3.service';
 import { FordefiService } from './fordefi/fordefi.service';
+import { ErrorDecoderService } from './error-decoder.service';
 import { ClickHouseService } from '../database/clickhouse.service';
 import { Context, TaskContext } from '../common';
 import {
@@ -14,6 +15,7 @@ import {
   encodePacked,
   encodeAbiParameters,
   parseAbiParameters,
+  BaseError,
 } from 'viem';
 import {
   DistributedRewardsDistributionABI,
@@ -48,6 +50,7 @@ export class ContractService {
     private web3Service: Web3Service,
     private fordefiService: FordefiService,
     private clickHouseService: ClickHouseService,
+    private errorDecoder: ErrorDecoderService,
   ) {}
 
   async getEffectiveTVL(ctx: Context, blockNumber?: bigint): Promise<bigint> {
@@ -411,7 +414,8 @@ export class ContractService {
         });
         
         ctx.logger.debug(`Commitment result: ${JSON.stringify(commitment)}`);
-        return commitment[0]; // exists field
+        // New struct has status as first field, check if not NONEXISTENT (0)
+        return Number(commitment[0]) !== 0;
       } catch (readError: any) {
         ctx.logger.error(
           {
@@ -846,9 +850,19 @@ export class ContractService {
       );
       return txHash;
     } catch (error) {
-      new TaskContext('error-handling').logger.error(
-        `Failed to commit root: ${error.message}`,
-      );
+      const errorCtx = new TaskContext('error-handling');
+      if (error instanceof BaseError) {
+        const errorMessage = this.errorDecoder.formatError(error, errorCtx);
+        const errorContext = this.errorDecoder.getErrorContext(error, errorCtx);
+        errorCtx.logger.error(
+          { errorContext },
+          `Failed to commit root: ${errorMessage}`,
+        );
+      } else {
+        errorCtx.logger.error(
+          `Failed to commit root: ${error?.message || error}`,
+        );
+      }
       return undefined;
     }
   }
@@ -1026,8 +1040,19 @@ export class ContractService {
           args: [commitmentKey],
         });
 
+        const commitmentForLogging = commitment ? {
+          status: commitment[0]?.toString(),
+          fromBlock: commitment[1]?.toString(),
+          toBlock: commitment[2]?.toString(),
+          merkleRoot: commitment[3],
+          totalBatches: commitment[4]?.toString(),
+          processedBatches: commitment[5]?.toString(),
+          approvalCount: commitment[6]?.toString(),
+          ipfsLink: commitment[7],
+        } : null;
+        
         ctx.logger.debug(
-          `Raw commitment response: ${JSON.stringify(commitment)}`
+          `Raw commitment response: ${JSON.stringify(commitmentForLogging)}`
         );
         
         if (!commitment) {
@@ -1042,13 +1067,14 @@ export class ContractService {
           };
         }
 
+        const status = Number(commitment[0]);
         return {
-          exists: Boolean(commitment[0]),
-          merkleRoot: (commitment[1] || '0x0000000000000000000000000000000000000000000000000000000000000000') as string,
-          totalBatches: Number(commitment[2] || 0),
-          processedBatches: Number(commitment[3] || 0),
-          approvalCount: Number(commitment[4] || 0),
-          ipfsLink: (commitment[5] || '') as string,
+          exists: status !== 0, // NONEXISTENT = 0
+          merkleRoot: (commitment[3] || '0x0000000000000000000000000000000000000000000000000000000000000000') as string,
+          totalBatches: Number(commitment[4] || 0),
+          processedBatches: Number(commitment[5] || 0),
+          approvalCount: Number(commitment[6] || 0),
+          ipfsLink: (commitment[7] || '') as string,
         };
       } catch (contractError: any) {
         if (contractError.message?.includes('returned no data')) {
@@ -1144,4 +1170,274 @@ export class ContractService {
     );
     return undefined;
   }
+
+  async getDistributionStatus(ctx: Context): Promise<{
+    nextFromBlock: number;
+    nextToBlock: number;
+    isReadyForDistribution: boolean;
+    needsConfirmation: boolean;
+    hasExistingCommitment: boolean;
+    blocksUntilNextDistribution: number;
+    confirmationBlocksNeeded: number;
+  }> {
+    try {
+      const currentBlock = await this.web3Service.getL1BlockNumber(ctx);
+      const lastRewardedBlock = await this.getLastRewardedBlock(ctx);
+      const blockInterval = this.configService.get('rewards.distributionBlockInterval') || 520;
+      const confirmationBlocks = this.configService.get('blockchain.epochConfirmationBlocks') || 150;
+      const startingBlock = this.configService.get('rewards.distributionStartingBlock') || 0;
+      const rewardsDistributionAddress = this.configService.get(
+        'blockchain.contracts.rewardsDistribution',
+      ) as Address;
+      
+      let lastCommitmentKey: string;
+      try {
+        lastCommitmentKey = await this.getLastCommitmentKey(ctx);
+      } catch (error) {
+        ctx.logger.debug('Could not fetch lastCommitmentKey - might be using older contract');
+        lastCommitmentKey = '0x0000000000000000000000000000000000000000000000000000000000000000';
+      }
+
+      let nextFromBlock: number = 0;
+      let nextToBlock: number = 0;
+      
+      if (lastCommitmentKey !== '0x0000000000000000000000000000000000000000000000000000000000000000') {
+        ctx.logger.info(`Found lastCommitmentKey: ${lastCommitmentKey}`);
+        
+        try {
+          const commitment = await this.web3Service.client.readContract({
+            address: rewardsDistributionAddress,
+            abi: DistributedRewardsDistributionABI,
+            functionName: 'commitments',
+            args: [lastCommitmentKey as `0x${string}`],
+          });
+          
+          const commitmentStatus = Number(commitment[0]); 
+          const commitmentFromBlock = Number(commitment[1]); 
+          const commitmentToBlock = Number(commitment[2]); 
+          
+          ctx.logger.info(
+            `Last commitment status: ${commitmentStatus}, blocks: ${commitmentFromBlock}-${commitmentToBlock}`
+          );
+          
+          if (commitmentStatus === 1) { // ACTIVE - not fully processed
+            // need to recover this distribution
+            nextFromBlock = commitmentFromBlock;
+            nextToBlock = commitmentToBlock;
+            ctx.logger.info(
+              `Found ACTIVE commitment that needs recovery for blocks ${nextFromBlock}-${nextToBlock}`
+            );
+          } else if (commitmentStatus === 2) { // COMPLETED
+            // skip and go to lastBlockRewarded + 1
+            nextFromBlock = lastRewardedBlock + 1;
+            nextToBlock = nextFromBlock + blockInterval - 1;
+            ctx.logger.info(
+              `Last commitment COMPLETED, continuing from block ${nextFromBlock}`
+            );
+          } else {
+            // status is NONEXISTENT (0)
+            ctx.logger.warn('Last commitment key exists but status is NONEXISTENT');
+            nextFromBlock = lastRewardedBlock + 1;
+            nextToBlock = nextFromBlock + blockInterval - 1;
+          }
+        } catch (error) {
+          ctx.logger.error('Failed to read commitment from contract', error);
+          // fallback to lastRewardedBlock
+          nextFromBlock = lastRewardedBlock + 1;
+          nextToBlock = nextFromBlock + blockInterval - 1;
+        }
+      } else {
+        // no lastCommitmentKey
+        if (lastRewardedBlock === 0) {
+          // fresh start - use starting block
+          nextFromBlock = startingBlock;
+          nextToBlock = nextFromBlock + blockInterval - 1;
+          ctx.logger.info(`Fresh start: Using configured starting block: ${startingBlock}`);
+        } else {
+          // continue from lastRewardedBlock
+          nextFromBlock = lastRewardedBlock + 1;
+          nextToBlock = nextFromBlock + blockInterval - 1;
+          ctx.logger.info(`Continuing from lastRewardedBlock + 1: ${nextFromBlock}`);
+        }
+      }
+      
+      // calculate blocks until distribution
+      const blocksUntilNextDistribution = Math.max(0, nextToBlock - currentBlock);
+      
+      // check if needs confirmation
+      const lastConfirmedBlock = currentBlock - confirmationBlocks;
+      const needsConfirmation = nextToBlock > lastConfirmedBlock;
+      const confirmationBlocksNeeded = needsConfirmation ? nextToBlock - lastConfirmedBlock : 0;
+      
+      // check for existing commitment
+      const commitment = await this.getCommitment(ctx, nextFromBlock, nextToBlock);
+      
+      // determine if ready for distribution
+      const isReadyForDistribution = 
+        currentBlock >= nextToBlock && 
+        !needsConfirmation && 
+        !commitment.exists;
+      
+      return {
+        nextFromBlock,
+        nextToBlock,
+        isReadyForDistribution,
+        needsConfirmation,
+        hasExistingCommitment: commitment.exists,
+        blocksUntilNextDistribution,
+        confirmationBlocksNeeded,
+      };
+    } catch (error) {
+      ctx.logger.error({ error }, 'Failed to get distribution status');
+      throw error;
+    }
+  }
+
+  async getCommitmentV2(
+    ctx: Context,
+    fromBlock: number,
+    toBlock: number,
+  ): Promise<{
+    status: number; // 0=NONEXISTENT, 1=ACTIVE, 2=COMPLETED
+    merkleRoot: string;
+    totalBatches: number;
+    processedBatches: number;
+    approvalCount: number;
+    ipfsLink: string;
+  }> {
+    try {
+      const rewardsDistributionAddress = this.configService.get(
+        'blockchain.contracts.rewardsDistribution',
+      ) as Address;
+
+      if (!rewardsDistributionAddress) {
+        throw new Error('Rewards distribution contract address not configured');
+      }
+
+      const result = await this.web3Service.client.readContract({
+        address: rewardsDistributionAddress,
+        abi: DistributedRewardsDistributionABI,
+        functionName: 'getCommitment',
+        args: [[BigInt(fromBlock), BigInt(toBlock)]],
+      });
+
+      return {
+        status: Number(result[0]),
+        merkleRoot: result[1] as string,
+        totalBatches: Number(result[2]),
+        processedBatches: Number(result[3]),
+        approvalCount: Number(result[4]),
+        ipfsLink: result[5] as string,
+      };
+    } catch (error) {
+      ctx.logger.error(
+        { error, fromBlock, toBlock },
+        'Failed to get commitment V2',
+      );
+      throw error;
+    }
+  }
+
+  async isCommitmentComplete(
+    ctx: Context,
+    fromBlock: number,
+    toBlock: number,
+  ): Promise<boolean> {
+    try {
+      const rewardsDistributionAddress = this.configService.get(
+        'blockchain.contracts.rewardsDistribution',
+      ) as Address;
+
+      if (!rewardsDistributionAddress) {
+        throw new Error('Rewards distribution contract address not configured');
+      }
+
+      const isComplete = await this.web3Service.client.readContract({
+        address: rewardsDistributionAddress,
+        abi: DistributedRewardsDistributionABI,
+        functionName: 'isCommitmentComplete',
+        args: [[BigInt(fromBlock), BigInt(toBlock)]],
+      });
+
+      return isComplete as boolean;
+    } catch (error) {
+      ctx.logger.error(
+        { error, fromBlock, toBlock },
+        'Failed to check if commitment is complete',
+      );
+      throw error;
+    }
+  }
+
+  async getLastCommitmentKey(ctx: Context): Promise<string> {
+    try {
+      const rewardsDistributionAddress = this.configService.get(
+        'blockchain.contracts.rewardsDistribution',
+      ) as Address;
+
+      if (!rewardsDistributionAddress) {
+        throw new Error('Rewards distribution contract address not configured');
+      }
+
+      const key = await this.web3Service.client.readContract({
+        address: rewardsDistributionAddress,
+        abi: DistributedRewardsDistributionABI,
+        functionName: 'lastCommitmentKey',
+        args: [],
+      });
+
+      return key as string;
+    } catch (error) {
+      ctx.logger.error({ error }, 'Failed to get last commitment key');
+      throw error;
+    }
+  }
+
+
+  async isNextDistributionReady(ctx: Context): Promise<{
+    isReady: boolean;
+    nextFromBlock: number;
+    nextToBlock: number;
+    blocksUntilReady: number;
+    needsConfirmation: boolean;
+    confirmationBlocksNeeded: number;
+  }> {
+    try {
+      const currentBlock = await this.web3Service.getL1BlockNumber(ctx);
+      const lastRewardedBlock = await this.getLastRewardedBlock(ctx);
+      const blockInterval = this.configService.get('rewards.distributionBlockInterval') || 520;
+      const confirmationBlocks = this.configService.get('blockchain.epochConfirmationBlocks') || 150;
+      
+      const nextFromBlock = lastRewardedBlock + 1;
+      const nextToBlock = nextFromBlock + blockInterval - 1;
+      
+      const blocksUntilReady = Math.max(0, nextToBlock - currentBlock);
+      
+      const lastConfirmedBlock = currentBlock - confirmationBlocks;
+      const needsConfirmation = nextToBlock > lastConfirmedBlock;
+      const confirmationBlocksNeeded = needsConfirmation ? nextToBlock - lastConfirmedBlock : 0;
+      
+      // ready if: end block reached + confirmed + no existing commitment
+      const isReady = 
+        currentBlock >= nextToBlock && 
+        !needsConfirmation;
+      
+      ctx.logger.debug(
+        `📊 Distribution check: current=${currentBlock}, target=${nextToBlock}, ready=${isReady}, blocksLeft=${blocksUntilReady}`
+      );
+      
+      return {
+        isReady,
+        nextFromBlock,
+        nextToBlock,
+        blocksUntilReady,
+        needsConfirmation,
+        confirmationBlocksNeeded,
+      };
+    } catch (error) {
+      ctx.logger.error({ error }, 'Failed to check if next distribution is ready');
+      throw error;
+    }
+  }
 }
+
