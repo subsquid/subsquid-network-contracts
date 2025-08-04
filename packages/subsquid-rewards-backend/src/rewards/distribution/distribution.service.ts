@@ -1463,19 +1463,9 @@ export class DistributionService {
     try {
       ctx.logger.debug('Checking for approved epochs ready for distribution');
       
-      // Get commitments that are ACTIVE (status=1) and approved but not fully distributed
       const rewardsDistributionAddress = this.configService.get(
         'blockchain.contracts.rewardsDistribution',
       ) as Address;
-
-      // Get all commitment events
-      const commitmentLogs = await this.web3Service.client.getLogs({
-        address: rewardsDistributionAddress,
-        event: parseAbiItem(
-          `event NewCommitment(address indexed committer, uint256 fromBlock, uint256 toBlock, bytes32 merkleRoot)`,
-        ),
-        fromBlock: 1n,
-      });
 
       const contract = getContract({
         address: rewardsDistributionAddress,
@@ -1490,41 +1480,47 @@ export class DistributionService {
         totalBatches: number;
         processedBatches: number;
       }> = [];
+
+      const lastCommitmentKey = await contract.read.lastCommitmentKey();
       
-      for (const log of commitmentLogs) {
-        if (!log.args?.fromBlock || !log.args?.toBlock) continue;
+      if (!lastCommitmentKey || lastCommitmentKey === '0x0000000000000000000000000000000000000000000000000000000000000000') {
+        ctx.logger.debug('No commitments found in contract');
+        return [];
+      }
 
-        const { fromBlock, toBlock, merkleRoot } = log.args;
-        const commitmentKey = this.commitmentKeyService.generateKeyFromBigInt(fromBlock, toBlock);
+      try {
+        const commitment = await contract.read.commitments([lastCommitmentKey]);
+        
+        const [status, fromBlock, toBlock, merkleRoot, totalBatches, processedBatches, approvalCount, ipfsLink] = commitment;
+        
+        ctx.logger.debug(
+          `Latest commitment ${fromBlock}-${toBlock}: status=${status}, approvals=${approvalCount}, batches=${processedBatches}/${totalBatches}`
+        );
 
-        try {
-          const commitment = await contract.read.commitments([commitmentKey]);
+        if (
+          status === 1 && // ACTIVE status
+          approvalCount > 0n && // has approvals
+          processedBatches < totalBatches // not fully distributed
+        ) {
+          approvedEpochs.push({
+            fromBlock: Number(fromBlock),
+            toBlock: Number(toBlock),
+            merkleRoot: merkleRoot as string,
+            totalBatches: Number(totalBatches),
+            processedBatches: Number(processedBatches),
+          });
           
-          // Destructure tuple: [status, fromBlock, toBlock, merkleRoot, totalBatches, processedBatches, approvalCount, ipfsLink]
-          const [status, , , , totalBatches, processedBatches, approvalCount] = commitment;
-          
-          // Check if commitment is ACTIVE (1), approved (approvalCount > 0), and not fully distributed
-          if (
-            status === 1 && // ACTIVE status
-            approvalCount > 0n && // has approvals
-            processedBatches < totalBatches // not fully distributed
-          ) {
-            approvedEpochs.push({
-              fromBlock: Number(fromBlock),
-              toBlock: Number(toBlock),
-              merkleRoot: merkleRoot as string,
-              totalBatches: Number(totalBatches),
-              processedBatches: Number(processedBatches),
-            });
-            
-            ctx.logger.debug(
-              `Found approved epoch ${fromBlock}-${toBlock}: ` +
-              `${processedBatches}/${totalBatches} batches processed`
-            );
-          }
-        } catch (error) {
-          ctx.logger.debug(`failed to get commitment info for ${fromBlock}-${toBlock}: ${error.message}`);
+          ctx.logger.debug(
+            `✅ Found approved epoch ready for distribution: ${fromBlock}-${toBlock} ` +
+            `(${processedBatches}/${totalBatches} batches processed)`
+          );
+        } else {
+          ctx.logger.debug(
+            `❌ Latest commitment not ready for distribution: status=${status}, approvals=${approvalCount}, fully_distributed=${processedBatches >= totalBatches}`
+          );
         }
+      } catch (error) {
+        ctx.logger.warn(`Failed to check latest commitment: ${error.message}`);
       }
 
       if (approvedEpochs.length > 0) {
