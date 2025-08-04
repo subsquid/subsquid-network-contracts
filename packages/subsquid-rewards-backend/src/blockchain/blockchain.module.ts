@@ -4,9 +4,10 @@ import { ContractService } from './contract.service';
 import { FordefiService } from './fordefi/fordefi.service';
 import { ErrorDecoderService } from './error-decoder.service';
 import { DatabaseModule } from '../database/database.module';
+import { CommonModule } from '../common/common.module';
 
 @Module({
-  imports: [DatabaseModule],
+  imports: [DatabaseModule, CommonModule],
   providers: [Web3Service, ContractService, FordefiService, ErrorDecoderService],
   exports: [Web3Service, ContractService, FordefiService, ErrorDecoderService],
 })

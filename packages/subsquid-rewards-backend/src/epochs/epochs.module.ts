@@ -3,6 +3,7 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { BlockSchedulerService } from './block-scheduler.service';
 import { EpochProcessorService } from './epoch-processor.service';
 import { StartupRecoveryService } from './startup-recovery.service';
+import { StatelessCoordinatorService } from './stateless-coordinator.service';
 import { EpochMetricsService } from './services/epoch-metrics.service';
 import { RewardsReporterService } from './services/rewards-reporter.service';
 import { BlockchainModule } from '../blockchain/blockchain.module';
@@ -20,6 +21,7 @@ import { CommonModule } from '../common/common.module';
     BlockSchedulerService,
     EpochProcessorService,
     StartupRecoveryService,
+    StatelessCoordinatorService,
     EpochMetricsService,
     RewardsReporterService,
   ],
@@ -27,6 +29,7 @@ import { CommonModule } from '../common/common.module';
     BlockSchedulerService,
     EpochProcessorService,
     StartupRecoveryService,
+    StatelessCoordinatorService,
     EpochMetricsService,
     RewardsReporterService,
   ],

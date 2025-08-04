@@ -7,9 +7,10 @@ import {
 } from '../rewards/calculation/rewards-calculator.service';
 import { Web3Service } from '../blockchain/web3.service';
 import { ContractService } from '../blockchain/contract.service';
+import { StatelessCoordinatorService } from './stateless-coordinator.service';
 import { Hex } from 'viem';
 import { DistributionService } from '../rewards/distribution/distribution.service';
-import { TaskContext, Context } from '../common';
+import { TaskContext, Context, CommitmentKeyService } from '../common';
 
 export interface EpochRange {
   fromBlock: number;
@@ -32,6 +33,8 @@ export class EpochProcessorService {
     private web3Service: Web3Service,
     private contractService: ContractService,
     private distributionService: DistributionService,
+    private statelessCoordinator: StatelessCoordinatorService,
+    private commitmentKeyService: CommitmentKeyService,
   ) {
     this.TOTAL_BATCHES = this.configService.get('rewards.totalBatches') || 4;
     this.workTimeout = this.configService.get('rewards.workTimeout') || 300000; // 5 minutes
@@ -468,7 +471,158 @@ export class EpochProcessorService {
   }
 
   /**
-   * Updated main process method to use Merkle tree distribution
+   * Check if commitment exists for current epoch and get approval status
+   */
+  async checkCommitmentStatus(): Promise<{
+    exists: boolean;
+    currentApprovals: number;
+    requiredApprovals: number;
+    fromBlock?: number;
+    toBlock?: number;
+    status?: number;
+  }> {
+    const ctx = new TaskContext('epoch-processor:check-commitment-status');
+    
+    try {
+      const [fromBlock, toBlock] = await this.getEpochRange();
+      
+      if (fromBlock >= toBlock) {
+        return {
+          exists: false,
+          currentApprovals: 0,
+          requiredApprovals: 0,
+        };
+      }
+
+      const commitmentKey = this.commitmentKeyService.generateKey(fromBlock, toBlock);
+      
+      const commitmentInfo = await this.contractService.getCommitmentInfo(commitmentKey);
+
+      if (!commitmentInfo || commitmentInfo.status === 0) {
+        const requiredApprovals = await this.contractService.getRequiredApprovals();
+        
+        if (!commitmentInfo) {
+          ctx.logger.debug(`📋 No commitment found for ${fromBlock}-${toBlock}`);
+        } else {
+          ctx.logger.debug(`📋 Commitment found for ${fromBlock}-${toBlock} but status=0 (NONEXISTENT)`);
+        }
+        
+        return {
+          exists: false,
+          currentApprovals: 0,
+          requiredApprovals,
+          fromBlock,
+          toBlock,
+        };
+      }
+
+      const requiredApprovals = await this.contractService.getRequiredApprovals();
+      
+      ctx.logger.info(
+        `📋 Commitment exists for ${fromBlock}-${toBlock}: status=${commitmentInfo.status}, approvals=${commitmentInfo.approvalCount}/${requiredApprovals}`
+      );
+
+      return {
+        exists: true,
+        currentApprovals: Number(commitmentInfo.approvalCount),
+        requiredApprovals,
+        fromBlock,
+        toBlock,
+        status: commitmentInfo.status,
+      };
+    } catch (error) {
+      ctx.logger.error({ error }, 'Failed to check commitment status');
+      return {
+        exists: false,
+        currentApprovals: 0,
+        requiredApprovals: 0,
+      };
+    }
+  }
+
+  /**
+   * Process new commitment creation
+   */
+  async processNewCommitment(): Promise<boolean> {
+    const ctx = new TaskContext('epoch-processor:new-commitment');
+    
+    try {
+      const [fromBlock, toBlock] = await this.getEpochRange();
+
+      if (fromBlock >= toBlock) {
+        ctx.logger.warn('No new blocks to process for commitment');
+        return true;
+      }
+
+      ctx.logger.info(`🔐 Creating new commitment for blocks ${fromBlock}-${toBlock}`);
+
+      return await this.processApprovalWithMerkleTree(fromBlock, toBlock);
+    } catch (error) {
+      ctx.logger.error({ error }, 'Failed to create new commitment');
+      return false;
+    }
+  }
+
+  /**
+   * Process approval phase - commitment and approval of Merkle root
+   */
+  async processApproval(): Promise<boolean> {
+    try {
+      const [fromBlock, toBlock] = await this.getEpochRange();
+
+      if (fromBlock >= toBlock) {
+        new TaskContext('approval:warning').logger.warn('No new blocks to process for approval');
+        return true;
+      }
+
+      new TaskContext('approval:start').logger.info(
+        `🔐 Starting approval phase for blocks ${fromBlock}-${toBlock}`
+      );
+
+      // check if we should use Merkle tree distribution
+      const useMerkleTree = this.configService.get(
+        'rewards.useMerkleTree',
+        true,
+      );
+
+      if (useMerkleTree) {
+        return await this.processApprovalWithMerkleTree(fromBlock, toBlock);
+      } else {
+        // fallback to legacy batch system
+        new TaskContext('approval:legacy').logger.warn('Legacy approval not implemented, using Merkle tree');
+        return await this.processApprovalWithMerkleTree(fromBlock, toBlock);
+      }
+    } catch (error) {
+      new TaskContext('error-handling').logger.error(
+        `Approval processing failed: ${error.message}`,
+        error.stack,
+      );
+      return false;
+    }
+  }
+
+  /**
+   * Process distribution phase - distribute approved epochs using Merkle proofs
+   */
+  async processDistribution(): Promise<boolean> {
+    try {
+      new TaskContext('distribution:start').logger.debug('🚀 Checking for approved epochs to distribute');
+
+      // Check if there are any approved epochs ready for distribution
+      const success = await this.processApprovedEpochs();
+      
+      return success;
+    } catch (error) {
+      new TaskContext('error-handling').logger.error(
+        `Distribution processing failed: ${error.message}`,
+        error.stack,
+      );
+      return false;
+    }
+  }
+
+  /**
+   * Updated main process method to use Merkle tree distribution (backward compatibility)
    */
   async processEpoch(): Promise<boolean> {
     try {
@@ -530,6 +684,210 @@ export class EpochProcessorService {
         `Failed to get epoch range: ${error.message}`,
       );
       return [0, 0];
+    }
+  }
+
+  /**
+   * Process approval of existing commitments (for non-committer bots)
+   */
+  async processExistingApprovals(): Promise<boolean> {
+    try {
+      const ctx = new TaskContext('approval:existing');
+      ctx.logger.info('📝 Checking for commitments needing approval');
+
+      const approvalCheck = await this.statelessCoordinator.checkForPendingApprovals();
+      
+      if (!approvalCheck.hasApprovals) {
+        ctx.logger.debug('no commitments need approval');
+        return true;
+      }
+
+      let allSuccess = true;
+      for (const commitment of approvalCheck.pendingCommitments) {
+        ctx.logger.info(`📋 Approving commitment ${commitment.fromBlock}-${commitment.toBlock}`);
+        
+        try {
+          const success = await this.contractService.approveCommitment(
+            commitment.fromBlock,
+            commitment.toBlock,
+          );
+          
+          if (success) {
+            ctx.logger.info(`✅ Approved commitment ${commitment.fromBlock}-${commitment.toBlock}`);
+          } else {
+            ctx.logger.error(`❌ Failed to approve commitment ${commitment.fromBlock}-${commitment.toBlock}`);
+            allSuccess = false;
+          }
+        } catch (error) {
+          ctx.logger.error({ error }, `Failed to approve commitment ${commitment.fromBlock}-${commitment.toBlock}`);
+          allSuccess = false;
+        }
+      }
+
+      return allSuccess;
+    } catch (error) {
+      new TaskContext('error-handling').logger.error(
+        `Existing approvals processing failed: ${error.message}`,
+        error.stack,
+      );
+      return false;
+    }
+  }
+
+  /**
+   * Process approval phase with Merkle tree - only commit and approve, no distribution
+   */
+  private async processApprovalWithMerkleTree(
+    fromBlock: number,
+    toBlock: number,
+  ): Promise<boolean> {
+    try {
+      const ctx = new TaskContext(`approval:merkle:${fromBlock}-${toBlock}`);
+      ctx.logger.info(`🌳 Processing approval with Merkle tree for epoch ${fromBlock}-${toBlock}`);
+
+      const commitmentKey = this.commitmentKeyService.generateKey(fromBlock, toBlock);
+      
+      try {
+        const existingCommitment = await this.contractService.getCommitmentInfo(commitmentKey);
+        
+        if (existingCommitment && existingCommitment.status !== 0) { // 0 = INACTIVE
+          ctx.logger.info(`📋 Commitment already exists for ${fromBlock}-${toBlock}, status: ${existingCommitment.status}`);
+          
+          const committerCheck = await this.statelessCoordinator.isCurrentCommitter();
+          if (committerCheck.isCommitter) {
+            ctx.logger.info(`🎯 Bot is committer - existing commitment should be handled by distribution phase`);
+            return true; 
+          } else {
+            ctx.logger.info(`👀 Bot is not committer - checking if commitment needs approval`);
+            if (existingCommitment.status === 1 && existingCommitment.approvalCount === 0n) {
+              ctx.logger.info(`📝 Commitment needs approval - approving now`);
+              const approveSuccess = await this.contractService.approveCommitment(fromBlock, toBlock);
+              return approveSuccess;
+            } else {
+              ctx.logger.info(`✅ Commitment already approved or in different state (approvals: ${existingCommitment.approvalCount})`);
+              return true;
+            }
+          }
+        }
+      } catch (error) {
+        ctx.logger.debug(`Could not check existing commitment: ${error.message} - proceeding with new commit check`);
+      }
+
+      const committerCheck = await this.statelessCoordinator.isCurrentCommitter();
+      if (!committerCheck.isCommitter) {
+        ctx.logger.info(`👀 No commitment exists and bot is not committer - nothing to do`);
+        return true;
+      }
+
+      ctx.logger.info(`🎯 Bot is committer - creating new commitment for ${fromBlock}-${toBlock}`);
+
+      const eligibilityCheck = await this.statelessCoordinator.checkCommitEligibility();
+      
+      if (!eligibilityCheck.eligible) {
+        ctx.logger.info(
+          `🚫 skipping commit - ${eligibilityCheck.reason || 'not eligible'} (${eligibilityCheck.blocksLeft} blocks left in window)`
+        );
+        ctx.logger.info(
+          `   next window starts at block ${eligibilityCheck.windowInfo.nextWindowStart}`
+        );
+        return true; 
+      }
+
+      ctx.logger.info(
+        `✅ commit eligibility confirmed - ${eligibilityCheck.blocksLeft} blocks left in window (safe with buffer)`
+      );
+
+      const result = await this.rewardsCalculatorService.calculateRewardsDetailed(
+        ctx,
+        fromBlock,
+        toBlock,
+        true, // skip signature validation
+      );
+
+      if (result.workers.length === 0) {
+        ctx.logger.warn('No workers found for approval');
+        return true;
+      }
+
+      // Generate Merkle tree
+      const merkleTree = await this.distributionService.generateMerkleTreeOnly(result.workers, 50);
+      
+      // Commit root only
+      const commitResult = await this.distributionService.commitRootOnly(
+        fromBlock,
+        toBlock,
+        merkleTree.root,
+        merkleTree.totalBatches,
+      );
+
+      if (!commitResult) {
+        ctx.logger.error('Failed to commit Merkle root');
+        return false;
+      }
+
+      ctx.logger.info(`✅ Approval phase completed for ${fromBlock}-${toBlock}`);
+      ctx.logger.info(`   Merkle root: ${merkleTree.root}`);
+      ctx.logger.info(`   Total batches: ${merkleTree.totalBatches}`);
+      
+      return true;
+    } catch (error) {
+      new TaskContext('error-handling').logger.error(
+        `Failed to process approval with Merkle tree: ${error.message}`,
+      );
+      return false;
+    }
+  }
+
+  /**
+   * Process approved epochs - find committed roots and distribute batches
+   */
+  private async processApprovedEpochs(): Promise<boolean> {
+    try {
+      const ctx = new TaskContext('distribution:process-approved');
+      
+      const approvedEpochs = await this.distributionService.getApprovedEpochsForDistribution();
+      
+      if (approvedEpochs.length === 0) {
+        ctx.logger.debug('No approved epochs ready for distribution');
+        return true;
+      }
+
+      let allSuccess = true;
+      for (const epoch of approvedEpochs) {
+        ctx.logger.info(`🚀 Checking if we should distribute epoch ${epoch.fromBlock}-${epoch.toBlock}`);
+        
+        const shouldStart = await this.statelessCoordinator.shouldStartDistribution(
+          epoch.fromBlock,
+          epoch.toBlock,
+        );
+        
+        if (!shouldStart) {
+          ctx.logger.info(`🚫 Skipping epoch ${epoch.fromBlock}-${epoch.toBlock} - another bot is distributing it`);
+          continue; 
+        }
+        
+        ctx.logger.info(`🚀 Starting distribution for epoch ${epoch.fromBlock}-${epoch.toBlock}`);
+        
+        const success = await this.distributionService.distributeApprovedEpoch(
+          epoch.fromBlock,
+          epoch.toBlock,
+          epoch.merkleRoot,
+        );
+        
+        if (!success) {
+          ctx.logger.error(`Failed to distribute epoch ${epoch.fromBlock}-${epoch.toBlock}`);
+          allSuccess = false;
+        } else {
+          ctx.logger.info(`✅ Successfully distributed epoch ${epoch.fromBlock}-${epoch.toBlock}`);
+        }
+      }
+
+      return allSuccess;
+    } catch (error) {
+      new TaskContext('error-handling').logger.error(
+        `Failed to process approved epochs: ${error.message}`,
+      );
+      return false;
     }
   }
 

@@ -45,4 +45,19 @@ export const rewardsConfig = registerAs('rewards', () => ({
     10,
   ),
   enableAutoDistribution: process.env.ENABLE_AUTO_DISTRIBUTION === 'true',
+
+  roundRobinWindow: parseInt(
+    process.env.ROUND_ROBIN_WINDOW || '120',
+    10,
+  ), 
+  commitSafetyBuffer: parseInt(
+    process.env.COMMIT_SAFETY_BUFFER || '3',
+    10,
+  ), 
+
+  botIndex: parseInt(
+    process.env.BOT_INDEX || '0',
+    10,
+  ), 
+  botId: process.env.BOT_ID || 'bot-0', 
 }));

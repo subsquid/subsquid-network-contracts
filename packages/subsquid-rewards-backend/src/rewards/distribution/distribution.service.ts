@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { TaskContext } from '../../common/task-context';
+import { TaskContext, CommitmentKeyService } from '../../common';
 import { Web3Service } from '../../blockchain/web3.service';
 import { MerkleTreeService, MerkleTreeResult, MerkleLeaf } from './merkle-tree.service';
 import {
@@ -16,16 +16,16 @@ import {
   createWalletClient,
   http,
   parseAbi,
+  parseAbiItem,
+  getContract,
   Address,
-  encodePacked,
-  keccak256,
-  encodeAbiParameters,
-  parseAbiParameters,
+  encodeFunctionData,
   BaseError,
 } from 'viem';
 import { arbitrum, foundry } from 'viem/chains';
 import { defineChain } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
+import { DistributedRewardsDistributionABI } from '../../blockchain/contracts/abis';
 
 export interface DistributionStatus {
   epochId: string;
@@ -124,6 +124,7 @@ export class DistributionService {
     private errorDecoder: ErrorDecoderService,
     private rewardsReporterService: RewardsReporterService,
     private epochMetricsService: EpochMetricsService,
+    private commitmentKeyService: CommitmentKeyService,
   ) {
     const rpcUrl = this.configService.get(
       'blockchain.network.l2RpcUrl',
@@ -1352,11 +1353,7 @@ export class DistributionService {
     fromBlock: number,
     toBlock: number,
   ): `0x${string}` {
-    const encoded = encodeAbiParameters(
-      parseAbiParameters('uint256, uint256'),
-      [BigInt(fromBlock), BigInt(toBlock)],
-    );
-    return keccak256(encoded);
+    return this.commitmentKeyService.generateKey(fromBlock, toBlock);
   }
 
   private logGasOptimizationSummary(gasOptimizations: {
@@ -1397,6 +1394,209 @@ export class DistributionService {
   async getClaimableRewards(workerAddress: Address): Promise<bigint> {
     return 0n;
   }
+
+  /**
+   * Generate Merkle tree only (for approval phase)
+   */
+  async generateMerkleTreeOnly(
+    workers: Array<{
+      workerId: bigint;
+      workerReward: bigint;
+      stakerReward: bigint;
+    }>,
+    batchSize: number = 50,
+  ): Promise<MerkleTreeResult> {
+    const ctx = new TaskContext('distribution:generate-merkle-only');
+    ctx.logger.info(`🌳 Generating Merkle tree for ${workers.length} workers (approval phase)`);
+
+    return await this.merkleTreeService.generateMerkleTree(workers, batchSize);
+  }
+
+  /**
+   * Commit root only (for approval phase)
+   */
+  async commitRootOnly(
+    fromBlock: number,
+    toBlock: number,
+    merkleRoot: string,
+    totalBatches: number,
+    ipfsLink: string = '',
+  ): Promise<boolean> {
+    const ctx = new TaskContext(`distribution:commit-root-only:${fromBlock}-${toBlock}`);
+    
+    try {
+      ctx.logger.info(`🔐 Committing Merkle root for blocks ${fromBlock}-${toBlock}`);
+      ctx.logger.info(`   Root: ${merkleRoot}`);
+      ctx.logger.info(`   Batches: ${totalBatches}`);
+
+      // Generate session ID for this commit operation
+      const sessionId = generateSessionId();
+      
+      // Use the existing commitMerkleRoot method
+      const transactionLog = await this.commitMerkleRoot(fromBlock, toBlock, merkleRoot, totalBatches, sessionId);
+      
+      if (transactionLog && transactionLog.status === 'success') {
+        ctx.logger.info(`✅ Merkle root committed successfully: ${transactionLog.hash}`);
+        return true;
+      } else {
+        ctx.logger.error('Failed to commit Merkle root');
+        return false;
+      }
+    } catch (error) {
+      ctx.logger.error(`❌ Failed to commit root: ${error.message}`);
+      return false;
+    }
+  }
+
+  /**
+   * Get approved epochs ready for distribution
+   */
+  async getApprovedEpochsForDistribution(): Promise<Array<{
+    fromBlock: number;
+    toBlock: number;
+    merkleRoot: string;
+    totalBatches: number;
+    processedBatches: number;
+  }>> {
+    const ctx = new TaskContext('distribution:get-approved-epochs');
+    
+    try {
+      ctx.logger.debug('Checking for approved epochs ready for distribution');
+      
+      // Get commitments that are ACTIVE (status=1) and approved but not fully distributed
+      const rewardsDistributionAddress = this.configService.get(
+        'blockchain.contracts.rewardsDistribution',
+      ) as Address;
+
+      // Get all commitment events
+      const commitmentLogs = await this.web3Service.client.getLogs({
+        address: rewardsDistributionAddress,
+        event: parseAbiItem(
+          `event NewCommitment(address indexed committer, uint256 fromBlock, uint256 toBlock, bytes32 merkleRoot)`,
+        ),
+        fromBlock: 1n,
+      });
+
+      const contract = getContract({
+        address: rewardsDistributionAddress,
+        abi: DistributedRewardsDistributionABI,
+        client: this.web3Service.client,
+      });
+
+      const approvedEpochs: Array<{
+        fromBlock: number;
+        toBlock: number;
+        merkleRoot: string;
+        totalBatches: number;
+        processedBatches: number;
+      }> = [];
+      
+      for (const log of commitmentLogs) {
+        if (!log.args?.fromBlock || !log.args?.toBlock) continue;
+
+        const { fromBlock, toBlock, merkleRoot } = log.args;
+        const commitmentKey = this.commitmentKeyService.generateKeyFromBigInt(fromBlock, toBlock);
+
+        try {
+          const commitment = await contract.read.commitments([commitmentKey]);
+          
+          // Destructure tuple: [status, fromBlock, toBlock, merkleRoot, totalBatches, processedBatches, approvalCount, ipfsLink]
+          const [status, , , , totalBatches, processedBatches, approvalCount] = commitment;
+          
+          // Check if commitment is ACTIVE (1), approved (approvalCount > 0), and not fully distributed
+          if (
+            status === 1 && // ACTIVE status
+            approvalCount > 0n && // has approvals
+            processedBatches < totalBatches // not fully distributed
+          ) {
+            approvedEpochs.push({
+              fromBlock: Number(fromBlock),
+              toBlock: Number(toBlock),
+              merkleRoot: merkleRoot as string,
+              totalBatches: Number(totalBatches),
+              processedBatches: Number(processedBatches),
+            });
+            
+            ctx.logger.debug(
+              `Found approved epoch ${fromBlock}-${toBlock}: ` +
+              `${processedBatches}/${totalBatches} batches processed`
+            );
+          }
+        } catch (error) {
+          ctx.logger.debug(`failed to get commitment info for ${fromBlock}-${toBlock}: ${error.message}`);
+        }
+      }
+
+      if (approvedEpochs.length > 0) {
+        ctx.logger.info(`📊 Found ${approvedEpochs.length} approved epochs ready for distribution`);
+      } else {
+        ctx.logger.debug('No approved epochs ready for distribution');
+      }
+
+      return approvedEpochs;
+    } catch (error) {
+      ctx.logger.error(`Failed to get approved epochs: ${error.message}`);
+      return [];
+    }
+  }
+
+  /**
+   * Distribute an already approved epoch using its Merkle root
+   */
+  async distributeApprovedEpoch(
+    fromBlock: number,
+    toBlock: number,
+    merkleRoot: string,
+  ): Promise<boolean> {
+    const ctx = new TaskContext(`distribution:distribute-approved:${fromBlock}-${toBlock}`);
+    
+    try {
+      ctx.logger.info(`🚀 Distributing approved epoch ${fromBlock}-${toBlock}`);
+      ctx.logger.info(`   Using Merkle root: ${merkleRoot}`);
+
+      // Recalculate rewards to get the same Merkle tree structure
+      const result = await this.rewardsCalculatorService.calculateRewardsDetailed(
+        ctx,
+        fromBlock,
+        toBlock,
+        true, // skip signature validation
+      );
+
+      if (result.workers.length === 0) {
+        ctx.logger.warn('No workers found for approved epoch distribution');
+        return true;
+      }
+
+      // Generate the same Merkle tree
+      const merkleTree = await this.merkleTreeService.generateMerkleTree(result.workers, 50);
+      
+      // Verify the root matches
+      if (merkleTree.root !== merkleRoot) {
+        ctx.logger.error(`Merkle root mismatch! Expected: ${merkleRoot}, Got: ${merkleTree.root}`);
+        return false;
+      }
+
+      // Distribute all batches
+      const sessionId = generateSessionId();
+      const distributionLogs = await this.distributeBatches(fromBlock, toBlock, merkleTree, sessionId);
+      
+      const allSuccessful = distributionLogs.every(log => log.status === 'success');
+      
+      if (allSuccessful) {
+        ctx.logger.info(`✅ Successfully distributed all ${merkleTree.totalBatches} batches`);
+        return true;
+      } else {
+        const failedBatches = distributionLogs.filter(log => log.status === 'failed').length;
+        ctx.logger.error(`❌ Failed to distribute ${failedBatches} out of ${merkleTree.totalBatches} batches`);
+        return false;
+      }
+    } catch (error) {
+      ctx.logger.error(`Failed to distribute approved epoch: ${error.message}`);
+      return false;
+    }
+  }
+
+
 
   /**
    * Distribute only the remaining batches during recovery

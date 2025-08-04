@@ -657,26 +657,84 @@ export class AdminController {
   }
 
   /**
-   * Manually trigger block check and potential distribution
+   * Manually trigger approval check
    */
-  @Post('scheduler/trigger')
-  async triggerSchedulerCheck() {
+  @Post('scheduler/trigger-approval')
+  async triggerApprovalCheck() {
     try {
       new TaskContext('method-call').logger.debug(
-        '🔄 Manual scheduler trigger requested',
+        '🔄 Manual approval trigger requested',
       );
-      const result = await this.blockSchedulerService.triggerManualCheck();
+      const result = await this.blockSchedulerService.triggerManualApprovalCheck();
 
       return {
         success: true,
         triggered: result,
         message: result
-          ? 'Block check completed successfully'
-          : 'Block check completed - no distribution needed',
+          ? 'Approval check completed successfully'
+          : 'Approval check completed - no approval needed',
       };
     } catch (error) {
       new TaskContext('error-handling').logger.error(
-        `Failed to trigger scheduler: ${error.message}`,
+        `Failed to trigger approval: ${error.message}`,
+      );
+      return {
+        success: false,
+        error: error.message,
+      };
+    }
+  }
+
+  /**
+   * Manually trigger distribution check
+   */
+  @Post('scheduler/trigger-distribution')
+  async triggerDistributionCheck() {
+    try {
+      new TaskContext('method-call').logger.debug(
+        '🔄 Manual distribution trigger requested',
+      );
+      const result = await this.blockSchedulerService.triggerManualDistributionCheck();
+
+      return {
+        success: true,
+        triggered: result,
+        message: result
+          ? 'Distribution check completed successfully'
+          : 'Distribution check completed - no distribution needed',
+      };
+    } catch (error) {
+      new TaskContext('error-handling').logger.error(
+        `Failed to trigger distribution: ${error.message}`,
+      );
+      return {
+        success: false,
+        error: error.message,
+      };
+    }
+  }
+
+  /**
+   * Manually trigger recovery check for stuck commitments
+   */
+  @Post('scheduler/trigger-recovery')
+  async triggerRecoveryCheck() {
+    try {
+      new TaskContext('method-call').logger.debug(
+        '🔄 Manual recovery trigger requested',
+      );
+      const result = await this.blockSchedulerService.triggerManualRecoveryCheck();
+
+      return {
+        success: true,
+        triggered: result,
+        message: result
+          ? 'Recovery check completed successfully'
+          : 'Recovery check completed - no stuck commitments found',
+      };
+    } catch (error) {
+      new TaskContext('error-handling').logger.error(
+        `Failed to trigger recovery: ${error.message}`,
       );
       return {
         success: false,
