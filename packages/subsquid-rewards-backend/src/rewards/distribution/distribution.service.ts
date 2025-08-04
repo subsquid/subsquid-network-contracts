@@ -1545,6 +1545,7 @@ export class DistributionService {
     merkleRoot: string,
   ): Promise<boolean> {
     const ctx = new TaskContext(`distribution:distribute-approved:${fromBlock}-${toBlock}`);
+    const sessionStartTime = Date.now();
     
     try {
       ctx.logger.info(`🚀 Distributing approved epoch ${fromBlock}-${toBlock}`);
@@ -1580,6 +1581,35 @@ export class DistributionService {
       
       if (allSuccessful) {
         ctx.logger.info(`✅ Successfully distributed all ${merkleTree.totalBatches} batches`);
+        
+        // generate rewards report after successful distribution
+        try {
+          const formattedCalculationResult = await this.rewardsCalculatorService.calculateRewardsFormatted(
+            ctx,
+            fromBlock,
+            toBlock,
+            true,
+          );
+
+          const startTime = new Date(sessionStartTime);
+          const endTime = new Date();
+          const networkMetrics = await this.epochMetricsService.collectNetworkMetrics(ctx);
+          const rewardMetrics = this.epochMetricsService.extractRewardMetrics(formattedCalculationResult);
+          const commitTxHash = ''; 
+
+          await this.rewardsReporterService.logSuccessfulRewardsReport({
+            epochStart: startTime,
+            epochEnd: endTime,
+            isCommitSuccess: true,
+            commitTxHash,
+            networkMetrics,
+            rewardMetrics,
+            workerRewards: formattedCalculationResult.workers,
+          });
+        } catch (reportError) {
+          ctx.logger.warn({ error: reportError }, 'failed to generate rewards report for approved epoch');
+        }
+        
         return true;
       } else {
         const failedBatches = distributionLogs.filter(log => log.status === 'failed').length;
