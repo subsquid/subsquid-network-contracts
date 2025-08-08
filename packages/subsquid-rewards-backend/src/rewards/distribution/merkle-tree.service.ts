@@ -27,10 +27,14 @@ export class MerkleTreeService {
     }>,
     batchSize: number = 50,
   ): Promise<MerkleTreeResult> {
-    const ctx = new TaskContext('merkle-tree:generate');
-    ctx.logger.debug(
-      `Generating Merkle tree for ${workers.length} workers with batch size ${batchSize}`,
-    );
+    let ctx: any = null;
+    try {
+      ctx = new TaskContext('merkle-tree:generate');
+      ctx?.logger?.debug(
+        `Generating Merkle tree for ${workers.length} workers with batch size ${batchSize}`,
+      );
+    } catch {
+    }
 
     // CRITICAL: Sort workers deterministically by workerId to ensure consistent merkle tree
     const sortedWorkers = [...workers].sort((a, b) => {
@@ -39,9 +43,13 @@ export class MerkleTreeService {
       return 0;
     });
 
-    ctx.logger.debug(
-      `Sorted ${sortedWorkers.length} workers deterministically by workerId`,
-    );
+    try {
+      ctx?.logger?.debug(
+        `Sorted ${sortedWorkers.length} workers deterministically by workerId`,
+      );
+    } catch {
+      // ignore logging for now
+    }
 
     const batches: MerkleLeaf[] = [];
     const leafHashes: string[] = [];
@@ -69,21 +77,33 @@ export class MerkleTreeService {
       
       leafHashes.push(leafHash);
 
-      ctx.logger.debug(
-        `Batch ${batches.length - 1}: ${batch.length} workers, hash: ${leafHash}`,
-      );
+      try {
+        ctx?.logger?.debug(
+          `Batch ${batches.length - 1}: ${batch.length} workers, hash: ${leafHash}`,
+        );
+      } catch {
+   // ignore logging for now
+      }
     }
 
-    ctx.logger.debug(
-      `Created ${batches.length} batches from ${sortedWorkers.length} workers`,
-    );
+    try {
+      ctx?.logger?.debug(
+        `Created ${batches.length} batches from ${sortedWorkers.length} workers`,
+      );
+    } catch {
+      // ignore logging for now
+    }
 
     // build Merkle tree
     const { root, proofs } = this.buildMerkleTree(leafHashes);
 
-    ctx.logger.info(
-      `✅ Merkle tree generated: root=${root}, ${batches.length} leaves`,
-    );
+    try {
+      ctx?.logger?.info(
+        `✅ Merkle tree generated: root=${root}, ${batches.length} leaves`,
+      );
+    } catch {
+      // ignore logging for now
+    }
 
     return {
       root,

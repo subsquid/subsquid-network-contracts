@@ -16,280 +16,225 @@ describe('MerkleTreeService', () => {
     expect(service).toBeDefined();
   });
 
-  describe('generateBatchHash', () => {
-    it('should generate correct batch hash for contract compatibility', () => {
-      const recipients = [1, 2, 3];
-      const workerRewards = [
-        '1000000000000000000',
-        '2000000000000000000',
-        '3000000000000000000',
-      ]; // 1, 2, 3 SQD
-      const stakerRewards = [
-        '100000000000000000',
-        '200000000000000000',
-        '300000000000000000',
-      ]; // 0.1, 0.2, 0.3 SQD
-
-      const hash = service.generateBatchHash(
-        recipients,
-        workerRewards,
-        stakerRewards,
+  describe('generateMerkleTree', () => {
+    it('should throw on empty workers input', async () => {
+      await expect(service.generateMerkleTree([], 10)).rejects.toThrow(
+        'Cannot build Merkle tree with no leaves',
       );
-
-      // Should return a valid keccak256 hash
-      expect(hash).toMatch(/^0x[a-fA-F0-9]{64}$/);
-      expect(hash.length).toBe(66); // 0x + 64 hex characters
     });
 
-    it('should generate different hashes for different batches', () => {
-      const batch1 = {
-        recipients: [1, 2, 3],
-        workerRewards: ['1000', '2000', '3000'],
-        stakerRewards: ['100', '200', '300'],
-      };
-
-      const batch2 = {
-        recipients: [4, 5, 6],
-        workerRewards: ['4000', '5000', '6000'],
-        stakerRewards: ['400', '500', '600'],
-      };
-
-      const hash1 = service.generateBatchHash(
-        batch1.recipients,
-        batch1.workerRewards,
-        batch1.stakerRewards,
-      );
-      const hash2 = service.generateBatchHash(
-        batch2.recipients,
-        batch2.workerRewards,
-        batch2.stakerRewards,
-      );
-
-      expect(hash1).not.toBe(hash2);
-    });
-  });
-
-  describe('createBatches', () => {
-    it('should create batches with correct structure', () => {
+    it('should generate a merkle tree with single worker', async () => {
       const workers = [
         {
-          workerId: 1,
-          workerReward: '1000000000000000000',
-          stakerReward: '100000000000000000',
-        },
-        {
-          workerId: 2,
-          workerReward: '2000000000000000000',
-          stakerReward: '200000000000000000',
-        },
-        {
-          workerId: 3,
-          workerReward: '3000000000000000000',
-          stakerReward: '300000000000000000',
-        },
-        {
-          workerId: 4,
-          workerReward: '4000000000000000000',
-          stakerReward: '400000000000000000',
-        },
-        {
-          workerId: 5,
-          workerReward: '5000000000000000000',
-          stakerReward: '500000000000000000',
+          workerId: 1n,
+          workerReward: 1000n,
+          stakerReward: 500n,
         },
       ];
 
-      const batches = service.createBatches(workers, 2);
+      const result = await service.generateMerkleTree(workers, 1);
 
-      expect(batches).toHaveLength(3); // 5 workers, batch size 2 = 3 batches (2+2+1)
-
-      // First batch
-      expect(batches[0].recipients).toEqual([1, 2]);
-      expect(batches[0].workerRewards).toEqual([
-        '1000000000000000000',
-        '2000000000000000000',
-      ]);
-      expect(batches[0].stakerRewards).toEqual([
-        '100000000000000000',
-        '200000000000000000',
-      ]);
-      expect(batches[0].leafHash).toMatch(/^0x[a-fA-F0-9]{64}$/);
-
-      // Last batch (odd worker)
-      expect(batches[2].recipients).toEqual([5]);
-      expect(batches[2].workerRewards).toEqual(['5000000000000000000']);
-      expect(batches[2].stakerRewards).toEqual(['500000000000000000']);
+      expect(result.root).toBeTruthy();
+      expect(result.leaves).toHaveLength(1);
+      expect(result.proofs).toHaveLength(1);
+      expect(result.totalBatches).toBe(1);
+      expect(result.leaves[0].recipients).toEqual([1n]);
+      expect(result.leaves[0].workerRewards).toEqual([1000n]);
+      expect(result.leaves[0].stakerRewards).toEqual([500n]);
     });
-  });
 
-  describe('buildMerkleTree', () => {
-    it('should build Merkle tree and generate valid proofs', () => {
-      // create test batches
+    it('should generate a merkle tree with multiple workers in single batch', async () => {
       const workers = [
         {
-          workerId: 1,
-          workerReward: '1000000000000000000',
-          stakerReward: '100000000000000000',
+          workerId: 1n,
+          workerReward: 1000n,
+          stakerReward: 500n,
         },
         {
-          workerId: 2,
-          workerReward: '2000000000000000000',
-          stakerReward: '200000000000000000',
-        },
-        {
-          workerId: 3,
-          workerReward: '3000000000000000000',
-          stakerReward: '300000000000000000',
+          workerId: 2n,
+          workerReward: 2000n,
+          stakerReward: 1000n,
         },
       ];
 
-      const batches = service.createBatches(workers, 2); // should create 2 batches
-      const merkleData = service.buildMerkleTree(batches);
+      const result = await service.generateMerkleTree(workers, 10);
 
-      expect(merkleData.root).toMatch(/^0x[a-fA-F0-9]{64}$/);
-      expect(merkleData.leaves).toHaveLength(2);
-      expect(Object.keys(merkleData.proofs)).toHaveLength(2);
-
-      // Verify all proofs
-      for (let i = 0; i < batches.length; i++) {
-        const isValid = service.verifyProof(
-          merkleData.leaves[i],
-          merkleData.proofs[i],
-          merkleData.root,
-        );
-        expect(isValid).toBe(true);
-      }
+      expect(result.root).toBeTruthy();
+      expect(result.leaves).toHaveLength(1);
+      expect(result.proofs).toHaveLength(1);
+      expect(result.totalBatches).toBe(1);
+      expect(result.leaves[0].recipients).toHaveLength(2);
+      expect(result.leaves[0].recipients).toEqual([1n, 2n]);
     });
 
-    it('should handle single batch correctly', () => {
+    it('should generate a merkle tree with multiple batches', async () => {
       const workers = [
         {
-          workerId: 1,
-          workerReward: '1000000000000000000',
-          stakerReward: '100000000000000000',
+          workerId: 1n,
+          workerReward: 1000n,
+          stakerReward: 500n,
+        },
+        {
+          workerId: 2n,
+          workerReward: 2000n,
+          stakerReward: 1000n,
+        },
+        {
+          workerId: 3n,
+          workerReward: 3000n,
+          stakerReward: 1500n,
         },
       ];
 
-      const batches = service.createBatches(workers, 10); // Single batch
-      const merkleData = service.buildMerkleTree(batches);
+      const result = await service.generateMerkleTree(workers, 2);
 
-      expect(merkleData.root).toBe(batches[0].leafHash); // Root equals single leaf
-      expect(merkleData.proofs[0]).toHaveLength(0); // No proof needed for single leaf
-
-      const isValid = service.verifyProof(
-        merkleData.leaves[0],
-        merkleData.proofs[0],
-        merkleData.root,
-      );
-      expect(isValid).toBe(true);
+      expect(result.root).toBeTruthy();
+      expect(result.leaves).toHaveLength(2);
+      expect(result.proofs).toHaveLength(2);
+      expect(result.totalBatches).toBe(2);
+      
+      // first batch should have 2 workers
+      expect(result.leaves[0].recipients).toHaveLength(2);
+      // second batch should have 1 worker
+      expect(result.leaves[1].recipients).toHaveLength(1);
     });
 
-    it('should match reference implementation from generate_merkle.mjs', () => {
-      // Using the exact same test data as in generate_merkle.mjs
-      const testBatches = [
+    it('should sort workers deterministically by workerId', async () => {
+      const workers = [
         {
-          batchId: 0,
-          recipients: [1, 2, 3],
-          workerRewards: [
-            '1000000000000000000',
-            '2000000000000000000',
-            '1500000000000000000',
-          ],
-          stakerRewards: [
-            '100000000000000000',
-            '200000000000000000',
-            '150000000000000000',
-          ],
-          leafHash: '',
+          workerId: 3n,
+          workerReward: 3000n,
+          stakerReward: 1500n,
         },
         {
-          batchId: 1,
-          recipients: [4, 5],
-          workerRewards: ['3000000000000000000', '2500000000000000000'],
-          stakerRewards: ['300000000000000000', '250000000000000000'],
-          leafHash: '',
+          workerId: 1n,
+          workerReward: 1000n,
+          stakerReward: 500n,
         },
         {
-          batchId: 2,
-          recipients: [6, 7, 8],
-          workerRewards: [
-            '1800000000000000000',
-            '2200000000000000000',
-            '1600000000000000000',
-          ],
-          stakerRewards: [
-            '180000000000000000',
-            '220000000000000000',
-            '160000000000000000',
-          ],
-          leafHash: '',
+          workerId: 2n,
+          workerReward: 2000n,
+          stakerReward: 1000n,
         },
       ];
 
-      // Generate leaf hashes
-      testBatches.forEach((batch) => {
-        batch.leafHash = service.generateBatchHash(
-          batch.recipients,
-          batch.workerRewards,
-          batch.stakerRewards,
-        );
-      });
+      const result = await service.generateMerkleTree(workers, 10);
 
-      const merkleData = service.buildMerkleTree(testBatches);
+      expect(result.leaves[0].recipients).toEqual([1n, 2n, 3n]); // should be sorted
+      expect(result.leaves[0].workerRewards).toEqual([1000n, 2000n, 3000n]);
+      expect(result.leaves[0].stakerRewards).toEqual([500n, 1000n, 1500n]);
+    });
 
-      // All proofs should be valid
-      for (let i = 0; i < testBatches.length; i++) {
-        const isValid = service.verifyProof(
-          testBatches[i].leafHash,
-          merkleData.proofs[i],
-          merkleData.root,
-        );
-        expect(isValid).toBe(true);
-      }
+    it('should generate consistent merkle roots for same input', async () => {
+      const workers = [
+        {
+          workerId: 1n,
+          workerReward: 1000n,
+          stakerReward: 500n,
+        },
+        {
+          workerId: 2n,
+          workerReward: 2000n,
+          stakerReward: 1000n,
+        },
+      ];
 
-      // Root should be a valid hash
-      expect(merkleData.root).toMatch(/^0x[a-fA-F0-9]{64}$/);
+      const result1 = await service.generateMerkleTree(workers, 2);
+      const result2 = await service.generateMerkleTree(workers, 2);
+
+      expect(result1.root).toBe(result2.root);
     });
   });
 
   describe('verifyProof', () => {
-    it('should reject invalid proofs', () => {
+    it('should verify a valid merkle proof', async () => {
       const workers = [
         {
-          workerId: 1,
-          workerReward: '1000000000000000000',
-          stakerReward: '100000000000000000',
+          workerId: 1n,
+          workerReward: 1000n,
+          stakerReward: 500n,
         },
         {
-          workerId: 2,
-          workerReward: '2000000000000000000',
-          stakerReward: '200000000000000000',
+          workerId: 2n,
+          workerReward: 2000n,
+          stakerReward: 1000n,
         },
       ];
 
-      const batches = service.createBatches(workers, 1);
-      const merkleData = service.buildMerkleTree(batches);
+      const result = await service.generateMerkleTree(workers, 1);
+      const leafHash = result.leaves[0].leafHash;
+      const proof = result.proofs[0];
+      const root = result.root;
 
-      // Use wrong leaf with correct proof
-      const wrongLeaf =
-        '0x1234567890123456789012345678901234567890123456789012345678901234';
-      const isValid = service.verifyProof(
-        wrongLeaf,
-        merkleData.proofs[0],
-        merkleData.root,
-      );
-      expect(isValid).toBe(false);
+      const isValid = service.verifyProof(leafHash, proof, root);
+      expect(isValid).toBe(true);
+    });
 
-      // Use correct leaf with wrong proof
-      const wrongProof = [
-        '0x1234567890123456789012345678901234567890123456789012345678901234',
+    it('should reject an invalid merkle proof', async () => {
+      const workers = [
+        {
+          workerId: 1n,
+          workerReward: 1000n,
+          stakerReward: 500n,
+        },
       ];
-      const isValid2 = service.verifyProof(
-        merkleData.leaves[0],
-        wrongProof,
-        merkleData.root,
-      );
-      expect(isValid2).toBe(false);
+
+      const result = await service.generateMerkleTree(workers, 1);
+      const leafHash = result.leaves[0].leafHash;
+      const invalidProof = ['0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef'];
+      const root = result.root;
+
+      const isValid = service.verifyProof(leafHash, invalidProof, root);
+      expect(isValid).toBe(false);
+    });
+  });
+
+  describe('getTotalRewards', () => {
+    it('should calculate total rewards correctly', async () => {
+      const workers = [
+        {
+          workerId: 1n,
+          workerReward: 1000n,
+          stakerReward: 500n,
+        },
+        {
+          workerId: 2n,
+          workerReward: 2000n,
+          stakerReward: 1000n,
+        },
+      ];
+
+      const result = await service.generateMerkleTree(workers, 1);
+      const totals = service.getTotalRewards(result.leaves);
+
+      expect(totals.totalWorkerRewards).toBe(3000n);
+      expect(totals.totalStakerRewards).toBe(1500n);
+    });
+
+    it('should handle multiple batches correctly', async () => {
+      const workers = [
+        {
+          workerId: 1n,
+          workerReward: 1000n,
+          stakerReward: 500n,
+        },
+        {
+          workerId: 2n,
+          workerReward: 2000n,
+          stakerReward: 1000n,
+        },
+        {
+          workerId: 3n,
+          workerReward: 3000n,
+          stakerReward: 1500n,
+        },
+      ];
+
+      const result = await service.generateMerkleTree(workers, 2);
+      const totals = service.getTotalRewards(result.leaves);
+
+      expect(totals.totalWorkerRewards).toBe(6000n);
+      expect(totals.totalStakerRewards).toBe(3000n);
     });
   });
 });

@@ -11,6 +11,7 @@ import { DistributionRecoveryService } from './distribution-recovery.service';
 import { ErrorDecoderService } from '../../blockchain/error-decoder.service';
 import { RewardsReporterService } from '../../epochs/services/rewards-reporter.service';
 import { EpochMetricsService } from '../../epochs/services/epoch-metrics.service';
+import { S3Service, EpochRewardsData } from '../../s3/s3.service';
 import {
   createPublicClient,
   createWalletClient,
@@ -96,6 +97,10 @@ export class DistributionService {
   private readonly walletClient;
   private readonly contractAddress: Address;
 
+  private readonly distributionBatchSize = parseInt(
+    process.env.DISTRIBUTION_BATCH_SIZE || '50',
+  );
+
   private readonly gasSimulationConfig = {
     enablePreflightSimulation: process.env.ENABLE_GAS_SIMULATION !== 'false',
     maxOptimizationAttempts: parseInt(
@@ -125,6 +130,7 @@ export class DistributionService {
     private rewardsReporterService: RewardsReporterService,
     private epochMetricsService: EpochMetricsService,
     private commitmentKeyService: CommitmentKeyService,
+    private s3Service: S3Service,
   ) {
     const rpcUrl = this.configService.get(
       'blockchain.network.l2RpcUrl',
@@ -214,12 +220,15 @@ export class DistributionService {
     new TaskContext('distribution:config').logger.debug(
       `  - Gas reduction factor: ${this.gasSimulationConfig.gasReductionFactor}`,
     );
+    new TaskContext('distribution:config').logger.debug(
+      `Distribution batch size: ${this.distributionBatchSize}`,
+    );
   }
 
   async distributeEpochRewards(
     fromBlock: number,
     toBlock: number,
-    batchSize: number = 50,
+    batchSize: number = this.distributionBatchSize,
   ): Promise<DistributionStatus> {
     const epochId = `${fromBlock}-${toBlock}`;
     const sessionId = generateSessionId();
@@ -249,118 +258,6 @@ export class DistributionService {
 
       const startCtx = new TaskContext(`distribution:epoch-${epochId}`);
       
-      // check for interrupted distribution
-      const recoveryStatus = await this.recoveryService.checkInterruptedDistribution(
-        startCtx,
-        fromBlock,
-        toBlock,
-      );
-
-      if (recoveryStatus.interrupted && recoveryStatus.commitment) {
-        sessionCtx.logger.info(
-          `🔄 Recovering interrupted distribution: ${recoveryStatus.commitment.processedBatches}/${recoveryStatus.commitment.totalBatches} batches already processed`,
-        );
-
-        // recover merkle tree and verify it matches
-        const recoveredTree = await this.recoveryService.recoverMerkleTree(
-          startCtx,
-          fromBlock,
-          toBlock,
-          batchSize,
-        );
-        
-        calculationResult = await this.rewardsCalculatorService.calculateRewardsDetailed(
-          startCtx,
-          fromBlock,
-          toBlock,
-          true,
-        );
-
-        const formattedCalculationResult =
-          await this.rewardsCalculatorService.calculateRewardsFormatted(
-            startCtx,
-            fromBlock,
-            toBlock,
-            true,
-          );
-
-        // check which batches need processing
-        const { remainingBatchIndices } = this.recoveryService.getProcessedAndRemainingBatches(
-          recoveredTree.processedLeaves,
-        );
-
-        if (remainingBatchIndices.length === 0) {
-          sessionCtx.logger.info('✅ All batches already processed, nothing to do');
-          status.status = 'completed';
-          status.totalBatches = recoveredTree.totalBatches;
-          status.processedBatches = recoveredTree.totalBatches;
-          status.completedAt = new Date();
-          return status;
-        }
-
-        // skip to distribution phase with remaining batches
-        sessionCtx.logger.info(
-          `📦 Resuming distribution with ${remainingBatchIndices.length} remaining batches`,
-        );
-
-        status.status = 'distributing';
-        status.totalBatches = recoveredTree.totalBatches;
-        status.processedBatches = recoveredTree.totalBatches - remainingBatchIndices.length;
-
-        // We need the full merkle tree to distribute remaining batches with correct proofs
-        const fullMerkleTree: MerkleTreeResult = {
-          root: recoveredTree.merkleRoot,
-          leaves: recoveredTree.leaves,
-          proofs: [], // These will be generated during distribution
-          totalBatches: recoveredTree.totalBatches,
-        };
-
-        // Distribute only the remaining batches
-        const distributionLogs = await this.distributeRemainingBatches(
-          fromBlock,
-          toBlock,
-          fullMerkleTree,
-          remainingBatchIndices,
-          sessionId,
-        );
-        transactionLogs.push(...distributionLogs);
-
-        status.processedBatches = recoveredTree.totalBatches;
-        status.status = 'completed';
-        status.completedAt = new Date();
-        
-        const sessionDuration = Date.now() - sessionStartTime;
-        sessionCtx.logger.info(
-          `✅ Resumed distribution completed successfully in ${(sessionDuration / 1000).toFixed(2)}s!`,
-        );
-        
-        // generate structured rewards report for recovery path
-        try {
-          const summaryCtx = new TaskContext(`distribution:recovery-report-${sessionId}`);
-          const startTime = new Date(sessionStartTime);
-          const endTime = status.completedAt!;
-          
-          const networkMetrics = await this.epochMetricsService.collectNetworkMetrics(summaryCtx);
-          
-          const rewardMetrics = this.epochMetricsService.extractRewardMetrics(formattedCalculationResult);
-          
-          const commitTxHash = transactionLogs.find(log => log.type === 'commit')?.hash || '';
-          
-          await this.rewardsReporterService.logSuccessfulRewardsReport({
-            epochStart: startTime,
-            epochEnd: endTime,
-            isCommitSuccess: true,
-            commitTxHash,
-            networkMetrics,
-            rewardMetrics,
-            workerRewards: formattedCalculationResult.workers, // use formatted workers with traffic data
-          });
-        } catch (reportError) {
-          sessionCtx.logger.warn({ error: reportError }, 'Failed to generate recovery rewards report');
-        }
-        
-        return status;
-      }
 
       // normal flow for new distribution
       startCtx.logger.debug(`🚀 Starting new distribution for epoch ${epochId}`);
@@ -412,47 +309,38 @@ export class DistributionService {
       );
 
       status.status = 'generating_tree';
-      let optimizedBatchSize = batchSize;
+      let finalBatchSize = batchSize;
       let totalGasSimulations = 0;
 
       if (this.gasSimulationConfig.enablePreflightSimulation) {
-        startCtx.logger.debug(`🔧 Optimizing batch size for gas efficiency...`);
-
-        const optimizationResult = await this.optimizeBatchSize(
+        const { optimizedBatchSize, gasSimulations } = await this.optimizeBatchSize(
           fromBlock,
           toBlock,
-          workerRewards,
+          workerRewards.map((w) => ({
+            workerId: w.workerId,
+            workerReward: w.workerReward,
+            stakerReward: w.stakerReward,
+          })),
           batchSize,
         );
-
-        optimizedBatchSize = optimizationResult.optimizedBatchSize;
-        totalGasSimulations = optimizationResult.gasSimulations;
-
-        if (optimizedBatchSize !== batchSize) {
-          startCtx.logger.warn(
-            `⚠️ Batch size adjusted from ${batchSize} to ${optimizedBatchSize} based on gas simulation`,
-          );
-        } else {
-          startCtx.logger.debug(
-            `✅ Original batch size ${batchSize} is optimal`,
-          );
-        }
-      } else {
-        startCtx.logger.debug(
-          `⚠️ Gas simulation disabled, using original batch size ${batchSize}`,
-        );
+        finalBatchSize = optimizedBatchSize;
+        totalGasSimulations = gasSimulations;
       }
+
+      startCtx.logger.debug(
+        `🔒 using batch size ${finalBatchSize} for merkle tree`,
+      );
 
       status.gasOptimizations = {
         originalBatchSize: batchSize,
-        finalBatchSize: optimizedBatchSize,
-        batchesAdjusted: optimizedBatchSize !== batchSize ? 1 : 0,
+        finalBatchSize: finalBatchSize,
+        batchesAdjusted: finalBatchSize === batchSize ? 0 : 1,
         totalGasSimulations,
       };
 
       const merkleTree = await this.merkleTreeService.generateMerkleTree(
         workerRewards,
-        optimizedBatchSize,
+        finalBatchSize,
       );
 
       status.totalBatches = merkleTree.totalBatches;
@@ -469,6 +357,9 @@ export class DistributionService {
         merkleTree.root,
         merkleTree.totalBatches,
         sessionId,
+        workerRewards,
+        merkleTree,
+        finalBatchSize,
       );
       if (commitLog) {
         transactionLogs.push(commitLog);
@@ -614,12 +505,135 @@ export class DistributionService {
     }
   }
 
+  /**
+   * Prepare and upload epoch rewards data to S3
+   */
+  private async prepareAndUploadToS3(
+    fromBlock: number,
+    toBlock: number,
+    merkleRoot: string,
+    totalBatches: number,
+    workersData: WorkerReward[],
+    merkleTree: any, // MerkleTreeResult
+    sessionStartTime: number,
+    sessionId: string,
+    explicitBatchSize?: number,
+  ): Promise<string> {
+    const ctx = new TaskContext(`s3:upload:${sessionId}`);
+    
+    try {
+      if (!this.s3Service.isEnabled()) {
+        ctx.logger.warn('S3 service disabled, using placeholder link');
+        return `s3://rewards-${fromBlock}-${toBlock}.json`;
+      }
+
+      ctx.logger.info(`📤 Preparing epoch rewards data for S3 upload`);
+
+      const networkName = this.configService.get('blockchain.network.name', 'arbitrum');
+
+      const startTime = await this.web3Service.getBlockTimestamp(ctx, fromBlock);
+      const endTime = await this.web3Service.getBlockTimestamp(ctx, toBlock);
+      const epochDuration = (endTime.getTime() - startTime.getTime()) / 1000;
+
+      const totalRequests = workersData.reduce((sum, w) => sum + ((w as any).totalRequests || 0), 0);
+      const totalBytesServed = workersData.reduce((sum, w) => sum + ((w as any).bytesSent || 0), 0);
+      const totalChunksRead = workersData.reduce((sum, w) => sum + ((w as any).chunksRead || 0), 0);
+
+      const totalWorkerRewards = workersData.reduce((sum, w) => sum + w.workerReward, 0n);
+      const totalStakerRewards = workersData.reduce((sum, w) => sum + w.stakerReward, 0n);
+      const totalRewards = totalWorkerRewards + totalStakerRewards;
+
+      const formattedWorkers = workersData.map(worker => {
+        const workerAny = worker as any;
+        return {
+          workerId: worker.workerId.toString(),
+          peerId: worker.id?.toString() || `worker-${worker.workerId}`,
+          workerReward: worker.workerReward.toString(),
+          stakerReward: worker.stakerReward.toString(),
+          totalReward: (worker.workerReward + worker.stakerReward).toString(),
+          stake: worker.stake?.toString() || '0',
+          performance: {
+            bytesServed: workerAny.bytesSent || 0,
+            chunksRead: workerAny.chunksRead || 0,
+            requestsProcessed: workerAny.totalRequests || 0,
+            requestErrorRate: 0,
+            livenessCoefficient: 1.0,
+          },
+        };
+      });
+
+      const formattedLeaves = merkleTree.leaves.map((leaf: any, index: number) => ({
+        batchIndex: index,
+        leafHash: leaf.leafHash,
+        recipients: leaf.recipients.map((r: bigint) => r.toString()),
+        workerRewards: leaf.workerRewards.map((r: bigint) => r.toString()),
+        stakerRewards: leaf.stakerRewards.map((r: bigint) => r.toString()),
+      }));
+
+      const epochRewardsData: EpochRewardsData = {
+        epochInfo: {
+          fromBlock,
+          toBlock,
+          startTime: startTime.toISOString(),
+          endTime: endTime.toISOString(),
+          epochDuration,
+          timestamp: new Date().toISOString(),
+          network: networkName,
+        },
+        merkleTree: {
+          root: merkleRoot,
+          totalBatches,
+          batchSize: explicitBatchSize ?? Math.ceil(workersData.length / totalBatches),
+          leaves: formattedLeaves,
+        },
+        rawData: {
+          totalWorkers: workersData.length,
+          workers: formattedWorkers,
+        },
+        networkMetrics: {
+          totalRequests,
+          totalBytesServed,
+          totalChunksRead,
+        },
+        rewardSummary: {
+          totalWorkerRewards: totalWorkerRewards.toString(),
+          totalStakerRewards: totalStakerRewards.toString(),
+          totalRewards: totalRewards.toString(),
+          currency: 'SQD',
+        },
+        distribution: {
+          uploadedAt: new Date().toISOString(),
+        },
+        verification: {
+          dataHash: '',
+          version: '1.0.0',
+        },
+      };
+
+      const result = await this.s3Service.uploadEpochRewards(epochRewardsData);
+      
+      if (result) {
+        ctx.logger.info(`✅ Epoch rewards uploaded to S3: ${result.key}`);
+        return result.url;
+      } else {
+        ctx.logger.warn('Failed to upload to S3, using placeholder');
+        return `s3://rewards-${fromBlock}-${toBlock}.json`;
+      }
+    } catch (error) {
+      ctx.logger.error('Failed to prepare S3 data', error);
+      return `s3://rewards-${fromBlock}-${toBlock}.json`;
+    }
+  }
+
   private async commitMerkleRoot(
     fromBlock: number,
     toBlock: number,
     merkleRoot: string,
     totalBatches: number,
     sessionId: string,
+    workersData?: WorkerReward[],
+    merkleTree?: any,
+    explicitBatchSize?: number,
   ): Promise<TransactionLog | null> {
     const startTime = Date.now();
     const commitCtx = new TaskContext(`distribution:commit-${sessionId}`);
@@ -635,7 +649,21 @@ export class DistributionService {
 
     while (!commitSuccess && retryCount < MAX_RETRIES) {
       const attemptStartTime = Date.now();
-      const ipfsLink = `ipfs://rewards-${fromBlock}-${toBlock}`;
+      
+      let s3Link = `s3://rewards-${fromBlock}-${toBlock}.json`;
+      if (workersData && workersData.length > 0 && merkleTree) {
+        s3Link = await this.prepareAndUploadToS3(
+          fromBlock,
+          toBlock,
+          merkleRoot,
+          totalBatches,
+          workersData,
+          merkleTree,
+          startTime,
+          sessionId,
+          explicitBatchSize,
+        );
+      }
 
       try {
         commitCtx.logger.info(
@@ -694,7 +722,7 @@ export class DistributionService {
           [BigInt(fromBlock), BigInt(toBlock)],
           merkleRoot as `0x${string}`,
           totalBatches,
-          ipfsLink,
+          s3Link,
         ];
 
         const { request } = await this.publicClient.simulateContract({
@@ -1154,167 +1182,13 @@ export class DistributionService {
     batchNumber: number,
     sessionId: string,
   ): Promise<TransactionLog[]> {
-    const chunkSize = Math.max(
-      1,
-      Math.floor(originalLeaf.recipients.length / 2),
+    // do not split a committed leaf -> proofs are for the full leaf
+    const chunkCtxPre = new TaskContext(`distribution:chunks-${sessionId}`);
+    chunkCtxPre.logger.warn(
+      `⚠️ [${sessionId}] refusing to split batch ${batchNumber} as it invalidates merkle proofs; falling back to direct attempt`,
     );
-    const chunkCtx = new TaskContext(`distribution:chunks-${sessionId}`);
-
-    chunkCtx.logger.info(
-      `📦 [${sessionId}] Splitting batch ${batchNumber} into chunks of ${chunkSize} workers each`,
-    );
-
-    const chunkLogs: TransactionLog[] = [];
-
-    for (
-      let chunkStart = 0;
-      chunkStart < originalLeaf.recipients.length;
-      chunkStart += chunkSize
-    ) {
-      const chunkEnd = Math.min(
-        chunkStart + chunkSize,
-        originalLeaf.recipients.length,
-      );
-
-      const chunkRecipients = originalLeaf.recipients.slice(
-        chunkStart,
-        chunkEnd,
-      );
-      const chunkWorkerRewards = originalLeaf.workerRewards.slice(
-        chunkStart,
-        chunkEnd,
-      );
-      const chunkStakerRewards = originalLeaf.stakerRewards.slice(
-        chunkStart,
-        chunkEnd,
-      );
-
-      const chunkIndex = Math.floor(chunkStart / chunkSize) + 1;
-      const totalChunks = Math.ceil(originalLeaf.recipients.length / chunkSize);
-
-      chunkCtx.logger.info(
-        `📦 [${sessionId}] Processing chunk ${chunkIndex}/${totalChunks} of batch ${batchNumber} with ${chunkRecipients.length} workers`,
-      );
-
-      try {
-        const chunkSimulation = await this.simulateDistribution(
-          fromBlock,
-          toBlock,
-          chunkRecipients,
-          chunkWorkerRewards,
-          chunkStakerRewards,
-          originalProof,
-        );
-
-        if (!chunkSimulation.success) {
-          chunkCtx.logger.error(
-            `❌ [${sessionId}] Chunk ${chunkIndex} simulation failed: ${chunkSimulation.error}`,
-          );
-
-          if (chunkRecipients.length === 1) {
-            chunkCtx.logger.error(
-              `❌ [${sessionId}] Single worker chunk failed - skipping worker ${chunkRecipients[0].toString()}`,
-            );
-
-            const failedLog: TransactionLog = {
-              type: 'distribute',
-              hash: 'failed',
-              blockNumber: 0,
-              gasUsed: 0n,
-              gasPrice: 0n,
-              batchNumber,
-              workerCount: 1,
-              duration: 0,
-              status: 'failed',
-              error: chunkSimulation.error,
-            };
-            chunkLogs.push(failedLog);
-            continue;
-          } else {
-            const recursiveLogs = await this.distributeBatchInChunks(
-              fromBlock,
-              toBlock,
-              {
-                recipients: chunkRecipients,
-                workerRewards: chunkWorkerRewards,
-                stakerRewards: chunkStakerRewards,
-              },
-              originalProof,
-              batchNumber,
-              sessionId,
-            );
-            chunkLogs.push(...recursiveLogs);
-            continue;
-          }
-        }
-
-        const chunkStartTime = Date.now();
-        const { request } = await this.publicClient.simulateContract({
-          account: this.walletClient.account,
-          address: this.contractAddress,
-          abi: this.contractAbi,
-          functionName: 'distribute',
-          args: [
-            [BigInt(fromBlock), BigInt(toBlock)],
-            chunkRecipients,
-            chunkWorkerRewards,
-            chunkStakerRewards,
-            originalProof as `0x${string}`[],
-          ],
-        });
-
-        const hash = await this.walletClient.writeContract(request);
-
-        chunkCtx.logger.info(
-          `📤 [${sessionId}] Chunk ${chunkIndex} TX submitted: ${hash}`,
-        );
-
-        const receipt = await this.publicClient.waitForTransactionReceipt({
-          hash,
-        });
-
-        const duration = Date.now() - chunkStartTime;
-
-        chunkCtx.logger.info(
-          `✅ [${sessionId}] Chunk ${chunkIndex}/${totalChunks} of batch ${batchNumber} distributed! Block: ${receipt.blockNumber.toString()}, Gas: ${receipt.gasUsed.toString()}, Duration: ${duration}ms`,
-        );
-
-        const log: TransactionLog = {
-          type: 'distribute',
-          hash: receipt.transactionHash,
-          blockNumber: Number(receipt.blockNumber),
-          gasUsed: receipt.gasUsed,
-          gasPrice: receipt.effectiveGasPrice || 0n,
-          batchNumber,
-          workerCount: chunkRecipients.length,
-          duration,
-          status: 'success',
-        };
-        chunkLogs.push(log);
-      } catch (error) {
-        const errorStr = String(error?.message || error);
-        chunkCtx.logger.error(
-          `❌ [${sessionId}] Failed to distribute chunk ${chunkIndex} of batch ${batchNumber}: ${errorStr}`,
-        );
-
-        const failedLog: TransactionLog = {
-          type: 'distribute',
-          hash: 'failed',
-          blockNumber: 0,
-          gasUsed: 0n,
-          gasPrice: 0n,
-          batchNumber,
-          workerCount: chunkRecipients.length,
-          duration: 0,
-          status: 'failed',
-          error: errorStr,
-        };
-        chunkLogs.push(failedLog);
-        throw error;
-      }
-    }
-
-    return chunkLogs;
+    throw new Error('cannot split committed leaf without rebuilding merkle tree');
+    // unreachable
   }
 
   async getDistributionStatus(
@@ -1404,7 +1278,7 @@ export class DistributionService {
       workerReward: bigint;
       stakerReward: bigint;
     }>,
-    batchSize: number = 50,
+    batchSize: number = this.distributionBatchSize,
   ): Promise<MerkleTreeResult> {
     const ctx = new TaskContext('distribution:generate-merkle-only');
     ctx.logger.info(`🌳 Generating Merkle tree for ${workers.length} workers (approval phase)`);
@@ -1564,16 +1438,31 @@ export class DistributionService {
         return true;
       }
 
-      // Generate the same Merkle tree
-      const merkleTree = await this.merkleTreeService.generateMerkleTree(result.workers, 50);
+      const merkleTree = await this.merkleTreeService.generateMerkleTree(result.workers, this.distributionBatchSize);
       
-      // Verify the root matches
       if (merkleTree.root !== merkleRoot) {
         ctx.logger.error(`Merkle root mismatch! Expected: ${merkleRoot}, Got: ${merkleTree.root}`);
-        return false;
+        
+        ctx.logger.info('🔄 Attempting to recover Merkle tree from S3...');
+        const recoveredTree = await this.recoverMerkleTreeFromS3(ctx, fromBlock, toBlock);
+        
+        if (recoveredTree && recoveredTree.root === merkleRoot) {
+          ctx.logger.info('✅ Successfully recovered Merkle tree from S3');
+          
+          const sessionId = generateSessionId();
+          const distributionLogs = await this.distributeBatches(fromBlock, toBlock, recoveredTree, sessionId);
+          
+          ctx.logger.info(`✅ Distribution completed using recovered Merkle tree from S3`);
+          ctx.logger.info(`   Total batches distributed: ${distributionLogs.length}`);
+          
+          return true;
+        } else {
+          ctx.logger.error('❌ Failed to recover valid Merkle tree from S3');
+          return false;
+        }
       }
 
-      // Distribute all batches
+
       const sessionId = generateSessionId();
       const distributionLogs = await this.distributeBatches(fromBlock, toBlock, merkleTree, sessionId);
       
@@ -1582,7 +1471,7 @@ export class DistributionService {
       if (allSuccessful) {
         ctx.logger.info(`✅ Successfully distributed all ${merkleTree.totalBatches} batches`);
         
-        // generate rewards report after successful distribution
+
         try {
           const formattedCalculationResult = await this.rewardsCalculatorService.calculateRewardsFormatted(
             ctx,
@@ -1763,5 +1652,133 @@ export class DistributionService {
     }
 
     return transactionLogs;
+  }
+
+  private async recoverMerkleTreeFromS3(
+    ctx: TaskContext,
+    fromBlock: number,
+    toBlock: number,
+  ): Promise<any | null> {
+    try {
+      const networkName = this.configService.get('blockchain.network.name', 'arbitrum');
+      const s3Key = this.s3Service.generateS3Key(networkName, fromBlock, toBlock);
+      ctx.logger.info(`📥 Attempting to download epoch data from S3: ${s3Key}`);
+      
+      if (!this.s3Service) {
+        ctx.logger.warn('S3 service not configured, cannot recover from S3');
+        return null;
+      }
+      
+      const epochRewardsData = await this.s3Service.downloadJson(s3Key);
+      
+      if (!epochRewardsData) {
+        ctx.logger.warn('No epoch rewards data found in S3');
+        return null;
+      }
+      
+      if (!epochRewardsData.rawData || !epochRewardsData.rawData.workers || !epochRewardsData.merkleTree) {
+        ctx.logger.error('Invalid epoch rewards data structure in S3 - missing worker data or merkle tree info');
+        return null;
+      }
+      
+      if (!epochRewardsData.merkleTree.batchSize) {
+        ctx.logger.error('Missing batchSize in stored merkle tree data');
+        return null;
+      }
+      
+      ctx.logger.info(`🔧 Recreating Merkle tree from ${epochRewardsData.rawData.workers.length} workers`);
+      ctx.logger.info(`   Using batch size: ${epochRewardsData.merkleTree.batchSize}`);
+      
+      const workers = epochRewardsData.rawData.workers.map((w: any) => ({
+        workerId: BigInt(w.workerId),
+        workerReward: BigInt(w.workerReward),
+        stakerReward: BigInt(w.stakerReward),
+      }));
+      
+      const recreatedTree = await this.merkleTreeService.generateMerkleTree(
+        workers,
+        epochRewardsData.merkleTree.batchSize
+      );
+      
+      ctx.logger.info(`✅ Successfully recreated Merkle tree from S3 data`);
+      ctx.logger.info(`   Recreated root: ${recreatedTree.root}`);
+      ctx.logger.info(`   Expected root: ${epochRewardsData.merkleTree.root}`);
+      ctx.logger.info(`   Total batches: ${recreatedTree.totalBatches}`);
+      ctx.logger.info(`   Leaves: ${recreatedTree.leaves.length}`);
+      
+      if (recreatedTree.root !== epochRewardsData.merkleTree.root) {
+        ctx.logger.error('❌ Recreated Merkle tree root does not match stored root');
+        ctx.logger.error(`   This indicates data corruption or calculation inconsistency`);
+        return null;
+      }
+      
+      ctx.logger.info(`✅ Merkle tree verification successful - roots match`);
+      
+      return recreatedTree;
+    } catch (error) {
+      ctx.logger.error({ error }, 'Failed to recover Merkle tree from S3');
+      
+      ctx.logger.info('🔄 Attempting to recover from contract commitment data...');
+      
+      try {
+        const commitmentKey = this.commitmentKeyService.generateKey(fromBlock, toBlock);
+        const commitment = await this.publicClient.readContract({
+          address: this.contractAddress,
+          abi: this.contractAbi,
+          functionName: 'commitments',
+          args: [commitmentKey],
+        });
+        
+        if (commitment && commitment[5]) { // ipfsLink is at index 5
+          const ipfsLink = commitment[5] as string;
+          ctx.logger.info(`📥 Found IPFS link in commitment: ${ipfsLink}`);
+          
+          ctx.logger.warn('IPFS recovery not yet implemented, but link available for manual recovery');
+        }
+      } catch (ipfsError) {
+        ctx.logger.debug('No IPFS link available in commitment');
+      }
+      
+      return null;
+    }
+  }
+
+
+  private generateBatchProof(
+    merkleTree: any,
+    batchLeaves: any[],
+  ): {
+    recipients: number[];
+    workerRewards: bigint[];
+    stakerRewards: bigint[];
+    merkleProof: `0x${string}`[];
+  } {
+    const recipients: number[] = [];
+    const workerRewards: bigint[] = [];
+    const stakerRewards: bigint[] = [];
+    const merkleProofs: `0x${string}`[] = [];
+    
+    // Extract data from batch leaves
+    for (const leaf of batchLeaves) {
+      recipients.push(...leaf.recipients);
+      workerRewards.push(...leaf.workerRewards);
+      stakerRewards.push(...leaf.stakerRewards);
+      
+
+      const leafIndex = merkleTree.leaves.findIndex((l: any) => 
+        l.hash === leaf.hash || JSON.stringify(l) === JSON.stringify(leaf)
+      );
+      
+      if (leafIndex >= 0 && merkleTree.proofs && merkleTree.proofs[leafIndex]) {
+        merkleProofs.push(...merkleTree.proofs[leafIndex]);
+      }
+    }
+    
+    return {
+      recipients,
+      workerRewards,
+      stakerRewards,
+      merkleProof: merkleProofs,
+    };
   }
 }

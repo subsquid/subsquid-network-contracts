@@ -8,6 +8,7 @@ import { RewardsModule } from './rewards/rewards.module';
 import { EpochsModule } from './epochs/epochs.module';
 import { ApiModule } from './api/api.module';
 import { CommonModule } from './common/common.module';
+import { S3Module } from './s3/s3.module';
 
 @Module({
   imports: [
@@ -15,6 +16,7 @@ import { CommonModule } from './common/common.module';
     CommonModule,
     DatabaseModule,
     BlockchainModule,
+    S3Module,
     RewardsModule,
     EpochsModule,
     ApiModule,

@@ -1,6 +1,6 @@
 {
   "name": "subsquid-rewards-backend",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "",
   "author": "",
   "private": true,
@@ -21,6 +21,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.859.0",
     "@clickhouse/client": "^1.11.2",
     "@nestjs/bull": "^11.0.2",
     "@nestjs/common": "^11.0.1",

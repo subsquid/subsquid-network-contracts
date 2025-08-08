@@ -10,6 +10,7 @@ export const DistributedRewardsDistributionABI = [
   { type: 'error', name: 'NotEnoughApprovals', inputs: [] },
   { type: 'error', name: 'NotAllBlocksCovered', inputs: [] },
   { type: 'error', name: 'CommitmentAlreadyCompleted', inputs: [] },
+  { type: 'error', name: 'AlreadyApproved', inputs: [] },
   {
     type: 'constructor',
     inputs: [

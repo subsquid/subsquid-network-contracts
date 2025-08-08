@@ -179,7 +179,7 @@ export class EpochProcessorService {
       return;
     }
 
-    const requiredApprovals = 1; // TODO: get from contract configuration
+    const requiredApprovals = await this.contractService.getRequiredApprovals();
     const currentApprovals = Number(latestCommitment.approvalCount);
 
     ctx.logger.debug(`📊 Approval status: ${currentApprovals}/${requiredApprovals} required`);

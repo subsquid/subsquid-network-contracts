@@ -96,7 +96,7 @@ export class BlockSchedulerService implements OnModuleInit {
       
       const distributionCheck = await this.contractService.isNextDistributionReady(ctx);
       
-      if (distributionCheck.blocksUntilReady > 5) {
+      if (distributionCheck.blocksUntilReady > 0) {
         ctx.logger.debug(`⏳ Next distribution in ${distributionCheck.blocksUntilReady} blocks`);
         return;
       }

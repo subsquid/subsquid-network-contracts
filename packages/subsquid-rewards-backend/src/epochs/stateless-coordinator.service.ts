@@ -195,7 +195,6 @@ export class StatelessCoordinatorService {
     pendingCommitments: Array<{
       fromBlock: number;
       toBlock: number;
-      merkleRoot: string;
     }>;
   }> {
     const ctx = new TaskContext('stateless-coordinator:pending-approvals');
@@ -203,18 +202,63 @@ export class StatelessCoordinatorService {
     try {
       const pendingCommitments = await this.contractService.getCommitmentsNeedingApproval();
 
-      ctx.logger.debug(`found ${pendingCommitments.length} commitments needing approval`);
+      ctx.logger.debug(`found ${pendingCommitments.length} commitments needing approval from contract`);
 
-      if (pendingCommitments.length > 0) {
-        ctx.logger.info(`📝 ${pendingCommitments.length} commitments need approval`);
-        for (const commitment of pendingCommitments) {
+      if (pendingCommitments.length === 0) {
+        return {
+          hasApprovals: false,
+          pendingCommitments: [],
+        };
+      }
+
+      // get bot address for approval checking
+      const botAddress = await this.getBotAddress();
+      
+      // filter out commitments already approved by this bot
+      const notApprovedCommitments: Array<{
+        fromBlock: number;
+        toBlock: number;
+      }> = [];
+      
+      for (const commitment of pendingCommitments) {
+        try {
+          const hasApproved = await this.contractService.hasApprovedCommitment(
+            commitment.fromBlock,
+            commitment.toBlock,
+            botAddress
+          );
+          
+          if (hasApproved) {
+            ctx.logger.debug(`✅ Bot ${botAddress} already approved commitment ${commitment.fromBlock}-${commitment.toBlock}`);
+          } else {
+            ctx.logger.debug(`⏳ Bot ${botAddress} has not approved commitment ${commitment.fromBlock}-${commitment.toBlock}`);
+            notApprovedCommitments.push({
+              fromBlock: commitment.fromBlock,
+              toBlock: commitment.toBlock,
+            });
+          }
+        } catch (error) {
+          ctx.logger.warn(`⚠️ could not check approval status for ${commitment.fromBlock}-${commitment.toBlock}: ${error.message}, including in pending list`);
+          // if we can't check, include it to be safe
+          notApprovedCommitments.push({
+            fromBlock: commitment.fromBlock,
+            toBlock: commitment.toBlock,
+          });
+        }
+      }
+
+      ctx.logger.debug(`filtered to ${notApprovedCommitments.length} commitments needing approval by this bot`);
+
+      if (notApprovedCommitments.length > 0) {
+        ctx.logger.info(`📝 ${notApprovedCommitments.length} commitments need approval from this bot`);
+        for (const commitment of notApprovedCommitments) {
           ctx.logger.info(`   - ${commitment.fromBlock}-${commitment.toBlock}`);
         }
       }
 
       return {
-        hasApprovals: pendingCommitments.length > 0,
-        pendingCommitments,
+        hasApprovals: notApprovedCommitments.length > 0,
+        pendingCommitments: notApprovedCommitments,
       };
     } catch (error) {
       ctx.logger.error({ error }, 'failed to check pending approvals');

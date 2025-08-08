@@ -267,26 +267,32 @@ export class ContractService {
   }
 
   async getBondAmount(): Promise<bigint> {
+    const ctx = new TaskContext('contract-service:get-bond-amount');
+    
     try {
-      const stakingAddress = this.configService.get(
-        'blockchain.contracts.staking',
+      const workerRegistrationAddress = this.configService.get(
+        'blockchain.contracts.workerRegistration',
       ) as Address;
 
-      if (!stakingAddress) {
-        new TaskContext('warning').logger.warn(
-          'Staking contract address not configured',
-        );
+      if (!workerRegistrationAddress) {
+        throw new Error('WorkerRegistration contract address not configured');
       }
 
-      // for dev: return mock bond amount
-      const mockBondAmount = BigInt('100000000000000000000000'); // 100k SQD
-      new TaskContext('method-call').logger.debug(
-        'Using mock bond amount (100k SQD) for development',
+      const contract = getContract({
+        address: workerRegistrationAddress,
+        abi: WorkerRegistrationABI,
+        client: this.web3Service.client,
+      });
+
+      const bondAmount = await contract.read.bondAmount();
+      ctx.logger.debug(
+        `✅ Retrieved bond amount from WorkerRegistration contract: ${Number(bondAmount) / 1e18} SQD (${bondAmount} wei)`,
       );
-      return mockBondAmount;
+      return bondAmount;
     } catch (error) {
-      new TaskContext('error-handling').logger.error(
-        `Failed to get bond amount: ${error.message}`,
+      ctx.logger.error(
+        { error },
+        `Failed to get bond amount from WorkerRegistration contract`,
       );
       throw error;
     }
@@ -1329,7 +1335,7 @@ export class ContractService {
       const currentBlock = await this.web3Service.getL1BlockNumber(ctx);
       const lastRewardedBlock = await this.getLastRewardedBlock(ctx);
       const blockInterval = this.configService.get('rewards.distributionBlockInterval') || 520;
-      const confirmationBlocks = this.configService.get('blockchain.epochConfirmationBlocks') || 150;
+      const confirmationBlocks = this.configService.get('blockchain.epochConfirmationBlocks') || 50;
       
       const nextFromBlock = lastRewardedBlock + 1;
       const nextToBlock = nextFromBlock + blockInterval - 1;
@@ -1606,6 +1612,44 @@ export class ContractService {
   }
 
   /**
+   * check if specific address has approved a commitment
+   */
+  async hasApprovedCommitment(fromBlock: number, toBlock: number, address: `0x${string}`): Promise<boolean> {
+    const ctx = new TaskContext(`contract-service:has-approved:${fromBlock}-${toBlock}`);
+    
+    try {
+      const rewardsDistributionAddress = this.configService.get(
+        'blockchain.contracts.rewardsDistribution',
+      ) as Address;
+
+      const commitmentKey = this.commitmentKeyService.generateKey(fromBlock, toBlock);
+
+      const hasApproved = await this.web3Service.client.readContract({
+        address: rewardsDistributionAddress,
+        abi: [
+          {
+            type: 'function',
+            name: 'approvedBy',
+            inputs: [
+              { name: '', type: 'bytes32', internalType: 'bytes32' },
+              { name: '', type: 'address', internalType: 'address' }
+            ],
+            outputs: [{ name: '', type: 'bool', internalType: 'bool' }],
+            stateMutability: 'view',
+          }
+        ],
+        functionName: 'approvedBy',
+        args: [commitmentKey, address],
+      });
+      
+      return hasApproved;
+    } catch (error) {
+      ctx.logger.error({ error }, 'failed to check approval status');
+      return false;
+    }
+  }
+
+  /**
    * approve a commitment
    */
   async approveCommitment(fromBlock: number, toBlock: number): Promise<boolean> {
@@ -1638,33 +1682,6 @@ export class ContractService {
       const botAddress = account.address;
       
       ctx.logger.debug(`🔑 Using bot address: ${botAddress}`);
-
-      try {
-        const hasApproved = await this.web3Service.client.readContract({
-          address: rewardsDistributionAddress,
-          abi: [
-            {
-              type: 'function',
-              name: 'approvedBy',
-              inputs: [
-                { name: '', type: 'bytes32', internalType: 'bytes32' },
-                { name: '', type: 'address', internalType: 'address' }
-              ],
-              outputs: [{ name: '', type: 'bool', internalType: 'bool' }],
-              stateMutability: 'view',
-            }
-          ],
-          functionName: 'approvedBy',
-          args: [commitmentKey, botAddress],
-        });
-        
-        if (hasApproved) {
-          ctx.logger.info(`✅ Bot ${botAddress} has already approved commitment ${fromBlock}-${toBlock}`);
-          return true;
-        }
-      } catch (error) {
-        ctx.logger.warn(`⚠️ Could not check approval status: ${error.message}, proceeding with approval check`);
-      }
 
       const commitment = await this.getCommitmentInfo(commitmentKey);
       if (!commitment) {
@@ -1747,7 +1764,8 @@ export class ContractService {
         } catch (error) {
           ctx.logger.error(`❌ Approval attempt ${attempt}/${maxRetries} failed: ${error.message}`);
           
-          if (error.message.includes('AlreadyApproved')) {
+     
+          if (error.message.includes('AlreadyApproved') || error.message.includes('0x101f817a')) {
             ctx.logger.info(`✅ Commitment ${fromBlock}-${toBlock} was already approved by this distributor`);
             return true;
           }

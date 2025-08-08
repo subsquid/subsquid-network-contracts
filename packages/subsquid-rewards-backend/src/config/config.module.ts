@@ -3,6 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import databaseConfig from './database.config';
 import blockchainConfig from './blockchain.config';
 import { rewardsConfig } from './rewards.config';
+import s3Config from './s3.config';
 
 // validate critical environment variables
 const validateConfig = (config: Record<string, unknown>) => {
@@ -44,7 +45,7 @@ const validateConfig = (config: Record<string, unknown>) => {
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      load: [databaseConfig, blockchainConfig, rewardsConfig],
+      load: [databaseConfig, blockchainConfig, rewardsConfig, s3Config],
       validate: validateConfig,
     }),
   ],
