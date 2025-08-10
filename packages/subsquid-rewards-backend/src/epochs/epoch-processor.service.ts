@@ -315,7 +315,7 @@ export class EpochProcessorService {
 
       const currentBlock = await this.web3Service.getL1BlockNumber(ctx);
       const epochConfirmationBlocks =
-        this.configService.get('blockchain.epochConfirmationBlocks') || 150;
+        this.configService.get('blockchain.epochConfirmationBlocks') || 1000;
       const lastConfirmedBlock = currentBlock - epochConfirmationBlocks;
 
       if (lastConfirmedBlock - lastRewardedBlock < epochLength) {
@@ -818,11 +818,30 @@ export class EpochProcessorService {
         toBlock,
         merkleTree.root,
         merkleTree.totalBatches,
+        '',
+        result.workers,
+        merkleTree,
+        50,
       );
 
-      if (!commitResult) {
+      if (!commitResult.success) {
         ctx.logger.error('Failed to commit Merkle root');
         return false;
+      }
+
+      try {
+        const s3Url = await this.distributionService.uploadEpochDataToS3(
+          fromBlock,
+          toBlock,
+          merkleTree.root,
+          merkleTree.totalBatches,
+          result.workers,
+          merkleTree,
+          50,
+        );
+        ctx.logger.info(`✅ Epoch data uploaded to S3 after commit: ${s3Url}`);
+      } catch (e) {
+        ctx.logger.error({ error: e }, `❌ Failed to upload epoch data to S3 after commit: ${e.message}`);
       }
 
       ctx.logger.info(`✅ Approval phase completed for ${fromBlock}-${toBlock}`);

@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { TaskContext } from '../common';
 import { ContractService } from '../blockchain/contract.service';
+import { Web3Service } from '../blockchain/web3.service';
 
 interface DistributionActivity {
   isActive: boolean;
@@ -21,6 +22,7 @@ export class StatelessCoordinatorService {
   constructor(
     private contractService: ContractService,
     private configService: ConfigService,
+    private web3Service: Web3Service,
   ) {}
 
   /**
@@ -35,7 +37,7 @@ export class StatelessCoordinatorService {
     const ctx = new TaskContext('stateless-coordinator:committer-check');
 
     try {
-      const currentBlock = await this.contractService.getCurrentBlockNumber();
+      const currentBlock = await this.web3Service.getL1BlockNumber(ctx);
       const roundRobinWindow = this.configService.get('rewards.roundRobinWindow', 130);
       
       const currentWindow = Math.floor(currentBlock / roundRobinWindow);
@@ -100,7 +102,7 @@ export class StatelessCoordinatorService {
     const ctx = new TaskContext('stateless-coordinator:commit-eligibility');
 
     try {
-      const currentBlock = await this.contractService.getCurrentBlockNumber();
+      const currentBlock = await this.web3Service.getL1BlockNumber(ctx);
       const roundRobinWindow = this.configService.get('rewards.roundRobinWindow', 130);
       const safetyBuffer = this.configService.get('rewards.commitSafetyBuffer', 3);
 
@@ -291,7 +293,7 @@ export class StatelessCoordinatorService {
         return { shouldActivate: false };
       }
 
-      const currentL1Block = await this.contractService['web3Service'].getL1BlockNumber(ctx);
+      const currentL1Block = await this.web3Service.getL1BlockNumber(ctx);
       
       const stuckCommitments: Array<{fromBlock: number; toBlock: number}> = [];
       let maxBlocksSince = 0;

@@ -1113,7 +1113,7 @@ export class ContractService {
       const currentBlock = await this.web3Service.getL1BlockNumber(ctx);
       const lastRewardedBlock = await this.getLastRewardedBlock(ctx);
       const blockInterval = this.configService.get('rewards.distributionBlockInterval') || 520;
-      const confirmationBlocks = this.configService.get('blockchain.epochConfirmationBlocks') || 150;
+      const confirmationBlocks = this.configService.get('blockchain.epochConfirmationBlocks') || 1000;
       const startingBlock = this.configService.get('rewards.distributionStartingBlock') || 0;
       const rewardsDistributionAddress = this.configService.get(
         'blockchain.contracts.rewardsDistribution',
@@ -1335,12 +1335,12 @@ export class ContractService {
       const currentBlock = await this.web3Service.getL1BlockNumber(ctx);
       const lastRewardedBlock = await this.getLastRewardedBlock(ctx);
       const blockInterval = this.configService.get('rewards.distributionBlockInterval') || 520;
-      const confirmationBlocks = this.configService.get('blockchain.epochConfirmationBlocks') || 50;
+      const confirmationBlocks = this.configService.get('blockchain.epochConfirmationBlocks') || 500;
       
       const nextFromBlock = lastRewardedBlock + 1;
       const nextToBlock = nextFromBlock + blockInterval - 1;
       
-      const blocksUntilReady = Math.max(0, nextToBlock - currentBlock);
+      const blocksUntilReady = nextToBlock > currentBlock ? nextToBlock - currentBlock : 0;
       
       const lastConfirmedBlock = currentBlock - confirmationBlocks;
       const needsConfirmation = nextToBlock > lastConfirmedBlock;
@@ -1352,7 +1352,7 @@ export class ContractService {
         !needsConfirmation;
       
       ctx.logger.debug(
-        `📊 Distribution check: current=${currentBlock}, target=${nextToBlock}, ready=${isReady}, blocksLeft=${blocksUntilReady}`
+        `📊 Distribution check: current=${currentBlock}, target=${nextToBlock}, ready=${isReady}, blocksLeft=${confirmationBlocksNeeded}`
       );
       
       return {

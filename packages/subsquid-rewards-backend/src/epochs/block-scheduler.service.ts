@@ -22,7 +22,8 @@ export class BlockSchedulerService implements OnModuleInit {
     private startupRecovery: StartupRecoveryService,
     private statelessCoordinator: StatelessCoordinatorService,
   ) {
-    this.enableAutoDistribution = this.configService.get('rewards.enableAutoDistribution') === true;
+    const rawFlag = this.configService.get('rewards.enableAutoDistribution');
+    this.enableAutoDistribution = rawFlag === true || (typeof rawFlag === 'string' && ['true','1','yes','on'].includes(rawFlag.toLowerCase()));
     
     const ctx = new TaskContext('block-scheduler-init');
     ctx.logger.info(`🔄 Block Scheduler (Separated) initialized:`);
@@ -88,16 +89,19 @@ export class BlockSchedulerService implements OnModuleInit {
     if (!this.enableAutoDistribution || this.isDistributionProcessing) {
       return;
     }
-
     const ctx = new TaskContext('block-scheduler:distribution');
     
     try {
       this.isDistributionProcessing = true;
       
       const distributionCheck = await this.contractService.isNextDistributionReady(ctx);
-      
       if (distributionCheck.blocksUntilReady > 0) {
         ctx.logger.debug(`⏳ Next distribution in ${distributionCheck.blocksUntilReady} blocks`);
+        return;
+      }
+
+      if (distributionCheck.needsConfirmation) {
+        ctx.logger.info(`⏳ waiting ${distributionCheck.confirmationBlocksNeeded} confirmation blocks before distributing ${distributionCheck.nextFromBlock}-${distributionCheck.nextToBlock}`);
         return;
       }
       
@@ -130,10 +134,6 @@ export class BlockSchedulerService implements OnModuleInit {
           }
         }
         
-      } else {
-        ctx.logger.info(`👀 I'm not committer - checking for commitments to approve`);
-        
-        await this.epochProcessor.processExistingApprovals();
       }
       
       ctx.logger.info('✅ Distribution interval completed');

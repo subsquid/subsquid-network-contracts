@@ -92,6 +92,11 @@ export interface DecodedError {
 
 @Injectable()
 export class ErrorDecoderService {
+  private static readonly MANUAL_SIG_MAP: Record<string, { name: string; description: string }> = {
+    '0x08c379a0': { name: 'Error(string)', description: 'reverted with reason string' },
+    '0x4e487b71': { name: 'Panic(uint256)', description: 'panic' },
+    '0xe2517d3f': { name: 'InvalidMerkleProof', description: 'merkle proof verification failed' },
+  };
   /**
    * Decode a contract error from a viem BaseError
    */
@@ -118,6 +123,14 @@ export class ErrorDecoderService {
       }
 
       const signature = signatureMatch[0];
+      const manual = ErrorDecoderService.MANUAL_SIG_MAP[signature];
+      if (manual) {
+        return {
+          errorName: manual.name,
+          description: manual.description,
+          signature,
+        };
+      }
       
       // Try to decode using the ABI
       const decodedError = decodeErrorResult({
