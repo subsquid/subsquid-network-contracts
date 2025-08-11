@@ -84,7 +84,7 @@ export class BlockSchedulerService implements OnModuleInit {
     }
   }
 
-  @Cron('*/1 * * * *') // Every 1 minute
+  @Cron('*/5 * * * *') // Every 5 minute
   async checkDistributionInterval() {
     if (!this.enableAutoDistribution || this.isDistributionProcessing) {
       return;
