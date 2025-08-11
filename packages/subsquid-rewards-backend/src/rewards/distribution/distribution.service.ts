@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { TaskContext, CommitmentKeyService } from '../../common';
 import { Web3Service } from '../../blockchain/web3.service';
-import { MerkleTreeService, MerkleTreeResult, MerkleLeaf } from './merkle-tree.service';
+import { MerkleTreeService, MerkleTreeResult } from './merkle-tree.service';
 import {
   RewardsCalculatorService,
   WorkerReward,
@@ -17,13 +17,11 @@ import {
   createWalletClient,
   http,
   parseAbi,
-  parseAbiItem,
   getContract,
   Address,
-  encodeFunctionData,
   BaseError,
 } from 'viem';
-import { arbitrum, foundry } from 'viem/chains';
+import { arbitrum } from 'viem/chains';
 import { defineChain } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { DistributedRewardsDistributionABI } from '../../blockchain/contracts/abis';

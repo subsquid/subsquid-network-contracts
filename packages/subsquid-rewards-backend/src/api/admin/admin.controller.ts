@@ -13,7 +13,6 @@ import {
   DistributionService,
   DistributionStatus,
 } from '../../rewards/distribution/distribution.service';
-import { ClickHouseService } from '../../database/clickhouse.service';
 import { Web3Service } from '../../blockchain/web3.service';
 import { BlockSchedulerService } from '../../epochs/block-scheduler.service';
 import { TaskContext } from '../../common';
@@ -25,24 +24,6 @@ export interface ManualDistributionRequest {
   batchSize?: number;
 }
 
-export interface DebugWorkerInfo {
-  peerId: string;
-  peerIdShort: string;
-  contractWorkerId: string;
-  isRegistered: boolean;
-  totalRequests: number;
-  outputSize: number;
-  chunksRead: number;
-}
-
-export interface DebugRegistrationInfo {
-  workerId: string;
-  peerId: string;
-  peerIdShort: string;
-  registrar: string;
-  registeredAt: string;
-  metadata: string;
-}
 
 @Controller('admin')
 export class AdminController {
@@ -52,7 +33,6 @@ export class AdminController {
   constructor(
     private rewardsCalculatorService: RewardsCalculatorService,
     private distributionService: DistributionService,
-    private clickHouseService: ClickHouseService,
     private web3Service: Web3Service,
     private blockSchedulerService: BlockSchedulerService,
   ) {}
@@ -468,159 +448,6 @@ export class AdminController {
     };
   }
 
-  /* turned off for now
-  @Get('debug/worker-states')
-  async debugWorkerStates(@Query('sampleSize') sampleSize?: string) {
-    try {
-      const size = sampleSize ? parseInt(sampleSize) : 10;
-
-      // Get sample workers from ClickHouse for the last 7 days
-      const endTime = new Date();
-      const startTime = new Date(endTime.getTime() - 7 * 24 * 60 * 60 * 1000);
-      const ctx = new TaskContext('admin:debug-worker-states');
-      const allWorkers = await this.clickHouseService.getActiveWorkers(
-        ctx,
-        22779388,
-        22779987,
-        true,
-      ); //for now
-      const sampleWorkers = allWorkers.slice(0, size);
-      new TaskContext("method-call").logger.debug(
-        `🔍 Debugging ${size} workers from ClickHouse (out of ${allWorkers.length} total)`,
-      );
-
-      // Check their registration status
-      const workerIds = await this.web3Service.preloadWorkerIds(
-        ctx,
-        sampleWorkers.map((w) => w.worker_id),
-      );
-
-      const debugInfo: DebugWorkerInfo[] = [];
-      for (const worker of sampleWorkers) {
-        const contractWorkerId = workerIds[worker.worker_id];
-        const isRegistered = contractWorkerId && contractWorkerId !== 0n;
-
-        debugInfo.push({
-          peerId: worker.worker_id,
-          peerIdShort: `${worker.worker_id.slice(0, 10)}...${worker.worker_id.slice(-10)}`,
-          contractWorkerId: contractWorkerId?.toString() || 'null',
-          isRegistered: Boolean(isRegistered),
-          totalRequests: worker.totalRequests,
-          outputSize: worker.output_size,
-          chunksRead: worker.num_read_chunks,
-        });
-      }
-
-      const registeredCount = debugInfo.filter((w) => w.isRegistered).length;
-      const totalClickHouseWorkers = allWorkers.length;
-
-      new TaskContext("method-call").logger.debug(`📊 Registration Summary:`);
-      new TaskContext("method-call").logger.debug(
-        `  Total workers in ClickHouse: ${totalClickHouseWorkers}`,
-      );
-      new TaskContext("method-call").logger.debug(`  Sample checked: ${debugInfo.length}`);
-      new TaskContext("method-call").logger.debug(`  Registered in contract: ${registeredCount}`);
-      new TaskContext("method-call").logger.debug(
-        `  Registration rate: ${((registeredCount / debugInfo.length) * 100).toFixed(1)}%`,
-      );
-
-      return {
-        summary: {
-          totalWorkersInClickHouse: totalClickHouseWorkers,
-          sampleChecked: debugInfo.length,
-          registeredInContract: registeredCount,
-          registrationRate: `${((registeredCount / debugInfo.length) * 100).toFixed(1)}%`,
-        },
-        workerDetails: debugInfo,
-        note:
-          registeredCount === 0
-            ? "⚠️  No workers are currently registered. This explains why distribution fails with 'Cannot build Merkle tree with no leaves'"
-            : `✅ Found ${registeredCount} registered workers that can receive rewards`,
-      };
-    } catch (error) {
-      new TaskContext("error-handling").logger.error(`Failed to debug worker states: ${error.message}`);
-      throw new Error(`Debug failed: ${error.message}`);
-    }
-  }
-
-  @Get('debug/recent-registrations')
-  async debugRecentRegistrations(@Query('limit') limit?: string) {
-    try {
-      const maxResults = limit ? parseInt(limit) : 50;
-
-      // Get recent registration events from the blockchain
-      const registrations = await this.web3Service.getRegistrations(new TaskContext('admin:debug-recent-registrations'));
-      const recentRegistrations = registrations
-        .sort((a, b) => Number(b.registeredAt) - Number(a.registeredAt))
-        .slice(0, maxResults);
-
-      new TaskContext("method-call").logger.debug(
-        `📋 Found ${recentRegistrations.length} recent registrations (out of ${registrations.length} total)`,
-      );
-
-      const debugInfo: DebugRegistrationInfo[] = [];
-      for (const reg of recentRegistrations) {
-        // convert hex peerId back to base58 for comparison
-        const peerIdBase58 = this.hexToBase58(reg.peerId);
-
-        debugInfo.push({
-          workerId: reg.workerId.toString(),
-          peerId: peerIdBase58,
-          peerIdShort: `${peerIdBase58.slice(0, 10)}...${peerIdBase58.slice(-10)}`,
-          registrar: reg.registrar,
-          registeredAt: reg.registeredAt.toString(),
-          metadata: reg.metadata,
-        });
-      }
-
-      return {
-        summary: {
-          totalRegistrations: registrations.length,
-          recentShown: debugInfo.length,
-        },
-        recentRegistrations: debugInfo,
-        note: "These are workers that have registered at some point. Check if they're still active with /debug/worker-states",
-      };
-    } catch (error) {
-      new TaskContext("error-handling").logger.error(
-        `Failed to debug recent registrations: ${error.message}`,
-      );
-      throw new Error(`Debug failed: ${error.message}`);
-    }
-  }
-*/
-  private hexToBase58(hex: string): string {
-    try {
-      // Remove 0x prefix and convert to Buffer
-      const buffer = Buffer.from(hex.replace('0x', ''), 'hex');
-
-      // Simple base58 encoding
-      const alphabet =
-        '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
-      const base = BigInt(alphabet.length);
-
-      let value = BigInt('0x' + buffer.toString('hex'));
-      let result = '';
-
-      while (value > 0) {
-        const remainder = value % base;
-        result = alphabet[Number(remainder)] + result;
-        value = value / base;
-      }
-
-      // add leading zeros
-      for (let i = 0; i < buffer.length && buffer[i] === 0; i++) {
-        result = alphabet[0] + result;
-      }
-
-      return result || alphabet[0];
-    } catch (error) {
-      new TaskContext('error-handling').logger.error(
-        `Failed to convert hex to base58: ${error.message}`,
-      );
-      return hex; // return original hex on error
-    }
-  }
 
   /**
    * Get block scheduler status

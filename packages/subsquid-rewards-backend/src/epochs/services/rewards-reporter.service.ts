@@ -56,38 +56,54 @@ export class RewardsReporterService {
     if (params.isCommitSuccess && params.workerRewards && params.workerRewards.length > 0) {
       const botId = process.env.BOT_NAME || this.configService.get('blockchain.network.networkName');
       const botWallet = this.configService.get('blockchain.distributor.address')?.toLowerCase() || '0x0';
-      
-      const duration = (params.epochEnd.getTime() - params.epochStart.getTime()) / 1000; 
-      const YEAR = 365 * 24 * 60 * 60;
-      
-      params.workerRewards.forEach(worker => {
-        const workerApr = worker.stake && worker.stake > 0n 
-          ? ((Number(worker.workerReward) * YEAR) / (duration * Number(worker.stake)) * 10000).toFixed(0)
-          : "0";
-        const delegatorApr = worker.stake && worker.stake > 0n
-          ? ((Number(worker.stakerReward) * YEAR) / (duration * Number(worker.stake)) * 10000).toFixed(0)
-          : "0";
-        
+
+      const totalEffectiveStake = params.workerRewards.reduce((acc, w: any) => {
+        const eff = BigInt(
+          (w?.delegation?.effectiveStake ?? w?.stake ?? 0).toString(),
+        );
+        return acc + eff;
+      }, 0n);
+
+      params.workerRewards.forEach((worker: any) => {
+        const id: string = worker?.id || worker?.peerId || worker?.workerId?.toString() || '';
+
+        const effStakeStr: string = (worker?.delegation?.effectiveStake ?? worker?.stake ?? '0').toString();
+        const effStake = BigInt(effStakeStr);
+        const workerApr: string = worker?.apr?.worker_apr ?? '0';
+        const delegatorApr: string = worker?.apr?.delegator_apr ?? '0';
+
+        const s_i = totalEffectiveStake > 0n
+          ? (Number(effStake) / Number(totalEffectiveStake)).toFixed(6)
+          : '0';
+
+        const trafficWeight = worker?.traffic?.trafficWeight ?? worker?.trafficWeight ?? 0;
+        const t_i = typeof trafficWeight === 'number'
+          ? trafficWeight.toFixed(6)
+          : String(trafficWeight);
+
+        const dTraffic = worker?.traffic?.dTraffic ?? worker?.dTraffic ?? 0;
+        const r_i = typeof dTraffic === 'number' ? dTraffic.toFixed(6) : String(dTraffic);
+
         console.log(
           JSON.stringify({
             time: new Date(),
-            type: "worker_report",
+            type: 'worker_report',
             bot_id: botId,
             bot_wallet: botWallet,
-            worker_id: worker.peerId || worker.workerId?.toString() || '',
-            t_i: (worker.traffic?.trafficWeight || worker.trafficWeight || 0).toFixed(),
-            s_i: (worker.traffic?.dTraffic || worker.stakeWeight || 0).toFixed(),
-            r_i: (worker.traffic?.dTraffic || worker.actualYield || 0).toFixed(),
+            worker_id: id,
+            t_i,
+            s_i,
+            r_i,
             worker_apr: workerApr,
             delegator_apr: delegatorApr,
-            worker_reward: (worker.workerReward || 0n).toString(),
-            staker_reward: (worker.stakerReward || 0n).toString(),
-            stake: (worker.stake || 0n).toString(),
-            bytes_sent: worker.traffic?.bytesSent || worker.bytesSent || 0,
-            chunks_read: worker.traffic?.chunksRead || worker.chunksRead || 0,
-            requests: worker.traffic?.totalRequests || worker.totalRequests || 0,
-            valid_requests: worker.traffic?.validRequests || worker.requestsProcessed || 0,
-          })
+            worker_reward: (worker?.workerReward ?? 0n).toString(),
+            staker_reward: (worker?.stakerReward ?? 0n).toString(),
+            stake: effStakeStr,
+            bytes_sent: worker?.traffic?.bytesSent ?? worker?.bytesSent ?? 0,
+            chunks_read: worker?.traffic?.chunksRead ?? worker?.chunksRead ?? 0,
+            requests: worker?.traffic?.totalRequests ?? worker?.totalRequests ?? 0,
+            valid_requests: worker?.traffic?.validRequests ?? worker?.requestsProcessed ?? 0,
+          }),
         );
       });
     }
