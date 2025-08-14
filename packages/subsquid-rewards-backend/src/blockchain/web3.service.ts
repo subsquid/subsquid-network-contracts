@@ -46,7 +46,9 @@ export class Web3Service {
 
     const l2RpcUrl = this.configService.get('blockchain.network.l2RpcUrl');
     console.log(`Initializing L2 client with RPC URL: ${l2RpcUrl}`);
-    console.log(`Network: ${networkName}, Chain: ${l2Chain.name} (${l2Chain.id})`);
+    console.log(
+      `Network: ${networkName}, Chain: ${l2Chain.name} (${l2Chain.id})`,
+    );
 
     this.publicClient = createPublicClient({
       chain: l2Chain,

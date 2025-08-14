@@ -117,22 +117,70 @@ export class RewardsCalculatorService {
     }
 
     try {
-      const startTime = await this.web3Service.getBlockTimestamp(
+      const epochLengthInBlocks =
+        await this.contractService.getEpochLength(ctx);
+      const totalBatches =
+        totalBatchesOverride ?? this.configService.get('rewards.totalBatches');
+
+      ctx.logger.info(
+        `📊 Epoch configuration: epochLength=${epochLengthInBlocks} blocks, totalBatches=${totalBatches}`,
+      );
+
+      let adjustedFromBlock = fromBlock;
+      let adjustedStartTime = await this.web3Service.getBlockTimestamp(
         ctx,
         fromBlock,
       );
       const endTime = await this.web3Service.getBlockTimestamp(ctx, toBlock);
+      
+      const originalTimeDiffSeconds = Math.floor((endTime.getTime() - adjustedStartTime.getTime()) / 1000);
+      ctx.logger.info(
+        `📊 Original range: blocks ${fromBlock}-${toBlock} (${originalTimeDiffSeconds}s = ~${(originalTimeDiffSeconds/3600).toFixed(2)}h)`,
+      );
+
+      if (totalBatches !== undefined && totalBatches > 1) {
+        adjustedFromBlock = toBlock - (epochLengthInBlocks * totalBatches) + 1;
+
+        if (adjustedFromBlock < 0) {
+          adjustedFromBlock = 0;
+        }
+
+        try {
+          adjustedStartTime = await this.web3Service.getBlockTimestamp(
+            ctx,
+            adjustedFromBlock,
+          );
+        } catch (error) {
+          const blockDiff = fromBlock - adjustedFromBlock;
+          adjustedStartTime = new Date(
+            adjustedStartTime.getTime() - blockDiff * 12 * 1000,
+          );
+        }
+
+        const timeDiffSeconds = Math.floor((endTime.getTime() - adjustedStartTime.getTime()) / 1000);
+        const timeDiffHours = (timeDiffSeconds / 3600).toFixed(2);
+        
+        ctx.logger.info(
+          `🔄 Batch filtering for formatted output: blocks ${adjustedFromBlock}-${toBlock} (${totalBatches} epochs)`,
+        );
+        ctx.logger.info(
+          `📊 Time range: ${adjustedStartTime.toISOString()} to ${endTime.toISOString()} (${timeDiffSeconds}s = ~${timeDiffHours}h)`,
+        );
+        ctx.logger.info(
+          `📊 Block range: ${toBlock - adjustedFromBlock + 1} blocks (${epochLengthInBlocks} blocks/epoch * ${totalBatches} epochs = ${epochLengthInBlocks * totalBatches} blocks expected)`,
+        );
+      }
 
       ctx.logger.debug('🔄 Starting old rewards calculator method...');
 
       const { OldWorkers, calculateLivenessFactor, historicalLiveness } =
         await import('./old-rewards-calculator');
 
-      const oldWorkers = new OldWorkers(startTime, endTime);
+      const oldWorkers = new OldWorkers(adjustedStartTime, endTime);
 
       const activeWorkerData = await this.clickHouseService.getActiveWorkers(
         ctx,
-        startTime,
+        adjustedStartTime,
         endTime,
         shouldSkipValidation,
       );
@@ -185,19 +233,16 @@ export class RewardsCalculatorService {
 
       const livenessFactor = await calculateLivenessFactor(
         this.clickHouseService,
-        startTime,
+        adjustedStartTime,
         endTime,
       );
       await oldWorkers.getLiveness(livenessFactor);
-
-      const epochLengthInBlocks =
-        await this.contractService.getEpochLength(ctx);
       const TENURE_EPOCH_COUNT = this.configService.get(
         'rewards.tenureEpochCount',
         10,
       );
       const tenureStartBlock =
-        fromBlock - epochLengthInBlocks * TENURE_EPOCH_COUNT;
+        adjustedFromBlock - epochLengthInBlocks * TENURE_EPOCH_COUNT;
       const epochStartBlockNumbers = [...new Array(TENURE_EPOCH_COUNT + 1)].map(
         (_, i) => tenureStartBlock + i * epochLengthInBlocks,
       );
@@ -208,7 +253,7 @@ export class RewardsCalculatorService {
             return await this.web3Service.getBlockTimestamp(ctx, blockNumber);
           } catch (error) {
             const estimatedTime = new Date(
-              startTime.getTime() - (fromBlock - blockNumber) * 12 * 1000,
+              adjustedStartTime.getTime() - (adjustedFromBlock - blockNumber) * 12 * 1000,
             );
             return estimatedTime;
           }
@@ -230,8 +275,7 @@ export class RewardsCalculatorService {
       let finalWorkers = oldWorkers;
       let batchNumber =
         batchNumberOverride ?? this.configService.get('rewards.batchNumber');
-      const totalBatches =
-        totalBatchesOverride ?? this.configService.get('rewards.totalBatches');
+      // totalBatches already declared above
 
       if (batchNumber === undefined && totalBatches !== undefined) {
         const epochNumber = Math.ceil(toBlock / epochLengthInBlocks);
@@ -246,16 +290,16 @@ export class RewardsCalculatorService {
         if (value && typeof (value as any).toFixed === 'function') {
           return BigInt((value as any).toFixed(0));
         }
-        
+
         const strValue = value.toString();
-        
+
         if (strValue.includes('e') || strValue.includes('E')) {
           const num = Number(strValue);
-          // convert to fixed notation 
+          // convert to fixed notation
           const fixedStr = num.toFixed(0);
           return BigInt(fixedStr);
         }
-        
+
         const dotIndex = strValue.indexOf('.');
         if (dotIndex === -1) {
           return BigInt(strValue);
@@ -264,16 +308,16 @@ export class RewardsCalculatorService {
       };
 
       const duration = Math.floor(
-        (endTime.getTime() - startTime.getTime()) / 1000,
+        (endTime.getTime() - adjustedStartTime.getTime()) / 1000,
       );
 
       const workerStats = finalWorkers.map((worker: any) => {
         const aprData = worker.apr(duration, 365 * 24 * 60 * 60);
-        
+
         // debug log for request counts
         if (worker.totalRequests > 0) {
           ctx.logger.debug(
-            `Worker ${worker.peerId.slice(0, 10)}... - totalRequests: ${worker.totalRequests}, requestsProcessed: ${worker.requestsProcessed}, errorRate: ${(1 - worker.requestsProcessed / worker.totalRequests).toFixed(4)}`
+            `Worker ${worker.peerId.slice(0, 10)}... - totalRequests: ${worker.totalRequests}, requestsProcessed: ${worker.requestsProcessed}, errorRate: ${(1 - worker.requestsProcessed / worker.totalRequests).toFixed(4)}`,
           );
         }
 
@@ -431,16 +475,52 @@ export class RewardsCalculatorService {
   ): Promise<RewardCalculationResult> {
     ctx.logger.debug('🔄 Starting old rewards calculator method...');
 
+    const epochLengthInBlocks =
+      await this.contractService.getEpochLength(ctx);
+    const totalBatches =
+      totalBatchesOverride ?? this.configService.get('rewards.totalBatches');
+
+    let adjustedFromBlock = fromBlock;
+    let adjustedStartTime = startTime;
+
+    if (totalBatches !== undefined && totalBatches > 1) {
+      adjustedFromBlock = toBlock - (epochLengthInBlocks * totalBatches) + 1;
+
+      if (adjustedFromBlock < 0) {
+        adjustedFromBlock = 0;
+      }
+
+      try {
+        adjustedStartTime = await this.web3Service.getBlockTimestamp(
+          ctx,
+          adjustedFromBlock,
+        );
+      } catch (error) {
+        const blockDiff = fromBlock - adjustedFromBlock;
+        adjustedStartTime = new Date(
+          startTime.getTime() - blockDiff * 12 * 1000,
+        );
+      }
+
+      ctx.logger.info(
+        `🔄 Batch filtering enabled: Fetching data for ${totalBatches} epochs`,
+      );
+      ctx.logger.info(
+        `   Original range: blocks ${fromBlock}-${toBlock}`,
+      );
+      ctx.logger.info(
+        `   Adjusted range: blocks ${adjustedFromBlock}-${toBlock} (${totalBatches} epochs)`,
+      );
+    }
+
     const { OldWorkers, calculateLivenessFactor, historicalLiveness } =
       await import('./old-rewards-calculator');
 
-    // oldWorkers instance with the time range
-    const oldWorkers = new OldWorkers(startTime, endTime);
+    const oldWorkers = new OldWorkers(adjustedStartTime, endTime);
 
-    // active workers from ClickHouse
     const activeWorkerData = await this.clickHouseService.getActiveWorkers(
       ctx,
-      startTime,
+      adjustedStartTime,
       endTime,
       skipSignatureValidation,
     );
@@ -469,7 +549,7 @@ export class RewardsCalculatorService {
 
       // set total requests
       worker.totalRequests = Number(workerData.totalRequests);
-      
+
       if (skipSignatureValidation) {
         worker.requestsProcessed = Number(workerData.totalRequests);
       }
@@ -529,13 +609,11 @@ export class RewardsCalculatorService {
     // get liveness
     const livenessFactor = await calculateLivenessFactor(
       this.clickHouseService,
-      startTime,
+      adjustedStartTime,
       endTime,
     );
     await oldWorkers.getLiveness(livenessFactor);
 
-    // get dTenure with historical liveness
-    const epochLengthInBlocks = await this.contractService.getEpochLength(ctx);
     const TENURE_EPOCH_COUNT = this.configService.get(
       'rewards.tenureEpochCount',
       10,
@@ -543,7 +621,7 @@ export class RewardsCalculatorService {
 
     // Calculate actual historical block numbers (like the old backend)
     const tenureStartBlock =
-      fromBlock - epochLengthInBlocks * TENURE_EPOCH_COUNT;
+      adjustedFromBlock - epochLengthInBlocks * TENURE_EPOCH_COUNT;
     const epochStartBlockNumbers = [...new Array(TENURE_EPOCH_COUNT + 1)].map(
       (_, i) => tenureStartBlock + i * epochLengthInBlocks,
     );
@@ -563,7 +641,7 @@ export class RewardsCalculatorService {
           );
           // fallback: estimate based on 12-second block time
           const estimatedTime = new Date(
-            startTime.getTime() - (fromBlock - blockNumber) * 12 * 1000,
+            adjustedStartTime.getTime() - (adjustedFromBlock - blockNumber) * 12 * 1000,
           );
           return estimatedTime;
         }
@@ -591,10 +669,7 @@ export class RewardsCalculatorService {
     let finalWorkers = oldWorkers;
     let batchNumber =
       batchNumberOverride ?? this.configService.get('rewards.batchNumber');
-    const totalBatches =
-      totalBatchesOverride ?? this.configService.get('rewards.totalBatches');
 
-    // DEBUG: Log batch number sources
     ctx.logger.debug(
       `🔍 Batch number sources: override=${batchNumberOverride}, config=${this.configService.get('rewards.batchNumber')}, env.BATCH_NUMBER=${process.env.BATCH_NUMBER}`,
     );

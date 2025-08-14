@@ -31,25 +31,29 @@ export class EpochMetricsService {
   async collectNetworkMetrics(ctx: Context): Promise<NetworkMetrics> {
     const activeWorkerCount = await this.web3Service.getActiveWorkerCount(ctx);
     const networkCapacity = await this.contractService.getTargetCapacity();
-    
+
     // get storage per worker with fallback (exact same pattern as original)
     let storagePerWorker = 200; // default fallback
     try {
       storagePerWorker = await this.contractService.getStoragePerWorkerInGb();
       ctx.logger.debug(`Storage per worker: ${storagePerWorker} GB`);
     } catch (error) {
-      ctx.logger.warn(`Failed to get storage per worker, using default: ${error.message}`);
+      ctx.logger.warn(
+        `Failed to get storage per worker, using default: ${error.message}`,
+      );
     }
-    
+
     const currentCapacity = Number(activeWorkerCount) * storagePerWorker;
     const targetCapacity = Number(networkCapacity) / 1e9; // convert from bytes to GB
-    
+
     // get APR with fallback (exact same pattern as original)
     let baseAprBasisPoints = 2000; // default fallback
     try {
       const contractApr = await this.contractService.getCurrentApy(ctx);
       baseAprBasisPoints = Number(contractApr);
-      ctx.logger.debug(`Using APR from rewards calculation: ${baseAprBasisPoints} basis points`);
+      ctx.logger.debug(
+        `Using APR from rewards calculation: ${baseAprBasisPoints} basis points`,
+      );
     } catch (error) {
       ctx.logger.warn(`Failed to get APR, using default: ${error.message}`);
     }
@@ -73,27 +77,48 @@ export class EpochMetricsService {
     // calculate total metrics from stored rewards data (exact same logic as original)
     if (lastCalculatedRewards?.workers) {
       totalBytesSent = lastCalculatedRewards.workers.reduce(
-        (sum: number, w: any) => sum + (w.traffic?.bytesSent || w.bytesSent || 0), 0
+        (sum: number, w: any) =>
+          sum + (w.traffic?.bytesSent || w.bytesSent || 0),
+        0,
       );
       totalChunksRead = lastCalculatedRewards.workers.reduce(
-        (sum: number, w: any) => sum + (w.traffic?.chunksRead || w.chunksRead || 0), 0
+        (sum: number, w: any) =>
+          sum + (w.traffic?.chunksRead || w.chunksRead || 0),
+        0,
       );
       totalRequests = lastCalculatedRewards.workers.reduce(
-        (sum: number, w: any) => sum + (w.traffic?.totalRequests || w.totalRequests || w.requests || 0), 0
+        (sum: number, w: any) =>
+          sum +
+          (w.traffic?.totalRequests || w.totalRequests || w.requests || 0),
+        0,
       );
       validRequests = lastCalculatedRewards.workers.reduce(
-        (sum: number, w: any) => sum + (w.traffic?.validRequests || w.validRequests || w.requestsProcessed || 0), 0
+        (sum: number, w: any) =>
+          sum +
+          (w.traffic?.validRequests ||
+            w.validRequests ||
+            w.requestsProcessed ||
+            0),
+        0,
       );
-      
+
       // extract the total rewards that were calculated
       if (lastCalculatedRewards.totalRewards) {
-        const totalWorkerReward = BigInt(lastCalculatedRewards.totalRewards.worker || 0);
-        const totalStakerReward = BigInt(lastCalculatedRewards.totalRewards.staker || 0);
+        const totalWorkerReward = BigInt(
+          lastCalculatedRewards.totalRewards.worker || 0,
+        );
+        const totalStakerReward = BigInt(
+          lastCalculatedRewards.totalRewards.staker || 0,
+        );
         totalReward = totalWorkerReward + totalStakerReward;
-      } else if (lastCalculatedRewards.workers && lastCalculatedRewards.workers.length > 0) {
+      } else if (
+        lastCalculatedRewards.workers &&
+        lastCalculatedRewards.workers.length > 0
+      ) {
         totalReward = lastCalculatedRewards.workers.reduce(
-          (sum: bigint, w: any) => sum + BigInt(w.workerReward || 0) + BigInt(w.stakerReward || 0),
-          0n
+          (sum: bigint, w: any) =>
+            sum + BigInt(w.workerReward || 0) + BigInt(w.stakerReward || 0),
+          0n,
         );
       }
     }
@@ -106,4 +131,4 @@ export class EpochMetricsService {
       validRequests,
     };
   }
-} 
+}

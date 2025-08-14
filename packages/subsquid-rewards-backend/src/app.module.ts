@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AppConfigModule } from './config/config.module';
+import { CoreModule } from './core/core.module';
 import { DatabaseModule } from './database/database.module';
 import { BlockchainModule } from './blockchain/blockchain.module';
 import { RewardsModule } from './rewards/rewards.module';
@@ -13,6 +14,7 @@ import { S3Module } from './s3/s3.module';
 @Module({
   imports: [
     AppConfigModule,
+    CoreModule,
     CommonModule,
     DatabaseModule,
     BlockchainModule,

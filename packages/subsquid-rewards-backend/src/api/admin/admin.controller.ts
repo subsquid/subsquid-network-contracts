@@ -24,7 +24,6 @@ export interface ManualDistributionRequest {
   batchSize?: number;
 }
 
-
 @Controller('admin')
 export class AdminController {
   // Store active distributions in memory for demo purposes
@@ -135,15 +134,16 @@ export class AdminController {
 
       try {
         // wait for distribution to complete
-        const finalStatus = await this.distributionService.distributeEpochRewards(
-          fromBlock,
-          toBlock,
-          batchSize,
-        );
+        const finalStatus =
+          await this.distributionService.distributeEpochRewards(
+            fromBlock,
+            toBlock,
+            batchSize,
+          );
 
         // update with final status
         this.activeDistributions.set(epochId, finalStatus);
-        
+
         ctx.logger.debug(
           `✅ Distribution completed for epoch ${epochId}: ${finalStatus.status}`,
         );
@@ -162,12 +162,12 @@ export class AdminController {
           completedAt: new Date(),
         };
         this.activeDistributions.set(epochId, errorStatus);
-        
+
         ctx.logger.error(
           { error },
           `❌ Distribution failed for epoch ${epochId}`,
         );
-        
+
         throw new HttpException(
           `Distribution failed: ${error.message}`,
           HttpStatus.INTERNAL_SERVER_ERROR,
@@ -448,7 +448,6 @@ export class AdminController {
     };
   }
 
-
   /**
    * Get block scheduler status
    */
@@ -492,7 +491,8 @@ export class AdminController {
       new TaskContext('method-call').logger.debug(
         '🔄 Manual approval trigger requested',
       );
-      const result = await this.blockSchedulerService.triggerManualApprovalCheck();
+      const result =
+        await this.blockSchedulerService.triggerManualApprovalCheck();
 
       return {
         success: true,
@@ -521,7 +521,8 @@ export class AdminController {
       new TaskContext('method-call').logger.debug(
         '🔄 Manual distribution trigger requested',
       );
-      const result = await this.blockSchedulerService.triggerManualDistributionCheck();
+      const result =
+        await this.blockSchedulerService.triggerManualDistributionCheck();
 
       return {
         success: true,
@@ -550,7 +551,8 @@ export class AdminController {
       new TaskContext('method-call').logger.debug(
         '🔄 Manual recovery trigger requested',
       );
-      const result = await this.blockSchedulerService.triggerManualRecoveryCheck();
+      const result =
+        await this.blockSchedulerService.triggerManualRecoveryCheck();
 
       return {
         success: true,

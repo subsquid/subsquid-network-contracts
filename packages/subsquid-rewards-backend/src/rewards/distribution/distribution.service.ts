@@ -237,6 +237,8 @@ export class DistributionService {
     fromBlock: number,
     toBlock: number,
     batchSize: number = this.distributionBatchSize,
+    batchNumber?: number,
+    totalBatches?: number,
   ): Promise<DistributionStatus> {
     const epochId = `${fromBlock}-${toBlock}`;
     const sessionId = generateSessionId();
@@ -265,12 +267,15 @@ export class DistributionService {
       );
 
       const startCtx = new TaskContext(`distribution:epoch-${epochId}`);
-      
 
-      let existingCommitment: { exists: boolean; merkleRoot: string; totalBatches: number } | null = null;
+      let existingCommitment: {
+        exists: boolean;
+        merkleRoot: string;
+        totalBatches: number;
+      } | null = null;
       let shouldRecalculate = true;
       const commitmentKey = this.generateCommitmentKey(fromBlock, toBlock);
-      
+
       try {
         const commitment = await this.publicClient.readContract({
           address: this.contractAddress,
@@ -278,7 +283,7 @@ export class DistributionService {
           functionName: 'commitments',
           args: [commitmentKey],
         });
-        
+
         if (commitment && commitment[0]) {
           existingCommitment = {
             exists: true,
@@ -289,14 +294,18 @@ export class DistributionService {
           startCtx.logger.info(
             `📋 Found existing commitment for epoch ${epochId}: root=${existingCommitment.merkleRoot}, batches=${existingCommitment.totalBatches}`,
           );
-          startCtx.logger.info(`🔄 Will use existing commitment data for recovery distribution`);
+          startCtx.logger.info(
+            `🔄 Will use existing commitment data for recovery distribution`,
+          );
         }
       } catch (error) {
         startCtx.logger.debug(`No existing commitment found: ${error.message}`);
       }
 
       // normal flow for new distribution
-      startCtx.logger.debug(`🚀 ${shouldRecalculate ? 'Starting new' : 'Recovering'} distribution for epoch ${epochId}`);
+      startCtx.logger.debug(
+        `🚀 ${shouldRecalculate ? 'Starting new' : 'Recovering'} distribution for epoch ${epochId}`,
+      );
 
       try {
         const bondAmount = await this.web3Service.getBondAmount(startCtx);
@@ -324,6 +333,8 @@ export class DistributionService {
             fromBlock,
             toBlock,
             true,
+            batchNumber,
+            totalBatches,
           );
 
         formattedCalculationResult =
@@ -332,6 +343,8 @@ export class DistributionService {
             fromBlock,
             toBlock,
             true,
+            batchNumber,
+            totalBatches,
           );
 
         startCtx.logger.debug(
@@ -354,16 +367,17 @@ export class DistributionService {
         let totalGasSimulations = 0;
 
         if (this.gasSimulationConfig.enablePreflightSimulation) {
-          const { optimizedBatchSize, gasSimulations } = await this.optimizeBatchSize(
-            fromBlock,
-            toBlock,
-            workerRewards.map((w) => ({
-              workerId: w.workerId,
-              workerReward: w.workerReward,
-              stakerReward: w.stakerReward,
-            })),
-            batchSize,
-          );
+          const { optimizedBatchSize, gasSimulations } =
+            await this.optimizeBatchSize(
+              fromBlock,
+              toBlock,
+              workerRewards.map((w) => ({
+                workerId: w.workerId,
+                workerReward: w.workerReward,
+                stakerReward: w.stakerReward,
+              })),
+              batchSize,
+            );
           finalBatchSize = optimizedBatchSize;
           totalGasSimulations = gasSimulations;
         }
@@ -409,8 +423,10 @@ export class DistributionService {
         startCtx.logger.debug(`✅ Committed Merkle root to contract`);
       } else {
         // Recovery flow - use existing commitment data
-        startCtx.logger.info(`🔄 Recovery mode: Using existing commitment data`);
-        
+        startCtx.logger.info(
+          `🔄 Recovery mode: Using existing commitment data`,
+        );
+
         // We need to recalculate just to get the worker data for distribution
         // but we'll use the existing merkle root
         status.status = 'recovering';
@@ -420,6 +436,8 @@ export class DistributionService {
             fromBlock,
             toBlock,
             true,
+            batchNumber,
+            totalBatches,
           );
 
         formattedCalculationResult =
@@ -428,24 +446,30 @@ export class DistributionService {
             fromBlock,
             toBlock,
             true,
+            batchNumber,
+            totalBatches,
           );
 
         workerRewards = calculationResult.workers;
-        
-        startCtx.logger.info(`📊 Attempting to reconstruct Merkle tree to match existing commitment`);
-        
-        const inferredBatchSize = Math.ceil(workerRewards.length / existingCommitment!.totalBatches);
+
+        startCtx.logger.info(
+          `📊 Attempting to reconstruct Merkle tree to match existing commitment`,
+        );
+
+        const inferredBatchSize = Math.ceil(
+          workerRewards.length / existingCommitment!.totalBatches,
+        );
         finalBatchSize = inferredBatchSize;
-        
+
         startCtx.logger.debug(
           `🔍 Inferred batch size: ${inferredBatchSize} (${workerRewards.length} workers / ${existingCommitment!.totalBatches} batches)`,
         );
-        
+
         merkleTree = await this.merkleTreeService.generateMerkleTree(
           workerRewards,
           inferredBatchSize,
         );
-        
+
         if (merkleTree.root !== existingCommitment!.merkleRoot) {
           startCtx.logger.warn(
             `⚠️ Reconstructed Merkle root (${merkleTree.root}) does not match committed root (${existingCommitment!.merkleRoot})`,
@@ -453,7 +477,7 @@ export class DistributionService {
           startCtx.logger.info(
             `📥 Attempting to fetch original epoch data from S3 for recovery...`,
           );
-          
+
           if (this.s3Service.isEnabled()) {
             try {
               const s3Key = this.s3Service.generateS3Key(
@@ -461,15 +485,17 @@ export class DistributionService {
                 fromBlock,
                 toBlock,
               );
-              
-              startCtx.logger.debug(`🔍 Looking for S3 data at key: ${s3Key}`);
+
+              startCtx.logger.info(`📥 Attempting S3 recovery from path: ${s3Key}`);
               const s3Data = await this.s3Service.downloadJson(s3Key);
-              
+
               if (s3Data && s3Data.merkleTree) {
-                startCtx.logger.info(`✅ Found original epoch data in S3, reconstructing exact Merkle tree`);
-                
+                startCtx.logger.info(
+                  `✅ Found original epoch data in S3, reconstructing exact Merkle tree`,
+                );
+
                 let s3Workers: WorkerReward[] = [];
-                
+
                 if (s3Data.workersData && Array.isArray(s3Data.workersData)) {
                   s3Workers = s3Data.workersData.map((w: any) => ({
                     workerId: BigInt(w.workerId),
@@ -487,16 +513,22 @@ export class DistributionService {
                     stake: w.stake ? BigInt(w.stake) : undefined,
                   }));
                 }
-                
+
                 if (s3Workers.length > 0) {
-                  const s3BatchSize = s3Data.batchSize || s3Data.merkleTree?.batchSize || inferredBatchSize;
-                  const s3MerkleTree = await this.merkleTreeService.generateMerkleTree(
-                    s3Workers,
-                    s3BatchSize,
-                  );
-                  
+                  const s3BatchSize =
+                    s3Data.batchSize ||
+                    s3Data.merkleTree?.batchSize ||
+                    inferredBatchSize;
+                  const s3MerkleTree =
+                    await this.merkleTreeService.generateMerkleTree(
+                      s3Workers,
+                      s3BatchSize,
+                    );
+
                   if (s3MerkleTree.root === existingCommitment!.merkleRoot) {
-                    startCtx.logger.info(`✅ Successfully reconstructed exact Merkle tree from S3 data`);
+                    startCtx.logger.info(
+                      `✅ Successfully reconstructed exact Merkle tree from S3 data`,
+                    );
                     merkleTree = s3MerkleTree;
                     workerRewards = s3Workers;
                     finalBatchSize = s3BatchSize;
@@ -504,41 +536,64 @@ export class DistributionService {
                     startCtx.logger.error(
                       `❌ S3 reconstructed root (${s3MerkleTree.root}) still doesn't match committed root (${existingCommitment!.merkleRoot})`,
                     );
-                    
-                    if (s3Data.merkleTree.root === existingCommitment!.merkleRoot) {
-                      startCtx.logger.info(`✅ Using pre-built Merkle tree from S3 with matching root`);
+
+                    if (
+                      s3Data.merkleTree.root === existingCommitment!.merkleRoot
+                    ) {
+                      startCtx.logger.info(
+                        `✅ Using pre-built Merkle tree from S3 with matching root`,
+                      );
                       merkleTree = s3Data.merkleTree;
                       workerRewards = s3Workers;
                       finalBatchSize = s3BatchSize;
                     } else {
-                      startCtx.logger.warn(`⚠️ Will use committed root for distribution but proofs may fail`);
+                      startCtx.logger.warn(
+                        `⚠️ Will use committed root for distribution but proofs may fail`,
+                      );
                       merkleTree.root = existingCommitment!.merkleRoot;
                     }
                   }
                 } else {
-                  startCtx.logger.warn(`⚠️ No worker data found in S3 response`);
-                  startCtx.logger.warn(`⚠️ Will use committed root for distribution but proofs may fail`);
+                  startCtx.logger.warn(
+                    `⚠️ No worker data found in S3 response`,
+                  );
+                  startCtx.logger.warn(
+                    `⚠️ Will use committed root for distribution but proofs may fail`,
+                  );
                   merkleTree.root = existingCommitment!.merkleRoot;
                 }
               } else {
                 startCtx.logger.warn(`⚠️ No S3 data found or invalid format`);
-                startCtx.logger.warn(`⚠️ Will use committed root for distribution but proofs may fail`);
+                startCtx.logger.warn(
+                  `⚠️ Will use committed root for distribution but proofs may fail`,
+                );
                 merkleTree.root = existingCommitment!.merkleRoot;
               }
             } catch (s3Error) {
-              startCtx.logger.error({ error: s3Error }, `❌ Failed to fetch from S3: ${s3Error.message}`);
-              startCtx.logger.warn(`⚠️ Will use committed root for distribution but proofs may fail`);
+              startCtx.logger.error(
+                { error: s3Error },
+                `❌ Failed to fetch from S3: ${s3Error.message}`,
+              );
+              startCtx.logger.warn(
+                `⚠️ Will use committed root for distribution but proofs may fail`,
+              );
               merkleTree.root = existingCommitment!.merkleRoot;
             }
           } else {
-            startCtx.logger.warn(`⚠️ S3 is disabled, cannot fetch original data`);
-            startCtx.logger.warn(`⚠️ Will use committed root for distribution but proofs may fail`);
+            startCtx.logger.warn(
+              `⚠️ S3 is disabled, cannot fetch original data`,
+            );
+            startCtx.logger.warn(
+              `⚠️ Will use committed root for distribution but proofs may fail`,
+            );
             merkleTree.root = existingCommitment!.merkleRoot;
           }
         } else {
-          startCtx.logger.info(`✅ Reconstructed Merkle tree matches existing commitment`);
+          startCtx.logger.info(
+            `✅ Reconstructed Merkle tree matches existing commitment`,
+          );
         }
-        
+
         status.totalBatches = existingCommitment!.totalBatches;
         status.merkleRoot = existingCommitment!.merkleRoot;
         status.totalWorkers = workerRewards.length;
@@ -546,7 +601,7 @@ export class DistributionService {
           (sum, w) => sum + w.workerReward,
           0n,
         );
-        
+
         startCtx.logger.info(
           `📋 Recovery summary: ${status.totalWorkers} workers, ${status.totalBatches} batches, root=${status.merkleRoot}`,
         );
@@ -568,7 +623,10 @@ export class DistributionService {
           );
           startCtx.logger.info(`✅ Epoch rewards uploaded to S3: ${s3Result}`);
         } catch (s3Error) {
-          startCtx.logger.error({ error: s3Error }, `❌ S3 upload failed (continuing distribution): ${s3Error.message}`);
+          startCtx.logger.error(
+            { error: s3Error },
+            `❌ S3 upload failed (continuing distribution): ${s3Error.message}`,
+          );
           // Continue with distribution even if S3 fails
         }
       }
@@ -644,17 +702,21 @@ export class DistributionService {
         this.logGasOptimizationSummary(status.gasOptimizations);
       }
 
-      // generate structured rewards report 
+      // generate structured rewards report
       try {
         const startTime = new Date(sessionStartTime);
-        const endTime = status.completedAt!;
-        
-        const networkMetrics = await this.epochMetricsService.collectNetworkMetrics(summaryCtx);
-        
-        const rewardMetrics = this.epochMetricsService.extractRewardMetrics(formattedCalculationResult);
-        
-        const commitTxHash = transactionLogs.find(log => log.type === 'commit')?.hash || '';
-        
+        const endTime = status.completedAt;
+
+        const networkMetrics =
+          await this.epochMetricsService.collectNetworkMetrics(summaryCtx);
+
+        const rewardMetrics = this.epochMetricsService.extractRewardMetrics(
+          formattedCalculationResult,
+        );
+
+        const commitTxHash =
+          transactionLogs.find((log) => log.type === 'commit')?.hash || '';
+
         await this.rewardsReporterService.logSuccessfulRewardsReport({
           epochStart: startTime,
           epochEnd: endTime,
@@ -665,17 +727,23 @@ export class DistributionService {
           workerRewards: formattedCalculationResult.workers, // use formatted workers with traffic data
         });
       } catch (reportError) {
-        summaryCtx.logger.warn({ error: reportError }, 'Failed to generate rewards report');
+        summaryCtx.logger.warn(
+          { error: reportError },
+          'Failed to generate rewards report',
+        );
       }
 
       return status;
     } catch (error) {
       const sessionDuration = Date.now() - sessionStartTime;
-      
+
       let errorMessage: string;
       if (error instanceof BaseError) {
         errorMessage = this.errorDecoder.formatError(error, sessionCtx);
-        const errorContext = this.errorDecoder.getErrorContext(error, sessionCtx);
+        const errorContext = this.errorDecoder.getErrorContext(
+          error,
+          sessionCtx,
+        );
         sessionCtx.logger.error(
           { errorContext },
           `❌ Distribution session ${sessionId} failed after ${(sessionDuration / 1000).toFixed(2)}s: ${errorMessage}`,
@@ -686,27 +754,30 @@ export class DistributionService {
           `❌ Distribution session ${sessionId} failed after ${(sessionDuration / 1000).toFixed(2)}s: ${errorMessage}`,
         );
       }
-      
+
       status.status = 'failed';
       status.error = errorMessage;
       status.completedAt = new Date();
-      
-      // log failed distribution 
+
+      // log failed distribution
       try {
         const startTime = new Date(sessionStartTime);
-        const endTime = status.completedAt!;
-        
+        const endTime = status.completedAt;
+
         await this.rewardsReporterService.logFailedRewardsReport(
           sessionCtx,
           startTime,
           endTime,
           '',
-          error
+          error,
         );
       } catch (reportError) {
-        sessionCtx.logger.warn({ error: reportError }, 'Failed to generate failed rewards report');
+        sessionCtx.logger.warn(
+          { error: reportError },
+          'Failed to generate failed rewards report',
+        );
       }
-      
+
       return status;
     }
   }
@@ -726,7 +797,7 @@ export class DistributionService {
     explicitBatchSize?: number,
   ): Promise<string> {
     const ctx = new TaskContext(`s3:upload:${sessionId}`);
-    
+
     try {
       if (!this.s3Service.isEnabled()) {
         ctx.logger.warn('S3 service disabled, using placeholder link');
@@ -735,21 +806,42 @@ export class DistributionService {
 
       ctx.logger.info(`📤 Preparing epoch rewards data for S3 upload`);
 
-      const networkName = this.configService.get('blockchain.network.name', 'arbitrum');
+      const networkName = this.configService.get(
+        'blockchain.network.name',
+        'arbitrum',
+      );
 
-      const startTime = await this.web3Service.getBlockTimestamp(ctx, fromBlock);
+      const startTime = await this.web3Service.getBlockTimestamp(
+        ctx,
+        fromBlock,
+      );
       const endTime = await this.web3Service.getBlockTimestamp(ctx, toBlock);
       const epochDuration = (endTime.getTime() - startTime.getTime()) / 1000;
 
-      const totalRequests = workersData.reduce((sum, w) => sum + ((w as any).totalRequests || 0), 0);
-      const totalBytesServed = workersData.reduce((sum, w) => sum + ((w as any).bytesSent || 0), 0);
-      const totalChunksRead = workersData.reduce((sum, w) => sum + ((w as any).chunksRead || 0), 0);
+      const totalRequests = workersData.reduce(
+        (sum, w) => sum + ((w as any).totalRequests || 0),
+        0,
+      );
+      const totalBytesServed = workersData.reduce(
+        (sum, w) => sum + ((w as any).bytesSent || 0),
+        0,
+      );
+      const totalChunksRead = workersData.reduce(
+        (sum, w) => sum + ((w as any).chunksRead || 0),
+        0,
+      );
 
-      const totalWorkerRewards = workersData.reduce((sum, w) => sum + w.workerReward, 0n);
-      const totalStakerRewards = workersData.reduce((sum, w) => sum + w.stakerReward, 0n);
+      const totalWorkerRewards = workersData.reduce(
+        (sum, w) => sum + w.workerReward,
+        0n,
+      );
+      const totalStakerRewards = workersData.reduce(
+        (sum, w) => sum + w.stakerReward,
+        0n,
+      );
       const totalRewards = totalWorkerRewards + totalStakerRewards;
 
-      const formattedWorkers = workersData.map(worker => {
+      const formattedWorkers = workersData.map((worker) => {
         const workerAny = worker as any;
         return {
           workerId: worker.workerId.toString(),
@@ -768,13 +860,15 @@ export class DistributionService {
         };
       });
 
-      const formattedLeaves = merkleTree.leaves.map((leaf: any, index: number) => ({
-        batchIndex: index,
-        leafHash: leaf.leafHash,
-        recipients: leaf.recipients.map((r: bigint) => r.toString()),
-        workerRewards: leaf.workerRewards.map((r: bigint) => r.toString()),
-        stakerRewards: leaf.stakerRewards.map((r: bigint) => r.toString()),
-      }));
+      const formattedLeaves = merkleTree.leaves.map(
+        (leaf: any, index: number) => ({
+          batchIndex: index,
+          leafHash: leaf.leafHash,
+          recipients: leaf.recipients.map((r: bigint) => r.toString()),
+          workerRewards: leaf.workerRewards.map((r: bigint) => r.toString()),
+          stakerRewards: leaf.stakerRewards.map((r: bigint) => r.toString()),
+        }),
+      );
 
       const epochRewardsData: EpochRewardsData = {
         epochInfo: {
@@ -789,21 +883,23 @@ export class DistributionService {
         merkleTree: {
           root: merkleRoot,
           totalBatches,
-          batchSize: explicitBatchSize ?? Math.ceil(workersData.length / totalBatches),
+          batchSize:
+            explicitBatchSize ?? Math.ceil(workersData.length / totalBatches),
           leaves: formattedLeaves,
         },
         rawData: {
           totalWorkers: workersData.length,
           workers: formattedWorkers,
         },
-        workersData: workersData.map(w => ({
+        workersData: workersData.map((w) => ({
           workerId: w.workerId.toString(),
           workerReward: w.workerReward.toString(),
           stakerReward: w.stakerReward.toString(),
           id: w.id?.toString(),
           stake: w.stake?.toString(),
         })),
-        batchSize: explicitBatchSize ?? Math.ceil(workersData.length / totalBatches),
+        batchSize:
+          explicitBatchSize ?? Math.ceil(workersData.length / totalBatches),
         networkMetrics: {
           totalRequests,
           totalBytesServed,
@@ -825,25 +921,25 @@ export class DistributionService {
       };
 
       const result = await this.s3Service.uploadEpochRewards(epochRewardsData);
-      
+
       ctx.logger.info(`✅ Epoch rewards uploaded to S3: ${result.key}`);
       ctx.logger.info(`📎 S3 URL: ${result.url}`);
       ctx.logger.info(`📊 Size: ${result.size} bytes, ETag: ${result.etag}`);
-      
+
       return result.url;
     } catch (error) {
       if (error.message?.includes('S3 service is disabled')) {
         ctx.logger.info('S3 service disabled, using placeholder link');
         return `s3://rewards-${fromBlock}-${toBlock}.json`;
       }
-      
+
       ctx.logger.error('❌ S3 upload failed', error);
       ctx.logger.error(`Error details: ${error.message}`);
-      
+
       if (process.env.NODE_ENV === 'production') {
         throw new Error(`Critical: S3 upload failed - ${error.message}`);
       }
-      
+
       // In development, continue with placeholder
       return `s3://rewards-${fromBlock}-${toBlock}.json`;
     }
@@ -873,7 +969,7 @@ export class DistributionService {
 
     while (!commitSuccess && retryCount < MAX_RETRIES) {
       const attemptStartTime = Date.now();
-      
+
       // S3 upload has been moved to distributeEpochRewards to ensure it happens for both normal and recovery flows
       const s3Link = `s3://rewards-${fromBlock}-${toBlock}.json`;
 
@@ -970,17 +1066,36 @@ export class DistributionService {
           status: 'success',
         };
 
+        // Log rewards_commited event for compatibility with old backend
+        if (workersData && workersData.length > 0) {
+          const totalStake = workersData.reduce((sum, w) => sum + (w.totalStake || 0n), 0n);
+          const capedStake = workersData.reduce((sum, w) => sum + (w.stake || 0n), 0n);
+          console.log(
+            JSON.stringify({
+              time: new Date(),
+              type: 'rewards_commited', // Match old backend typo for compatibility
+              bot_wallet: this.walletClient.account.address,
+              tx_hash: receipt.transactionHash,
+              from_block: fromBlock,
+              to_block: toBlock,
+              totalStake: totalStake.toString(),
+              capedStake: capedStake.toString(),
+              workers_count: workersData.length,
+            }),
+          );
+        }
+
         commitSuccess = true;
       } catch (error) {
         const duration = Date.now() - attemptStartTime;
-        
+
         let errorMessage: string;
         let errorContext: Record<string, any> = {};
-        
+
         if (error instanceof BaseError) {
           errorMessage = this.errorDecoder.formatError(error, commitCtx);
           errorContext = this.errorDecoder.getErrorContext(error, commitCtx);
-          
+
           if (this.errorDecoder.isSpecificError(error, 'NotAllBlocksCovered')) {
             try {
               const lastBlockRewarded = await this.publicClient.readContract({
@@ -988,14 +1103,18 @@ export class DistributionService {
                 abi: this.contractAbi,
                 functionName: 'lastBlockRewarded',
               });
-              
+
               commitCtx.logger.error(
                 `❌ [${sessionId}] Block continuity error: lastBlockRewarded=${lastBlockRewarded}, trying to commit fromBlock=${fromBlock}`,
               );
               errorContext.lastBlockRewarded = lastBlockRewarded.toString();
-              errorContext.expectedFromBlock = (Number(lastBlockRewarded) + 1).toString();
+              errorContext.expectedFromBlock = (
+                Number(lastBlockRewarded) + 1
+              ).toString();
             } catch (e) {
-              commitCtx.logger.debug('Could not fetch lastBlockRewarded for additional context');
+              commitCtx.logger.debug(
+                'Could not fetch lastBlockRewarded for additional context',
+              );
             }
           }
         } else {
@@ -1338,21 +1457,29 @@ export class DistributionService {
       } catch (error) {
         let errorMessage: string;
         let errorContext: Record<string, any> = {};
-        
+
         if (error instanceof BaseError) {
           errorMessage = this.errorDecoder.formatError(error, batchCtx);
           errorContext = this.errorDecoder.getErrorContext(error, batchCtx);
-          
-          if (this.errorDecoder.isSpecificError(error, 'BatchAlreadyProcessed')) {
+
+          if (
+            this.errorDecoder.isSpecificError(error, 'BatchAlreadyProcessed')
+          ) {
             batchCtx.logger.warn(
               `⚠️ [${sessionId}] Batch ${batchNumber} already processed - skipping`,
             );
-            continue; 
+            continue;
           }
 
           if (this.errorDecoder.isSpecificError(error, 'InvalidMerkleProof')) {
-            batchCtx.logger.warn(`⚠️ [${sessionId}] invalid merkle proof detected, attempting recovery from s3 and retry`);
-            const recovered = await this.recoverMerkleTreeFromS3(batchCtx, fromBlock, toBlock);
+            batchCtx.logger.warn(
+              `⚠️ [${sessionId}] invalid merkle proof detected, attempting recovery from s3 and retry`,
+            );
+            const recovered = await this.recoverMerkleTreeFromS3(
+              batchCtx,
+              fromBlock,
+              toBlock,
+            );
             if (recovered && recovered.root === merkleTree.root) {
               const retryLeaf = recovered.leaves[i];
               const retryProof = recovered.proofs[i];
@@ -1371,7 +1498,8 @@ export class DistributionService {
                   ],
                 });
                 const hash = await this.walletClient.writeContract(request);
-                const receipt = await this.publicClient.waitForTransactionReceipt({ hash });
+                const receipt =
+                  await this.publicClient.waitForTransactionReceipt({ hash });
                 const duration = Date.now() - batchStartTime;
                 const log: TransactionLog = {
                   type: 'distribute',
@@ -1388,14 +1516,17 @@ export class DistributionService {
                 continue;
               } catch (retryErr) {
                 // fall through to normal failure handling
-                errorMessage = this.errorDecoder.formatError(retryErr as BaseError, batchCtx);
+                errorMessage = this.errorDecoder.formatError(
+                  retryErr as BaseError,
+                  batchCtx,
+                );
               }
             }
           }
         } else {
           errorMessage = String(error?.message || error);
         }
-        
+
         batchCtx.logger.error(
           { errorContext },
           `❌ [${sessionId}] Failed to distribute batch ${batchNumber}/${merkleTree.totalBatches}: ${errorMessage}`,
@@ -1442,7 +1573,9 @@ export class DistributionService {
     chunkCtxPre.logger.warn(
       `⚠️ [${sessionId}] refusing to split batch ${batchNumber} as it invalidates merkle proofs; falling back to direct attempt`,
     );
-    throw new Error('cannot split committed leaf without rebuilding merkle tree');
+    throw new Error(
+      'cannot split committed leaf without rebuilding merkle tree',
+    );
     // unreachable
   }
 
@@ -1536,7 +1669,9 @@ export class DistributionService {
     batchSize: number = this.distributionBatchSize,
   ): Promise<MerkleTreeResult> {
     const ctx = new TaskContext('distribution:generate-merkle-only');
-    ctx.logger.info(`🌳 Generating Merkle tree for ${workers.length} workers (approval phase)`);
+    ctx.logger.info(
+      `🌳 Generating Merkle tree for ${workers.length} workers (approval phase)`,
+    );
 
     return await this.merkleTreeService.generateMerkleTree(workers, batchSize);
   }
@@ -1554,17 +1689,21 @@ export class DistributionService {
     merkleTree?: any,
     explicitBatchSize?: number,
   ): Promise<CommitResult> {
-    const ctx = new TaskContext(`distribution:commit-root-only:${fromBlock}-${toBlock}`);
+    const ctx = new TaskContext(
+      `distribution:commit-root-only:${fromBlock}-${toBlock}`,
+    );
     const sessionStartTime = Date.now();
-    
+
     try {
-      ctx.logger.info(`🔐 Committing Merkle root for blocks ${fromBlock}-${toBlock}`);
+      ctx.logger.info(
+        `🔐 Committing Merkle root for blocks ${fromBlock}-${toBlock}`,
+      );
       ctx.logger.info(`   Root: ${merkleRoot}`);
       ctx.logger.info(`   Batches: ${totalBatches}`);
 
       // Generate session ID for this commit operation
       const sessionId = generateSessionId();
-      
+
       // Use the existing commitMerkleRoot method (this uploads to S3 when workers/merkle are provided)
       const transactionLog = await this.commitMerkleRoot(
         fromBlock,
@@ -1576,9 +1715,11 @@ export class DistributionService {
         merkleTree,
         explicitBatchSize,
       );
-      
+
       if (transactionLog && transactionLog.status === 'success') {
-        ctx.logger.info(`✅ Merkle root committed successfully: ${transactionLog.hash}`);
+        ctx.logger.info(
+          `✅ Merkle root committed successfully: ${transactionLog.hash}`,
+        );
         return {
           success: true,
           txHash: transactionLog.hash,
@@ -1624,18 +1765,20 @@ export class DistributionService {
   /**
    * Get approved epochs ready for distribution
    */
-  async getApprovedEpochsForDistribution(): Promise<Array<{
-    fromBlock: number;
-    toBlock: number;
-    merkleRoot: string;
-    totalBatches: number;
-    processedBatches: number;
-  }>> {
+  async getApprovedEpochsForDistribution(): Promise<
+    Array<{
+      fromBlock: number;
+      toBlock: number;
+      merkleRoot: string;
+      totalBatches: number;
+      processedBatches: number;
+    }>
+  > {
     const ctx = new TaskContext('distribution:get-approved-epochs');
-    
+
     try {
       ctx.logger.debug('Checking for approved epochs ready for distribution');
-      
+
       const rewardsDistributionAddress = this.configService.get(
         'blockchain.contracts.rewardsDistribution',
       ) as Address;
@@ -1655,19 +1798,32 @@ export class DistributionService {
       }> = [];
 
       const lastCommitmentKey = await contract.read.lastCommitmentKey();
-      
-      if (!lastCommitmentKey || lastCommitmentKey === '0x0000000000000000000000000000000000000000000000000000000000000000') {
+
+      if (
+        !lastCommitmentKey ||
+        lastCommitmentKey ===
+          '0x0000000000000000000000000000000000000000000000000000000000000000'
+      ) {
         ctx.logger.debug('No commitments found in contract');
         return [];
       }
 
       try {
         const commitment = await contract.read.commitments([lastCommitmentKey]);
-        
-        const [status, fromBlock, toBlock, merkleRoot, totalBatches, processedBatches, approvalCount, ipfsLink] = commitment;
-        
+
+        const [
+          status,
+          fromBlock,
+          toBlock,
+          merkleRoot,
+          totalBatches,
+          processedBatches,
+          approvalCount,
+          ipfsLink,
+        ] = commitment;
+
         ctx.logger.debug(
-          `Latest commitment ${fromBlock}-${toBlock}: status=${status}, approvals=${approvalCount}, batches=${processedBatches}/${totalBatches}`
+          `Latest commitment ${fromBlock}-${toBlock}: status=${status}, approvals=${approvalCount}, batches=${processedBatches}/${totalBatches}`,
         );
 
         if (
@@ -1682,14 +1838,14 @@ export class DistributionService {
             totalBatches: Number(totalBatches),
             processedBatches: Number(processedBatches),
           });
-          
+
           ctx.logger.debug(
             `✅ Found approved epoch ready for distribution: ${fromBlock}-${toBlock} ` +
-            `(${processedBatches}/${totalBatches} batches processed)`
+              `(${processedBatches}/${totalBatches} batches processed)`,
           );
         } else {
           ctx.logger.debug(
-            `❌ Latest commitment not ready for distribution: status=${status}, approvals=${approvalCount}, fully_distributed=${processedBatches >= totalBatches}`
+            `❌ Latest commitment not ready for distribution: status=${status}, approvals=${approvalCount}, fully_distributed=${processedBatches >= totalBatches}`,
           );
         }
       } catch (error) {
@@ -1697,7 +1853,9 @@ export class DistributionService {
       }
 
       if (approvedEpochs.length > 0) {
-        ctx.logger.info(`📊 Found ${approvedEpochs.length} approved epochs ready for distribution`);
+        ctx.logger.info(
+          `📊 Found ${approvedEpochs.length} approved epochs ready for distribution`,
+        );
       } else {
         ctx.logger.debug('No approved epochs ready for distribution');
       }
@@ -1717,56 +1875,80 @@ export class DistributionService {
     toBlock: number,
     merkleRoot: string,
   ): Promise<boolean> {
-    const ctx = new TaskContext(`distribution:distribute-approved:${fromBlock}-${toBlock}`);
+    const ctx = new TaskContext(
+      `distribution:distribute-approved:${fromBlock}-${toBlock}`,
+    );
     const sessionStartTime = Date.now();
-    
+
     try {
       ctx.logger.info(`🚀 Distributing approved epoch ${fromBlock}-${toBlock}`);
       ctx.logger.info(`   Using Merkle root: ${merkleRoot}`);
 
       // Recalculate rewards to get the same Merkle tree structure
-      const result = await this.rewardsCalculatorService.calculateRewardsDetailed(
-        ctx,
-        fromBlock,
-        toBlock,
-        true, // skip signature validation
-      );
+      const result =
+        await this.rewardsCalculatorService.calculateRewardsDetailed(
+          ctx,
+          fromBlock,
+          toBlock,
+          true, // skip signature validation
+        );
 
       if (result.workers.length === 0) {
         ctx.logger.warn('No workers found for approved epoch distribution');
         return true;
       }
 
-      const merkleTree = await this.merkleTreeService.generateMerkleTree(result.workers, this.distributionBatchSize);
-      
+      const merkleTree = await this.merkleTreeService.generateMerkleTree(
+        result.workers,
+        this.distributionBatchSize,
+      );
+
       // Prepare formatted calculation result for S3 upload
       let formattedCalculationResult;
       try {
-        formattedCalculationResult = await this.rewardsCalculatorService.calculateRewardsFormatted(
+        formattedCalculationResult =
+          await this.rewardsCalculatorService.calculateRewardsFormatted(
+            ctx,
+            fromBlock,
+            toBlock,
+            true,
+          );
+      } catch (formatError) {
+        ctx.logger.warn(
+          `Failed to format calculation result: ${formatError.message}`,
+        );
+      }
+
+      if (merkleTree.root !== merkleRoot) {
+        ctx.logger.error(
+          `Merkle root mismatch! Expected: ${merkleRoot}, Got: ${merkleTree.root}`,
+        );
+
+        ctx.logger.info('🔄 Attempting to recover Merkle tree from S3...');
+        const recoveredTree = await this.recoverMerkleTreeFromS3(
           ctx,
           fromBlock,
           toBlock,
-          true,
         );
-      } catch (formatError) {
-        ctx.logger.warn(`Failed to format calculation result: ${formatError.message}`);
-      }
-      
-      if (merkleTree.root !== merkleRoot) {
-        ctx.logger.error(`Merkle root mismatch! Expected: ${merkleRoot}, Got: ${merkleTree.root}`);
-        
-        ctx.logger.info('🔄 Attempting to recover Merkle tree from S3...');
-        const recoveredTree = await this.recoverMerkleTreeFromS3(ctx, fromBlock, toBlock);
-        
+
         if (recoveredTree && recoveredTree.root === merkleRoot) {
           ctx.logger.info('✅ Successfully recovered Merkle tree from S3');
-          
+
           const sessionId = generateSessionId();
-          const distributionLogs = await this.distributeBatches(fromBlock, toBlock, recoveredTree, sessionId);
-          
-          ctx.logger.info(`✅ Distribution completed using recovered Merkle tree from S3`);
-          ctx.logger.info(`   Total batches distributed: ${distributionLogs.length}`);
-          
+          const distributionLogs = await this.distributeBatches(
+            fromBlock,
+            toBlock,
+            recoveredTree,
+            sessionId,
+          );
+
+          ctx.logger.info(
+            `✅ Distribution completed using recovered Merkle tree from S3`,
+          );
+          ctx.logger.info(
+            `   Total batches distributed: ${distributionLogs.length}`,
+          );
+
           return true;
         } else {
           ctx.logger.error('❌ Failed to recover valid Merkle tree from S3');
@@ -1774,29 +1956,40 @@ export class DistributionService {
         }
       }
 
-
       const sessionId = generateSessionId();
-      const distributionLogs = await this.distributeBatches(fromBlock, toBlock, merkleTree, sessionId);
-      
-      const allSuccessful = distributionLogs.every(log => log.status === 'success');
-      
+      const distributionLogs = await this.distributeBatches(
+        fromBlock,
+        toBlock,
+        merkleTree,
+        sessionId,
+      );
+
+      const allSuccessful = distributionLogs.every(
+        (log) => log.status === 'success',
+      );
+
       if (allSuccessful) {
-        ctx.logger.info(`✅ Successfully distributed all ${merkleTree.totalBatches} batches`);
-        
+        ctx.logger.info(
+          `✅ Successfully distributed all ${merkleTree.totalBatches} batches`,
+        );
 
         try {
-          const formattedCalculationResult = await this.rewardsCalculatorService.calculateRewardsFormatted(
-            ctx,
-            fromBlock,
-            toBlock,
-            true,
-          );
+          const formattedCalculationResult =
+            await this.rewardsCalculatorService.calculateRewardsFormatted(
+              ctx,
+              fromBlock,
+              toBlock,
+              true,
+            );
 
           const startTime = new Date(sessionStartTime);
           const endTime = new Date();
-          const networkMetrics = await this.epochMetricsService.collectNetworkMetrics(ctx);
-          const rewardMetrics = this.epochMetricsService.extractRewardMetrics(formattedCalculationResult);
-          const commitTxHash = ''; 
+          const networkMetrics =
+            await this.epochMetricsService.collectNetworkMetrics(ctx);
+          const rewardMetrics = this.epochMetricsService.extractRewardMetrics(
+            formattedCalculationResult,
+          );
+          const commitTxHash = '';
 
           await this.rewardsReporterService.logSuccessfulRewardsReport({
             epochStart: startTime,
@@ -1808,13 +2001,20 @@ export class DistributionService {
             workerRewards: formattedCalculationResult.workers,
           });
         } catch (reportError) {
-          ctx.logger.warn({ error: reportError }, 'failed to generate rewards report for approved epoch');
+          ctx.logger.warn(
+            { error: reportError },
+            'failed to generate rewards report for approved epoch',
+          );
         }
-        
+
         return true;
       } else {
-        const failedBatches = distributionLogs.filter(log => log.status === 'failed').length;
-        ctx.logger.error(`❌ Failed to distribute ${failedBatches} out of ${merkleTree.totalBatches} batches`);
+        const failedBatches = distributionLogs.filter(
+          (log) => log.status === 'failed',
+        ).length;
+        ctx.logger.error(
+          `❌ Failed to distribute ${failedBatches} out of ${merkleTree.totalBatches} batches`,
+        );
         return false;
       }
     } catch (error) {
@@ -1833,7 +2033,9 @@ export class DistributionService {
     remainingBatchIndices: number[],
     sessionId: string,
   ): Promise<TransactionLog[]> {
-    const batchCtx = new TaskContext(`distribution:remaining-batches-${sessionId}`);
+    const batchCtx = new TaskContext(
+      `distribution:remaining-batches-${sessionId}`,
+    );
 
     batchCtx.logger.info(
       `📦 [${sessionId}] Distributing ${remainingBatchIndices.length} remaining batches`,
@@ -1970,101 +2172,134 @@ export class DistributionService {
     toBlock: number,
   ): Promise<any | null> {
     try {
-      const networkName = this.configService.get('blockchain.network.name', 'arbitrum');
+      const networkName = this.configService.get(
+        'blockchain.network.name',
+        'arbitrum',
+      );
       let s3Key = this.s3Service.generateS3Key(networkName, fromBlock, toBlock);
       ctx.logger.info(`📥 Attempting to download epoch data from S3: ${s3Key}`);
-      
+
       if (!this.s3Service) {
         ctx.logger.warn('S3 service not configured, cannot recover from S3');
         return null;
       }
-      
+
       // try primary key
       let epochRewardsData = await this.s3Service.downloadJson(s3Key);
       // fallback: try alternate local naming if not found
-      if (!epochRewardsData && (networkName === 'localhost' || networkName === 'local')) {
+      if (
+        !epochRewardsData &&
+        (networkName === 'localhost' || networkName === 'local')
+      ) {
         const altNetwork = networkName === 'localhost' ? 'local' : 'localhost';
-        const altKey = this.s3Service.generateS3Key(altNetwork, fromBlock, toBlock);
+        const altKey = this.s3Service.generateS3Key(
+          altNetwork,
+          fromBlock,
+          toBlock,
+        );
         const exists = await this.s3Service.checkFileExists(altKey);
         if (exists) {
-          ctx.logger.warn(`⚠️ primary key not found, trying alternate network key: ${altKey}`);
+          ctx.logger.warn(
+            `⚠️ primary key not found, trying alternate network key: ${altKey}`,
+          );
           s3Key = altKey;
           epochRewardsData = await this.s3Service.downloadJson(altKey);
         }
       }
-      
+
       if (!epochRewardsData) {
         ctx.logger.warn('No epoch rewards data found in S3');
         return null;
       }
-      
-      if (!epochRewardsData.rawData || !epochRewardsData.rawData.workers || !epochRewardsData.merkleTree) {
-        ctx.logger.error('Invalid epoch rewards data structure in S3 - missing worker data or merkle tree info');
+
+      if (
+        !epochRewardsData.rawData ||
+        !epochRewardsData.rawData.workers ||
+        !epochRewardsData.merkleTree
+      ) {
+        ctx.logger.error(
+          'Invalid epoch rewards data structure in S3 - missing worker data or merkle tree info',
+        );
         return null;
       }
-      
+
       if (!epochRewardsData.merkleTree.batchSize) {
         ctx.logger.error('Missing batchSize in stored merkle tree data');
         return null;
       }
-      
-      ctx.logger.info(`🔧 Recreating Merkle tree from ${epochRewardsData.rawData.workers.length} workers`);
-      ctx.logger.info(`   Using batch size: ${epochRewardsData.merkleTree.batchSize}`);
-      
+
+      ctx.logger.info(
+        `🔧 Recreating Merkle tree from ${epochRewardsData.rawData.workers.length} workers`,
+      );
+      ctx.logger.info(
+        `   Using batch size: ${epochRewardsData.merkleTree.batchSize}`,
+      );
+
       const workers = epochRewardsData.rawData.workers.map((w: any) => ({
         workerId: BigInt(w.workerId),
         workerReward: BigInt(w.workerReward),
         stakerReward: BigInt(w.stakerReward),
       }));
-      
+
       const recreatedTree = await this.merkleTreeService.generateMerkleTree(
         workers,
-        epochRewardsData.merkleTree.batchSize
+        epochRewardsData.merkleTree.batchSize,
       );
-      
+
       ctx.logger.info(`✅ Successfully recreated Merkle tree from S3 data`);
       ctx.logger.info(`   Recreated root: ${recreatedTree.root}`);
       ctx.logger.info(`   Expected root: ${epochRewardsData.merkleTree.root}`);
       ctx.logger.info(`   Total batches: ${recreatedTree.totalBatches}`);
       ctx.logger.info(`   Leaves: ${recreatedTree.leaves.length}`);
-      
+
       if (recreatedTree.root !== epochRewardsData.merkleTree.root) {
-        ctx.logger.error('❌ Recreated Merkle tree root does not match stored root');
-        ctx.logger.error(`   This indicates data corruption or calculation inconsistency`);
+        ctx.logger.error(
+          '❌ Recreated Merkle tree root does not match stored root',
+        );
+        ctx.logger.error(
+          `   This indicates data corruption or calculation inconsistency`,
+        );
         return null;
       }
-      
+
       ctx.logger.info(`✅ Merkle tree verification successful - roots match`);
-      
+
       return recreatedTree;
     } catch (error) {
       ctx.logger.error({ error }, 'Failed to recover Merkle tree from S3');
-      
-      ctx.logger.info('🔄 Attempting to recover from contract commitment data...');
-      
+
+      ctx.logger.info(
+        '🔄 Attempting to recover from contract commitment data...',
+      );
+
       try {
-        const commitmentKey = this.commitmentKeyService.generateKey(fromBlock, toBlock);
+        const commitmentKey = this.commitmentKeyService.generateKey(
+          fromBlock,
+          toBlock,
+        );
         const commitment = await this.publicClient.readContract({
           address: this.contractAddress,
           abi: this.contractAbi,
           functionName: 'commitments',
           args: [commitmentKey],
         });
-        
-        if (commitment && commitment[5]) { // ipfsLink is at index 5
+
+        if (commitment && commitment[5]) {
+          // ipfsLink is at index 5
           const ipfsLink = commitment[5] as string;
           ctx.logger.info(`📥 Found IPFS link in commitment: ${ipfsLink}`);
-          
-          ctx.logger.warn('IPFS recovery not yet implemented, but link available for manual recovery');
+
+          ctx.logger.warn(
+            'IPFS recovery not yet implemented, but link available for manual recovery',
+          );
         }
       } catch (ipfsError) {
         ctx.logger.debug('No IPFS link available in commitment');
       }
-      
+
       return null;
     }
   }
-
 
   private generateBatchProof(
     merkleTree: any,
@@ -2079,23 +2314,23 @@ export class DistributionService {
     const workerRewards: bigint[] = [];
     const stakerRewards: bigint[] = [];
     const merkleProofs: `0x${string}`[] = [];
-    
+
     // Extract data from batch leaves
     for (const leaf of batchLeaves) {
       recipients.push(...leaf.recipients);
       workerRewards.push(...leaf.workerRewards);
       stakerRewards.push(...leaf.stakerRewards);
-      
 
-      const leafIndex = merkleTree.leaves.findIndex((l: any) => 
-        l.hash === leaf.hash || JSON.stringify(l) === JSON.stringify(leaf)
+      const leafIndex = merkleTree.leaves.findIndex(
+        (l: any) =>
+          l.hash === leaf.hash || JSON.stringify(l) === JSON.stringify(leaf),
       );
-      
+
       if (leafIndex >= 0 && merkleTree.proofs && merkleTree.proofs[leafIndex]) {
         merkleProofs.push(...merkleTree.proofs[leafIndex]);
       }
     }
-    
+
     return {
       recipients,
       workerRewards,

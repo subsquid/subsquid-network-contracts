@@ -30,4 +30,5 @@ export default registerAs('blockchain', () => ({
     confirmations: 1,
     timeout: 30000,
   },
+  epochConfirmationBlocks: parseInt(process.env.EPOCH_CONFIRMATION_BLOCKS || '150', 10),
 }));

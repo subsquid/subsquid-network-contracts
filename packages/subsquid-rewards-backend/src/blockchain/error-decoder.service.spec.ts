@@ -13,7 +13,7 @@ describe('ErrorDecoderService', () => {
     }).compile();
 
     service = module.get<ErrorDecoderService>(ErrorDecoderService);
-    
+
     // Mock context
     mockContext = {
       logger: {
@@ -31,18 +31,25 @@ describe('ErrorDecoderService', () => {
 
   describe('decodeContractError', () => {
     it('should decode NotAllBlocksCovered error', () => {
-      const error = new BaseError('The contract function "commitRoot" reverted with the following signature:\n0x1608bdd2');
+      const error = new BaseError(
+        'The contract function "commitRoot" reverted with the following signature:\n0x1608bdd2',
+      );
       const decoded = service.decodeContractError(error, mockContext);
-      
+
       expect(decoded).toBeDefined();
       expect(decoded?.errorName).toBe('NotAllBlocksCovered');
-      expect(decoded?.description).toBe('Block range does not start from lastBlockRewarded + 1');
+      expect(decoded?.description).toBe(
+        'Block range does not start from lastBlockRewarded + 1',
+      );
     });
 
     it('should return null for non-contract errors', () => {
       const error = new Error('Regular error');
-      const decoded = service.decodeContractError(error as BaseError, mockContext);
-      
+      const decoded = service.decodeContractError(
+        error as BaseError,
+        mockContext,
+      );
+
       expect(decoded).toBeNull();
     });
 
@@ -55,7 +62,9 @@ describe('ErrorDecoderService', () => {
       };
 
       Object.entries(errorSignatures).forEach(([signature, expectedError]) => {
-        const error = new BaseError(`Contract reverted with signature:\n${signature}`);
+        const error = new BaseError(
+          `Contract reverted with signature:\n${signature}`,
+        );
         const decoded = service.decodeContractError(error, mockContext);
         expect(decoded?.errorName).toBe(expectedError);
       });
@@ -64,32 +73,42 @@ describe('ErrorDecoderService', () => {
 
   describe('formatError', () => {
     it('should format NotAllBlocksCovered error', () => {
-      const error = new BaseError('The contract function "commitRoot" reverted with the following signature:\n0x1608bdd2');
+      const error = new BaseError(
+        'The contract function "commitRoot" reverted with the following signature:\n0x1608bdd2',
+      );
       const formatted = service.formatError(error, mockContext);
-      
-      expect(formatted).toBe('Contract Error: NotAllBlocksCovered - Block range does not start from lastBlockRewarded + 1');
+
+      expect(formatted).toBe(
+        'Contract Error: NotAllBlocksCovered - Block range does not start from lastBlockRewarded + 1',
+      );
     });
 
     it('should return original message for non-decodable errors', () => {
       const error = new BaseError('Some other error');
       const formatted = service.formatError(error, mockContext);
-      
+
       expect(formatted).toContain('Some other error');
     });
 
     it('should handle unknown signatures', () => {
-      const error = new BaseError('Contract reverted with signature:\n0xdeadbeef');
+      const error = new BaseError(
+        'Contract reverted with signature:\n0xdeadbeef',
+      );
       const formatted = service.formatError(error, mockContext);
-      
+
       expect(formatted).toContain('Unknown error with signature 0xdeadbeef');
-      expect(formatted).toContain('https://openchain.xyz/signatures?query=0xdeadbeef');
+      expect(formatted).toContain(
+        'https://openchain.xyz/signatures?query=0xdeadbeef',
+      );
     });
   });
 
   describe('isSpecificError', () => {
     it('should correctly identify specific errors', () => {
-      const error = new BaseError('The contract function "commitRoot" reverted with the following signature:\n0x1608bdd2');
-      
+      const error = new BaseError(
+        'The contract function "commitRoot" reverted with the following signature:\n0x1608bdd2',
+      );
+
       expect(service.isSpecificError(error, 'NotAllBlocksCovered')).toBe(true);
       expect(service.isSpecificError(error, 'NotACommitter')).toBe(false);
     });
@@ -97,25 +116,35 @@ describe('ErrorDecoderService', () => {
 
   describe('getErrorContext', () => {
     it('should provide context for NotAllBlocksCovered', () => {
-      const error = new BaseError('The contract function "commitRoot" reverted with the following signature:\n0x1608bdd2');
+      const error = new BaseError(
+        'The contract function "commitRoot" reverted with the following signature:\n0x1608bdd2',
+      );
       const context = service.getErrorContext(error, mockContext);
-      
-      expect(context.hint).toBe('Check lastBlockRewarded on the contract and ensure fromBlock = lastBlockRewarded + 1');
-      expect(context.action).toBe('Query contract.lastBlockRewarded() to get the correct starting block');
+
+      expect(context.hint).toBe(
+        'Check lastBlockRewarded on the contract and ensure fromBlock = lastBlockRewarded + 1',
+      );
+      expect(context.action).toBe(
+        'Query contract.lastBlockRewarded() to get the correct starting block',
+      );
     });
 
     it('should provide context for BatchAlreadyProcessed', () => {
-      const error = new BaseError('Contract reverted with signature:\n0xe2b1f194');
+      const error = new BaseError(
+        'Contract reverted with signature:\n0xe2b1f194',
+      );
       const context = service.getErrorContext(error, mockContext);
-      
+
       expect(context.hint).toBe('This batch has already been distributed');
-      expect(context.action).toBe('Skip this batch and continue with remaining batches');
+      expect(context.action).toBe(
+        'Skip this batch and continue with remaining batches',
+      );
     });
 
     it('should return empty context for unknown errors', () => {
       const error = new BaseError('Some random error');
       const context = service.getErrorContext(error, mockContext);
-      
+
       expect(context).toEqual({});
     });
   });
@@ -123,10 +152,10 @@ describe('ErrorDecoderService', () => {
   describe('getErrorDetails', () => {
     it('should return details for known errors', () => {
       expect(service.getErrorDetails('NotAllBlocksCovered')).toBe(
-        'Block range does not start from lastBlockRewarded + 1'
+        'Block range does not start from lastBlockRewarded + 1',
       );
       expect(service.getErrorDetails('MerkleRootNotCommitted')).toBe(
-        'No merkle root committed for this block range'
+        'No merkle root committed for this block range',
       );
     });
 

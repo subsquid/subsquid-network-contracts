@@ -1,7 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { ContractService } from '../../blockchain/contract.service';
 import { MerkleTreeService, MerkleLeaf } from './merkle-tree.service';
-import { RewardsCalculatorService, WorkerReward } from '../calculation/rewards-calculator.service';
+import {
+  RewardsCalculatorService,
+  WorkerReward,
+} from '../calculation/rewards-calculator.service';
 import { TaskContext, Context } from '../../common';
 
 export interface CommitmentInfo {
@@ -54,14 +57,21 @@ export class DistributionRecoveryService {
       // try to get commitment using new method first
       let commitmentV2: CommitmentInfoV2 | null = null;
       try {
-        commitmentV2 = await this.contractService.getCommitmentV2(ctx, fromBlock, toBlock);
+        commitmentV2 = await this.contractService.getCommitmentV2(
+          ctx,
+          fromBlock,
+          toBlock,
+        );
       } catch (error) {
-        ctx.logger.debug('Could not use getCommitmentV2, falling back to old method');
+        ctx.logger.debug(
+          'Could not use getCommitmentV2, falling back to old method',
+        );
       }
 
       if (commitmentV2) {
         // using new contract with status field
-        if (commitmentV2.status === 0) { // NONEXISTENT
+        if (commitmentV2.status === 0) {
+          // NONEXISTENT
           ctx.logger.debug('No commitment found - this is a new distribution');
           return { interrupted: false };
         }
@@ -71,10 +81,11 @@ export class DistributionRecoveryService {
         );
 
         // check if completed
-        if (commitmentV2.status === 2) { // COMPLETED
+        if (commitmentV2.status === 2) {
+          // COMPLETED
           ctx.logger.info('✅ Distribution already completed');
-          return { 
-            interrupted: false, 
+          return {
+            interrupted: false,
             commitment: {
               exists: true,
               merkleRoot: commitmentV2.merkleRoot,
@@ -82,7 +93,7 @@ export class DistributionRecoveryService {
               processedBatches: commitmentV2.processedBatches,
               approvalCount: commitmentV2.approvalCount,
               ipfsLink: commitmentV2.ipfsLink,
-            }
+            },
           };
         }
 
@@ -99,7 +110,6 @@ export class DistributionRecoveryService {
           },
         };
       } else {
-
         const commitment = await this.contractService.getCommitment(
           ctx,
           fromBlock,
@@ -167,12 +177,13 @@ export class DistributionRecoveryService {
       }
 
       // Calculate rewards exactly as before
-      const workerRewards = await this.rewardsCalculatorService.calculateEpochRewards(
-        ctx,
-        fromBlock,
-        toBlock,
-        true, // skipSignatureValidation
-      );
+      const workerRewards =
+        await this.rewardsCalculatorService.calculateEpochRewards(
+          ctx,
+          fromBlock,
+          toBlock,
+          true, // skipSignatureValidation
+        );
 
       if (workerRewards.length === 0) {
         throw new Error('No workers found for recovery');
@@ -205,9 +216,7 @@ export class DistributionRecoveryService {
         );
       }
 
-      ctx.logger.info(
-        `✅ Merkle root matches! Checking processed batches...`,
-      );
+      ctx.logger.info(`✅ Merkle root matches! Checking processed batches...`);
 
       // check which batches have been processed
       const leafHashes = merkleTree.leaves.map((leaf) => leaf.leafHash);
@@ -238,9 +247,7 @@ export class DistributionRecoveryService {
   /**
    * get the indices of processed and remaining batches
    */
-  getProcessedAndRemainingBatches(
-    processedLeaves: boolean[],
-  ): {
+  getProcessedAndRemainingBatches(processedLeaves: boolean[]): {
     processedBatchIndices: number[];
     remainingBatchIndices: number[];
   } {
@@ -263,7 +270,11 @@ export class DistributionRecoveryService {
    */
   async checkPendingDistributions(ctx: Context): Promise<{
     lastBlockRewarded: number;
-    pendingRanges: Array<{ fromBlock: number; toBlock: number; status: string }>;
+    pendingRanges: Array<{
+      fromBlock: number;
+      toBlock: number;
+      status: string;
+    }>;
     lastCommitment?: {
       fromBlock: number;
       toBlock: number;
@@ -273,31 +284,49 @@ export class DistributionRecoveryService {
     };
   }> {
     try {
-      const lastBlockRewarded = await this.contractService.getLastBlockRewarded(ctx);
-      
-      ctx.logger.info(
-        `📊 Last block rewarded: ${lastBlockRewarded}`,
-      );
+      const lastBlockRewarded =
+        await this.contractService.getLastBlockRewarded(ctx);
 
-      const pendingRanges: Array<{ fromBlock: number; toBlock: number; status: string }> = [];
+      ctx.logger.info(`📊 Last block rewarded: ${lastBlockRewarded}`);
+
+      const pendingRanges: Array<{
+        fromBlock: number;
+        toBlock: number;
+        status: string;
+      }> = [];
       let lastCommitment: any;
 
       try {
-        const lastCommitmentKey = await this.contractService.getLastCommitmentKey(ctx);
-        
-        if (lastCommitmentKey !== '0x0000000000000000000000000000000000000000000000000000000000000000') {
+        const lastCommitmentKey =
+          await this.contractService.getLastCommitmentKey(ctx);
+
+        if (
+          lastCommitmentKey !==
+          '0x0000000000000000000000000000000000000000000000000000000000000000'
+        ) {
           const epochLength = await this.contractService.getEpochLength(ctx);
-          
+
           const possibleRanges = [
-            { fromBlock: Math.max(1, lastBlockRewarded - epochLength + 1), toBlock: lastBlockRewarded },
-            { fromBlock: lastBlockRewarded + 1, toBlock: lastBlockRewarded + epochLength },
+            {
+              fromBlock: Math.max(1, lastBlockRewarded - epochLength + 1),
+              toBlock: lastBlockRewarded,
+            },
+            {
+              fromBlock: lastBlockRewarded + 1,
+              toBlock: lastBlockRewarded + epochLength,
+            },
           ];
 
           for (const range of possibleRanges) {
             try {
-              const commitment = await this.contractService.getCommitmentV2(ctx, range.fromBlock, range.toBlock);
-              
-              if (commitment.status !== 0) { // Not NONEXISTENT
+              const commitment = await this.contractService.getCommitmentV2(
+                ctx,
+                range.fromBlock,
+                range.toBlock,
+              );
+
+              if (commitment.status !== 0) {
+                // Not NONEXISTENT
                 lastCommitment = {
                   fromBlock: range.fromBlock,
                   toBlock: range.toBlock,
@@ -306,7 +335,8 @@ export class DistributionRecoveryService {
                   totalBatches: commitment.totalBatches,
                 };
 
-                if (commitment.status === 1) { // ACTIVE
+                if (commitment.status === 1) {
+                  // ACTIVE
                   pendingRanges.push({
                     fromBlock: range.fromBlock,
                     toBlock: range.toBlock,
@@ -316,12 +346,16 @@ export class DistributionRecoveryService {
                 break;
               }
             } catch (e) {
-              ctx.logger.debug(`No commitment found for range ${range.fromBlock}-${range.toBlock}`);
+              ctx.logger.debug(
+                `No commitment found for range ${range.fromBlock}-${range.toBlock}`,
+              );
             }
           }
         }
       } catch (error) {
-        ctx.logger.debug('Could not check last commitment - might be using older contract');
+        ctx.logger.debug(
+          'Could not check last commitment - might be using older contract',
+        );
       }
 
       return {

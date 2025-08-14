@@ -153,7 +153,7 @@ export class PublicController {
   }
 
   /**
-  * calculate rewards for the last N blocks - compatible with old backend
+   * calculate rewards for the last N blocks - compatible with old backend
    */
   @Get('rewards/:lastNBlocks')
   async calculateRewardsForLastNBlocks(
@@ -171,7 +171,7 @@ export class PublicController {
     try {
       const lastBlock = await this.web3Service.getL1BlockNumber(ctx);
       const fromBlock = lastBlock - Number(lastNBlocks);
-      
+
       return this.calculateRewards(fromBlock.toString(), lastBlock.toString());
     } catch (error: any) {
       ctx.logger.error(
@@ -188,13 +188,13 @@ export class PublicController {
 
   private bn(value: string | { toString(): string }): string {
     const strValue = typeof value === 'string' ? value : value.toString();
-    
+
     if (strValue.includes('e') || strValue.includes('E')) {
       const num = Number(strValue);
       const fixedStr = num.toFixed(0);
       return BigInt(fixedStr).toString();
     }
-    
+
     const dotIndex = strValue.indexOf('.');
     if (dotIndex === -1) {
       return BigInt(strValue).toString();

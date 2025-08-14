@@ -33,8 +33,7 @@ export class MerkleTreeService {
       ctx?.logger?.debug(
         `Generating Merkle tree for ${workers.length} workers with batch size ${batchSize}`,
       );
-    } catch {
-    }
+    } catch {}
 
     // CRITICAL: Sort workers deterministically by workerId to ensure consistent merkle tree
     const sortedWorkers = [...workers].sort((a, b) => {
@@ -53,7 +52,7 @@ export class MerkleTreeService {
 
     const batches: MerkleLeaf[] = [];
     const leafHashes: string[] = [];
-    
+
     for (let i = 0; i < sortedWorkers.length; i += batchSize) {
       const batch = sortedWorkers.slice(i, i + batchSize);
 
@@ -74,7 +73,7 @@ export class MerkleTreeService {
         stakerRewards: batch.map((w) => w.stakerReward),
         leafHash,
       });
-      
+
       leafHashes.push(leafHash);
 
       try {
@@ -82,7 +81,7 @@ export class MerkleTreeService {
           `Batch ${batches.length - 1}: ${batch.length} workers, hash: ${leafHash}`,
         );
       } catch {
-   // ignore logging for now
+        // ignore logging for now
       }
     }
 

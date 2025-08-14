@@ -25,34 +25,41 @@ export class StartupRecoveryService implements OnModuleInit {
     }
 
     const ctx = new TaskContext('startup:recovery-check');
-    
+
     try {
-      ctx.logger.info('🔍 Checking for interrupted distributions on startup...');
-      
+      ctx.logger.info(
+        '🔍 Checking for interrupted distributions on startup...',
+      );
+
       let lastBlockRewarded: number;
       try {
-        lastBlockRewarded = await this.contractService.getLastBlockRewarded(ctx);
+        lastBlockRewarded =
+          await this.contractService.getLastBlockRewarded(ctx);
       } catch (error: any) {
-        if (error.message?.includes('ContractFunctionExecutionError') || 
-            error.message?.includes('lastBlockRewarded') ||
-            error.cause?.message?.includes('reverted')) {
+        if (
+          error.message?.includes('ContractFunctionExecutionError') ||
+          error.message?.includes('lastBlockRewarded') ||
+          error.cause?.message?.includes('reverted')
+        ) {
           ctx.logger.warn(
-            'Contract does not support lastBlockRewarded function or is not properly deployed. Skipping recovery check.'
+            'Contract does not support lastBlockRewarded function or is not properly deployed. Skipping recovery check.',
           );
           ctx.logger.warn(
-            `Contract address: ${this.configService.get('blockchain.contracts.rewardsDistribution')}`
+            `Contract address: ${this.configService.get('blockchain.contracts.rewardsDistribution')}`,
           );
           ctx.logger.warn(
-            'This might be a new deployment or the contract ABI might be outdated.'
+            'This might be a new deployment or the contract ABI might be outdated.',
           );
           ctx.logger.debug({ error: error.message }, 'Full error details');
           return;
         }
         throw error;
       }
-      
+
       if (lastBlockRewarded === 0) {
-        ctx.logger.info('📊 No previous distributions found (lastBlockRewarded = 0)');
+        ctx.logger.info(
+          '📊 No previous distributions found (lastBlockRewarded = 0)',
+        );
         return;
       }
 
@@ -61,32 +68,48 @@ export class StartupRecoveryService implements OnModuleInit {
       // check if there's a last commitment key
       let lastCommitmentKey: string;
       try {
-        lastCommitmentKey = await this.contractService.getLastCommitmentKey(ctx);
+        lastCommitmentKey =
+          await this.contractService.getLastCommitmentKey(ctx);
         ctx.logger.info(`🔑 Last commitment key: ${lastCommitmentKey}`);
       } catch (error) {
-        ctx.logger.debug('Could not fetch lastCommitmentKey - might be using older contract');
-        lastCommitmentKey = '0x0000000000000000000000000000000000000000000000000000000000000000';
+        ctx.logger.debug(
+          'Could not fetch lastCommitmentKey - might be using older contract',
+        );
+        lastCommitmentKey =
+          '0x0000000000000000000000000000000000000000000000000000000000000000';
       }
 
       // if we have a last commitment key, check its status
-      if (lastCommitmentKey !== '0x0000000000000000000000000000000000000000000000000000000000000000') {
+      if (
+        lastCommitmentKey !==
+        '0x0000000000000000000000000000000000000000000000000000000000000000'
+      ) {
         try {
           // decode the commitment key to get block range
           // the key is keccak256(abi.encode(fromBlock, toBlock))
           // we need to check pending distributions to find the range
-          const pendingInfo = await this.recoveryService.checkPendingDistributions(ctx);
-          
+          const pendingInfo =
+            await this.recoveryService.checkPendingDistributions(ctx);
+
           if (pendingInfo.lastCommitment) {
-            const { fromBlock, toBlock, status, processedBatches, totalBatches } = pendingInfo.lastCommitment;
-            
-            if (status === 1) { // ACTIVE
+            const {
+              fromBlock,
+              toBlock,
+              status,
+              processedBatches,
+              totalBatches,
+            } = pendingInfo.lastCommitment;
+
+            if (status === 1) {
+              // ACTIVE
               ctx.logger.warn(
                 `⚠️ Found active commitment for blocks ${fromBlock}-${toBlock}: ${processedBatches}/${totalBatches} batches processed`,
               );
               ctx.logger.warn(
                 '💡 This distribution needs to be resumed. Use the /admin/distribute endpoint.',
               );
-            } else if (status === 2) { // COMPLETED
+            } else if (status === 2) {
+              // COMPLETED
               ctx.logger.info(
                 `✅ Last commitment (blocks ${fromBlock}-${toBlock}) is completed`,
               );
@@ -98,30 +121,35 @@ export class StartupRecoveryService implements OnModuleInit {
       }
 
       // check for other pending distributions
-      const pendingInfo = await this.recoveryService.checkPendingDistributions(ctx);
-      
+      const pendingInfo =
+        await this.recoveryService.checkPendingDistributions(ctx);
+
       if (pendingInfo.pendingRanges.length > 0) {
         ctx.logger.warn(
           `⚠️ Found ${pendingInfo.pendingRanges.length} pending distribution ranges:`,
         );
-        
+
         for (const range of pendingInfo.pendingRanges) {
           ctx.logger.warn(
             `   - Blocks ${range.fromBlock}-${range.toBlock}: ${range.status}`,
           );
         }
-        
+
         ctx.logger.warn(
           '💡 Use the /admin/distribute endpoint to resume these distributions',
         );
-      } else if (!pendingInfo.lastCommitment || pendingInfo.lastCommitment.status === 2) {
+      } else if (
+        !pendingInfo.lastCommitment ||
+        pendingInfo.lastCommitment.status === 2
+      ) {
         ctx.logger.info('✅ No interrupted distributions found');
       }
 
-      const currentL1Block = await this.contractService['web3Service'].getL1BlockNumber(ctx);
+      const currentL1Block =
+        await this.contractService['web3Service'].getL1BlockNumber(ctx);
       const epochLength = await this.contractService.getEpochLength(ctx);
       const blocksSinceLastReward = currentL1Block - lastBlockRewarded;
-      
+
       if (blocksSinceLastReward > epochLength) {
         const missedEpochs = Math.floor(blocksSinceLastReward / epochLength);
         ctx.logger.warn(
@@ -131,16 +159,10 @@ export class StartupRecoveryService implements OnModuleInit {
           `💡 Next distribution should start from block ${lastBlockRewarded + 1}`,
         );
       } else {
-        ctx.logger.info(
-          `✅ ${blocksSinceLastReward} blocks since last reward`,
-        );
+        ctx.logger.info(`✅ ${blocksSinceLastReward} blocks since last reward`);
       }
-      
     } catch (error) {
-      ctx.logger.error(
-        { error },
-        'Failed to complete startup recovery check',
-      );
+      ctx.logger.error({ error }, 'Failed to complete startup recovery check');
     }
   }
 }

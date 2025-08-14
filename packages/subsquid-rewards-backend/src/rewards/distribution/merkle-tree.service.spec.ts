@@ -92,7 +92,7 @@ describe('MerkleTreeService', () => {
       expect(result.leaves).toHaveLength(2);
       expect(result.proofs).toHaveLength(2);
       expect(result.totalBatches).toBe(2);
-      
+
       // first batch should have 2 workers
       expect(result.leaves[0].recipients).toHaveLength(2);
       // second batch should have 1 worker
@@ -181,7 +181,9 @@ describe('MerkleTreeService', () => {
 
       const result = await service.generateMerkleTree(workers, 1);
       const leafHash = result.leaves[0].leafHash;
-      const invalidProof = ['0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef'];
+      const invalidProof = [
+        '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
+      ];
       const root = result.root;
 
       const isValid = service.verifyProof(leafHash, invalidProof, root);

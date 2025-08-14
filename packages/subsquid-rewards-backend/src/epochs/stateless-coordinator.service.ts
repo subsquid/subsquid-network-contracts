@@ -38,8 +38,11 @@ export class StatelessCoordinatorService {
 
     try {
       const currentBlock = await this.web3Service.getL1BlockNumber(ctx);
-      const roundRobinWindow = this.configService.get('rewards.roundRobinWindow', 130);
-      
+      const roundRobinWindow = this.configService.get(
+        'rewards.roundRobinWindow',
+        130,
+      );
+
       const currentWindow = Math.floor(currentBlock / roundRobinWindow);
       const windowStart = currentWindow * roundRobinWindow;
       const windowEnd = windowStart + roundRobinWindow - 1;
@@ -73,8 +76,10 @@ export class StatelessCoordinatorService {
    * Get bot address from private key
    */
   private async getBotAddress(): Promise<`0x${string}`> {
-    const privateKey = this.configService.get('blockchain.distributor.privateKey') as `0x${string}`;
-    
+    const privateKey = this.configService.get(
+      'blockchain.distributor.privateKey',
+    ) as `0x${string}`;
+
     if (!privateKey) {
       throw new Error('Missing DISTRIBUTOR_PRIVATE_KEY environment variable');
     }
@@ -103,8 +108,14 @@ export class StatelessCoordinatorService {
 
     try {
       const currentBlock = await this.web3Service.getL1BlockNumber(ctx);
-      const roundRobinWindow = this.configService.get('rewards.roundRobinWindow', 130);
-      const safetyBuffer = this.configService.get('rewards.commitSafetyBuffer', 3);
+      const roundRobinWindow = this.configService.get(
+        'rewards.roundRobinWindow',
+        130,
+      );
+      const safetyBuffer = this.configService.get(
+        'rewards.commitSafetyBuffer',
+        3,
+      );
 
       // calculate current window
       const currentWindow = Math.floor(currentBlock / roundRobinWindow);
@@ -118,15 +129,19 @@ export class StatelessCoordinatorService {
       );
 
       let isCommitter: boolean;
-      
+
       if (botAddress) {
-        isCommitter = await this.contractService.canCommit(botAddress as `0x${string}`);
-        ctx.logger.debug(`🔍 Checking commit eligibility for address: ${botAddress}, result: ${isCommitter}`);
+        isCommitter = await this.contractService.canCommit(
+          botAddress as `0x${string}`,
+        );
+        ctx.logger.debug(
+          `🔍 Checking commit eligibility for address: ${botAddress}, result: ${isCommitter}`,
+        );
       } else {
         const committerCheck = await this.isCurrentCommitter();
         isCommitter = committerCheck.isCommitter;
       }
-      
+
       if (!isCommitter) {
         return {
           eligible: false,
@@ -141,26 +156,9 @@ export class StatelessCoordinatorService {
         };
       }
 
-      // check safety buffer
-      if (blocksLeft < safetyBuffer) {
-        const reason = `too close to window end (${blocksLeft} blocks left, need ${safetyBuffer})`;
-        ctx.logger.info(`🚫 commit not eligible: ${reason}`);
-
-        return {
-          eligible: false,
-          blocksLeft,
-          windowInfo: {
-            currentWindow,
-            windowStart,
-            windowEnd,
-            nextWindowStart,
-          },
-          reason,
-        };
-      }
 
       ctx.logger.info(
-        `✅ commit eligible - committer for window ${currentWindow}, ${blocksLeft} blocks left (safe with buffer)`,
+        `✅ commit eligible - committer for window ${currentWindow}, ${blocksLeft} blocks left in window`,
       );
 
       return {
@@ -174,7 +172,10 @@ export class StatelessCoordinatorService {
         },
       };
     } catch (error) {
-      ctx.logger.error({ error }, 'failed to check commit eligibility, defaulting to not eligible');
+      ctx.logger.error(
+        { error },
+        'failed to check commit eligibility, defaulting to not eligible',
+      );
       return {
         eligible: false,
         blocksLeft: 0,
@@ -202,9 +203,12 @@ export class StatelessCoordinatorService {
     const ctx = new TaskContext('stateless-coordinator:pending-approvals');
 
     try {
-      const pendingCommitments = await this.contractService.getCommitmentsNeedingApproval();
+      const pendingCommitments =
+        await this.contractService.getCommitmentsNeedingApproval();
 
-      ctx.logger.debug(`found ${pendingCommitments.length} commitments needing approval from contract`);
+      ctx.logger.debug(
+        `found ${pendingCommitments.length} commitments needing approval from contract`,
+      );
 
       if (pendingCommitments.length === 0) {
         return {
@@ -215,32 +219,38 @@ export class StatelessCoordinatorService {
 
       // get bot address for approval checking
       const botAddress = await this.getBotAddress();
-      
+
       // filter out commitments already approved by this bot
       const notApprovedCommitments: Array<{
         fromBlock: number;
         toBlock: number;
       }> = [];
-      
+
       for (const commitment of pendingCommitments) {
         try {
           const hasApproved = await this.contractService.hasApprovedCommitment(
             commitment.fromBlock,
             commitment.toBlock,
-            botAddress
+            botAddress,
           );
-          
+
           if (hasApproved) {
-            ctx.logger.debug(`✅ Bot ${botAddress} already approved commitment ${commitment.fromBlock}-${commitment.toBlock}`);
+            ctx.logger.debug(
+              `✅ Bot ${botAddress} already approved commitment ${commitment.fromBlock}-${commitment.toBlock}`,
+            );
           } else {
-            ctx.logger.debug(`⏳ Bot ${botAddress} has not approved commitment ${commitment.fromBlock}-${commitment.toBlock}`);
+            ctx.logger.debug(
+              `⏳ Bot ${botAddress} has not approved commitment ${commitment.fromBlock}-${commitment.toBlock}`,
+            );
             notApprovedCommitments.push({
               fromBlock: commitment.fromBlock,
               toBlock: commitment.toBlock,
             });
           }
         } catch (error) {
-          ctx.logger.warn(`⚠️ could not check approval status for ${commitment.fromBlock}-${commitment.toBlock}: ${error.message}, including in pending list`);
+          ctx.logger.warn(
+            `⚠️ could not check approval status for ${commitment.fromBlock}-${commitment.toBlock}: ${error.message}, including in pending list`,
+          );
           // if we can't check, include it to be safe
           notApprovedCommitments.push({
             fromBlock: commitment.fromBlock,
@@ -249,10 +259,14 @@ export class StatelessCoordinatorService {
         }
       }
 
-      ctx.logger.debug(`filtered to ${notApprovedCommitments.length} commitments needing approval by this bot`);
+      ctx.logger.debug(
+        `filtered to ${notApprovedCommitments.length} commitments needing approval by this bot`,
+      );
 
       if (notApprovedCommitments.length > 0) {
-        ctx.logger.info(`📝 ${notApprovedCommitments.length} commitments need approval from this bot`);
+        ctx.logger.info(
+          `📝 ${notApprovedCommitments.length} commitments need approval from this bot`,
+        );
         for (const commitment of notApprovedCommitments) {
           ctx.logger.info(`   - ${commitment.fromBlock}-${commitment.toBlock}`);
         }
@@ -280,28 +294,32 @@ export class StatelessCoordinatorService {
     blocksSinceCommitment?: number;
     lastCommitmentBlock?: number;
     currentBlock?: number;
-    stuckCommitments?: Array<{fromBlock: number; toBlock: number;}>;
+    stuckCommitments?: Array<{ fromBlock: number; toBlock: number }>;
   }> {
     const ctx = new TaskContext('stateless-coordinator:recovery-check');
-    
+
     try {
       // get pending (approved but incomplete) commitments
-      const pendingCommitments = await this.contractService.getPendingCommitments();
-      
+      const pendingCommitments =
+        await this.contractService.getPendingCommitments();
+
       if (pendingCommitments.length === 0) {
-        ctx.logger.debug('no pending approved commitments found, recovery not needed');
+        ctx.logger.debug(
+          'no pending approved commitments found, recovery not needed',
+        );
         return { shouldActivate: false };
       }
 
       const currentL1Block = await this.web3Service.getL1BlockNumber(ctx);
-      
-      const stuckCommitments: Array<{fromBlock: number; toBlock: number}> = [];
+
+      const stuckCommitments: Array<{ fromBlock: number; toBlock: number }> =
+        [];
       let maxBlocksSince = 0;
       let oldestCommitmentBlock = 0;
 
       for (const commitment of pendingCommitments) {
         const blocksSinceCommitment = currentL1Block - commitment.toBlock;
-        
+
         ctx.logger.debug(
           `approved commitment ${commitment.fromBlock}-${commitment.toBlock}: ${blocksSinceCommitment} L1 blocks old (${commitment.processedBatches}/${commitment.totalBatches} batches)`,
         );
@@ -311,7 +329,7 @@ export class StatelessCoordinatorService {
             fromBlock: commitment.fromBlock,
             toBlock: commitment.toBlock,
           });
-          
+
           if (blocksSinceCommitment > maxBlocksSince) {
             maxBlocksSince = blocksSinceCommitment;
             oldestCommitmentBlock = commitment.toBlock;
@@ -325,7 +343,9 @@ export class StatelessCoordinatorService {
         ctx.logger.info(
           `🔍 recovery threshold reached: ${stuckCommitments.length} stuck approved commitments found`,
         );
-        ctx.logger.info(`   oldest: ${maxBlocksSince} L1 blocks since completion`);
+        ctx.logger.info(
+          `   oldest: ${maxBlocksSince} L1 blocks since completion`,
+        );
       } else {
         ctx.logger.debug(
           `⏳ no stuck commitments - all approved commitments are < ${this.RECOVERY_BLOCK_THRESHOLD} L1 blocks old`,
@@ -340,7 +360,10 @@ export class StatelessCoordinatorService {
         stuckCommitments,
       };
     } catch (error) {
-      ctx.logger.error({ error }, 'failed to check recovery activation, defaulting to false');
+      ctx.logger.error(
+        { error },
+        'failed to check recovery activation, defaulting to false',
+      );
       return { shouldActivate: false };
     }
   }
@@ -357,13 +380,13 @@ export class StatelessCoordinatorService {
     );
 
     try {
-      const recentEvents = await this.contractService.getRecentDistributionEvents(
-        this.ACTIVITY_WINDOW_BLOCKS,
-      );
+      const recentEvents =
+        await this.contractService.getRecentDistributionEvents(
+          this.ACTIVITY_WINDOW_BLOCKS,
+        );
 
       const commitmentEvents = recentEvents.filter(
-        (event) =>
-          event.fromBlock === fromBlock && event.toBlock === toBlock,
+        (event) => event.fromBlock === fromBlock && event.toBlock === toBlock,
       );
 
       if (commitmentEvents.length === 0) {
@@ -437,7 +460,8 @@ export class StatelessCoordinatorService {
     let estimatedBatchesPerMinute: number | undefined;
     if (sortedEvents.length >= 2) {
       const timeSpan =
-        (sortedEvents[0].blockTimestamp - sortedEvents[sortedEvents.length - 1].blockTimestamp) /
+        (sortedEvents[0].blockTimestamp -
+          sortedEvents[sortedEvents.length - 1].blockTimestamp) /
         60; // minutes
       estimatedBatchesPerMinute = sortedEvents.length / timeSpan;
     }
@@ -446,7 +470,8 @@ export class StatelessCoordinatorService {
     const isProgressing = this.isDistributionProgressing(sortedEvents);
 
     return {
-      isActive: isProgressing && timeSinceLastActivity < this.ACTIVITY_TIMEOUT_SECONDS,
+      isActive:
+        isProgressing && timeSinceLastActivity < this.ACTIVITY_TIMEOUT_SECONDS,
       lastActivity: lastActivityTime,
       estimatedBatchesPerMinute,
       currentBatch: latestEvent.batchIndex,
@@ -466,7 +491,7 @@ export class StatelessCoordinatorService {
 
     // check if batch numbers are incrementing over time
     const batchProgression = events.map((e) => e.batchIndex || 0);
-    
+
     // if we see increasing batch numbers, it's progressing
     for (let i = 0; i < batchProgression.length - 1; i++) {
       if (batchProgression[i] > batchProgression[i + 1]) {
@@ -495,7 +520,7 @@ export class StatelessCoordinatorService {
     try {
       // FIRST: Check if there are any stuck approved commitments that need recovery
       const recoveryCheck = await this.shouldActivateRecovery();
-      
+
       if (!recoveryCheck.shouldActivate) {
         ctx.logger.debug(
           `⏳ recovery not needed - no stuck approved commitments found`,
@@ -522,10 +547,15 @@ export class StatelessCoordinatorService {
         }
       }
 
-      ctx.logger.info('✅ recovery conditions met - proceeding with recovery/distribution');
+      ctx.logger.info(
+        '✅ recovery conditions met - proceeding with recovery/distribution',
+      );
       return false; // don't skip recovery - we should proceed
     } catch (error) {
-      ctx.logger.error({ error }, 'failed to check if should skip recovery, proceeding with recovery');
+      ctx.logger.error(
+        { error },
+        'failed to check if should skip recovery, proceeding with recovery',
+      );
       return false; // default to allowing recovery
     }
   }

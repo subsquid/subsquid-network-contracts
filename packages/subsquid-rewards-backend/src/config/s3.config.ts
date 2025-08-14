@@ -1,6 +1,9 @@
 import { registerAs } from '@nestjs/config';
 
-function parseBoolean(value: string | undefined, defaultValue = false): boolean {
+function parseBoolean(
+  value: string | undefined,
+  defaultValue = false,
+): boolean {
   if (value == null) return defaultValue;
   const v = value.trim().toLowerCase();
   return v === 'true' || v === '1' || v === 'yes' || v === 'on';
@@ -20,6 +23,7 @@ export interface S3Config {
   maxRetryDelay: number;
   forcePathStyle: boolean;
   debugMode: boolean;
+  pathPrefix?: string;
 }
 
 export default registerAs('s3', (): S3Config => {
@@ -37,14 +41,18 @@ export default registerAs('s3', (): S3Config => {
     requestTimeout: parseInt(process.env.S3_REQUEST_TIMEOUT || '30000', 10),
     forcePathStyle: parseBoolean(process.env.S3_FORCE_PATH_STYLE, true),
     debugMode: parseBoolean(process.env.S3_DEBUG, false),
+    pathPrefix: process.env.S3_PATH_PREFIX || process.env.NETWORK_NAME || 'unknown',
   };
 
   if (process.env.NODE_ENV !== 'production' || config.debugMode) {
     console.log('[S3Config] Configuration loaded:', {
       enabled: config.enabled,
-      endpoint: config.endpoint ? `${config.endpoint.substring(0, 30)}...` : 'NOT SET',
+      endpoint: config.endpoint
+        ? `${config.endpoint.substring(0, 30)}...`
+        : 'NOT SET',
       bucket: config.bucket,
       region: config.region,
+      pathPrefix: config.pathPrefix,
       hasAccessKey: !!config.accessKeyId,
       hasSecret: !!config.accessKeySecret,
       retryAttempts: config.retryAttempts,

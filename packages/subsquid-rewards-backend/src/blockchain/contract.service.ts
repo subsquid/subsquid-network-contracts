@@ -165,7 +165,6 @@ export class ContractService {
 
   async getCurrentApy(ctx: Context, blockNumber?: bigint): Promise<bigint> {
     try {
-
       try {
         const tvl = await this.getEffectiveTVL(ctx, blockNumber);
         ctx.logger.debug(`TVL: ${tvl.toString()}`);
@@ -268,7 +267,7 @@ export class ContractService {
 
   async getBondAmount(): Promise<bigint> {
     const ctx = new TaskContext('contract-service:get-bond-amount');
-    
+
     try {
       const workerRegistrationAddress = this.configService.get(
         'blockchain.contracts.workerRegistration',
@@ -305,7 +304,7 @@ export class ContractService {
       ) as Address;
 
       ctx.logger.debug(
-        `Getting lastBlockRewarded from contract at ${rewardsDistributionAddress}`
+        `Getting lastBlockRewarded from contract at ${rewardsDistributionAddress}`,
       );
 
       try {
@@ -314,36 +313,42 @@ export class ContractService {
           abi: DistributedRewardsDistributionABI,
           functionName: 'lastBlockRewarded',
         });
-        
+
         const lastBlockNum = Number(lastBlock);
         ctx.logger.debug(`lastBlockRewarded value: ${lastBlockNum}`);
-        
+
         // if lastBlockRewarded is 0, use the configured starting block
         if (lastBlockNum === 0) {
-          const startingBlock = this.configService.get('rewards.distributionStartingBlock') || 0;
+          const startingBlock =
+            this.configService.get('rewards.distributionStartingBlock') || 0;
           if (startingBlock > 0) {
             ctx.logger.info(
-              `Using configured starting block: ${startingBlock} (lastBlockRewarded = 0)`
+              `Using configured starting block: ${startingBlock} (lastBlockRewarded = 0)`,
             );
             // return startingBlock - 1 so the first distribution starts at startingBlock
             return startingBlock - 1;
           }
         }
-        
+
         return lastBlockNum;
       } catch (contractError: any) {
         if (contractError.message?.includes('returned no data')) {
-          ctx.logger.debug('Contract returned no data for lastBlockRewarded - using starting block');
-          const startingBlock = this.configService.get('rewards.distributionStartingBlock') || 0;
+          ctx.logger.debug(
+            'Contract returned no data for lastBlockRewarded - using starting block',
+          );
+          const startingBlock =
+            this.configService.get('rewards.distributionStartingBlock') || 0;
           if (startingBlock > 0) {
-            ctx.logger.info(`Using configured starting block: ${startingBlock}`);
+            ctx.logger.info(
+              `Using configured starting block: ${startingBlock}`,
+            );
             return startingBlock - 1;
           }
           return 0;
         }
-        
+
         ctx.logger.error(
-          `Contract call failed: ${contractError.shortMessage || contractError.message}`
+          `Contract call failed: ${contractError.shortMessage || contractError.message}`,
         );
         throw contractError;
       }
@@ -351,8 +356,10 @@ export class ContractService {
       if (typeof error === 'number') {
         return error;
       }
-      
-      ctx.logger.error(`Unexpected error getting last rewarded block: ${error.message}`);
+
+      ctx.logger.error(
+        `Unexpected error getting last rewarded block: ${error.message}`,
+      );
       return 0;
     }
   }
@@ -365,12 +372,15 @@ export class ContractService {
 
       const ctx = new TaskContext('contract:isCommitted');
       ctx.logger.debug(
-        `Checking if committed: ${fromBlock}-${toBlock} at contract ${rewardsDistributionAddress}`
+        `Checking if committed: ${fromBlock}-${toBlock} at contract ${rewardsDistributionAddress}`,
       );
 
       // create the commitment key using abi.encode to match contract
-      const commitmentKey = this.commitmentKeyService.generateKey(fromBlock, toBlock);
-      
+      const commitmentKey = this.commitmentKeyService.generateKey(
+        fromBlock,
+        toBlock,
+      );
+
       ctx.logger.debug(`Commitment key: ${commitmentKey}`);
 
       try {
@@ -381,7 +391,7 @@ export class ContractService {
           functionName: 'commitments',
           args: [commitmentKey],
         });
-        
+
         ctx.logger.debug(`Commitment result: ${JSON.stringify(commitment)}`);
         // New struct has status as first field, check if not NONEXISTENT (0)
         return Number(commitment[0]) !== 0;
@@ -395,7 +405,7 @@ export class ContractService {
             fromBlock,
             toBlock,
           },
-          'Failed to read commitment from contract'
+          'Failed to read commitment from contract',
         );
         throw readError;
       }
@@ -423,13 +433,13 @@ export class ContractService {
     } catch (error: any) {
       if (error.message?.includes('returned no data')) {
         new TaskContext('contract-service:canCommit').logger.debug(
-          'Contract returned no data for canCommit - returning false'
+          'Contract returned no data for canCommit - returning false',
         );
         return false;
       }
-      
+
       new TaskContext('contract-service:canCommit').logger.warn(
-        `Failed to check if can commit: ${error.shortMessage || error.message}`
+        `Failed to check if can commit: ${error.shortMessage || error.message}`,
       );
       return false;
     }
@@ -514,26 +524,40 @@ export class ContractService {
         client: this.web3Service.client,
       });
 
-
       const lastCommitmentKey = await contract.read.lastCommitmentKey();
-      
-      if (!lastCommitmentKey || lastCommitmentKey === '0x0000000000000000000000000000000000000000000000000000000000000000') {
-        new TaskContext('contract-service:getLatestCommitment').logger.debug('No commitment key found');
+
+      if (
+        !lastCommitmentKey ||
+        lastCommitmentKey ===
+          '0x0000000000000000000000000000000000000000000000000000000000000000'
+      ) {
+        new TaskContext('contract-service:getLatestCommitment').logger.debug(
+          'No commitment key found',
+        );
         return undefined;
       }
 
       const commitment = await contract.read.commitments([lastCommitmentKey]);
-      const [status, fromBlock, toBlock, merkleRoot, totalBatches, processedBatches, approvalCount, ipfsLink] = commitment;
+      const [
+        status,
+        fromBlock,
+        toBlock,
+        merkleRoot,
+        totalBatches,
+        processedBatches,
+        approvalCount,
+        ipfsLink,
+      ] = commitment;
 
       return {
-        fromBlock: fromBlock as bigint,
-        toBlock: toBlock as bigint,
-        merkleRoot: merkleRoot as `0x${string}`,
+        fromBlock: fromBlock,
+        toBlock: toBlock,
+        merkleRoot: merkleRoot,
         totalBatches: Number(totalBatches),
         processedBatches: Number(processedBatches),
         approvalCount: BigInt(approvalCount),
-        ipfsLink: ipfsLink as string,
-        exists: status !== 0
+        ipfsLink: ipfsLink,
+        exists: status !== 0,
       };
     } catch (error) {
       new TaskContext('error-handling').logger.error(
@@ -919,7 +943,10 @@ export class ContractService {
       });
 
       // create the commitment key using abi.encode to match contract
-      const commitmentKey = this.commitmentKeyService.generateKey(fromBlock, toBlock);
+      const commitmentKey = this.commitmentKeyService.generateKey(
+        fromBlock,
+        toBlock,
+      );
 
       return await contract.read.processed([commitmentKey, leafHash]);
     } catch (error) {
@@ -954,14 +981,16 @@ export class ContractService {
         throw new Error('Rewards distribution contract address not configured');
       }
 
-      const commitmentKey = this.commitmentKeyService.generateKey(fromBlock, toBlock);
+      const commitmentKey = this.commitmentKeyService.generateKey(
+        fromBlock,
+        toBlock,
+      );
 
       ctx.logger.debug(
-        `Getting commitment for blocks ${fromBlock}-${toBlock}, key: ${commitmentKey}, contract: ${rewardsDistributionAddress}`
+        `Getting commitment for blocks ${fromBlock}-${toBlock}, key: ${commitmentKey}, contract: ${rewardsDistributionAddress}`,
       );
 
       try {
-
         const commitment = await this.web3Service.client.readContract({
           address: rewardsDistributionAddress,
           abi: DistributedRewardsDistributionABI,
@@ -969,26 +998,29 @@ export class ContractService {
           args: [commitmentKey],
         });
 
-        const commitmentForLogging = commitment ? {
-          status: commitment[0]?.toString(),
-          fromBlock: commitment[1]?.toString(),
-          toBlock: commitment[2]?.toString(),
-          merkleRoot: commitment[3],
-          totalBatches: commitment[4]?.toString(),
-          processedBatches: commitment[5]?.toString(),
-          approvalCount: commitment[6]?.toString(),
-          ipfsLink: commitment[7],
-        } : null;
-        
+        const commitmentForLogging = commitment
+          ? {
+              status: commitment[0]?.toString(),
+              fromBlock: commitment[1]?.toString(),
+              toBlock: commitment[2]?.toString(),
+              merkleRoot: commitment[3],
+              totalBatches: commitment[4]?.toString(),
+              processedBatches: commitment[5]?.toString(),
+              approvalCount: commitment[6]?.toString(),
+              ipfsLink: commitment[7],
+            }
+          : null;
+
         ctx.logger.debug(
-          `Raw commitment response: ${JSON.stringify(commitmentForLogging)}`
+          `Raw commitment response: ${JSON.stringify(commitmentForLogging)}`,
         );
-        
+
         if (!commitment) {
           ctx.logger.debug('No commitment found (null/undefined response)');
           return {
             exists: false,
-            merkleRoot: '0x0000000000000000000000000000000000000000000000000000000000000000',
+            merkleRoot:
+              '0x0000000000000000000000000000000000000000000000000000000000000000',
             totalBatches: 0,
             processedBatches: 0,
             approvalCount: 0,
@@ -999,20 +1031,22 @@ export class ContractService {
         const status = Number(commitment[0]);
         return {
           exists: status !== 0, // NONEXISTENT = 0
-          merkleRoot: (commitment[3] || '0x0000000000000000000000000000000000000000000000000000000000000000') as string,
+          merkleRoot: (commitment[3] ||
+            '0x0000000000000000000000000000000000000000000000000000000000000000') as string,
           totalBatches: Number(commitment[4] || 0),
           processedBatches: Number(commitment[5] || 0),
           approvalCount: Number(commitment[6] || 0),
-          ipfsLink: (commitment[7] || '') as string,
+          ipfsLink: commitment[7] || '',
         };
       } catch (contractError: any) {
         if (contractError.message?.includes('returned no data')) {
           ctx.logger.debug(
-            'Contract returned no data - this likely means no commitment exists yet'
+            'Contract returned no data - this likely means no commitment exists yet',
           );
           return {
             exists: false,
-            merkleRoot: '0x0000000000000000000000000000000000000000000000000000000000000000',
+            merkleRoot:
+              '0x0000000000000000000000000000000000000000000000000000000000000000',
             totalBatches: 0,
             processedBatches: 0,
             approvalCount: 0,
@@ -1023,11 +1057,13 @@ export class ContractService {
       }
     } catch (error) {
       ctx.logger.error(
-        { 
+        {
           error,
           fromBlock,
           toBlock,
-          contractAddress: this.configService.get('blockchain.contracts.rewardsDistribution'),
+          contractAddress: this.configService.get(
+            'blockchain.contracts.rewardsDistribution',
+          ),
         },
         `Failed to get commitment for blocks ${fromBlock}-${toBlock}`,
       );
@@ -1058,11 +1094,11 @@ export class ContractService {
           this.isBatchProcessed(fromBlock, toBlock, leafHash as Hex),
         ),
       );
-      
+
       ctx.logger.debug(
-        `Checked ${leafHashes.length} batches: ${results.filter(r => r).length} processed`,
+        `Checked ${leafHashes.length} batches: ${results.filter((r) => r).length} processed`,
       );
-      
+
       return results;
     } catch (error) {
       ctx.logger.error(
@@ -1112,27 +1148,36 @@ export class ContractService {
     try {
       const currentBlock = await this.web3Service.getL1BlockNumber(ctx);
       const lastRewardedBlock = await this.getLastRewardedBlock(ctx);
-      const blockInterval = this.configService.get('rewards.distributionBlockInterval') || 520;
-      const confirmationBlocks = this.configService.get('blockchain.epochConfirmationBlocks') || 1000;
-      const startingBlock = this.configService.get('rewards.distributionStartingBlock') || 0;
+      const blockInterval =
+        this.configService.get('rewards.distributionBlockInterval') || 520;
+      const confirmationBlocks =
+        this.configService.get('blockchain.epochConfirmationBlocks') || 1000;
+      const startingBlock =
+        this.configService.get('rewards.distributionStartingBlock') || 0;
       const rewardsDistributionAddress = this.configService.get(
         'blockchain.contracts.rewardsDistribution',
       ) as Address;
-      
+
       let lastCommitmentKey: string;
       try {
         lastCommitmentKey = await this.getLastCommitmentKey(ctx);
       } catch (error) {
-        ctx.logger.debug('Could not fetch lastCommitmentKey - might be using older contract');
-        lastCommitmentKey = '0x0000000000000000000000000000000000000000000000000000000000000000';
+        ctx.logger.debug(
+          'Could not fetch lastCommitmentKey - might be using older contract',
+        );
+        lastCommitmentKey =
+          '0x0000000000000000000000000000000000000000000000000000000000000000';
       }
 
       let nextFromBlock: number = 0;
       let nextToBlock: number = 0;
-      
-      if (lastCommitmentKey !== '0x0000000000000000000000000000000000000000000000000000000000000000') {
+
+      if (
+        lastCommitmentKey !==
+        '0x0000000000000000000000000000000000000000000000000000000000000000'
+      ) {
         ctx.logger.info(`Found lastCommitmentKey: ${lastCommitmentKey}`);
-        
+
         try {
           const commitment = await this.web3Service.client.readContract({
             address: rewardsDistributionAddress,
@@ -1140,32 +1185,36 @@ export class ContractService {
             functionName: 'commitments',
             args: [lastCommitmentKey as `0x${string}`],
           });
-          
-          const commitmentStatus = Number(commitment[0]); 
-          const commitmentFromBlock = Number(commitment[1]); 
-          const commitmentToBlock = Number(commitment[2]); 
-          
+
+          const commitmentStatus = Number(commitment[0]);
+          const commitmentFromBlock = Number(commitment[1]);
+          const commitmentToBlock = Number(commitment[2]);
+
           ctx.logger.info(
-            `Last commitment status: ${commitmentStatus}, blocks: ${commitmentFromBlock}-${commitmentToBlock}`
+            `Last commitment status: ${commitmentStatus}, blocks: ${commitmentFromBlock}-${commitmentToBlock}`,
           );
-          
-          if (commitmentStatus === 1) { // ACTIVE - not fully processed
+
+          if (commitmentStatus === 1) {
+            // ACTIVE - not fully processed
             // need to recover this distribution
             nextFromBlock = commitmentFromBlock;
             nextToBlock = commitmentToBlock;
             ctx.logger.info(
-              `Found ACTIVE commitment that needs recovery for blocks ${nextFromBlock}-${nextToBlock}`
+              `Found ACTIVE commitment that needs recovery for blocks ${nextFromBlock}-${nextToBlock}`,
             );
-          } else if (commitmentStatus === 2) { // COMPLETED
+          } else if (commitmentStatus === 2) {
+            // COMPLETED
             // skip and go to lastBlockRewarded + 1
             nextFromBlock = lastRewardedBlock + 1;
             nextToBlock = nextFromBlock + blockInterval - 1;
             ctx.logger.info(
-              `Last commitment COMPLETED, continuing from block ${nextFromBlock}`
+              `Last commitment COMPLETED, continuing from block ${nextFromBlock}`,
             );
           } else {
             // status is NONEXISTENT (0)
-            ctx.logger.warn('Last commitment key exists but status is NONEXISTENT');
+            ctx.logger.warn(
+              'Last commitment key exists but status is NONEXISTENT',
+            );
             nextFromBlock = lastRewardedBlock + 1;
             nextToBlock = nextFromBlock + blockInterval - 1;
           }
@@ -1181,32 +1230,43 @@ export class ContractService {
           // fresh start - use starting block
           nextFromBlock = startingBlock;
           nextToBlock = nextFromBlock + blockInterval - 1;
-          ctx.logger.info(`Fresh start: Using configured starting block: ${startingBlock}`);
+          ctx.logger.info(
+            `Fresh start: Using configured starting block: ${startingBlock}`,
+          );
         } else {
           // continue from lastRewardedBlock
           nextFromBlock = lastRewardedBlock + 1;
           nextToBlock = nextFromBlock + blockInterval - 1;
-          ctx.logger.info(`Continuing from lastRewardedBlock + 1: ${nextFromBlock}`);
+          ctx.logger.info(
+            `Continuing from lastRewardedBlock + 1: ${nextFromBlock}`,
+          );
         }
       }
-      
+
       // calculate blocks until distribution
-      const blocksUntilNextDistribution = Math.max(0, nextToBlock - currentBlock);
-      
+      const blocksUntilNextDistribution = Math.max(
+        0,
+        nextToBlock - currentBlock,
+      );
+
       // check if needs confirmation
       const lastConfirmedBlock = currentBlock - confirmationBlocks;
       const needsConfirmation = nextToBlock > lastConfirmedBlock;
-      const confirmationBlocksNeeded = needsConfirmation ? nextToBlock - lastConfirmedBlock : 0;
-      
+      const confirmationBlocksNeeded = needsConfirmation
+        ? nextToBlock - lastConfirmedBlock
+        : 0;
+
       // check for existing commitment
-      const commitment = await this.getCommitment(ctx, nextFromBlock, nextToBlock);
-      
+      const commitment = await this.getCommitment(
+        ctx,
+        nextFromBlock,
+        nextToBlock,
+      );
+
       // determine if ready for distribution
-      const isReadyForDistribution = 
-        currentBlock >= nextToBlock && 
-        !needsConfirmation && 
-        !commitment.exists;
-      
+      const isReadyForDistribution =
+        currentBlock >= nextToBlock && !needsConfirmation && !commitment.exists;
+
       return {
         nextFromBlock,
         nextToBlock,
@@ -1256,7 +1316,7 @@ export class ContractService {
         totalBatches: Number(result[2]),
         processedBatches: Number(result[3]),
         approvalCount: Number(result[4]),
-        ipfsLink: result[5] as string,
+        ipfsLink: result[5],
       };
     } catch (error) {
       ctx.logger.error(
@@ -1288,7 +1348,7 @@ export class ContractService {
         args: [[BigInt(fromBlock), BigInt(toBlock)]],
       });
 
-      return isComplete as boolean;
+      return isComplete;
     } catch (error) {
       ctx.logger.error(
         { error, fromBlock, toBlock },
@@ -1322,7 +1382,6 @@ export class ContractService {
     }
   }
 
-
   async isNextDistributionReady(ctx: Context): Promise<{
     isReady: boolean;
     nextFromBlock: number;
@@ -1334,27 +1393,30 @@ export class ContractService {
     try {
       const currentBlock = await this.web3Service.getL1BlockNumber(ctx);
       const lastRewardedBlock = await this.getLastRewardedBlock(ctx);
-      const blockInterval = this.configService.get('rewards.distributionBlockInterval') || 520;
-      const confirmationBlocks = this.configService.get('blockchain.epochConfirmationBlocks') || 500;
-      
+      const blockInterval =
+        this.configService.get('rewards.distributionBlockInterval') || 520;
+      const confirmationBlocks =
+        this.configService.get('blockchain.epochConfirmationBlocks') || 150;
+
       const nextFromBlock = lastRewardedBlock + 1;
       const nextToBlock = nextFromBlock + blockInterval - 1;
-      
-      const blocksUntilReady = nextToBlock > currentBlock ? nextToBlock - currentBlock : 0;
-      
+
+      const blocksUntilReady =
+        nextToBlock > currentBlock ? nextToBlock - currentBlock : 0;
+
       const lastConfirmedBlock = currentBlock - confirmationBlocks;
       const needsConfirmation = nextToBlock > lastConfirmedBlock;
-      const confirmationBlocksNeeded = needsConfirmation ? nextToBlock - lastConfirmedBlock : 0;
-      
+      const confirmationBlocksNeeded = needsConfirmation
+        ? nextToBlock - lastConfirmedBlock
+        : 0;
+
       // ready if: end block reached + confirmed + no existing commitment
-      const isReady = 
-        currentBlock >= nextToBlock && 
-        !needsConfirmation;
-      
+      const isReady = currentBlock >= nextToBlock && !needsConfirmation;
+
       ctx.logger.debug(
-        `📊 Distribution check: current=${currentBlock}, target=${nextToBlock}, ready=${isReady}, blocksLeft=${confirmationBlocksNeeded}`
+        `📊 Distribution check: current=${currentBlock}, target=${nextToBlock}, ready=${isReady}, confirmations=${confirmationBlocks}, blocksToWait=${confirmationBlocksNeeded}`,
       );
-      
+
       return {
         isReady,
         nextFromBlock,
@@ -1364,7 +1426,10 @@ export class ContractService {
         confirmationBlocksNeeded,
       };
     } catch (error) {
-      ctx.logger.error({ error }, 'Failed to check if next distribution is ready');
+      ctx.logger.error(
+        { error },
+        'Failed to check if next distribution is ready',
+      );
       throw error;
     }
   }
@@ -1373,8 +1438,10 @@ export class ContractService {
    * get recent distribution events for activity detection
    */
   async getRecentDistributionEvents(blockWindow: number = 50): Promise<any[]> {
-    const ctx = new TaskContext('contract-service:get-recent-distribution-events');
-    
+    const ctx = new TaskContext(
+      'contract-service:get-recent-distribution-events',
+    );
+
     try {
       const rewardsDistributionAddress = this.configService.get(
         'blockchain.contracts.rewardsDistribution',
@@ -1398,7 +1465,7 @@ export class ContractService {
           const block = await this.web3Service.client.getBlock({
             blockNumber: log.blockNumber,
           });
-          
+
           return {
             ...log.args,
             blockNumber: log.blockNumber,
@@ -1410,7 +1477,9 @@ export class ContractService {
         }),
       );
 
-      ctx.logger.debug(`found ${eventsWithTimestamps.length} recent distribution events`);
+      ctx.logger.debug(
+        `found ${eventsWithTimestamps.length} recent distribution events`,
+      );
       return eventsWithTimestamps;
     } catch (error) {
       ctx.logger.error({ error }, 'failed to get recent distribution events');
@@ -1421,16 +1490,18 @@ export class ContractService {
   /**
    * get commitments that are approved but not fully distributed
    */
-  async getPendingCommitments(): Promise<Array<{
-    fromBlock: number;
-    toBlock: number;
-    merkleRoot: string;
-    totalBatches: number;
-    processedBatches: number;
-    status: string;
-  }>> {
+  async getPendingCommitments(): Promise<
+    Array<{
+      fromBlock: number;
+      toBlock: number;
+      merkleRoot: string;
+      totalBatches: number;
+      processedBatches: number;
+      status: string;
+    }>
+  > {
     const ctx = new TaskContext('contract-service:get-pending-commitments');
-    
+
     try {
       const rewardsDistributionAddress = this.configService.get(
         'blockchain.contracts.rewardsDistribution',
@@ -1443,14 +1514,27 @@ export class ContractService {
       });
 
       const lastCommitmentKey = await contract.read.lastCommitmentKey();
-      
-      if (!lastCommitmentKey || lastCommitmentKey === '0x0000000000000000000000000000000000000000000000000000000000000000') {
+
+      if (
+        !lastCommitmentKey ||
+        lastCommitmentKey ===
+          '0x0000000000000000000000000000000000000000000000000000000000000000'
+      ) {
         ctx.logger.debug('No commitment key found');
         return [];
       }
 
       const commitment = await contract.read.commitments([lastCommitmentKey]);
-      const [status, fromBlock, toBlock, merkleRoot, totalBatches, processedBatches, approvalCount, ipfsLink] = commitment;
+      const [
+        status,
+        fromBlock,
+        toBlock,
+        merkleRoot,
+        totalBatches,
+        processedBatches,
+        approvalCount,
+        ipfsLink,
+      ] = commitment;
 
       const pendingCommitments: Array<{
         fromBlock: number;
@@ -1460,7 +1544,7 @@ export class ContractService {
         processedBatches: number;
         status: string;
       }> = [];
-      
+
       if (
         status === 1 && // ACTIVE status
         approvalCount > 0n &&
@@ -1476,7 +1560,9 @@ export class ContractService {
         });
       }
 
-      ctx.logger.debug(`found ${pendingCommitments.length} pending commitments`);
+      ctx.logger.debug(
+        `found ${pendingCommitments.length} pending commitments`,
+      );
       return pendingCommitments;
     } catch (error) {
       ctx.logger.error({ error }, 'failed to get pending commitments');
@@ -1486,7 +1572,7 @@ export class ContractService {
 
   async getRequiredApprovals(): Promise<number> {
     const ctx = new TaskContext('contract-service:get-required-approvals');
-    
+
     try {
       const rewardsDistributionAddress = this.configService.get(
         'blockchain.contracts.rewardsDistribution',
@@ -1499,7 +1585,7 @@ export class ContractService {
       });
 
       const requiredApprovals = await contract.read.requiredApproves();
-      
+
       ctx.logger.debug(`Required approvals: ${requiredApprovals}`);
       return Number(requiredApprovals);
     } catch (error) {
@@ -1508,14 +1594,17 @@ export class ContractService {
     }
   }
 
+  async getCommitmentsNeedingApproval(): Promise<
+    Array<{
+      fromBlock: number;
+      toBlock: number;
+      merkleRoot: string;
+    }>
+  > {
+    const ctx = new TaskContext(
+      'contract-service:get-commitments-needing-approval',
+    );
 
-  async getCommitmentsNeedingApproval(): Promise<Array<{
-    fromBlock: number;
-    toBlock: number;
-    merkleRoot: string;
-  }>> {
-    const ctx = new TaskContext('contract-service:get-commitments-needing-approval');
-    
     try {
       const rewardsDistributionAddress = this.configService.get(
         'blockchain.contracts.rewardsDistribution',
@@ -1528,32 +1617,42 @@ export class ContractService {
       });
 
       const lastCommitmentKey = await contract.read.lastCommitmentKey();
-      
-      if (lastCommitmentKey === '0x0000000000000000000000000000000000000000000000000000000000000000') {
+
+      if (
+        lastCommitmentKey ===
+        '0x0000000000000000000000000000000000000000000000000000000000000000'
+      ) {
         ctx.logger.debug('no commitments found (lastCommitmentKey is zero)');
         return [];
       }
 
       const commitment = await contract.read.commitments([lastCommitmentKey]);
 
-      const [status, fromBlock, toBlock, merkleRoot, , , approvalCount] = commitment;
-      
+      const [status, fromBlock, toBlock, merkleRoot, , , approvalCount] =
+        commitment;
+
       const requiredApproves = await contract.read.requiredApproves();
-      
-      ctx.logger.debug(`latest commitment: blocks ${fromBlock}-${toBlock}, status: ${status}, approvals: ${approvalCount}/${requiredApproves}`);
-      
+
+      ctx.logger.debug(
+        `latest commitment: blocks ${fromBlock}-${toBlock}, status: ${status}, approvals: ${approvalCount}/${requiredApproves}`,
+      );
+
       // check if commitment needs more approvals
       if (
         status === 1 && // ACTIVE status (committed)
         approvalCount < requiredApproves // needs more approvals
       ) {
-        const needingApproval = [{
-          fromBlock: Number(fromBlock),
-          toBlock: Number(toBlock),
-          merkleRoot: merkleRoot as string,
-        }];
-        
-        ctx.logger.debug(`found 1 commitment needing approval: ${fromBlock}-${toBlock} (${approvalCount}/${requiredApproves} approvals)`);
+        const needingApproval = [
+          {
+            fromBlock: Number(fromBlock),
+            toBlock: Number(toBlock),
+            merkleRoot: merkleRoot as string,
+          },
+        ];
+
+        ctx.logger.debug(
+          `found 1 commitment needing approval: ${fromBlock}-${toBlock} (${approvalCount}/${requiredApproves} approvals)`,
+        );
         return needingApproval;
       }
 
@@ -1579,7 +1678,7 @@ export class ContractService {
     ipfsLink: string;
   } | null> {
     const ctx = new TaskContext('contract-service:get-commitment-info');
-    
+
     try {
       const rewardsDistributionAddress = this.configService.get(
         'blockchain.contracts.rewardsDistribution',
@@ -1591,10 +1690,21 @@ export class ContractService {
         client: this.web3Service.client,
       });
 
-      const commitment = await contract.read.commitments([commitmentKey as `0x${string}`]);
-      
-      const [status, fromBlock, toBlock, merkleRoot, totalBatches, processedBatches, approvalCount, ipfsLink] = commitment;
-      
+      const commitment = await contract.read.commitments([
+        commitmentKey as `0x${string}`,
+      ]);
+
+      const [
+        status,
+        fromBlock,
+        toBlock,
+        merkleRoot,
+        totalBatches,
+        processedBatches,
+        approvalCount,
+        ipfsLink,
+      ] = commitment;
+
       return {
         status: Number(status),
         fromBlock: Number(fromBlock),
@@ -1603,7 +1713,7 @@ export class ContractService {
         totalBatches: Number(totalBatches),
         processedBatches: Number(processedBatches),
         approvalCount,
-        ipfsLink: ipfsLink as string,
+        ipfsLink: ipfsLink,
       };
     } catch (error) {
       ctx.logger.debug(`failed to get commitment info: ${error.message}`);
@@ -1614,15 +1724,24 @@ export class ContractService {
   /**
    * check if specific address has approved a commitment
    */
-  async hasApprovedCommitment(fromBlock: number, toBlock: number, address: `0x${string}`): Promise<boolean> {
-    const ctx = new TaskContext(`contract-service:has-approved:${fromBlock}-${toBlock}`);
-    
+  async hasApprovedCommitment(
+    fromBlock: number,
+    toBlock: number,
+    address: `0x${string}`,
+  ): Promise<boolean> {
+    const ctx = new TaskContext(
+      `contract-service:has-approved:${fromBlock}-${toBlock}`,
+    );
+
     try {
       const rewardsDistributionAddress = this.configService.get(
         'blockchain.contracts.rewardsDistribution',
       ) as Address;
 
-      const commitmentKey = this.commitmentKeyService.generateKey(fromBlock, toBlock);
+      const commitmentKey = this.commitmentKeyService.generateKey(
+        fromBlock,
+        toBlock,
+      );
 
       const hasApproved = await this.web3Service.client.readContract({
         address: rewardsDistributionAddress,
@@ -1632,16 +1751,16 @@ export class ContractService {
             name: 'approvedBy',
             inputs: [
               { name: '', type: 'bytes32', internalType: 'bytes32' },
-              { name: '', type: 'address', internalType: 'address' }
+              { name: '', type: 'address', internalType: 'address' },
             ],
             outputs: [{ name: '', type: 'bool', internalType: 'bool' }],
             stateMutability: 'view',
-          }
+          },
         ],
         functionName: 'approvedBy',
         args: [commitmentKey, address],
       });
-      
+
       return hasApproved;
     } catch (error) {
       ctx.logger.error({ error }, 'failed to check approval status');
@@ -1652,15 +1771,23 @@ export class ContractService {
   /**
    * approve a commitment
    */
-  async approveCommitment(fromBlock: number, toBlock: number): Promise<boolean> {
-    const ctx = new TaskContext(`contract-service:approve-commitment:${fromBlock}-${toBlock}`);
-    
+  async approveCommitment(
+    fromBlock: number,
+    toBlock: number,
+  ): Promise<boolean> {
+    const ctx = new TaskContext(
+      `contract-service:approve-commitment:${fromBlock}-${toBlock}`,
+    );
+
     try {
       const rewardsDistributionAddress = this.configService.get(
         'blockchain.contracts.rewardsDistribution',
       ) as Address;
 
-      const commitmentKey = this.commitmentKeyService.generateKey(fromBlock, toBlock);
+      const commitmentKey = this.commitmentKeyService.generateKey(
+        fromBlock,
+        toBlock,
+      );
 
       ctx.logger.info(`📋 Approving commitment ${fromBlock}-${toBlock}`);
       ctx.logger.info(`   Commitment key: ${commitmentKey}`);
@@ -1671,16 +1798,20 @@ export class ContractService {
         client: this.web3Service.client,
       });
 
-      const privateKey = this.configService.get('blockchain.distributor.privateKey') as `0x${string}`;
-      
+      const privateKey = this.configService.get(
+        'blockchain.distributor.privateKey',
+      ) as `0x${string}`;
+
       if (!privateKey) {
-        ctx.logger.error('❌ DISTRIBUTOR_PRIVATE_KEY environment variable is not set or empty');
+        ctx.logger.error(
+          '❌ DISTRIBUTOR_PRIVATE_KEY environment variable is not set or empty',
+        );
         throw new Error('Missing DISTRIBUTOR_PRIVATE_KEY environment variable');
       }
-      
+
       const account = privateKeyToAccount(privateKey);
       const botAddress = account.address;
-      
+
       ctx.logger.debug(`🔑 Using bot address: ${botAddress}`);
 
       const commitment = await this.getCommitmentInfo(commitmentKey);
@@ -1690,21 +1821,29 @@ export class ContractService {
       }
 
       if (commitment.status !== 1) {
-        ctx.logger.warn(`❌ Commitment ${fromBlock}-${toBlock} is not ACTIVE (status: ${commitment.status})`);
+        ctx.logger.warn(
+          `❌ Commitment ${fromBlock}-${toBlock} is not ACTIVE (status: ${commitment.status})`,
+        );
         return false;
       }
 
       const requiredApprovals = await this.getRequiredApprovals();
-      ctx.logger.info(`📊 Commitment status: ${commitment.approvalCount}/${requiredApprovals} approvals`);
+      ctx.logger.info(
+        `📊 Commitment status: ${commitment.approvalCount}/${requiredApprovals} approvals`,
+      );
 
       if (commitment.approvalCount >= requiredApprovals) {
-        ctx.logger.info(`✅ Commitment ${fromBlock}-${toBlock} already has enough approvals (${commitment.approvalCount}/${requiredApprovals})`);
+        ctx.logger.info(
+          `✅ Commitment ${fromBlock}-${toBlock} already has enough approvals (${commitment.approvalCount}/${requiredApprovals})`,
+        );
         return true;
       }
 
-      ctx.logger.info(`🔄 Sending approval transaction for commitment ${fromBlock}-${toBlock}`);
+      ctx.logger.info(
+        `🔄 Sending approval transaction for commitment ${fromBlock}-${toBlock}`,
+      );
       const rpcUrl = this.configService.get('blockchain.network.l2RpcUrl');
-      
+
       let chain;
       if (rpcUrl.includes('localhost') || rpcUrl.includes('127.0.0.1')) {
         chain = defineChain({
@@ -1724,7 +1863,7 @@ export class ContractService {
       } else {
         chain = arbitrum;
       }
-      
+
       const walletClient = createWalletClient({
         account,
         chain,
@@ -1748,34 +1887,47 @@ export class ContractService {
           ctx.logger.info(`📤 Approval transaction sent: ${txHash}`);
 
           // Wait for confirmation
-          const receipt = await this.web3Service.client.waitForTransactionReceipt({
-            hash: txHash,
-            confirmations: 2,
-            timeout: 120000, // 2 minutes
-          });
+          const receipt =
+            await this.web3Service.client.waitForTransactionReceipt({
+              hash: txHash,
+              confirmations: 2,
+              timeout: 120000, // 2 minutes
+            });
 
           if (receipt.status === 'success') {
-            ctx.logger.info(`✅ Approval confirmed for ${fromBlock}-${toBlock} (tx: ${txHash})`);
+            ctx.logger.info(
+              `✅ Approval confirmed for ${fromBlock}-${toBlock} (tx: ${txHash})`,
+            );
             return true;
           } else {
-            ctx.logger.error(`❌ Approval transaction failed for ${fromBlock}-${toBlock} (tx: ${txHash})`);
+            ctx.logger.error(
+              `❌ Approval transaction failed for ${fromBlock}-${toBlock} (tx: ${txHash})`,
+            );
             if (attempt === maxRetries) return false;
           }
         } catch (error) {
-          ctx.logger.error(`❌ Approval attempt ${attempt}/${maxRetries} failed: ${error.message}`);
-          
-     
-          if (error.message.includes('AlreadyApproved') || error.message.includes('0x101f817a')) {
-            ctx.logger.info(`✅ Commitment ${fromBlock}-${toBlock} was already approved by this distributor`);
+          ctx.logger.error(
+            `❌ Approval attempt ${attempt}/${maxRetries} failed: ${error.message}`,
+          );
+
+          if (
+            error.message.includes('AlreadyApproved') ||
+            error.message.includes('0x101f817a')
+          ) {
+            ctx.logger.info(
+              `✅ Commitment ${fromBlock}-${toBlock} was already approved by this distributor`,
+            );
             return true;
           }
-          
+
           if (attempt === maxRetries) {
-            ctx.logger.error(`❌ Failed to approve commitment ${fromBlock}-${toBlock} after ${maxRetries} attempts`);
+            ctx.logger.error(
+              `❌ Failed to approve commitment ${fromBlock}-${toBlock} after ${maxRetries} attempts`,
+            );
             return false;
           }
-          
-          await new Promise(resolve => setTimeout(resolve, 2000 * attempt));
+
+          await new Promise((resolve) => setTimeout(resolve, 2000 * attempt));
         }
       }
 
@@ -1801,4 +1953,3 @@ export class ContractService {
     }
   }
 }
-

@@ -5,7 +5,11 @@ import { ContractService } from '../../blockchain/contract.service';
 import { DistributionService } from '../../rewards/distribution/distribution.service';
 import { RewardsCalculatorService } from '../../rewards/calculation/rewards-calculator.service';
 import { Context } from '../../common';
-import { EpochMetricsService, NetworkMetrics, RewardMetrics } from './epoch-metrics.service';
+import {
+  EpochMetricsService,
+  NetworkMetrics,
+  RewardMetrics,
+} from './epoch-metrics.service';
 import { RewardsReporterService } from './rewards-reporter.service';
 
 export interface EpochProcessingResult {
@@ -28,29 +32,35 @@ export class EpochProcessorService {
     private rewardsReporter: RewardsReporterService,
   ) {}
 
-  async processEpoch(ctx: Context, fromBlock: number, toBlock: number): Promise<EpochProcessingResult> {
+  async processEpoch(
+    ctx: Context,
+    fromBlock: number,
+    toBlock: number,
+  ): Promise<EpochProcessingResult> {
     const epochStart = await this.web3Service.getBlockTimestamp(ctx, fromBlock);
     const epochEnd = await this.web3Service.getBlockTimestamp(ctx, toBlock);
     let commitTxHash = '';
     let lastCalculatedRewards: any;
-    
+
     try {
       // phase 1: commit
       commitTxHash = await this.processCommitPhase(ctx, fromBlock, toBlock);
-      
+
       // store rewards for reporting
       lastCalculatedRewards = this.getLastCalculatedRewards();
-      
-      // phase 2: approval  
+
+      // phase 2: approval
       await this.processApprovalPhase(ctx, fromBlock, toBlock);
-      
+
       // phase 3: distribution
       await this.processDistributionPhase(ctx, fromBlock, toBlock);
-      
+
       // success - collect metrics and report
       const networkMetrics = await this.epochMetrics.collectNetworkMetrics(ctx);
-      const rewardMetrics = this.epochMetrics.extractRewardMetrics(lastCalculatedRewards);
-      
+      const rewardMetrics = this.epochMetrics.extractRewardMetrics(
+        lastCalculatedRewards,
+      );
+
       await this.rewardsReporter.logSuccessfulRewardsReport({
         epochStart,
         epochEnd,
@@ -59,14 +69,13 @@ export class EpochProcessorService {
         networkMetrics,
         rewardMetrics,
       });
-      
+
       return {
         isSuccess: true,
         commitTxHash,
         networkMetrics,
         rewardMetrics,
       };
-      
     } catch (error) {
       // failure - report error
       await this.rewardsReporter.logFailedRewardsReport(
@@ -76,7 +85,7 @@ export class EpochProcessorService {
         commitTxHash,
         error as Error,
       );
-      
+
       // still return basic metrics for error case
       const networkMetrics = await this.epochMetrics.collectNetworkMetrics(ctx);
       const emptyRewardMetrics: RewardMetrics = {
@@ -86,7 +95,7 @@ export class EpochProcessorService {
         totalRequests: 0,
         validRequests: 0,
       };
-      
+
       return {
         isSuccess: false,
         commitTxHash,
@@ -97,12 +106,20 @@ export class EpochProcessorService {
     }
   }
 
-  private async processCommitPhase(ctx: Context, fromBlock: number, toBlock: number): Promise<string> {
-    ctx.logger.debug(`📝 Phase 1: Committing Merkle root for ${fromBlock}-${toBlock}`);
-    
-    ctx.logger.debug(`🔄 Proceeding with commit for ${fromBlock}-${toBlock}`)
+  private async processCommitPhase(
+    ctx: Context,
+    fromBlock: number,
+    toBlock: number,
+  ): Promise<string> {
+    ctx.logger.debug(
+      `📝 Phase 1: Committing Merkle root for ${fromBlock}-${toBlock}`,
+    );
 
-    const distributorAddress = this.configService.get('blockchain.distributor.address');
+    ctx.logger.debug(`🔄 Proceeding with commit for ${fromBlock}-${toBlock}`);
+
+    const distributorAddress = this.configService.get(
+      'blockchain.distributor.address',
+    );
     if (!distributorAddress) {
       throw new Error('Distributor address not configured');
     }
@@ -115,39 +132,48 @@ export class EpochProcessorService {
 
     ctx.logger.debug(`🧮 Calculating rewards for ${fromBlock}-${toBlock}...`);
 
-    const skipSignatureValidation = this.configService.get('rewards.skipSignatureValidation') || false;
-    
+    const skipSignatureValidation =
+      this.configService.get('rewards.skipSignatureValidation') || false;
+
     // calculate formatted rewards to get all metrics
-    const formattedRewards = await this.rewardsCalculatorService.calculateRewardsFormatted(
-      ctx,
-      fromBlock,
-      toBlock,
-      skipSignatureValidation,
-    );
-    
+    const formattedRewards =
+      await this.rewardsCalculatorService.calculateRewardsFormatted(
+        ctx,
+        fromBlock,
+        toBlock,
+        skipSignatureValidation,
+      );
+
     // store for use in distribution phase logging (exact same as original)
     this.setLastCalculatedRewards(formattedRewards);
-    
+
     // also get detailed result for merkle tree
-    const calculationResult = await this.rewardsCalculatorService.calculateRewardsDetailed(
-      ctx,
-      fromBlock,
-      toBlock,
-      skipSignatureValidation,
-    );
+    const calculationResult =
+      await this.rewardsCalculatorService.calculateRewardsDetailed(
+        ctx,
+        fromBlock,
+        toBlock,
+        skipSignatureValidation,
+      );
 
     const workers = calculationResult.workers;
 
     if (workers.length === 0) {
-      ctx.logger.warn(`⚠️  No workers found for range ${fromBlock}-${toBlock}, skipping commit`);
+      ctx.logger.warn(
+        `⚠️  No workers found for range ${fromBlock}-${toBlock}, skipping commit`,
+      );
       return '';
     }
 
     // generate Merkle tree using the MerkleTreeService directly (exact same as original)
-    const merkleTree = await this.distributionService['merkleTreeService'].generateMerkleTree(workers, 50);
+    const merkleTree = await this.distributionService[
+      'merkleTreeService'
+    ].generateMerkleTree(workers, 50);
 
     // commit the root to contract
-    ctx.logger.debug(`📤 Committing Merkle root ${merkleTree.root} with ${merkleTree.totalBatches} batches...`);
+    ctx.logger.debug(
+      `📤 Committing Merkle root ${merkleTree.root} with ${merkleTree.totalBatches} batches...`,
+    );
 
     const txHash = await this.contractService.commitRoot(
       fromBlock,
@@ -165,8 +191,14 @@ export class EpochProcessorService {
     }
   }
 
-  private async processApprovalPhase(ctx: Context, fromBlock: number, toBlock: number): Promise<void> {
-    ctx.logger.debug(`✅ Phase 2: Checking approvals for ${fromBlock}-${toBlock}`);
+  private async processApprovalPhase(
+    ctx: Context,
+    fromBlock: number,
+    toBlock: number,
+  ): Promise<void> {
+    ctx.logger.debug(
+      `✅ Phase 2: Checking approvals for ${fromBlock}-${toBlock}`,
+    );
 
     const latestCommitment = await this.contractService.getLatestCommitment();
 
@@ -175,17 +207,23 @@ export class EpochProcessorService {
       Number(latestCommitment.fromBlock) !== fromBlock ||
       Number(latestCommitment.toBlock) !== toBlock
     ) {
-      ctx.logger.debug(`No commitment found for range ${fromBlock}-${toBlock}, skipping approval`);
+      ctx.logger.debug(
+        `No commitment found for range ${fromBlock}-${toBlock}, skipping approval`,
+      );
       return;
     }
 
     const requiredApprovals = await this.contractService.getRequiredApprovals();
     const currentApprovals = Number(latestCommitment.approvalCount);
 
-    ctx.logger.debug(`📊 Approval status: ${currentApprovals}/${requiredApprovals} required`);
+    ctx.logger.debug(
+      `📊 Approval status: ${currentApprovals}/${requiredApprovals} required`,
+    );
 
     if (currentApprovals < requiredApprovals) {
-      ctx.logger.debug(`📝 Approving commitment for ${fromBlock}-${toBlock}...`);
+      ctx.logger.debug(
+        `📝 Approving commitment for ${fromBlock}-${toBlock}...`,
+      );
       const txHash = await this.contractService.approveRoot(fromBlock, toBlock);
 
       if (txHash) {
@@ -198,21 +236,30 @@ export class EpochProcessorService {
     }
   }
 
-  private async processDistributionPhase(ctx: Context, fromBlock: number, toBlock: number): Promise<void> {
-    ctx.logger.debug(`💰 Phase 3: Distributing rewards for ${fromBlock}-${toBlock}`);
+  private async processDistributionPhase(
+    ctx: Context,
+    fromBlock: number,
+    toBlock: number,
+  ): Promise<void> {
+    ctx.logger.debug(
+      `💰 Phase 3: Distributing rewards for ${fromBlock}-${toBlock}`,
+    );
 
     // use the existing distribution service which handles Merkle proof generation and batch distribution
-    const distributionStatus = await this.distributionService.distributeEpochRewards(
-      fromBlock,
-      toBlock,
-      50, // batch size
-    );
+    const distributionStatus =
+      await this.distributionService.distributeEpochRewards(
+        fromBlock,
+        toBlock,
+        50, // batch size
+      );
 
     if (distributionStatus.status === 'completed') {
       ctx.logger.debug(`✅ Distribution completed successfully:`);
       ctx.logger.debug(`   - Workers: ${distributionStatus.totalWorkers}`);
       ctx.logger.debug(`   - Batches: ${distributionStatus.totalBatches}`);
-      ctx.logger.debug(`   - Total Rewards: ${Number(distributionStatus.totalRewards) / 1e18} SQD`);
+      ctx.logger.debug(
+        `   - Total Rewards: ${Number(distributionStatus.totalRewards) / 1e18} SQD`,
+      );
     } else {
       throw new Error(`Distribution failed: ${distributionStatus.error}`);
     }
@@ -232,4 +279,4 @@ export class EpochProcessorService {
   clearLastCalculatedRewards(): void {
     this.lastCalculatedRewards = undefined;
   }
-} 
+}

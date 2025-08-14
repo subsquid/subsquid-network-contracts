@@ -9,7 +9,13 @@ import { DatabaseModule } from '../database/database.module';
 import { S3Module } from '../s3/s3.module';
 
 @Module({
-  imports: [EpochsModule, RewardsModule, BlockchainModule, DatabaseModule, S3Module],
+  imports: [
+    EpochsModule,
+    RewardsModule,
+    BlockchainModule,
+    DatabaseModule,
+    S3Module,
+  ],
   controllers: [AdminController, S3Controller, PublicController],
 })
 export class ApiModule {}

@@ -13,7 +13,7 @@ export interface RewardsReportParams {
   commitErrorMessage?: string;
   networkMetrics: NetworkMetrics;
   rewardMetrics: RewardMetrics;
-  workerRewards?: Array<any>; 
+  workerRewards?: Array<any>;
 }
 
 @Injectable()
@@ -26,16 +26,21 @@ export class RewardsReporterService {
 
   async logSuccessfulRewardsReport(params: RewardsReportParams): Promise<void> {
     const stakeFactor = 1; // same as old backend - always 1
-    
+
     // log the rewards report in old backend format (exact same as original)
     console.log(
       JSON.stringify({
         time: new Date(),
         epoch_start: params.epochStart,
         epoch_end: params.epochEnd,
-        type: "rewards_report",
-        bot_id: process.env.BOT_NAME || this.configService.get('blockchain.network.networkName'),
-        bot_wallet: this.configService.get('blockchain.distributor.address')?.toLowerCase() || '0x0',
+        type: 'rewards_report',
+        bot_id:
+          process.env.BOT_NAME ||
+          this.configService.get('blockchain.network.networkName'),
+        bot_wallet:
+          this.configService
+            .get('blockchain.distributor.address')
+            ?.toLowerCase() || '0x0',
         is_commit_success: params.isCommitSuccess,
         commit_tx_hash: params.commitTxHash,
         commit_error_message: params.commitErrorMessage || '',
@@ -50,12 +55,21 @@ export class RewardsReporterService {
         total_bytes_sent: params.rewardMetrics.totalBytesSent,
         total_requests: params.rewardMetrics.totalRequests,
         valid_requests: params.rewardMetrics.validRequests,
-      })
+      }),
     );
-    
-    if (params.isCommitSuccess && params.workerRewards && params.workerRewards.length > 0) {
-      const botId = process.env.BOT_NAME || this.configService.get('blockchain.network.networkName');
-      const botWallet = this.configService.get('blockchain.distributor.address')?.toLowerCase() || '0x0';
+
+    if (
+      params.isCommitSuccess &&
+      params.workerRewards &&
+      params.workerRewards.length > 0
+    ) {
+      const botId =
+        process.env.BOT_NAME ||
+        this.configService.get('blockchain.network.networkName');
+      const botWallet =
+        this.configService
+          .get('blockchain.distributor.address')
+          ?.toLowerCase() || '0x0';
 
       const totalEffectiveStake = params.workerRewards.reduce((acc, w: any) => {
         const eff = BigInt(
@@ -65,24 +79,33 @@ export class RewardsReporterService {
       }, 0n);
 
       params.workerRewards.forEach((worker: any) => {
-        const id: string = worker?.id || worker?.peerId || worker?.workerId?.toString() || '';
+        const id: string =
+          worker?.id || worker?.peerId || worker?.workerId?.toString() || '';
 
-        const effStakeStr: string = (worker?.delegation?.effectiveStake ?? worker?.stake ?? '0').toString();
+        const effStakeStr: string = (
+          worker?.delegation?.effectiveStake ??
+          worker?.stake ??
+          '0'
+        ).toString();
         const effStake = BigInt(effStakeStr);
         const workerApr: string = worker?.apr?.worker_apr ?? '0';
         const delegatorApr: string = worker?.apr?.delegator_apr ?? '0';
 
-        const s_i = totalEffectiveStake > 0n
-          ? (Number(effStake) / Number(totalEffectiveStake)).toFixed(6)
-          : '0';
+        const s_i =
+          totalEffectiveStake > 0n
+            ? (Number(effStake) / Number(totalEffectiveStake)).toFixed(6)
+            : '0';
 
-        const trafficWeight = worker?.traffic?.trafficWeight ?? worker?.trafficWeight ?? 0;
-        const t_i = typeof trafficWeight === 'number'
-          ? trafficWeight.toFixed(6)
-          : String(trafficWeight);
+        const trafficWeight =
+          worker?.traffic?.trafficWeight ?? worker?.trafficWeight ?? 0;
+        const t_i =
+          typeof trafficWeight === 'number'
+            ? trafficWeight.toFixed(6)
+            : String(trafficWeight);
 
         const dTraffic = worker?.traffic?.dTraffic ?? worker?.dTraffic ?? 0;
-        const r_i = typeof dTraffic === 'number' ? dTraffic.toFixed(6) : String(dTraffic);
+        const r_i =
+          typeof dTraffic === 'number' ? dTraffic.toFixed(6) : String(dTraffic);
 
         console.log(
           JSON.stringify({
@@ -101,8 +124,10 @@ export class RewardsReporterService {
             stake: effStakeStr,
             bytes_sent: worker?.traffic?.bytesSent ?? worker?.bytesSent ?? 0,
             chunks_read: worker?.traffic?.chunksRead ?? worker?.chunksRead ?? 0,
-            requests: worker?.traffic?.totalRequests ?? worker?.totalRequests ?? 0,
-            valid_requests: worker?.traffic?.validRequests ?? worker?.requestsProcessed ?? 0,
+            requests:
+              worker?.traffic?.totalRequests ?? worker?.totalRequests ?? 0,
+            valid_requests:
+              worker?.traffic?.validRequests ?? worker?.requestsProcessed ?? 0,
           }),
         );
       });
@@ -118,19 +143,20 @@ export class RewardsReporterService {
   ): Promise<void> {
     // log failed distribution in old backend format (exact same logic as original)
     try {
-      const activeWorkerCount = await this.web3Service.getActiveWorkerCount(ctx);
+      const activeWorkerCount =
+        await this.web3Service.getActiveWorkerCount(ctx);
       const networkCapacity = await this.contractService.getTargetCapacity();
-      
+
       let storagePerWorker = 200;
       try {
         storagePerWorker = await this.contractService.getStoragePerWorkerInGb();
       } catch (storageError) {
         // use default if fetch fails
       }
-      
+
       const currentCapacity = Number(activeWorkerCount) * storagePerWorker;
       const targetCapacity = Number(networkCapacity) / 1e9;
-      
+
       // try to get APR even for failed case
       let baseAprBasisPoints = 2000;
       try {
@@ -145,9 +171,15 @@ export class RewardsReporterService {
           time: new Date(),
           epoch_start: epochStart,
           epoch_end: epochEnd,
-          type: "rewards_report",
-          bot_id: process.env.BOT_NAME || this.configService.get('blockchain.network.networkName') || 'nestjs-backend-0-0',
-          bot_wallet: this.configService.get('blockchain.distributor.address')?.toLowerCase() || '0x0',
+          type: 'rewards_report',
+          bot_id:
+            process.env.BOT_NAME ||
+            this.configService.get('blockchain.network.networkName') ||
+            'nestjs-backend-0-0',
+          bot_wallet:
+            this.configService
+              .get('blockchain.distributor.address')
+              ?.toLowerCase() || '0x0',
           is_commit_success: false,
           commit_tx_hash: commitTxHash || '',
           commit_error_message: error.message,
@@ -155,17 +187,17 @@ export class RewardsReporterService {
           current_capacity: Math.round(currentCapacity),
           active_workers_count: Number(activeWorkerCount),
           base_apr: baseAprBasisPoints.toFixed(),
-          stake_factor: "1", // matches old backend
+          stake_factor: '1', // matches old backend
           r_apr: baseAprBasisPoints.toFixed(),
-          total_reward: "0",
+          total_reward: '0',
           total_chunks_read: 0,
           total_bytes_sent: 0,
           total_requests: 0,
           valid_requests: 0,
-        })
+        }),
       );
     } catch (logError) {
       ctx.logger.error({ error: logError }, `Failed to log error metrics`);
     }
   }
-} 
+}

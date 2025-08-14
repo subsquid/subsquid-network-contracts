@@ -9,7 +9,13 @@ import {
   HttpStatus,
 } from '@nestjs/common';
 import { S3Service } from '../../s3/s3.service';
-import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiQuery } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiParam,
+  ApiQuery,
+} from '@nestjs/swagger';
 
 @ApiTags('S3 Management')
 @Controller('admin/s3')
@@ -30,7 +36,9 @@ export class S3Controller {
       healthy: isHealthy,
       lastHealthCheck: lastHealthCheck?.toISOString() || null,
       config: {
-        endpoint: config.endpoint ? config.endpoint.substring(0, 50) + '...' : 'NOT SET',
+        endpoint: config.endpoint
+          ? config.endpoint.substring(0, 50) + '...'
+          : 'NOT SET',
         bucket: config.bucket || 'NOT SET',
         region: config.region || 'NOT SET',
       },
@@ -43,12 +51,14 @@ export class S3Controller {
   async performHealthCheck() {
     try {
       const isHealthy = await this.s3Service.checkHealth();
-      
+
       return {
         success: true,
         healthy: isHealthy,
         timestamp: new Date().toISOString(),
-        message: isHealthy ? 'S3 service is healthy' : 'S3 service health check failed',
+        message: isHealthy
+          ? 'S3 service is healthy'
+          : 'S3 service health check failed',
       };
     } catch (error) {
       return {
@@ -66,7 +76,7 @@ export class S3Controller {
   async testConnection() {
     try {
       const result = await this.s3Service.testConnection();
-      
+
       return {
         ...result,
         timestamp: new Date().toISOString(),
@@ -81,8 +91,16 @@ export class S3Controller {
 
   @Get('list')
   @ApiOperation({ summary: 'List files in S3 with optional prefix' })
-  @ApiQuery({ name: 'prefix', required: false, description: 'File prefix to filter' })
-  @ApiQuery({ name: 'maxKeys', required: false, description: 'Maximum number of files to return' })
+  @ApiQuery({
+    name: 'prefix',
+    required: false,
+    description: 'File prefix to filter',
+  })
+  @ApiQuery({
+    name: 'maxKeys',
+    required: false,
+    description: 'Maximum number of files to return',
+  })
   @ApiResponse({ status: 200, description: 'List of files' })
   async listFiles(
     @Query('prefix') prefix = '',
@@ -91,7 +109,7 @@ export class S3Controller {
     try {
       const limit = maxKeys ? parseInt(maxKeys, 10) : 100;
       const files = await this.s3Service.listFiles(prefix, limit);
-      
+
       return {
         success: true,
         prefix,
@@ -113,7 +131,7 @@ export class S3Controller {
     const { key } = body;
     try {
       const exists = await this.s3Service.checkFileExists(key);
-      
+
       if (!exists) {
         return {
           success: false,
@@ -122,9 +140,9 @@ export class S3Controller {
           message: 'File not found',
         };
       }
-      
+
       const metadata = await this.s3Service.getFileMetadata(key);
-      
+
       return {
         success: true,
         exists: true,
@@ -146,11 +164,11 @@ export class S3Controller {
     const { key } = body;
     try {
       const data = await this.s3Service.downloadJson(key);
-      
+
       if (!data) {
         throw new HttpException('File not found', HttpStatus.NOT_FOUND);
       }
-      
+
       return {
         success: true,
         key,
@@ -160,7 +178,7 @@ export class S3Controller {
       if (error.status === HttpStatus.NOT_FOUND) {
         throw error;
       }
-      
+
       throw new HttpException(
         `Failed to download file: ${error.message}`,
         HttpStatus.INTERNAL_SERVER_ERROR,
@@ -178,14 +196,14 @@ export class S3Controller {
         timestamp: new Date().toISOString(),
         message: 'Test upload from admin API',
       };
-      
+
       const key = body.key || `test/admin-upload-${Date.now()}.json`;
-      
+
       const result = await this.s3Service.uploadJson(testData, key, {
         source: 'admin-api',
         test: 'true',
       });
-      
+
       return {
         success: true,
         result,
@@ -216,9 +234,9 @@ export class S3Controller {
         parseInt(fromBlock, 10),
         parseInt(toBlock, 10),
       );
-      
+
       const exists = await this.s3Service.checkFileExists(key);
-      
+
       if (!exists) {
         return {
           success: true,
@@ -227,9 +245,9 @@ export class S3Controller {
           message: 'Epoch data not found in S3',
         };
       }
-      
+
       const metadata = await this.s3Service.getFileMetadata(key);
-      
+
       return {
         success: true,
         exists: true,
@@ -247,16 +265,22 @@ export class S3Controller {
 
   @Get('recent-uploads')
   @ApiOperation({ summary: 'Get recent uploads to S3' })
-  @ApiQuery({ name: 'limit', required: false, description: 'Maximum number of files' })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    description: 'Maximum number of files',
+  })
   @ApiResponse({ status: 200, description: 'Recent uploads' })
   async getRecentUploads(@Query('limit') limit = '20') {
     try {
       const maxKeys = parseInt(limit, 10);
       const files = await this.s3Service.listFiles('rewards/', maxKeys);
-      
+
       // Parse file names to extract epoch info
-      const uploads = files.map(file => {
-        const match = file.match(/rewards\/(\w+)\/distributions\/(\d+)-(\d+)\.json/);
+      const uploads = files.map((file) => {
+        const match = file.match(
+          /rewards\/(\w+)\/distributions\/(\d+)-(\d+)\.json/,
+        );
         if (match) {
           return {
             key: file,
@@ -267,7 +291,7 @@ export class S3Controller {
         }
         return { key: file };
       });
-      
+
       return {
         success: true,
         count: uploads.length,
@@ -287,7 +311,7 @@ export class S3Controller {
   async cleanupTestFiles() {
     try {
       const testFiles = await this.s3Service.listFiles('test/', 100);
-      
+
       if (testFiles.length === 0) {
         return {
           success: true,
@@ -295,10 +319,10 @@ export class S3Controller {
           cleaned: 0,
         };
       }
-      
+
       // Note: Actual deletion would require adding a delete method to S3Service
       // For now, just return the list of files that would be deleted
-      
+
       return {
         success: true,
         message: `Found ${testFiles.length} test files (deletion not implemented)`,
