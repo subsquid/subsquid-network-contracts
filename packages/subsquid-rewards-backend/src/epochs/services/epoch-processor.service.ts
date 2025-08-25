@@ -37,8 +37,11 @@ export class EpochProcessorService {
     fromBlock: number,
     toBlock: number,
   ): Promise<EpochProcessingResult> {
-    const epochStart = await this.web3Service.getBlockTimestamp(ctx, fromBlock);
-    const epochEnd = await this.web3Service.getBlockTimestamp(ctx, toBlock);
+    const fromBlockTimestamp = await this.web3Service.getBlockTimestamp(ctx, fromBlock);
+    const toBlockTimestamp = await this.web3Service.getBlockTimestamp(ctx, toBlock);
+    
+    const epochStart = new Date(fromBlockTimestamp.getTime());
+    const epochEnd = new Date(toBlockTimestamp.getTime());
     let commitTxHash = '';
     let lastCalculatedRewards: any;
 
