@@ -704,8 +704,8 @@ export class DistributionService {
 
       // generate structured rewards report
       try {
-        const startTime = new Date(sessionStartTime);
-        const endTime = status.completedAt;
+        const epochStartTime = await this.web3Service.getBlockTimestamp(summaryCtx, fromBlock);
+        const epochEndTime = await this.web3Service.getBlockTimestamp(summaryCtx, toBlock);
 
         const networkMetrics =
           await this.epochMetricsService.collectNetworkMetrics(summaryCtx);
@@ -718,8 +718,8 @@ export class DistributionService {
           transactionLogs.find((log) => log.type === 'commit')?.hash || '';
 
         await this.rewardsReporterService.logSuccessfulRewardsReport({
-          epochStart: startTime,
-          epochEnd: endTime,
+          epochStart: epochStartTime,
+          epochEnd: epochEndTime,
           isCommitSuccess: true,
           commitTxHash,
           networkMetrics,
@@ -1982,8 +1982,8 @@ export class DistributionService {
               true,
             );
 
-          const startTime = new Date(sessionStartTime);
-          const endTime = new Date();
+          const epochStartTime = await this.web3Service.getBlockTimestamp(ctx, fromBlock);
+          const epochEndTime = await this.web3Service.getBlockTimestamp(ctx, toBlock);
           const networkMetrics =
             await this.epochMetricsService.collectNetworkMetrics(ctx);
           const rewardMetrics = this.epochMetricsService.extractRewardMetrics(
@@ -1992,8 +1992,8 @@ export class DistributionService {
           const commitTxHash = '';
 
           await this.rewardsReporterService.logSuccessfulRewardsReport({
-            epochStart: startTime,
-            epochEnd: endTime,
+            epochStart: epochStartTime,
+            epochEnd: epochEndTime,
             isCommitSuccess: true,
             commitTxHash,
             networkMetrics,

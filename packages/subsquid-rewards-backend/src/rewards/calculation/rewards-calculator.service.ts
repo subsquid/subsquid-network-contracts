@@ -24,6 +24,12 @@ export interface RewardCalculationResult {
   workers: WorkerReward[];
   totalRewards: bigint;
   calculationTime: number;
+  epochMetadata?: {
+    adjustedStartTime: Date;
+    endTime: Date;
+    fromBlock: number;
+    toBlock: number;
+  };
 }
 
 @Injectable()
@@ -415,6 +421,12 @@ export class RewardsCalculatorService {
       workers: [],
       totalRewards: 0n,
       calculationTime: (endTime.getTime() - startTime.getTime()) / 1000,
+      epochMetadata: {
+        adjustedStartTime: startTime,
+        endTime,
+        fromBlock,
+        toBlock,
+      },
     };
   }
 
@@ -734,6 +746,12 @@ export class RewardsCalculatorService {
       workers,
       totalRewards,
       calculationTime: (endTime.getTime() - startTime.getTime()) / 1000,
+      epochMetadata: {
+        adjustedStartTime: startTime,
+        endTime,
+        fromBlock,
+        toBlock,
+      },
     };
   }
 
