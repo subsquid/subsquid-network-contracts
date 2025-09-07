@@ -46,4 +46,6 @@ library Errors {
   error WorkerDoesNotExist();
   error NoRewardsAvailable();
   error RewardTransferFailed();
+
+  error CommitmentAlreadyCompleted();
 }

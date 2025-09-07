@@ -106,7 +106,7 @@ export class DistributionService {
   private readonly contractAddress: Address;
 
   private readonly distributionBatchSize = parseInt(
-    process.env.DISTRIBUTION_BATCH_SIZE || '50',
+    process.env.DISTRIBUTION_BATCH_SIZE || '75',
   );
 
   private readonly gasSimulationConfig = {

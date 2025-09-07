@@ -1,7 +1,6 @@
 import { Module, forwardRef } from '@nestjs/common';
 import { RewardsCalculatorService } from './calculation/rewards-calculator.service';
 import { MerkleTreeService } from './distribution/merkle-tree.service';
-import { MerkleService } from './merkle.service';
 import { DistributionService } from './distribution/distribution.service';
 import { DistributionRecoveryService } from './distribution/distribution-recovery.service';
 import { DatabaseModule } from '../database/database.module';
@@ -22,14 +21,12 @@ import { S3Module } from '../s3/s3.module';
   providers: [
     RewardsCalculatorService,
     MerkleTreeService,
-    MerkleService,
     DistributionService,
     DistributionRecoveryService,
   ],
   exports: [
     RewardsCalculatorService,
     MerkleTreeService,
-    MerkleService,
     DistributionService,
     DistributionRecoveryService,
   ],

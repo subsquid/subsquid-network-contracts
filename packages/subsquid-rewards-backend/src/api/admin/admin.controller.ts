@@ -8,6 +8,7 @@ import {
   HttpException,
   HttpStatus,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { RewardsCalculatorService } from '../../rewards/calculation/rewards-calculator.service';
 import {
   DistributionService,
@@ -34,6 +35,7 @@ export class AdminController {
     private distributionService: DistributionService,
     private web3Service: Web3Service,
     private blockSchedulerService: BlockSchedulerService,
+    private configService: ConfigService,
   ) {}
 
   /**
@@ -86,7 +88,8 @@ export class AdminController {
    */
   @Post('distribute')
   async startDistribution(@Body() body: ManualDistributionRequest) {
-    const { fromBlock, toBlock, batchSize = 50 } = body;
+    const defaultBatchSize = this.configService.get<number>('rewards.maxBatchSize', 100);
+    const { fromBlock, toBlock, batchSize = defaultBatchSize } = body;
     const epochId = `${fromBlock}-${toBlock}`;
 
     try {

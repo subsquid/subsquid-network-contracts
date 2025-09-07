@@ -41,11 +41,23 @@ contract DistributedRewardsDistribution is IRewardsDistribution, AccessControl, 
   }
 
   /**
+   * @notice Commitment status enum
+   * @dev Tracks the lifecycle state of a commitment
+   */
+  enum CommitmentStatus {
+    NONEXISTENT,  // 0: Default state, commitment doesn't exist
+    ACTIVE,       // 1: Active commitment, can receive distributions
+    COMPLETED     // 2: All batches processed, rewards distributed
+  }
+
+  /**
    * @notice Represents a commitment for a block range
    * @dev Stores all information about a specific Merkle root commitment
    */
   struct Commitment {
-    bool exists;
+    CommitmentStatus status;
+    uint256 fromBlock;
+    uint256 toBlock;
     bytes32 merkleRoot;
     uint16 totalBatches;
     uint16 processedBatches;
@@ -63,6 +75,10 @@ contract DistributedRewardsDistribution is IRewardsDistribution, AccessControl, 
 
   mapping(uint256 => uint256) public accumulatedRewards;
   mapping(uint256 => uint256) public withdrawnRewards;
+
+  // events for admin functions
+  event CommitmentCleared(uint256 indexed fromBlock, uint256 indexed toBlock, bytes32 indexed commitmentKey, CommitmentStatus previousStatus);
+  event LastRewardedBlockUpdated(uint256 indexed previousBlock, uint256 indexed newBlock);
 
   /**
    * @notice Adds a distributor to the whitelist
@@ -179,13 +195,17 @@ contract DistributedRewardsDistribution is IRewardsDistribution, AccessControl, 
 
     bytes32 k = _key(fromBlock, toBlock);
     Commitment storage c = commitments[k];
-    if (!c.exists) {
-      c.exists = true;
+    if (c.status == CommitmentStatus.NONEXISTENT) {
+      c.status = CommitmentStatus.ACTIVE;
       c.merkleRoot = root;
       c.totalBatches = totalBatches;
       c.ipfsLink = ipfs;
+      c.fromBlock = fromBlock;
+      c.toBlock = toBlock;
       lastCommitmentKey = k; 
       emit NewCommitment(msg.sender, fromBlock, toBlock, root);
+    } else if (c.status == CommitmentStatus.COMPLETED) {
+      revert Errors.CommitmentAlreadyCompleted();
     } else if (c.merkleRoot != root) {
       revert Errors.MerkleRootMismatch();
     }
@@ -200,7 +220,7 @@ contract DistributedRewardsDistribution is IRewardsDistribution, AccessControl, 
   function approveRoot(uint256[2] calldata blockRange) external whenNotPaused onlyRole(REWARDS_DISTRIBUTOR_ROLE) {
     bytes32 k = _key(blockRange[0], blockRange[1]);
     Commitment storage c = commitments[k];
-    if (!c.exists) revert Errors.MerkleRootNotCommitted();
+    if (c.status != CommitmentStatus.ACTIVE) revert Errors.MerkleRootNotCommitted();
     _approve(k, blockRange[0], blockRange[1]);
   }
 
@@ -243,7 +263,8 @@ contract DistributedRewardsDistribution is IRewardsDistribution, AccessControl, 
     bytes32 k = _key(fromBlock, toBlock);
     Commitment storage c = commitments[k];
 
-    if (!c.exists) revert Errors.MerkleRootNotCommitted();
+    if (c.status == CommitmentStatus.NONEXISTENT) revert Errors.MerkleRootNotCommitted();
+    if (c.status == CommitmentStatus.COMPLETED) revert Errors.CommitmentAlreadyCompleted();
     if (c.approvalCount < requiredApproves) revert Errors.NotEnoughApprovals();
 
     bytes32 leaf = keccak256(abi.encode(recipients, workerRewards, stakerRewards));
@@ -253,6 +274,7 @@ contract DistributedRewardsDistribution is IRewardsDistribution, AccessControl, 
     processed[k][leaf] = true;
     c.processedBatches += 1;
     if (c.processedBatches == c.totalBatches) {
+      c.status = CommitmentStatus.COMPLETED;
       lastBlockRewarded = toBlock;
     }
 
@@ -314,5 +336,96 @@ contract DistributedRewardsDistribution is IRewardsDistribution, AccessControl, 
     for (uint256 i; i < owned.length; ++i) {
       total += withdrawableRewardOf(owned[i]);
     }
+  }
+
+  /**
+   * @notice Clear a commitment and all its associated data
+   * @param blockRange Array with [fromBlock, toBlock] to identify the commitment
+   * @dev Admin function to completely reset a commitment so it can be resubmitted with corrected data
+   *      Use case: Distribution fails due to wrong merkle tree, clear and resubmit
+   */
+  function clearCommitment(uint256[2] calldata blockRange) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    bytes32 k = _key(blockRange[0], blockRange[1]);
+    Commitment storage c = commitments[k];
+    
+    if (c.status == CommitmentStatus.NONEXISTENT) revert Errors.MerkleRootNotCommitted();
+    
+    // store previous status for event
+    CommitmentStatus previousStatus = c.status;
+    
+    // completely reset commitment struct to allow resubmission
+    c.status = CommitmentStatus.NONEXISTENT;
+    c.merkleRoot = bytes32(0);
+    c.totalBatches = 0;
+    c.processedBatches = 0;
+    c.approvalCount = 0;
+    c.ipfsLink = "";
+    
+    // if this was the last commitment, clear the reference
+    if (lastCommitmentKey == k) {
+      lastCommitmentKey = bytes32(0);
+    }
+    
+    emit CommitmentCleared(blockRange[0], blockRange[1], k, previousStatus);
+  }
+
+  /**
+   * @notice Manually set the last rewarded block number
+   * @param blockNumber The block number to set as last rewarded
+   * @dev Admin function for manual adjustment in case of recovery or migration
+   */
+  function setLastRewardedBlock(uint256 blockNumber) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    uint256 previousBlock = lastBlockRewarded;
+    lastBlockRewarded = blockNumber;
+    emit LastRewardedBlockUpdated(previousBlock, blockNumber);
+  }
+
+  /**
+   * @notice Get commitment details for a block range
+   * @param blockRange Array with [fromBlock, toBlock]
+   * @return status The commitment status (NONEXISTENT, ACTIVE, CLEARED, COMPLETED)
+   * @return merkleRoot The Merkle root
+   * @return totalBatches Total number of batches
+   * @return processedBatches Number of processed batches
+   * @return approvalCount Number of approvals received
+   * @return ipfsLink IPFS link to full data
+   */
+  function getCommitment(uint256[2] calldata blockRange) 
+    external 
+    view 
+    returns (
+      CommitmentStatus status,
+      bytes32 merkleRoot,
+      uint16 totalBatches,
+      uint16 processedBatches,
+      uint256 approvalCount,
+      string memory ipfsLink
+    ) 
+  {
+    bytes32 k = _key(blockRange[0], blockRange[1]);
+    Commitment storage c = commitments[k];
+    return (c.status, c.merkleRoot, c.totalBatches, c.processedBatches, c.approvalCount, c.ipfsLink);
+  }
+
+  /**
+   * @notice Check if a commitment is fully processed (all batches distributed)
+   * @param blockRange Array with [fromBlock, toBlock]
+   * @return isComplete True if all batches have been processed
+   */
+  function isCommitmentComplete(uint256[2] calldata blockRange) external view returns (bool isComplete) {
+    bytes32 k = _key(blockRange[0], blockRange[1]);
+    Commitment storage c = commitments[k];
+    return c.status == CommitmentStatus.COMPLETED;
+  }
+
+  /**
+   * @notice Check if a commitment can accept new distributions
+   * @param blockRange Array with [fromBlock, toBlock]
+   * @return canDistribute True if commitment is active and can receive distributions
+   */
+  function canAcceptDistributions(uint256[2] calldata blockRange) external view returns (bool canDistribute) {
+    bytes32 k = _key(blockRange[0], blockRange[1]);
+    Commitment storage c = commitments[k];
+    return c.status == CommitmentStatus.ACTIVE && c.approvalCount >= requiredApproves;
   }
 }

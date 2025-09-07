@@ -16,9 +16,9 @@ export default registerAs('database', () => {
       },
       options: {
         clickhouse_settings: {
-          connect_timeout: 60000,
-          send_timeout: 60000,
-          receive_timeout: 60000,
+          connect_timeout: 180000,
+          send_timeout: 180000,
+          receive_timeout: 180000,
         },
       },
     },

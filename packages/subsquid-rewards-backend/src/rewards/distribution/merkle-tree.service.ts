@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { keccak256, encodeAbiParameters, parseAbiParameters } from 'viem';
 import { Context } from '../../common';
 import { TaskContext } from '../../common/task-context';
@@ -19,19 +20,23 @@ export interface MerkleTreeResult {
 
 @Injectable()
 export class MerkleTreeService {
+  constructor(private configService: ConfigService) {}
+
   async generateMerkleTree(
     workers: Array<{
       workerId: bigint;
       workerReward: bigint;
       stakerReward: bigint;
     }>,
-    batchSize: number = 50,
+    batchSize?: number,
   ): Promise<MerkleTreeResult> {
+    const maxBatchSize = this.configService.get<number>('rewards.maxBatchSize', 100);
+    const effectiveBatchSize = batchSize ?? maxBatchSize;
     let ctx: any = null;
     try {
       ctx = new TaskContext('merkle-tree:generate');
       ctx?.logger?.debug(
-        `Generating Merkle tree for ${workers.length} workers with batch size ${batchSize}`,
+        `Generating Merkle tree for ${workers.length} workers with batch size ${effectiveBatchSize}`,
       );
     } catch {}
 
@@ -53,8 +58,8 @@ export class MerkleTreeService {
     const batches: MerkleLeaf[] = [];
     const leafHashes: string[] = [];
 
-    for (let i = 0; i < sortedWorkers.length; i += batchSize) {
-      const batch = sortedWorkers.slice(i, i + batchSize);
+    for (let i = 0; i < sortedWorkers.length; i += effectiveBatchSize) {
+      const batch = sortedWorkers.slice(i, i + effectiveBatchSize);
 
       const leafHash = keccak256(
         encodeAbiParameters(
@@ -130,22 +135,26 @@ export class MerkleTreeService {
       const nextLevel: string[] = [];
 
       for (let i = 0; i < currentLevel.length; i += 2) {
-        const left = currentLevel[i] as `0x${string}`;
-        const right = (
-          i + 1 < currentLevel.length ? currentLevel[i + 1] : left
-        ) as `0x${string}`;
+        if (i + 1 < currentLevel.length) {
+          // Process pair of nodes
+          const left = currentLevel[i] as `0x${string}`;
+          const right = currentLevel[i + 1] as `0x${string}`;
 
-        // sort hashes using strict comparison to match OpenZeppelin
-        const [sortedLeft, sortedRight] =
-          left < right ? [left, right] : [right, left];
+          // sort hashes using strict comparison to match OpenZeppelin
+          const [sortedLeft, sortedRight] =
+            left < right ? [left, right] : [right, left];
 
-        const combined = keccak256(
-          encodeAbiParameters(parseAbiParameters('bytes32, bytes32'), [
-            sortedLeft,
-            sortedRight,
-          ]),
-        );
-        nextLevel.push(combined);
+          const combined = keccak256(
+            encodeAbiParameters(parseAbiParameters('bytes32, bytes32'), [
+              sortedLeft,
+              sortedRight,
+            ]),
+          );
+          nextLevel.push(combined);
+        } else {
+          // Odd number of nodes, promote the last one unchanged (OpenZeppelin standard)
+          nextLevel.push(currentLevel[i]);
+        }
       }
 
       levels.push(nextLevel);

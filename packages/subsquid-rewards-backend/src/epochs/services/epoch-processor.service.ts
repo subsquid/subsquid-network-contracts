@@ -22,6 +22,10 @@ export interface EpochProcessingResult {
 
 @Injectable()
 export class EpochProcessorService {
+  private readonly distributionBatchSize = parseInt(
+    process.env.DISTRIBUTION_BATCH_SIZE || '75',
+  );
+
   constructor(
     private configService: ConfigService,
     private web3Service: Web3Service,
@@ -171,7 +175,7 @@ export class EpochProcessorService {
     // generate Merkle tree using the MerkleTreeService directly (exact same as original)
     const merkleTree = await this.distributionService[
       'merkleTreeService'
-    ].generateMerkleTree(workers, 50);
+    ].generateMerkleTree(workers, this.distributionBatchSize);
 
     // commit the root to contract
     ctx.logger.debug(
@@ -253,7 +257,7 @@ export class EpochProcessorService {
       await this.distributionService.distributeEpochRewards(
         fromBlock,
         toBlock,
-        50, // batch size
+        this.distributionBatchSize,
       );
 
     if (distributionStatus.status === 'completed') {

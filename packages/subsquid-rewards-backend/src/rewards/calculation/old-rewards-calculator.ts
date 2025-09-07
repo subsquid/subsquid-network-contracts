@@ -509,25 +509,6 @@ export class OldWorkers {
     console.log(`Total chunks read: ${this.totalChunksRead()}`);
     console.log(`Total supply: ${this.totalSupply().toString()}`);
 
-    const workerArray = Object.values(this.workers);
-    for (let i = 0; i < Math.min(3, workerArray.length); i++) {
-      const worker = workerArray[i];
-      const contractId = await worker.getId();
-      console.log(
-        `\n--- Worker ${i + 1}: ${worker.peerId.slice(0, 20)}... (ID: ${contractId}) ---`,
-      );
-      console.log(`  Traffic weight: ${worker.trafficWeight.toString()}`);
-      console.log(`  dTraffic: ${worker.dTraffic.toString()}`);
-      console.log(`  Liveness: ${worker.livenessCoefficient.toString()}`);
-      console.log(`  dTenure: ${worker.dTenure.toString()}`);
-      console.log(`  Actual yield: ${worker.actualYield.toString()}`);
-      console.log(
-        `  Worker reward: ${worker.workerReward.toString()} (${worker.workerReward.div(1e18).toString()} SQD)`,
-      );
-      console.log(
-        `  Staker reward: ${worker.stakerReward.toString()} (${worker.stakerReward.div(1e18).toString()} SQD)`,
-      );
-    }
   }
 }
 
@@ -581,8 +562,11 @@ export async function calculateLivenessFactor(
     `;
 
     const client = clickHouseService.client;
-    const results = await client.query(query).toPromise();
-    const pings = Array.isArray(results) ? results : [results];
+    // Use streaming instead of toPromise() to avoid JSON parsing limits
+    const pings: any[] = [];
+    for await (const row of client.query(query).stream()) {
+      pings.push(row);
+    }
 
     const totalPeriodSeconds = Math.floor(
       (endTime.getTime() - startTime.getTime()) / 1000,
@@ -676,11 +660,9 @@ async function getPings(
   `;
 
   const client = clickhouseService.client;
-  const results = await client.query(query).toPromise();
   const pings: Record<string, number[]> = {};
-  const resultArray = Array.isArray(results) ? results : [results];
 
-  for (const row of resultArray) {
+  for await (const row of client.query(query).stream()) {
     if (row.worker_id && row.timestamps) {
       pings[row.worker_id] = row.timestamps;
     }

@@ -158,23 +158,26 @@ export class ClickHouseService implements OnModuleInit {
     `;
 
     try {
-      const rows = await this.client.query(query).toPromise();
+      const results: WorkerStats[] = [];
+      let processedRows = 0;
 
-      if (!Array.isArray(rows)) {
-        throw new Error('Unexpected response format from ClickHouse');
+      for await (const row of this.client.query(query).stream()) {
+        processedRows++;
+        results.push({
+          workerId: row.workerId,
+          peerId: row.peerId,
+          totalQueries: parseInt(row.totalQueries),
+          successfulQueries: parseInt(row.successfulQueries),
+          avgResponseTime: parseFloat(row.avgResponseTime),
+          totalBytes: parseInt(row.totalBytes),
+          lastSeen: new Date(row.lastSeen),
+          uptime: parseInt(row.activeDays),
+          trafficWeight: this.calculateTrafficWeight(row),
+        });
       }
 
-      return rows.map((row: any) => ({
-        workerId: row.workerId,
-        peerId: row.peerId,
-        totalQueries: parseInt(row.totalQueries),
-        successfulQueries: parseInt(row.successfulQueries),
-        avgResponseTime: parseFloat(row.avgResponseTime),
-        totalBytes: parseInt(row.totalBytes),
-        lastSeen: new Date(row.lastSeen),
-        uptime: parseInt(row.activeDays),
-        trafficWeight: this.calculateTrafficWeight(row),
-      }));
+      ctx.logger.debug(`✅ Processed ${processedRows} worker stats via streaming`);
+      return results;
     } catch (error) {
       ctx.logger.error({ error }, 'Failed to get worker stats');
       throw error;
@@ -210,13 +213,16 @@ export class ClickHouseService implements OnModuleInit {
     `;
 
     try {
-      const rows = await this.client.query(query).toPromise();
+      const results: WorkerPing[] = [];
+      let processedRows = 0;
 
-      if (!Array.isArray(rows)) {
-        throw new Error('Unexpected response format from ClickHouse');
+      for await (const row of this.client.query(query).stream()) {
+        processedRows++;
+        results.push(row as WorkerPing);
       }
 
-      return rows as WorkerPing[];
+      ctx.logger.debug(`✅ Processed ${processedRows} worker pings via streaming`);
+      return results;
     } catch (error) {
       ctx.logger.error({ error }, 'Failed to get worker pings');
       throw error;
@@ -316,10 +322,16 @@ export class ClickHouseService implements OnModuleInit {
         ctx.logger.debug(`   TO: ${this.formatDate(endTime)}`);
         ctx.logger.debug(`${query}`);
 
-        const results = await this.client.query(query).toPromise();
-        const resultArray = Array.isArray(results) ? results : [results];
-        ctx.logger.debug(`✅ Processed ${resultArray.length} workers`);
-        return resultArray;
+        const results: WorkerQueryData[] = [];
+        let processedRows = 0;
+        
+        for await (const row of this.client.query(query).stream()) {
+          processedRows++;
+          results.push(row as WorkerQueryData);
+        }
+        
+        ctx.logger.debug(`✅ Processed ${processedRows} workers via streaming`);
+        return results;
       } catch (error) {
         ctx.logger.error({ error }, `Failed to fetch active workers`);
         throw error;
@@ -350,17 +362,16 @@ export class ClickHouseService implements OnModuleInit {
     try {
       ctx.logger.debug(`🔍 Executing ClickHouse Pings Query: ${query}`);
 
-      const results = await this.client.query(query).toPromise();
-
       const pings: Record<string, number[]> = {};
-      const resultArray = Array.isArray(results) ? results : [results];
+      let processedRows = 0;
 
-      for (const row of resultArray) {
+      for await (const row of this.client.query(query).stream()) {
+        processedRows++;
         pings[row.worker_id] = row.timestamps;
       }
 
       ctx.logger.debug(
-        `✅ Retrieved pings for ${Object.keys(pings).length} workers`,
+        `✅ Retrieved pings for ${processedRows} workers via streaming`,
       );
       return pings;
     } catch (error) {
