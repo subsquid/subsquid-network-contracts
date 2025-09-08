@@ -9,14 +9,13 @@ export interface RetryOptions {
   context?: TaskContext;
 }
 
-
 export class RetryUtility {
   static async execute<T>(
     operation: () => Promise<T>,
     options: RetryOptions = {},
   ): Promise<T> {
     const {
-      maxAttempts = 3, // Same as MAX_RETRIES 
+      maxAttempts = 3, // Same as MAX_RETRIES
       initialDelay = 1000,
       maxDelay = 10000,
       factor = 2,
@@ -31,7 +30,6 @@ export class RetryUtility {
         return await operation();
       } catch (error) {
         lastError = error as Error;
-
 
         if (context) {
           context.logger.warn(

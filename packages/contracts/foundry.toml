@@ -28,4 +28,19 @@ arbitrum-sepolia = { key = "N89QM8KDR8SZ52I7YCSN6Z35QAUFUYBHBV" }
 arbitrum = { key = "N89QM8KDR8SZ52I7YCSN6Z35QAUFUYBHBV" }
 sepolia = { key = "MMGCJXPZ3J392VFETA9Y9425IB41A6FWXW" }
 
+[profile.ci]
+src = "src"
+out = "artifacts" 
+evm_version = "shanghai"
+libs = ["lib"]
+via_ir = false
+optimizer = true
+optimizer_runs = 1
+remappings = [
+    "@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/",
+    "openzeppelin-contracts/contracts=lib/openzeppelin-contracts/contracts/",
+    "@prb/math=lib/prb-math/",
+]
+fs_permissions = [{ access = "read-write", path = "./"}]
+
 # See more config options https://github.com/foundry-rs/foundry/tree/master/config

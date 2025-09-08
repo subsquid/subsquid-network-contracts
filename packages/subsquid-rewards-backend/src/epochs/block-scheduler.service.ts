@@ -33,8 +33,12 @@ export class BlockSchedulerService implements OnModuleInit {
     ctx.logger.info(
       `   - Auto distribution: ${this.enableAutoDistribution ? '✅ ENABLED' : '❌ DISABLED'}`,
     );
-    ctx.logger.info(`   - Approval phase: Every 5 minutes (matches old backend)`);
-    ctx.logger.info(`   - Distribution phase: Every 5 minutes (matches old backend)`);
+    ctx.logger.info(
+      `   - Approval phase: Every 5 minutes (matches old backend)`,
+    );
+    ctx.logger.info(
+      `   - Distribution phase: Every 5 minutes (matches old backend)`,
+    );
     ctx.logger.info(
       `   - Recovery phase: Every 5 minutes (100+ blocks past approved commitment)`,
     );
@@ -75,7 +79,7 @@ export class BlockSchedulerService implements OnModuleInit {
     }
   }
 
-  @Cron('*/2 * * * *') // Every 5 minutes 
+  @Cron('*/2 * * * *') // Every 5 minutes
   async checkApprovalInterval() {
     if (!this.enableAutoDistribution || this.isApprovalProcessing) {
       return;
@@ -101,7 +105,6 @@ export class BlockSchedulerService implements OnModuleInit {
       this.isApprovalProcessing = false;
     }
   }
-
 
   @Cron('*/5 * * * *') // Every 5 minutes
   async checkDistributionInterval() {

@@ -9,7 +9,6 @@ import { CommonModule } from '../common/common.module';
 import { EpochsModule } from '../epochs/epochs.module';
 import { S3Module } from '../s3/s3.module';
 
-
 @Module({
   imports: [
     DatabaseModule,

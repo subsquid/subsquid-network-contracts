@@ -156,7 +156,6 @@ export class StatelessCoordinatorService {
         };
       }
 
-
       ctx.logger.info(
         `✅ commit eligible - committer for window ${currentWindow}, ${blocksLeft} blocks left in window`,
       );

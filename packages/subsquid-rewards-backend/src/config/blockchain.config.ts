@@ -30,7 +30,13 @@ export default registerAs('blockchain', () => ({
     confirmations: 1,
     timeout: 30000,
   },
-  epochConfirmationBlocks: parseInt(process.env.EPOCH_CONFIRMATION_BLOCKS || '150', 10),
-  rewardEpochLength: parseInt(process.env.REWARD_EPOCH_LENGTH_BLOCKS || '7000', 10),
+  epochConfirmationBlocks: parseInt(
+    process.env.EPOCH_CONFIRMATION_BLOCKS || '150',
+    10,
+  ),
+  rewardEpochLength: parseInt(
+    process.env.REWARD_EPOCH_LENGTH_BLOCKS || '7000',
+    10,
+  ),
   maxEpochsPerCommit: parseInt(process.env.MAX_EPOCHS_PER_COMMIT || '1', 10),
 }));

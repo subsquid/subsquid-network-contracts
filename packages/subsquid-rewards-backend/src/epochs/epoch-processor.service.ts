@@ -192,7 +192,7 @@ export class EpochProcessorService {
         console.log(
           JSON.stringify({
             time: new Date(),
-            type: 'rewards_commited', 
+            type: 'rewards_commited',
             bot_wallet: distributorAddress,
             tx_hash: txHash,
             from_block: fromBlock,
@@ -615,8 +615,9 @@ export class EpochProcessorService {
       const ctx = new TaskContext('distribution:start');
       ctx.logger.debug('🚀 Checking for approved epochs to distribute');
 
-      const committerCheck = await this.statelessCoordinator.isCurrentCommitter();
-      
+      const committerCheck =
+        await this.statelessCoordinator.isCurrentCommitter();
+
       if (!committerCheck.isCommitter) {
         ctx.logger.info(
           `🚫 Not current committer - skipping distribution (window: ${committerCheck.currentWindow}, reason: ${committerCheck.reason || 'not in window'})`,
@@ -949,7 +950,8 @@ export class EpochProcessorService {
         );
 
         // Double-check we're still the committer (in case window changed)
-        const currentCommitterCheck = await this.statelessCoordinator.isCurrentCommitter();
+        const currentCommitterCheck =
+          await this.statelessCoordinator.isCurrentCommitter();
         if (!currentCommitterCheck.isCommitter) {
           ctx.logger.warn(
             `⚠️ No longer the current committer - stopping distribution (was processing ${epoch.fromBlock}-${epoch.toBlock})`,

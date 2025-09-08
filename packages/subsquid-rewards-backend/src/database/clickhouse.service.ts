@@ -176,7 +176,9 @@ export class ClickHouseService implements OnModuleInit {
         });
       }
 
-      ctx.logger.debug(`✅ Processed ${processedRows} worker stats via streaming`);
+      ctx.logger.debug(
+        `✅ Processed ${processedRows} worker stats via streaming`,
+      );
       return results;
     } catch (error) {
       ctx.logger.error({ error }, 'Failed to get worker stats');
@@ -221,7 +223,9 @@ export class ClickHouseService implements OnModuleInit {
         results.push(row as WorkerPing);
       }
 
-      ctx.logger.debug(`✅ Processed ${processedRows} worker pings via streaming`);
+      ctx.logger.debug(
+        `✅ Processed ${processedRows} worker pings via streaming`,
+      );
       return results;
     } catch (error) {
       ctx.logger.error({ error }, 'Failed to get worker pings');
@@ -324,12 +328,12 @@ export class ClickHouseService implements OnModuleInit {
 
         const results: WorkerQueryData[] = [];
         let processedRows = 0;
-        
+
         for await (const row of this.client.query(query).stream()) {
           processedRows++;
           results.push(row as WorkerQueryData);
         }
-        
+
         ctx.logger.debug(`✅ Processed ${processedRows} workers via streaming`);
         return results;
       } catch (error) {

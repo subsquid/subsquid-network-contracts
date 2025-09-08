@@ -94,7 +94,7 @@ export class BlockchainService extends BaseService {
     if (l1RpcUrl) {
       // Determine L1 chain
       const l1Chain = l1RpcUrl.includes('sepolia') ? sepolia : mainnet;
-      
+
       this.l1Client = createPublicClient({
         chain: l1Chain,
         transport: http(l1RpcUrl),
@@ -138,7 +138,10 @@ export class BlockchainService extends BaseService {
         (ctx || context).logger.debug(`Current L1 block: ${block}`);
         return block;
       } catch (error) {
-        (ctx || context).logger.error({ error }, 'Failed to get L1 block number');
+        (ctx || context).logger.error(
+          { error },
+          'Failed to get L1 block number',
+        );
         // Fallback to L2 block for testing (same as original Web3Service)
         const fallbackBlock = await this.publicClient.getBlockNumber();
         return Number(fallbackBlock);

@@ -138,14 +138,16 @@ export class RewardsCalculatorService {
         fromBlock,
       );
       const endTime = await this.web3Service.getBlockTimestamp(ctx, toBlock);
-      
-      const originalTimeDiffSeconds = Math.floor((endTime.getTime() - adjustedStartTime.getTime()) / 1000);
+
+      const originalTimeDiffSeconds = Math.floor(
+        (endTime.getTime() - adjustedStartTime.getTime()) / 1000,
+      );
       ctx.logger.info(
-        `📊 Original range: blocks ${fromBlock}-${toBlock} (${originalTimeDiffSeconds}s = ~${(originalTimeDiffSeconds/3600).toFixed(2)}h)`,
+        `📊 Original range: blocks ${fromBlock}-${toBlock} (${originalTimeDiffSeconds}s = ~${(originalTimeDiffSeconds / 3600).toFixed(2)}h)`,
       );
 
       if (totalBatches !== undefined && totalBatches > 1) {
-        adjustedFromBlock = toBlock - (epochLengthInBlocks * totalBatches) + 1;
+        adjustedFromBlock = toBlock - epochLengthInBlocks * totalBatches + 1;
 
         if (adjustedFromBlock < 0) {
           adjustedFromBlock = 0;
@@ -163,9 +165,11 @@ export class RewardsCalculatorService {
           );
         }
 
-        const timeDiffSeconds = Math.floor((endTime.getTime() - adjustedStartTime.getTime()) / 1000);
+        const timeDiffSeconds = Math.floor(
+          (endTime.getTime() - adjustedStartTime.getTime()) / 1000,
+        );
         const timeDiffHours = (timeDiffSeconds / 3600).toFixed(2);
-        
+
         ctx.logger.info(
           `🔄 Batch filtering for formatted output: blocks ${adjustedFromBlock}-${toBlock} (${totalBatches} epochs)`,
         );
@@ -259,7 +263,8 @@ export class RewardsCalculatorService {
             return await this.web3Service.getBlockTimestamp(ctx, blockNumber);
           } catch (error) {
             const estimatedTime = new Date(
-              adjustedStartTime.getTime() - (adjustedFromBlock - blockNumber) * 12 * 1000,
+              adjustedStartTime.getTime() -
+                (adjustedFromBlock - blockNumber) * 12 * 1000,
             );
             return estimatedTime;
           }
@@ -487,8 +492,7 @@ export class RewardsCalculatorService {
   ): Promise<RewardCalculationResult> {
     ctx.logger.debug('🔄 Starting old rewards calculator method...');
 
-    const epochLengthInBlocks =
-      await this.contractService.getEpochLength(ctx);
+    const epochLengthInBlocks = await this.contractService.getEpochLength(ctx);
     const totalBatches =
       totalBatchesOverride ?? this.configService.get('rewards.totalBatches');
 
@@ -496,7 +500,7 @@ export class RewardsCalculatorService {
     let adjustedStartTime = startTime;
 
     if (totalBatches !== undefined && totalBatches > 1) {
-      adjustedFromBlock = toBlock - (epochLengthInBlocks * totalBatches) + 1;
+      adjustedFromBlock = toBlock - epochLengthInBlocks * totalBatches + 1;
 
       if (adjustedFromBlock < 0) {
         adjustedFromBlock = 0;
@@ -517,9 +521,7 @@ export class RewardsCalculatorService {
       ctx.logger.info(
         `🔄 Batch filtering enabled: Fetching data for ${totalBatches} epochs`,
       );
-      ctx.logger.info(
-        `   Original range: blocks ${fromBlock}-${toBlock}`,
-      );
+      ctx.logger.info(`   Original range: blocks ${fromBlock}-${toBlock}`);
       ctx.logger.info(
         `   Adjusted range: blocks ${adjustedFromBlock}-${toBlock} (${totalBatches} epochs)`,
       );
@@ -653,7 +655,8 @@ export class RewardsCalculatorService {
           );
           // fallback: estimate based on 12-second block time
           const estimatedTime = new Date(
-            adjustedStartTime.getTime() - (adjustedFromBlock - blockNumber) * 12 * 1000,
+            adjustedStartTime.getTime() -
+              (adjustedFromBlock - blockNumber) * 12 * 1000,
           );
           return estimatedTime;
         }

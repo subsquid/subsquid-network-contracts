@@ -148,19 +148,27 @@ export class S3Service implements OnModuleInit {
 
   async onModuleInit() {
     this.logger.log(`🔍 S3 Service module init - enabled: ${this.enabled}`);
-    
+
     const pathPrefix = this.config.pathPrefix || 'unknown';
     this.logger.log(`📁 S3 Path Configuration:`);
     this.logger.log(`   - Path prefix: ${pathPrefix}`);
     this.logger.log(`   - Save location: rewards/${pathPrefix}/distributions/`);
-    this.logger.log(`   - Recovery location: rewards/${pathPrefix}/distributions/`);
-    this.logger.log(`   - Duplicates: rewards/${pathPrefix}/distributions/duplicates/`);
-    
+    this.logger.log(
+      `   - Recovery location: rewards/${pathPrefix}/distributions/`,
+    );
+    this.logger.log(
+      `   - Duplicates: rewards/${pathPrefix}/distributions/duplicates/`,
+    );
+
     if (this.enabled) {
       await this.initialize();
     } else {
-      this.logger.warn('⚠️  S3 service is DISABLED - files will not be uploaded/downloaded');
-      this.logger.warn('   To enable S3, set S3_ENABLED=true and configure credentials');
+      this.logger.warn(
+        '⚠️  S3 service is DISABLED - files will not be uploaded/downloaded',
+      );
+      this.logger.warn(
+        '   To enable S3, set S3_ENABLED=true and configure credentials',
+      );
     }
   }
 
@@ -408,7 +416,8 @@ export class S3Service implements OnModuleInit {
       throw new S3ConfigurationError('S3 client not initialized');
     }
 
-    const pathPrefix = this.config.pathPrefix || epochData.epochInfo.network || 'unknown';
+    const pathPrefix =
+      this.config.pathPrefix || epochData.epochInfo.network || 'unknown';
     const fromBlock = epochData.epochInfo.fromBlock;
     const toBlock = epochData.epochInfo.toBlock;
     const key = `rewards/${pathPrefix}/distributions/${fromBlock}-${toBlock}.json`;

@@ -30,7 +30,10 @@ export class MerkleTreeService {
     }>,
     batchSize?: number,
   ): Promise<MerkleTreeResult> {
-    const maxBatchSize = this.configService.get<number>('rewards.maxBatchSize', 100);
+    const maxBatchSize = this.configService.get<number>(
+      'rewards.maxBatchSize',
+      100,
+    );
     const effectiveBatchSize = batchSize ?? maxBatchSize;
     let ctx: any = null;
     try {

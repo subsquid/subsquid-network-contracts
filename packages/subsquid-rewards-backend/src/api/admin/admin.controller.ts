@@ -88,7 +88,10 @@ export class AdminController {
    */
   @Post('distribute')
   async startDistribution(@Body() body: ManualDistributionRequest) {
-    const defaultBatchSize = this.configService.get<number>('rewards.maxBatchSize', 100);
+    const defaultBatchSize = this.configService.get<number>(
+      'rewards.maxBatchSize',
+      100,
+    );
     const { fromBlock, toBlock, batchSize = defaultBatchSize } = body;
     const epochId = `${fromBlock}-${toBlock}`;
 

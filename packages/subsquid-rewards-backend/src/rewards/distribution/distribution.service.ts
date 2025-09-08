@@ -486,7 +486,9 @@ export class DistributionService {
                 toBlock,
               );
 
-              startCtx.logger.info(`📥 Attempting S3 recovery from path: ${s3Key}`);
+              startCtx.logger.info(
+                `📥 Attempting S3 recovery from path: ${s3Key}`,
+              );
               const s3Data = await this.s3Service.downloadJson(s3Key);
 
               if (s3Data && s3Data.merkleTree) {
@@ -704,11 +706,35 @@ export class DistributionService {
 
       // generate structured rewards report
       try {
-        const epochStartTime = await this.web3Service.getBlockTimestamp(summaryCtx, fromBlock);
-        const epochEndTime = await this.web3Service.getBlockTimestamp(summaryCtx, toBlock);
+        summaryCtx.logger.info(
+          `📊 Generating rewards report for epoch ${fromBlock}-${toBlock} (recovery: ${!shouldRecalculate})`,
+        );
+
+        const epochStartTime = await this.web3Service.getBlockTimestamp(
+          summaryCtx,
+          fromBlock,
+        );
+        const epochEndTime = await this.web3Service.getBlockTimestamp(
+          summaryCtx,
+          toBlock,
+        );
 
         const networkMetrics =
           await this.epochMetricsService.collectNetworkMetrics(summaryCtx);
+
+        // Ensure we have formatted calculation result for recovery scenarios
+        if (!formattedCalculationResult) {
+          summaryCtx.logger.warn(
+            'formattedCalculationResult is null, recalculating for rewards report',
+          );
+          formattedCalculationResult =
+            await this.rewardsCalculatorService.calculateRewardsFormatted(
+              summaryCtx,
+              fromBlock,
+              toBlock,
+              true,
+            );
+        }
 
         const rewardMetrics = this.epochMetricsService.extractRewardMetrics(
           formattedCalculationResult,
@@ -726,6 +752,10 @@ export class DistributionService {
           rewardMetrics,
           workerRewards: formattedCalculationResult.workers, // use formatted workers with traffic data
         });
+
+        summaryCtx.logger.info(
+          `✅ Rewards report generated successfully for epoch ${fromBlock}-${toBlock}`,
+        );
       } catch (reportError) {
         summaryCtx.logger.warn(
           { error: reportError },
@@ -1068,8 +1098,14 @@ export class DistributionService {
 
         // Log rewards_commited event for compatibility with old backend
         if (workersData && workersData.length > 0) {
-          const totalStake = workersData.reduce((sum, w) => sum + (w.totalStake || 0n), 0n);
-          const capedStake = workersData.reduce((sum, w) => sum + (w.stake || 0n), 0n);
+          const totalStake = workersData.reduce(
+            (sum, w) => sum + (w.totalStake || 0n),
+            0n,
+          );
+          const capedStake = workersData.reduce(
+            (sum, w) => sum + (w.stake || 0n),
+            0n,
+          );
           console.log(
             JSON.stringify({
               time: new Date(),
@@ -1942,12 +1978,70 @@ export class DistributionService {
             sessionId,
           );
 
-          ctx.logger.info(
-            `✅ Distribution completed using recovered Merkle tree from S3`,
+          const allSuccessful = distributionLogs.every(
+            (log) => log.status === 'success',
           );
-          ctx.logger.info(
-            `   Total batches distributed: ${distributionLogs.length}`,
-          );
+
+          if (allSuccessful) {
+            ctx.logger.info(
+              `✅ Distribution completed using recovered Merkle tree from S3`,
+            );
+            ctx.logger.info(
+              `   Total batches distributed: ${distributionLogs.length}`,
+            );
+
+            // Generate rewards report for S3 recovery scenario
+            try {
+              const formattedCalculationResult =
+                await this.rewardsCalculatorService.calculateRewardsFormatted(
+                  ctx,
+                  fromBlock,
+                  toBlock,
+                  true,
+                );
+
+              const epochStartTime = await this.web3Service.getBlockTimestamp(
+                ctx,
+                fromBlock,
+              );
+              const epochEndTime = await this.web3Service.getBlockTimestamp(
+                ctx,
+                toBlock,
+              );
+              const networkMetrics =
+                await this.epochMetricsService.collectNetworkMetrics(ctx);
+              const rewardMetrics = this.epochMetricsService.extractRewardMetrics(
+                formattedCalculationResult,
+              );
+
+              await this.rewardsReporterService.logSuccessfulRewardsReport({
+                epochStart: epochStartTime,
+                epochEnd: epochEndTime,
+                isCommitSuccess: true,
+                commitTxHash: '', // No new commit in S3 recovery
+                networkMetrics,
+                rewardMetrics,
+                workerRewards: formattedCalculationResult.workers,
+              });
+
+              ctx.logger.info(
+                `✅ Rewards report generated for S3 recovery distribution`,
+              );
+            } catch (reportError) {
+              ctx.logger.warn(
+                { error: reportError },
+                'Failed to generate rewards report for S3 recovery',
+              );
+            }
+          } else {
+            const failedBatches = distributionLogs.filter(
+              (log) => log.status === 'failed',
+            ).length;
+            ctx.logger.error(
+              `❌ Failed to distribute ${failedBatches} out of ${recoveredTree.totalBatches} batches in S3 recovery`,
+            );
+            return false;
+          }
 
           return true;
         } else {
@@ -1982,8 +2076,14 @@ export class DistributionService {
               true,
             );
 
-          const epochStartTime = await this.web3Service.getBlockTimestamp(ctx, fromBlock);
-          const epochEndTime = await this.web3Service.getBlockTimestamp(ctx, toBlock);
+          const epochStartTime = await this.web3Service.getBlockTimestamp(
+            ctx,
+            fromBlock,
+          );
+          const epochEndTime = await this.web3Service.getBlockTimestamp(
+            ctx,
+            toBlock,
+          );
           const networkMetrics =
             await this.epochMetricsService.collectNetworkMetrics(ctx);
           const rewardMetrics = this.epochMetricsService.extractRewardMetrics(

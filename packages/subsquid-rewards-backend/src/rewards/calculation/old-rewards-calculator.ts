@@ -508,7 +508,6 @@ export class OldWorkers {
     console.log(`Total bytes sent: ${this.totalBytesSent()}`);
     console.log(`Total chunks read: ${this.totalChunksRead()}`);
     console.log(`Total supply: ${this.totalSupply().toString()}`);
-
   }
 }
 

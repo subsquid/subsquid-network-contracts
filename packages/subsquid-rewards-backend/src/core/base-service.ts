@@ -4,7 +4,6 @@ import { TaskContext } from '../common';
 
 @Injectable()
 export abstract class BaseService {
-
   protected abstract readonly serviceName: string;
 
   constructor(protected configService: ConfigService) {}

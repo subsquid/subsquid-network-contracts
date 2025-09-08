@@ -41,7 +41,8 @@ export default registerAs('s3', (): S3Config => {
     requestTimeout: parseInt(process.env.S3_REQUEST_TIMEOUT || '30000', 10),
     forcePathStyle: parseBoolean(process.env.S3_FORCE_PATH_STYLE, true),
     debugMode: parseBoolean(process.env.S3_DEBUG, false),
-    pathPrefix: process.env.S3_PATH_PREFIX || process.env.NETWORK_NAME || 'unknown',
+    pathPrefix:
+      process.env.S3_PATH_PREFIX || process.env.NETWORK_NAME || 'unknown',
   };
 
   if (process.env.NODE_ENV !== 'production' || config.debugMode) {

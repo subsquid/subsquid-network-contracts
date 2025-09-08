@@ -45,9 +45,10 @@ contract DistributedRewardsDistribution is IRewardsDistribution, AccessControl, 
    * @dev Tracks the lifecycle state of a commitment
    */
   enum CommitmentStatus {
-    NONEXISTENT,  // 0: Default state, commitment doesn't exist
-    ACTIVE,       // 1: Active commitment, can receive distributions
-    COMPLETED     // 2: All batches processed, rewards distributed
+    NONEXISTENT, // 0: Default state, commitment doesn't exist
+    ACTIVE, // 1: Active commitment, can receive distributions
+    COMPLETED // 2: All batches processed, rewards distributed
+
   }
 
   /**
@@ -77,7 +78,9 @@ contract DistributedRewardsDistribution is IRewardsDistribution, AccessControl, 
   mapping(uint256 => uint256) public withdrawnRewards;
 
   // events for admin functions
-  event CommitmentCleared(uint256 indexed fromBlock, uint256 indexed toBlock, bytes32 indexed commitmentKey, CommitmentStatus previousStatus);
+  event CommitmentCleared(
+    uint256 indexed fromBlock, uint256 indexed toBlock, bytes32 indexed commitmentKey, CommitmentStatus previousStatus
+  );
   event LastRewardedBlockUpdated(uint256 indexed previousBlock, uint256 indexed newBlock);
 
   /**
@@ -190,7 +193,7 @@ contract DistributedRewardsDistribution is IRewardsDistribution, AccessControl, 
     if (root == bytes32(0)) revert Errors.InvalidMerkleRoot();
     if (!canCommit(msg.sender)) revert Errors.NotACommitter();
     if (totalBatches == 0) revert Errors.TotalLeavesCannotBeZero();
-    
+
     if (lastBlockRewarded != 0 && fromBlock != lastBlockRewarded + 1) revert Errors.NotAllBlocksCovered();
 
     bytes32 k = _key(fromBlock, toBlock);
@@ -202,7 +205,7 @@ contract DistributedRewardsDistribution is IRewardsDistribution, AccessControl, 
       c.ipfsLink = ipfs;
       c.fromBlock = fromBlock;
       c.toBlock = toBlock;
-      lastCommitmentKey = k; 
+      lastCommitmentKey = k;
       emit NewCommitment(msg.sender, fromBlock, toBlock, root);
     } else if (c.status == CommitmentStatus.COMPLETED) {
       revert Errors.CommitmentAlreadyCompleted();
@@ -258,9 +261,21 @@ contract DistributedRewardsDistribution is IRewardsDistribution, AccessControl, 
       revert Errors.ArrayLengthMismatch();
     }
 
-    uint256 fromBlock = blockRange[0];
-    uint256 toBlock = blockRange[1];
-    bytes32 k = _key(fromBlock, toBlock);
+    _validateAndProcessCommitment(blockRange, recipients, workerRewards, stakerRewards, merkleProof);
+    _distributeRewards(blockRange, recipients, workerRewards, stakerRewards);
+  }
+
+  /**
+   * @dev Internal function to validate commitment and process batch
+   */
+  function _validateAndProcessCommitment(
+    uint256[2] calldata blockRange,
+    uint256[] calldata recipients,
+    uint256[] calldata workerRewards,
+    uint256[] calldata stakerRewards,
+    bytes32[] calldata merkleProof
+  ) internal {
+    bytes32 k = _key(blockRange[0], blockRange[1]);
     Commitment storage c = commitments[k];
 
     if (c.status == CommitmentStatus.NONEXISTENT) revert Errors.MerkleRootNotCommitted();
@@ -275,14 +290,27 @@ contract DistributedRewardsDistribution is IRewardsDistribution, AccessControl, 
     c.processedBatches += 1;
     if (c.processedBatches == c.totalBatches) {
       c.status = CommitmentStatus.COMPLETED;
-      lastBlockRewarded = toBlock;
+      lastBlockRewarded = blockRange[1];
     }
+  }
 
+  /**
+   * @dev Internal function to distribute rewards to workers and stakers
+   */
+  function _distributeRewards(
+    uint256[2] calldata blockRange,
+    uint256[] calldata recipients,
+    uint256[] calldata workerRewards,
+    uint256[] calldata stakerRewards
+  ) internal {
     for (uint256 i; i < recipients.length; ++i) {
       accumulatedRewards[recipients[i]] += workerRewards[i];
     }
     router.staking().distribute(recipients, stakerRewards);
-    emit BatchDistributed(fromBlock, toBlock, uint64(c.processedBatches - 1), recipients, workerRewards, stakerRewards);
+    
+    bytes32 k = _key(blockRange[0], blockRange[1]);
+    Commitment storage c = commitments[k];
+    emit BatchDistributed(blockRange[0], blockRange[1], uint64(c.processedBatches - 1), recipients, workerRewards, stakerRewards);
   }
 
   /**
@@ -347,12 +375,12 @@ contract DistributedRewardsDistribution is IRewardsDistribution, AccessControl, 
   function clearCommitment(uint256[2] calldata blockRange) external onlyRole(DEFAULT_ADMIN_ROLE) {
     bytes32 k = _key(blockRange[0], blockRange[1]);
     Commitment storage c = commitments[k];
-    
+
     if (c.status == CommitmentStatus.NONEXISTENT) revert Errors.MerkleRootNotCommitted();
-    
+
     // store previous status for event
     CommitmentStatus previousStatus = c.status;
-    
+
     // completely reset commitment struct to allow resubmission
     c.status = CommitmentStatus.NONEXISTENT;
     c.merkleRoot = bytes32(0);
@@ -360,12 +388,12 @@ contract DistributedRewardsDistribution is IRewardsDistribution, AccessControl, 
     c.processedBatches = 0;
     c.approvalCount = 0;
     c.ipfsLink = "";
-    
+
     // if this was the last commitment, clear the reference
     if (lastCommitmentKey == k) {
       lastCommitmentKey = bytes32(0);
     }
-    
+
     emit CommitmentCleared(blockRange[0], blockRange[1], k, previousStatus);
   }
 
@@ -390,9 +418,9 @@ contract DistributedRewardsDistribution is IRewardsDistribution, AccessControl, 
    * @return approvalCount Number of approvals received
    * @return ipfsLink IPFS link to full data
    */
-  function getCommitment(uint256[2] calldata blockRange) 
-    external 
-    view 
+  function getCommitment(uint256[2] calldata blockRange)
+    external
+    view
     returns (
       CommitmentStatus status,
       bytes32 merkleRoot,
@@ -400,7 +428,7 @@ contract DistributedRewardsDistribution is IRewardsDistribution, AccessControl, 
       uint16 processedBatches,
       uint256 approvalCount,
       string memory ipfsLink
-    ) 
+    )
   {
     bytes32 k = _key(blockRange[0], blockRange[1]);
     Commitment storage c = commitments[k];
