@@ -176,7 +176,7 @@ export class BlockSchedulerService implements OnModuleInit {
     }
   }
 
-  @Cron('*/7 * * * *') // Every 7 minutes
+  @Cron('*/17 * * * *') // Every 17 minutes
   async checkRecoveryInterval() {
     if (!this.enableAutoDistribution || this.isDistributionProcessing) {
       return;
