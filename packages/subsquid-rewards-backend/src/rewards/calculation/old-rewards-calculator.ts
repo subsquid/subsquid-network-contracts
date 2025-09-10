@@ -351,15 +351,7 @@ export class OldWorkers {
     this.stakeFactor = this.calculateStakeFactor();
     this.rAPR = this.baseApr;
 
-    console.log('--- DEBUG rMax CALCULATION ---');
-    console.log(`rAPR (basis points): ${this.rAPR.toString()}`);
-    console.log(`duration (seconds): ${duration}`);
-    console.log(`YEAR (seconds): ${YEAR}`);
-
     const rMax = this.rAPR.mul(duration).div(YEAR).div(10_000);
-
-    console.log(`Calculated rMax: ${rMax.toString()}`);
-    console.log('------------------------------');
 
     this.map((worker) => worker.getRewards(rMax));
   }

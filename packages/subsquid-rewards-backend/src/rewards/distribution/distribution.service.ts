@@ -1950,9 +1950,17 @@ export class DistributionService {
             true,
           );
       } catch (formatError) {
-        ctx.logger.warn(
-          `Failed to format calculation result: ${formatError.message}`,
+        ctx.logger.error(
+          { 
+            error: formatError,
+            fromBlock,
+            toBlock,
+            workerCount: result.workers.length
+          },
+          `❌ CRITICAL: calculateRewardsFormatted failed with ${result.workers.length} workers: ${formatError.message}`,
         );
+        // Set to null to indicate failure - will be recalculated later for reporting
+        formattedCalculationResult = null;
       }
 
       if (merkleTree.root !== merkleRoot) {
@@ -2068,13 +2076,16 @@ export class DistributionService {
         );
 
         try {
-          const formattedCalculationResult =
-            await this.rewardsCalculatorService.calculateRewardsFormatted(
-              ctx,
-              fromBlock,
-              toBlock,
-              true,
-            );
+          // Ensure we have formatted calculation result for rewards reporting
+          if (!formattedCalculationResult) {
+            formattedCalculationResult =
+              await this.rewardsCalculatorService.calculateRewardsFormatted(
+                ctx,
+                fromBlock,
+                toBlock,
+                true,
+              );
+          }
 
           const epochStartTime = await this.web3Service.getBlockTimestamp(
             ctx,
@@ -2084,11 +2095,15 @@ export class DistributionService {
             ctx,
             toBlock,
           );
+
           const networkMetrics =
             await this.epochMetricsService.collectNetworkMetrics(ctx);
+
+          
           const rewardMetrics = this.epochMetricsService.extractRewardMetrics(
             formattedCalculationResult,
           );
+          
           const commitTxHash = '';
 
           await this.rewardsReporterService.logSuccessfulRewardsReport({
