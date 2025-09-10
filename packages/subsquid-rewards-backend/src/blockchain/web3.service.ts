@@ -320,9 +320,6 @@ export class Web3Service {
       // same implementation as packages/rewards-calculator/src/utils.ts
       const { decode } = bs58;
       const hexValue = `0x${Buffer.from(decode(value)).toString('hex')}`;
-      ctx.logger.debug(
-        `Converted peer ID ${value.slice(0, 20)}... to ${hexValue.slice(0, 20)}...`,
-      );
       return hexValue as `0x${string}`;
     } catch (error) {
       ctx.logger.error(

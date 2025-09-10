@@ -83,6 +83,7 @@ export class OldWorker {
       totalChunksRead,
     );
     this.trafficWeight = Decimal.sqrt(bytesSent.mul(chunksRead));
+    console.log(`📊 [TRAFFIC-CALC-DEBUG] Worker ${this.peerId}: totalBytesSent=${totalBytesSent}, totalChunksRead=${totalChunksRead}, normalized bytesSent=${bytesSent.toString()}, normalized chunksRead=${chunksRead.toString()}, trafficWeight=${this.trafficWeight.toString()}`);
   }
 
   public async calculateDTraffic(
@@ -94,20 +95,34 @@ export class OldWorker {
       new Decimal(1),
       this.trafficWeight.div(supplyRatio).pow(dTrafficAlpha),
     );
+    console.log(`📊 [DTRAFFIC-CALC-DEBUG] Worker ${this.peerId}: totalSupply=${totalSupply.toString()}, stake=${this.stake.toString()}, bond=${this.bond.toString()}, supplyRatio=${supplyRatio.toString()}, dTraffic=${this.dTraffic.toString()}`);
   }
 
   public async calculateLiveness(networkStats: NetworkStatsEntry) {
+    console.log(`🔍 [LIVENESS-DEBUG] Worker ${this.peerId}: calculateLiveness called`);
+    console.log(`🔍 [LIVENESS-DEBUG] networkStats:`, networkStats);
+    
     this.networkStats = networkStats;
-    if (!networkStats) return;
+    if (!networkStats) {
+      console.log(`❌ [LIVENESS-DEBUG] Worker ${this.peerId}: networkStats is null/undefined!`);
+      return;
+    }
+    
     const { livenessFactor } = networkStats;
+    console.log(`🔍 [LIVENESS-DEBUG] Worker ${this.peerId}: livenessFactor = ${livenessFactor}`);
+    
     if (livenessFactor < 0.8) {
       this.livenessCoefficient = new Decimal(0);
+      console.log(`❌ [LIVENESS-DEBUG] Worker ${this.peerId}: livenessFactor ${livenessFactor} < 0.8, setting livenessCoefficient = 0`);
     } else if (livenessFactor < 0.9) {
       this.livenessCoefficient = new Decimal(9).mul(livenessFactor).sub(7.2);
+      console.log(`⚠️ [LIVENESS-DEBUG] Worker ${this.peerId}: livenessFactor ${livenessFactor} < 0.9, setting livenessCoefficient = ${this.livenessCoefficient.toString()}`);
     } else if (livenessFactor < 0.95) {
       this.livenessCoefficient = new Decimal(2).mul(livenessFactor).sub(0.9);
+      console.log(`✅ [LIVENESS-DEBUG] Worker ${this.peerId}: livenessFactor ${livenessFactor} < 0.95, setting livenessCoefficient = ${this.livenessCoefficient.toString()}`);
     } else {
       this.livenessCoefficient = new Decimal(1);
+      console.log(`✅ [LIVENESS-DEBUG] Worker ${this.peerId}: livenessFactor ${livenessFactor} >= 0.95, setting livenessCoefficient = 1`);
     }
   }
 
@@ -124,13 +139,25 @@ export class OldWorker {
   }
 
   public async getRewards(rMax: Decimal) {
+    console.log(`💰 [REWARDS-DEBUG] Worker ${this.peerId}: getRewards called`);
+    console.log(`💰 [REWARDS-DEBUG] Worker ${this.peerId}: rMax = ${rMax.toString()}`);
+    console.log(`💰 [REWARDS-DEBUG] Worker ${this.peerId}: livenessCoefficient = ${this.livenessCoefficient.toString()}`);
+    console.log(`💰 [REWARDS-DEBUG] Worker ${this.peerId}: dTraffic = ${this.dTraffic.toString()}`);
+    console.log(`💰 [REWARDS-DEBUG] Worker ${this.peerId}: dTenure = ${this.dTenure.toString()}`);
+    
     this.actualYield = rMax
       .mul(this.livenessCoefficient)
       .mul(this.dTraffic)
       .mul(this.dTenure);
+    
+    console.log(`💰 [REWARDS-DEBUG] Worker ${this.peerId}: actualYield = ${this.actualYield.toString()}`);
+    console.log(`💰 [REWARDS-DEBUG] Worker ${this.peerId}: bond = ${this.bond.toString()}, stake = ${this.stake.toString()}`);
 
     this.workerReward = this.actualYield.mul(this.bond.add(this.stake.div(2)));
     this.stakerReward = this.actualYield.mul(this.stake).div(2);
+    
+    console.log(`💰 [REWARDS-DEBUG] Worker ${this.peerId}: workerReward = ${this.workerReward.toString()}`);
+    console.log(`💰 [REWARDS-DEBUG] Worker ${this.peerId}: stakerReward = ${this.stakerReward.toString()}`);
   }
 
   public stakeWeight(stakeSum: Decimal) {
@@ -231,9 +258,11 @@ export class OldWorkers {
   }
 
   public async fetchCurrentBond(bondAmount: bigint) {
+    console.log(`🔗 [BOND-DEBUG] fetchCurrentBond() called with bondAmount: ${bondAmount.toString()} wei`);
     this.bond = new Decimal(bondAmount.toString());
     this.map((worker) => {
       worker.bond = this.bond;
+      console.log(`🔗 [BOND-DEBUG] Worker ${worker.peerId}: bond set to ${worker.bond.toString()}`);
     });
     return this.bond;
   }
@@ -336,7 +365,15 @@ export class OldWorkers {
   }
 
   public async getLiveness(networkStats: Record<string, NetworkStatsEntry>) {
-    this.map((worker) => worker.calculateLiveness(networkStats[worker.peerId]));
+    console.log(`🔍 [GET-LIVENESS-DEBUG] getLiveness called with ${Object.keys(networkStats).length} network stats entries`);
+    console.log(`🔍 [GET-LIVENESS-DEBUG] Available worker IDs in networkStats:`, Object.keys(networkStats).slice(0, 10)); // Show first 10
+    console.log(`🔍 [GET-LIVENESS-DEBUG] Worker count in this.workers: ${this.workers ? Object.keys(this.workers).length : 0}`);
+    
+    this.map((worker) => {
+      const hasStats = !!networkStats[worker.peerId];
+      console.log(`🔍 [GET-LIVENESS-DEBUG] Worker ${worker.peerId}: has network stats = ${hasStats}`);
+      worker.calculateLiveness(networkStats[worker.peerId]);
+    });
   }
 
   public async getDTenure(historicalLiveness: Record<string, number[]>) {
@@ -346,14 +383,22 @@ export class OldWorkers {
   }
 
   public async calculateRewards(baseApr: number) {
+    console.log(`🏁 [CALC-DEBUG] calculateRewards started`);
+    console.log(`🏁 [CALC-DEBUG] baseApr = ${baseApr}`);
+    console.log(`🏁 [CALC-DEBUG] from = ${this.from}, to = ${this.to}`);
+    console.log(`🏁 [CALC-DEBUG] worker count = ${this.workers ? Object.keys(this.workers).length : 0}`);
+    
     const duration = dayjs(this.to).diff(dayjs(this.from), 'second');
     this.baseApr = new Decimal(baseApr);
     this.stakeFactor = this.calculateStakeFactor();
     this.rAPR = this.baseApr;
 
     const rMax = this.rAPR.mul(duration).div(YEAR).div(10_000);
+    console.log(`🏁 [CALC-DEBUG] duration = ${duration}s, rMax = ${rMax.toString()}`);
 
     this.map((worker) => worker.getRewards(rMax));
+    
+    console.log(`🏁 [CALC-DEBUG] calculateRewards completed`);
   }
 
   private totalBytesSent() {
@@ -436,9 +481,8 @@ export class OldWorkers {
         workerReward.add(stakerReward),
       ),
     );
-    console.table(stats);
-    console.log('Max unlocked:', this.formatSqd(totalUnlocked));
-    console.log('Total reward:', this.formatSqd(totalReward));
+    console.log(`📊 [STATS-DEBUG] Total reward calculated: ${this.formatSqd(totalReward)}`);
+    console.log(`📊 [STATS-DEBUG] Total unlocked: ${this.formatSqd(totalUnlocked)}`);
     this.logPercentageUnlocked(totalReward, totalUnlocked);
   }
 
@@ -534,10 +578,16 @@ export async function calculateLivenessFactor(
   startTime: Date,
   endTime: Date,
 ): Promise<Record<string, NetworkStatsEntry>> {
+  console.log(`🔍 [LIVENESS-FACTOR-DEBUG] calculateLivenessFactor started`);
+  console.log(`🔍 [LIVENESS-FACTOR-DEBUG] startTime: ${startTime.toISOString()}`);
+  console.log(`🔍 [LIVENESS-FACTOR-DEBUG] endTime: ${endTime.toISOString()}`);
+  
   try {
     const databaseName =
       clickHouseService.configService?.get('database.clickhouse.database') ||
       'testnet';
+    console.log(`🔍 [LIVENESS-FACTOR-DEBUG] Using database: ${databaseName}`);
+    
     const query = `
       SELECT
         worker_id,
@@ -551,28 +601,44 @@ export async function calculateLivenessFactor(
         AND timestamp <= '${formatDateForClickHouse(endTime)}' 
       GROUP BY worker_id
     `;
+    
+    console.log(`🔍 [LIVENESS-FACTOR-DEBUG] ClickHouse query:`, query);
 
     const client = clickHouseService.client;
+    console.log(`🔍 [LIVENESS-FACTOR-DEBUG] ClickHouse client available: ${!!client}`);
+    
     // Use streaming instead of toPromise() to avoid JSON parsing limits
     const pings: any[] = [];
     for await (const row of client.query(query).stream()) {
       pings.push(row);
     }
+    
+    console.log(`🔍 [LIVENESS-FACTOR-DEBUG] Retrieved ${pings.length} ping records from ClickHouse`);
 
     const totalPeriodSeconds = Math.floor(
       (endTime.getTime() - startTime.getTime()) / 1000,
     );
+    console.log(`🔍 [LIVENESS-FACTOR-DEBUG] Total period: ${totalPeriodSeconds} seconds`);
+    
     const res: Record<string, NetworkStatsEntry> = {};
 
     for (const ping of pings) {
       if (ping.worker_id && ping.timestamps) {
-        res[ping.worker_id] = networkStats(ping.timestamps, totalPeriodSeconds);
+        const stats = networkStats(ping.timestamps, totalPeriodSeconds);
+        res[ping.worker_id] = stats;
+        console.log(`🔍 [LIVENESS-FACTOR-DEBUG] Worker ${ping.worker_id}: livenessFactor = ${stats.livenessFactor}, totalPings = ${stats.totalPings}, totalTimeOffline = ${stats.totalTimeOffline}s`);
       }
+    }
+    
+    console.log(`🔍 [LIVENESS-FACTOR-DEBUG] Calculated liveness for ${Object.keys(res).length} workers`);
+    if (Object.keys(res).length === 0) {
+      console.log(`❌ [LIVENESS-FACTOR-DEBUG] WARNING: No liveness data found! This will cause all rewards to be 0.`);
     }
 
     return res;
   } catch (error) {
-    console.warn(`Failed to get liveness factor: ${error.message}`);
+    console.error(`❌ [LIVENESS-FACTOR-DEBUG] Failed to get liveness factor: ${error.message}`);
+    console.error(`❌ [LIVENESS-FACTOR-DEBUG] Error stack:`, error.stack);
     return {};
   }
 }
