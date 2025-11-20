@@ -1,65 +1,58 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.24;
+pragma solidity ^0.8.20;
 
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
-import {Errors} from "./libs/Errors.sol";
+import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
+import {IFeeRouter} from "./interfaces/IFeeRouter.sol";
 
-contract FeeRouterModule is Ownable {
-    using SafeERC20 for IERC20;
+contract FeeRouterModule is AccessControl, IFeeRouter {
 
-    struct FeeConfig {
-        uint16 sqdProvidersBps;
-        uint16 workerPoolBps;
-        address workerPoolAddress;
-    }
+    uint256 public constant BASIS_POINTS = 10000;
 
     FeeConfig public feeConfig;
 
-    event FeeConfigUpdated(uint16 sqdProvidersBps, uint16 workerPoolBps, address workerPoolAddress);
-    event FeesRouted(address indexed portal, address indexed token, uint256 toProviders, uint256 toWorkers);
+    constructor() {
+        _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
 
-    constructor(
-        uint16 initialSqdProvidersBps,
-        uint16 initialWorkerPoolBps,
-        address initialWorkerPoolAddress
-    ) Ownable(msg.sender) {
-        if (initialWorkerPoolAddress == address(0)) revert Errors.InvalidAddress();
-        if (uint256(initialSqdProvidersBps) + uint256(initialWorkerPoolBps) != 10000) {
-            revert Errors.InvalidSplit();
-        }
-
+        // 50/50 split: 50% to providers, 50% to worker pool
         feeConfig = FeeConfig({
-            sqdProvidersBps: initialSqdProvidersBps,
-            workerPoolBps: initialWorkerPoolBps,
-            workerPoolAddress: initialWorkerPoolAddress
+            toProvidersBPS: 5000,
+            toWorkerPoolBPS: 5000,
+            toBurnBPS: 0
         });
     }
-
-    function setFeeConfig(FeeConfig calldata config) external onlyOwner {
-        if (config.workerPoolAddress == address(0)) revert Errors.InvalidAddress();
-        if (uint256(config.sqdProvidersBps) + uint256(config.workerPoolBps) != 10000) {
-            revert Errors.InvalidSplit();
-        }
-
-        feeConfig = config;
-        emit FeeConfigUpdated(config.sqdProvidersBps, config.workerPoolBps, config.workerPoolAddress);
+    
+    function calculateSplit(uint256 amount) external view returns (
+        uint256 toProviders,
+        uint256 toWorkerPool,
+        uint256 toBurn
+    ) {
+        // M-11: Calculate first two portions, then assign remainder to toBurn
+        // This ensures sum always equals amount (no rounding loss)
+        toProviders = (amount * feeConfig.toProvidersBPS) / BASIS_POINTS;
+        toWorkerPool = (amount * feeConfig.toWorkerPoolBPS) / BASIS_POINTS;
+        toBurn = amount - toProviders - toWorkerPool;
     }
-
-    function routeFees(address portal, IERC20 token, uint256 totalAmount) external returns (uint256 toProviders, uint256 toWorkers, uint256) {
-        if (totalAmount == 0) revert Errors.ZeroAmount();
-
-        FeeConfig memory config = feeConfig;
-
-        toProviders = (totalAmount * config.sqdProvidersBps) / 10000;
-        toWorkers = totalAmount - toProviders;
-
-        token.safeTransferFrom(portal, portal, toProviders);
-        token.safeTransferFrom(portal, config.workerPoolAddress, toWorkers);
-
-        emit FeesRouted(portal, address(token), toProviders, toWorkers);
-
-        return (toProviders, toWorkers, 0);
+    
+    function setFeeConfig(
+        uint16 toProvidersBPS,
+        uint16 toWorkerPoolBPS,
+        uint16 toBurnBPS
+    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        require(
+            toProvidersBPS + toWorkerPoolBPS + toBurnBPS == BASIS_POINTS,
+            "Must sum to 100%"
+        );
+        
+        feeConfig = FeeConfig({
+            toProvidersBPS: toProvidersBPS,
+            toWorkerPoolBPS: toWorkerPoolBPS,
+            toBurnBPS: toBurnBPS
+        });
+        
+        emit FeeConfigUpdated(toProvidersBPS, toWorkerPoolBPS, toBurnBPS);
+    }
+    
+    function getFeeConfig() external view returns (FeeConfig memory) {
+        return feeConfig;
     }
 }

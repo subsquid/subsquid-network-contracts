@@ -1,6 +1,7 @@
-# Compiler files
+# Foundry/Solidity
 cache/
 out/
+lib/
 
 # Ignores development broadcast logs
 !/broadcast
@@ -12,3 +13,31 @@ docs/
 
 # Dotenv file
 .env
+
+# Frontend (Next.js)
+frontend/node_modules/
+frontend/.pnp
+frontend/.pnp.js
+frontend/.next/
+frontend/out/
+frontend/build/
+frontend/.vercel/
+frontend/*.tsbuildinfo
+frontend/next-env.d.ts
+frontend/pnpm-lock.yaml
+frontend/package-lock.json
+frontend/yarn.lock
+
+# Testing
+coverage/
+coverage.json
+
+# Misc
+.DS_Store
+*.pem
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+*.log

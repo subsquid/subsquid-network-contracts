@@ -1,0 +1,372 @@
+"use client";
+
+import { useState, useEffect } from "react";
+import { useAccount, useWriteContract, useWaitForTransactionReceipt, useReadContract, useChainId, useSwitchChain } from "wagmi";
+import { PORTAL_FACTORY_ABI, ERC20_ABI, contractAddresses, targetChainId } from "@/config/contracts";
+import { parseUnits, formatUnits } from "viem";
+
+export function PortalDeployer({ onPortalCreated }: { onPortalCreated?: () => void }) {
+  const { address } = useAccount();
+  const chainId = useChainId();
+  const { switchChain } = useSwitchChain();
+  const [showForm, setShowForm] = useState(false);
+
+  // Form state
+  const [capacityMultiplier, setCapacityMultiplier] = useState(10); // 1x to 12x minimum
+  const [collectionDays, setCollectionDays] = useState(30);
+  const [preDepositAmount, setPreDepositAmount] = useState("");
+  const [enablePreDeposit, setEnablePreDeposit] = useState(false);
+  const [selectedTokens, setSelectedTokens] = useState<string[]>([contractAddresses.usdcToken]);
+  const [peerId, setPeerId] = useState("");
+
+  const { writeContract, data: hash, isPending } = useWriteContract();
+  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash });
+
+  // Check if on correct chain
+  const isWrongChain = chainId !== targetChainId;
+
+  // Read minimum stake threshold from network controller
+  const { data: minStakeThreshold } = useReadContract({
+    address: contractAddresses.networkController,
+    abi: [
+      {
+        inputs: [],
+        name: "minStakeThreshold",
+        outputs: [{ name: "", type: "uint256" }],
+        stateMutability: "view",
+        type: "function",
+      },
+    ],
+    functionName: "minStakeThreshold",
+  });
+
+  // Calculate capacity based on multiplier
+  const minStake = minStakeThreshold ? Number(formatUnits(minStakeThreshold, 18)) : 100000;
+  const maxCapacity = minStake * capacityMultiplier;
+
+  // Temperature color based on capacity
+  const getTemperatureColor = () => {
+    if (capacityMultiplier <= 1) return "from-red-500 to-red-600"; // Low CUs
+    if (capacityMultiplier <= 3) return "from-orange-500 to-orange-600"; // Medium
+    if (capacityMultiplier <= 7) return "from-yellow-500 to-yellow-600"; // Good
+    if (capacityMultiplier <= 10) return "from-green-500 to-green-600"; // Optimal
+    return "from-blue-500 to-blue-600"; // Max
+  };
+
+  const getCapacityLabel = () => {
+    if (capacityMultiplier <= 1) return "⚠️ Low CUs Amount";
+    if (capacityMultiplier <= 3) return "Medium CUs";
+    if (capacityMultiplier <= 7) return "Good CUs";
+    if (capacityMultiplier <= 10) return "✅ Optimal Amount";
+    return "🔥 Maximum Capacity";
+  };
+
+  const getCUEstimate = () => {
+    // CU calculation: floor(totalStaked / minThreshold)
+    return Math.floor(maxCapacity / minStake);
+  };
+
+  const { data: sqdAllowance } = useReadContract({
+    address: contractAddresses.sqdToken,
+    abi: ERC20_ABI,
+    functionName: "allowance",
+    args: address ? [address, contractAddresses.gatewayRegistry] : undefined,
+  });
+
+  const handleApproveSQD = async () => {
+    if (!preDepositAmount || !enablePreDeposit) return;
+
+    writeContract({
+      address: contractAddresses.sqdToken,
+      abi: ERC20_ABI,
+      functionName: "approve",
+      args: [contractAddresses.gatewayRegistry, parseUnits(preDepositAmount, 18)],
+    });
+  };
+
+  const handleDeployPortal = async () => {
+    if (!address || !peerId) return;
+
+    // switch to correct chain if needed
+    if (isWrongChain && switchChain) {
+      try {
+        await switchChain({ chainId: targetChainId });
+        // wait a bit for chain switch to complete
+        await new Promise(resolve => setTimeout(resolve, 2000));
+      } catch (error) {
+        console.error("Failed to switch chain:", error);
+        return;
+      }
+    }
+
+    // double-check we're on the right chain
+    if (chainId !== targetChainId) {
+      alert("Please switch to Arbitrum Sepolia network in your wallet");
+      return;
+    }
+
+    const depositDeadline = Math.floor(Date.now() / 1000) + collectionDays * 24 * 60 * 60;
+    const peerIdBytes = `0x${Buffer.from(peerId).toString("hex")}` as `0x${string}`;
+
+    const txArgs = {
+      address: contractAddresses.portalFactory,
+      abi: PORTAL_FACTORY_ABI,
+      functionName: "createPortal",
+      args: [
+        address, // operator
+        selectedTokens as `0x${string}`[], // paymentTokens
+        parseUnits(maxCapacity.toString(), 18), // maxCapacity
+        BigInt(depositDeadline), // depositDeadline
+        peerIdBytes, // peerId
+        `Capacity: ${maxCapacity.toLocaleString()} SQD | CUs: ${getCUEstimate()}`, // metadata
+      ],
+      chainId: targetChainId,
+    };
+
+    writeContract(txArgs);
+  };
+
+  useEffect(() => {
+    if (isSuccess) {
+      // reset form
+      setShowForm(false);
+      setCapacityMultiplier(10);
+      setCollectionDays(30);
+      setPreDepositAmount("");
+      setEnablePreDeposit(false);
+      setPeerId("");
+      // trigger portal list refresh
+      if (onPortalCreated) {
+        onPortalCreated();
+      }
+    }
+  }, [isSuccess, onPortalCreated]);
+
+  const needsSQDApproval =
+    enablePreDeposit &&
+    preDepositAmount &&
+    (!sqdAllowance || sqdAllowance < parseUnits(preDepositAmount, 18));
+
+  if (!showForm) {
+    return (
+      <div className="bg-gradient-to-r from-sqd-accent/10 to-sqd-secondary/10 rounded-lg p-6 border border-sqd-accent/20">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-lg font-medium text-sqd-text-primary mb-1">Deploy New Portal</h3>
+            <p className="text-sm text-sqd-text-secondary">
+              Launch a staking portal with configurable capacity
+            </p>
+          </div>
+          <button
+            onClick={() => setShowForm(true)}
+            className="bg-sqd-accent hover:bg-sqd-accent/90 text-white px-6 py-2.5 rounded-full text-sm font-semibold transition-colors"
+          >
+            + Deploy Portal
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-white rounded-lg p-6 border border-sqd-divider shadow-lg">
+      <div className="flex items-center justify-between mb-6">
+        <h3 className="text-lg font-medium text-sqd-text-primary">Deploy New Portal</h3>
+        <button
+          onClick={() => setShowForm(false)}
+          className="text-sqd-text-secondary hover:text-sqd-text-primary"
+        >
+          ✕
+        </button>
+      </div>
+
+      <div className="space-y-6">
+        {/* Peer ID Input */}
+        <div>
+          <label className="block text-sm font-medium text-sqd-text-secondary mb-2">
+            Peer ID
+          </label>
+          <input
+            type="text"
+            value={peerId}
+            onChange={(e) => setPeerId(e.target.value)}
+            placeholder="peer_12D3KooW..."
+            className="w-full bg-white border border-sqd-divider rounded-lg px-3.5 py-2.5 text-sqd-text-primary placeholder-sqd-text-disabled focus:outline-none focus:border-sqd-secondary"
+          />
+        </div>
+
+        {/* Capacity Slider with Temperature Gauge */}
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <label className="text-sm font-medium text-sqd-text-secondary">Portal Capacity</label>
+            <div className="text-right">
+              <div className="text-lg font-semibold text-sqd-text-primary">
+                {maxCapacity.toLocaleString()} SQD
+              </div>
+              <div className="text-xs text-sqd-text-secondary">
+                {capacityMultiplier}x Minimum ({getCUEstimate()} CUs)
+              </div>
+            </div>
+          </div>
+
+          {/* Temperature Gauge */}
+          <div
+            className={`bg-gradient-to-r ${getTemperatureColor()} rounded-lg p-4 mb-3 text-white text-center font-medium`}
+          >
+            {getCapacityLabel()}
+          </div>
+
+          {/* Slider */}
+          <input
+            type="range"
+            min="1"
+            max="12"
+            step="1"
+            value={capacityMultiplier}
+            onChange={(e) => setCapacityMultiplier(Number(e.target.value))}
+            className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+            style={{
+              background: `linear-gradient(to right, rgb(239 68 68) 0%, rgb(234 179 8) 50%, rgb(34 197 94) 83%, rgb(59 130 246) 100%)`,
+            }}
+          />
+          <div className="flex justify-between text-xs text-sqd-text-secondary mt-1">
+            <span>1x (Min)</span>
+            <span>10x (Optimal)</span>
+            <span>12x (Max)</span>
+          </div>
+
+          <div className="mt-3 p-3 bg-sqd-primary rounded-lg text-xs text-sqd-text-secondary">
+            <div className="flex justify-between mb-1">
+              <span>Minimum Threshold:</span>
+              <span className="font-medium">{minStake.toLocaleString()} SQD</span>
+            </div>
+            <div className="flex justify-between mb-1">
+              <span>Selected Capacity:</span>
+              <span className="font-medium">{maxCapacity.toLocaleString()} SQD</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Estimated CUs:</span>
+              <span className="font-medium text-sqd-accent">{getCUEstimate()} CUs</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Collection Duration */}
+        <div>
+          <label className="block text-sm font-medium text-sqd-text-secondary mb-2">
+            Collection Period (Days)
+          </label>
+          <input
+            type="number"
+            value={collectionDays}
+            onChange={(e) => setCollectionDays(Number(e.target.value))}
+            placeholder="30"
+            className="w-full bg-white border border-sqd-divider rounded-lg px-3.5 py-2.5 text-sqd-text-primary placeholder-sqd-text-disabled focus:outline-none focus:border-sqd-secondary"
+          />
+          <p className="text-xs text-sqd-text-secondary mt-1">
+            Deadline: {new Date(Date.now() + collectionDays * 24 * 60 * 60 * 1000).toLocaleDateString()}
+          </p>
+        </div>
+
+        {/* Pre-Deposit Option */}
+        <div className="border border-sqd-divider rounded-lg p-4">
+          <div className="flex items-center justify-between mb-3">
+            <label className="text-sm font-medium text-sqd-text-secondary">Pre-Deposit SQD</label>
+            <label className="relative inline-flex items-center cursor-pointer">
+              <input
+                type="checkbox"
+                checked={enablePreDeposit}
+                onChange={(e) => setEnablePreDeposit(e.target.checked)}
+                className="sr-only peer"
+              />
+              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-sqd-accent"></div>
+            </label>
+          </div>
+
+          {enablePreDeposit && (
+            <>
+              <input
+                type="number"
+                value={preDepositAmount}
+                onChange={(e) => setPreDepositAmount(e.target.value)}
+                placeholder="10000"
+                className="w-full bg-white border border-sqd-divider rounded-lg px-3.5 py-2.5 text-sqd-text-primary placeholder-sqd-text-disabled focus:outline-none focus:border-sqd-secondary mb-2"
+              />
+              <p className="text-xs text-sqd-text-secondary">
+                Kickstart your portal by depositing SQD upfront as the operator
+              </p>
+            </>
+          )}
+        </div>
+
+        {/* Payment Tokens (Multi-select can be added later) */}
+        <div>
+          <label className="block text-sm font-medium text-sqd-text-secondary mb-2">
+            Payment Tokens (for fee distribution)
+          </label>
+          <div className="flex gap-2">
+            <div className="px-3 py-2 bg-blue-100 text-blue-700 rounded-lg text-sm font-medium">
+              USDC
+            </div>
+            <div className="px-3 py-2 bg-gray-100 text-gray-400 rounded-lg text-sm">DAI (Coming soon)</div>
+            <div className="px-3 py-2 bg-gray-100 text-gray-400 rounded-lg text-sm">USDT (Coming soon)</div>
+          </div>
+        </div>
+
+        {/* Action Buttons */}
+        {address ? (
+          <div className="space-y-2 pt-2">
+            {isWrongChain ? (
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-2">
+                <p className="text-sm text-yellow-800 mb-2">
+                  ⚠️ Please switch to Arbitrum Sepolia network
+                </p>
+                <button
+                  onClick={() => switchChain?.({ chainId: targetChainId })}
+                  className="w-full bg-yellow-500 hover:bg-yellow-600 text-white text-sm font-medium py-2 rounded-full transition-colors"
+                >
+                  Switch to Arbitrum Sepolia
+                </button>
+              </div>
+            ) : null}
+            {needsSQDApproval && (
+              <button
+                onClick={handleApproveSQD}
+                disabled={!preDepositAmount || isPending || isConfirming || isWrongChain}
+                className="w-full bg-sqd-primary hover:bg-sqd-divider disabled:opacity-50 disabled:cursor-not-allowed text-sqd-text-primary text-sm font-medium py-2.5 rounded-full transition-colors"
+              >
+                {isPending || isConfirming ? "Approving SQD..." : "Approve SQD for Pre-Deposit"}
+              </button>
+            )}
+            <button
+              onClick={handleDeployPortal}
+              disabled={!peerId || (enablePreDeposit && needsSQDApproval) || isPending || isConfirming || isWrongChain}
+              className="w-full bg-sqd-accent hover:bg-sqd-accent/90 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-semibold py-2.5 rounded-full transition-colors"
+            >
+              {isPending || isConfirming ? "Deploying Portal..." : "Deploy Portal"}
+            </button>
+          </div>
+        ) : (
+          <button
+            disabled
+            className="w-full bg-sqd-primary text-sqd-text-disabled text-sm font-medium py-2.5 rounded-full cursor-not-allowed"
+          >
+            Connect Wallet to Deploy
+          </button>
+        )}
+      </div>
+
+      {/* Info Box */}
+      <div className="mt-6 p-4 bg-sqd-primary rounded-lg">
+        <h4 className="text-sm font-medium text-sqd-text-primary mb-2">How it works</h4>
+        <ul className="space-y-1.5 text-xs text-sqd-text-secondary">
+          <li>• Portal collects SQD from liquidity providers until capacity is met</li>
+          <li>• Once activated, portal stakes 100% in GatewayRegistry</li>
+          <li>• CUs (Compute Units) are calculated: floor(totalStaked / minThreshold)</li>
+          <li>• Optimal capacity (10x) maximizes CU efficiency</li>
+          <li>• You can distribute fees to providers in multiple tokens</li>
+        </ul>
+      </div>
+    </div>
+  );
+}

@@ -1,154 +1,222 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.24;
+pragma solidity ^0.8.20;
 
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
 import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
-import {PortalPool} from "./PortalPool.sol";
-import {GatewayRegistry} from "./GatewayRegistry.sol";
-import {FeeRouterModule} from "./FeeRouterModule.sol";
-import {Errors} from "./libs/Errors.sol";
+import {Clones} from "@openzeppelin/contracts/proxy/Clones.sol";
+import {IPortal} from "./interfaces/IPortal.sol";
+import {IGatewayRegistry} from "./interfaces/IGatewayRegistry.sol";
 
-contract PortalFactory is Ownable, Pausable {
-    using SafeERC20 for IERC20;
-
-    IERC20 public immutable SQD;
-    GatewayRegistry public immutable gatewayRegistry;
-    FeeRouterModule public immutable feeRouter;
-
-    mapping(address => bool) public supportedPaymentTokens;
+contract PortalFactory is AccessControl, Pausable {
+    
+    bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
+    
+    address public implementation;
+    address public gatewayRegistry;
+    address public feeRouter;
+    address public networkController;
+    address public sqd;
+    
+    address[] public allPortals;
+    mapping(address => address[]) public operatorPortals;
     mapping(address => bool) public isPortal;
-    address[] public portals;
-
-    uint256 public constant DEFAULT_EPOCH_LENGTH = 7200;
-    uint256 public constant DEFAULT_BASE_EXIT_DELAY = 1;
-    uint256 public constant AVERAGE_BLOCK_TIME_SECONDS = 12;
-
+    
+    uint256 public minStakeThreshold;
+    
     event PortalCreated(
         address indexed portal,
-        address indexed consumer,
-        uint256 targetSQD,
-        uint256 minimumSQD,
-        address paymentToken,
-        uint256 budget
+        address indexed operator,
+        bytes peerId
     );
-    event PaymentTokenAdded(address indexed token);
-    event PaymentTokenRemoved(address indexed token);
 
+    event PortalPaymentTokensSet(
+        address indexed portal,
+        address[] paymentTokens
+    );
+    
+    event PortalUpgraded(
+        address indexed portal,
+        address indexed newImplementation
+    );
+    
+    event StakeMoved(
+        address indexed fromPortal,
+        address indexed toPortal,
+        address indexed provider,
+        uint256 amount
+    );
+    
     constructor(
-        address[] memory _supportedTokens,
-        address _sqdToken,
+        address _implementation,
+        address _gatewayRegistry,
         address _feeRouter,
-        address _gatewayRegistry
-    ) Ownable(msg.sender) {
-        if (_sqdToken == address(0)) revert Errors.ZeroAddress();
-        if (_feeRouter == address(0)) revert Errors.ZeroAddress();
-        if (_gatewayRegistry == address(0)) revert Errors.ZeroAddress();
-
-        SQD = IERC20(_sqdToken);
-        feeRouter = FeeRouterModule(_feeRouter);
-        gatewayRegistry = GatewayRegistry(_gatewayRegistry);
-
-        for (uint256 i = 0; i < _supportedTokens.length; i++) {
-            if (_supportedTokens[i] != address(0)) {
-                supportedPaymentTokens[_supportedTokens[i]] = true;
-                emit PaymentTokenAdded(_supportedTokens[i]);
-            }
-        }
+        address _networkController,
+        address _sqd,
+        uint256 _minStakeThreshold
+    ) {
+        require(_implementation != address(0), "Invalid implementation");
+        require(_gatewayRegistry != address(0), "Invalid gateway");
+        require(_feeRouter != address(0), "Invalid fee router");
+        require(_networkController != address(0), "Invalid controller");
+        require(_sqd != address(0), "Invalid SQD");
+        
+        _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
+        _grantRole(PAUSER_ROLE, msg.sender);
+        
+        implementation = _implementation;
+        gatewayRegistry = _gatewayRegistry;
+        feeRouter = _feeRouter;
+        networkController = _networkController;
+        sqd = _sqd;
+        minStakeThreshold = _minStakeThreshold;
     }
+    
 
     function createPortal(
-        address consumer,
-        uint256 targetSQD,
-        uint256 minimumSQD,
-        uint64 depositDeadline,
-        address paymentToken,
-        uint256 budget
-    ) external whenNotPaused returns (address portalAddr) {
-        if (consumer == address(0)) revert Errors.ZeroAddress();
-        if (!supportedPaymentTokens[paymentToken]) revert Errors.UnsupportedPaymentToken();
-        if (depositDeadline <= block.timestamp) revert Errors.InvalidDeadline();
-        if (budget == 0) revert Errors.ZeroAmount();
+        address operator,
+        address[] calldata paymentTokens,
+        uint256 maxCapacity,
+        uint256 depositDeadline,
+        bytes calldata peerId,
+        string calldata metadata
+    ) external whenNotPaused returns (address portal) {
+        require(operator != address(0), "Invalid operator");
+        require(paymentTokens.length > 0, "No payment tokens provided");
+        require(maxCapacity >= minStakeThreshold, "Below minimum");
+        require(depositDeadline > block.number, "Invalid deadline");
+        require(peerId.length > 0, "Empty peer ID");
 
-        if (minimumSQD < gatewayRegistry.MIN_STAKE_AMOUNT()) {
-            revert Errors.BelowMinimumDeposit();
+        // Validate all tokens are non-zero
+        for (uint256 i = 0; i < paymentTokens.length; ++i) {
+            require(paymentTokens[i] != address(0), "Invalid payment token");
         }
 
-        if (targetSQD < minimumSQD) revert Errors.InvalidParameters();
+        portal = Clones.clone(implementation);
 
-        PortalPool portal = new PortalPool(
-            address(this),
-            consumer,
-            address(SQD),
-            paymentToken,
-            address(feeRouter),
-            address(gatewayRegistry),
-            targetSQD,
-            minimumSQD,
+        IPortal(portal).initialize(
+            operator,
+            maxCapacity,
             depositDeadline,
-            DEFAULT_EPOCH_LENGTH,
-            DEFAULT_BASE_EXIT_DELAY,
-            AVERAGE_BLOCK_TIME_SECONDS
+            peerId,
+            sqd,
+            gatewayRegistry,
+            feeRouter,
+            networkController
         );
 
-        portalAddr = address(portal);
+        // Set all payment tokens
+        IPortal(portal).initializePaymentTokens(paymentTokens);
 
-        gatewayRegistry.registerPortal(portalAddr);
+        allPortals.push(portal);
+        operatorPortals[operator].push(portal);
+        isPortal[portal] = true;
 
-        IERC20(paymentToken).safeTransferFrom(msg.sender, portalAddr, budget);
+        emit PortalCreated(portal, operator, peerId);
+        emit PortalPaymentTokensSet(portal, paymentTokens);
+    }
+    
+    function moveStake(
+        address fromPortal,
+        address toPortal,
+        uint256 amount
+    ) external whenNotPaused {
+        // H-5: Zero address checks
+        require(fromPortal != address(0), "Invalid source");
+        require(toPortal != address(0), "Invalid destination");
+        require(fromPortal != toPortal, "Same portal");
+        require(amount > 0, "Invalid amount");
+        require(isPortal[fromPortal], "Invalid source portal");
+        require(isPortal[toPortal], "Invalid destination portal");
+        
+        IPortal(fromPortal).withdrawForMove(msg.sender, amount);
+        
+        IPortal(toPortal).depositFromMove(msg.sender, amount);
+        
+        IGatewayRegistry(gatewayRegistry).reallocate(
+            fromPortal,
+            toPortal,
+            msg.sender,
+            amount
+        );
+        
+        emit StakeMoved(fromPortal, toPortal, msg.sender, amount);
+    }
+    
+    function upgradePortal(
+        address portal,
+        address newImplementation
+    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        require(isPortal[portal], "Not a portal");
+        require(newImplementation != address(0), "Invalid implementation");
+        
+        IPortal(portal).upgradeTo(newImplementation);
+        
+        emit PortalUpgraded(portal, newImplementation);
+    }
+    
+    function upgradeAllPortals(
+        address newImplementation
+    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        require(newImplementation != address(0), "Invalid implementation");
 
-        portal.initialize();
-
-        isPortal[portalAddr] = true;
-        portals.push(portalAddr);
-
-        emit PortalCreated(portalAddr, consumer, targetSQD, minimumSQD, paymentToken, budget);
+        _upgradePortalsBatch(newImplementation, 0, allPortals.length);
     }
 
-    function addPaymentToken(address token) external onlyOwner {
-        if (token == address(0)) revert Errors.ZeroAddress();
-        if (supportedPaymentTokens[token]) revert Errors.AlreadyInitialized();
-
-        supportedPaymentTokens[token] = true;
-        emit PaymentTokenAdded(token);
+    function upgradePortalsBatch(
+        address newImplementation,
+        uint256 startIndex,
+        uint256 endIndex
+    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        _upgradePortalsBatch(newImplementation, startIndex, endIndex);
     }
 
-    function removePaymentToken(address token) external onlyOwner {
-        if (!supportedPaymentTokens[token]) revert Errors.InvalidAddress();
+    function _upgradePortalsBatch(
+        address newImplementation,
+        uint256 startIndex,
+        uint256 endIndex
+    ) internal {
+        require(newImplementation != address(0), "Invalid implementation");
+        require(endIndex <= allPortals.length, "Invalid range");
+        require(startIndex < endIndex, "Invalid range");
 
-        supportedPaymentTokens[token] = false;
-        emit PaymentTokenRemoved(token);
+        for (uint256 i = startIndex; i < endIndex; ++i) {
+            IPortal(allPortals[i]).upgradeTo(newImplementation);
+            emit PortalUpgraded(allPortals[i], newImplementation);
+        }
     }
-
-    function pausePortal(address portal) external onlyOwner {
-        if (!isPortal[portal]) revert Errors.InvalidAddress();
-        PortalPool(portal).pause();
+    
+    function getPortalCount() external view returns (uint256) {
+        return allPortals.length;
     }
-
-    function unpausePortal(address portal) external onlyOwner {
-        if (!isPortal[portal]) revert Errors.InvalidAddress();
-        PortalPool(portal).unpause();
+    
+    function getOperatorPortals(address operator) 
+        external 
+        view 
+        returns (address[] memory) 
+    {
+        return operatorPortals[operator];
     }
-
-    function pause() external onlyOwner {
+    
+    function pause() external onlyRole(PAUSER_ROLE) {
         _pause();
     }
-
-    function unpause() external onlyOwner {
+    
+    function unpause() external onlyRole(PAUSER_ROLE) {
         _unpause();
     }
-
-    function getPortalCount() external view returns (uint256) {
-        return portals.length;
+    
+    function setImplementation(address _implementation) 
+        external 
+        onlyRole(DEFAULT_ADMIN_ROLE) 
+    {
+        require(_implementation != address(0), "Invalid implementation");
+        implementation = _implementation;
     }
-
-    function getPortalAt(uint256 index) external view returns (address) {
-        if (index >= portals.length) revert Errors.InvalidParameters();
-        return portals[index];
-    }
-
-    function getAllPortals() external view returns (address[] memory) {
-        return portals;
+    
+    function setMinStakeThreshold(uint256 _threshold) 
+        external 
+        onlyRole(DEFAULT_ADMIN_ROLE) 
+    {
+        minStakeThreshold = _threshold;
     }
 }
