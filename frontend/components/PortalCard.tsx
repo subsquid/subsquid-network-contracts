@@ -1,49 +1,59 @@
 "use client";
 
 import { useReadContract } from "wagmi";
-import { PORTAL_POOL_ABI, STATE_NAMES } from "@/config/contracts";
+import { PORTAL_ABI, STATE_NAMES } from "@/config/contracts";
 import { formatUnits } from "viem";
 
-interface Portal {
-  address: string;
-  consumer: string;
-  targetSQD: bigint;
-  collectionTarget: bigint;
-  paymentToken: string;
-  budget: bigint;
-}
-
 interface PortalCardProps {
-  portal: Portal;
-  filterState: "all" | "collecting" | "active" | "closed" | "failed";
+  portalAddress: string;
+  filterState: "all" | "collecting" | "active" | "failed";
+  onClick?: () => void;
 }
 
-export function PortalCard({ portal, filterState }: PortalCardProps) {
-  const { data: state } = useReadContract({
-    address: portal.address as `0x${string}`,
-    abi: PORTAL_POOL_ABI,
-    functionName: "state",
+interface PortalInfo {
+  operator: string;
+  maxCapacity: bigint;
+  totalStaked: bigint;
+  depositDeadline: bigint;
+  activationTime: bigint;
+  state: number;
+  paused: boolean;
+}
+
+export function PortalCard({ portalAddress, filterState, onClick }: PortalCardProps) {
+  // Read portal info
+  const { data: portalInfo } = useReadContract({
+    address: portalAddress as `0x${string}`,
+    abi: PORTAL_ABI,
+    functionName: "getPortalInfo",
+  }) as { data: PortalInfo | undefined };
+
+  // Read active stake
+  const { data: activeStake } = useReadContract({
+    address: portalAddress as `0x${string}`,
+    abi: PORTAL_ABI,
+    functionName: "getActiveStake",
   });
 
-  const { data: totalActiveSQD } = useReadContract({
-    address: portal.address as `0x${string}`,
-    abi: PORTAL_POOL_ABI,
-    functionName: "totalActiveSQD",
+  // Read peerId
+  const { data: peerId } = useReadContract({
+    address: portalAddress as `0x${string}`,
+    abi: PORTAL_ABI,
+    functionName: "getPeerId",
   });
 
-  const { data: totalRewards } = useReadContract({
-    address: portal.address as `0x${string}`,
-    abi: PORTAL_POOL_ABI,
-    functionName: "totalRewardsDistributed",
-  });
+  if (!portalInfo) {
+    return (
+      <div className="bg-white rounded-lg border border-sqd-divider p-5 animate-pulse">
+        <div className="h-4 bg-gray-200 rounded w-3/4 mb-4"></div>
+        <div className="h-4 bg-gray-200 rounded w-1/2 mb-4"></div>
+        <div className="h-2 bg-gray-200 rounded w-full mb-4"></div>
+        <div className="h-8 bg-gray-200 rounded w-full"></div>
+      </div>
+    );
+  }
 
-  const { data: depositDeadline } = useReadContract({
-    address: portal.address as `0x${string}`,
-    abi: PORTAL_POOL_ABI,
-    functionName: "depositDeadline",
-  });
-
-  const stateNum = typeof state === "number" ? state : 0;
+  const stateNum = portalInfo.state;
   const stateName = STATE_NAMES[stateNum] || "Unknown";
 
   // Filter logic
@@ -52,43 +62,43 @@ export function PortalCard({ portal, filterState }: PortalCardProps) {
       collecting: 0,
       active: 1,
       failed: 2,
-      closed: 3,
     };
     if (stateNum !== filterMap[filterState]) {
       return null;
     }
   }
 
-  const progress = totalActiveSQD
-    ? Number((totalActiveSQD * 100n) / portal.collectionTarget)
-    : 0;
+  const maxCapacity = Number(formatUnits(portalInfo.maxCapacity, 18));
+  const totalStaked = Number(formatUnits(portalInfo.totalStaked, 18));
+  const activeStakeAmount = activeStake ? Number(formatUnits(activeStake, 18)) : totalStaked;
+  const progress = maxCapacity > 0 ? (totalStaked / maxCapacity) * 100 : 0;
 
   const stateColors: Record<string, string> = {
     Collecting: "bg-blue-100 text-blue-700 border-blue-200",
     Active: "bg-green-100 text-green-700 border-green-200",
     Failed: "bg-red-100 text-red-700 border-red-200",
-    Closed: "bg-gray-100 text-gray-700 border-gray-200",
   };
 
   const progressColors: Record<string, string> = {
     Collecting: "bg-blue-500",
     Active: "bg-green-500",
     Failed: "bg-red-500",
-    Closed: "bg-gray-500",
   };
 
-  const deadlineDate = depositDeadline
-    ? new Date(Number(depositDeadline) * 1000).toLocaleDateString()
-    : "N/A";
+  // Deadline is in block number, not timestamp
+  const deadlineBlock = Number(portalInfo.depositDeadline);
 
   return (
-    <div className="bg-white rounded-lg border border-sqd-divider p-5 hover:shadow-md transition-shadow">
+    <div
+      className="bg-white rounded-lg border border-sqd-divider p-5 hover:shadow-md transition-shadow cursor-pointer"
+      onClick={onClick}
+    >
       {/* Header */}
       <div className="flex items-start justify-between mb-4">
         <div className="flex-1 min-w-0">
           <div className="text-xs text-sqd-text-secondary mb-1">Portal</div>
           <div className="text-sm font-mono text-sqd-text-primary truncate">
-            {portal.address.slice(0, 6)}...{portal.address.slice(-4)}
+            {portalAddress.slice(0, 6)}...{portalAddress.slice(-4)}
           </div>
         </div>
         <div
@@ -119,45 +129,50 @@ export function PortalCard({ portal, filterState }: PortalCardProps) {
       {/* Stats Grid */}
       <div className="space-y-3">
         <div className="flex justify-between items-center">
-          <span className="text-xs text-sqd-text-secondary">Target SQD</span>
+          <span className="text-xs text-sqd-text-secondary">Max Capacity</span>
           <span className="text-sm font-medium text-sqd-text-primary">
-            {formatUnits(portal.targetSQD, 18)} SQD
+            {maxCapacity.toLocaleString()} SQD
           </span>
         </div>
 
         <div className="flex justify-between items-center">
           <span className="text-xs text-sqd-text-secondary">Total Staked</span>
           <span className="text-sm font-medium text-sqd-text-primary">
-            {totalActiveSQD ? formatUnits(totalActiveSQD, 18) : "0"} SQD
+            {totalStaked.toLocaleString()} SQD
           </span>
         </div>
 
-        <div className="flex justify-between items-center">
-          <span className="text-xs text-sqd-text-secondary">Budget</span>
-          <span className="text-sm font-medium text-sqd-text-primary">
-            {formatUnits(portal.budget, 6)} USDC
-          </span>
-        </div>
-
-        {totalRewards && totalRewards > 0n && (
+        {stateNum === 1 && activeStakeAmount !== totalStaked && (
           <div className="flex justify-between items-center">
-            <span className="text-xs text-sqd-text-secondary">Rewards Distributed</span>
-            <span className="text-sm font-medium text-green-600">
-              {formatUnits(totalRewards, 6)} USDC
+            <span className="text-xs text-sqd-text-secondary">Active Stake</span>
+            <span className="text-sm font-medium text-sqd-accent">
+              {activeStakeAmount.toLocaleString()} SQD
             </span>
           </div>
         )}
 
         {stateNum === 0 && (
           <div className="flex justify-between items-center">
-            <span className="text-xs text-sqd-text-secondary">Deadline</span>
-            <span className="text-sm font-medium text-sqd-text-primary">{deadlineDate}</span>
+            <span className="text-xs text-sqd-text-secondary">Deadline Block</span>
+            <span className="text-sm font-medium text-sqd-text-primary">#{deadlineBlock}</span>
+          </div>
+        )}
+
+        {portalInfo.paused && (
+          <div className="flex justify-between items-center">
+            <span className="text-xs text-red-600">⚠️ Portal Paused</span>
           </div>
         )}
       </div>
 
       {/* Action Button */}
-      <button className="w-full mt-4 bg-sqd-accent hover:bg-sqd-accent/90 text-white py-2 rounded-full text-sm font-medium transition-colors">
+      <button
+        className="w-full mt-4 bg-sqd-accent hover:bg-sqd-accent/90 text-white py-2 rounded-full text-sm font-medium transition-colors"
+        onClick={(e) => {
+          e.stopPropagation();
+          onClick?.();
+        }}
+      >
         View Details
       </button>
     </div>

@@ -87,7 +87,7 @@ contract ExitFunctionalityTest is Test {
             MIN_STAKE
         );
 
-        registry.setFactory(address(factory));
+        
 
 
         sqd.mint(provider, 100_000_000 ether);
@@ -111,7 +111,6 @@ contract ExitFunctionalityTest is Test {
             _makeTokenArray(address(paymentToken)),
             MIN_STAKE * 2,
             block.number + 100,
-            bytes("peer_exit_test"),
             "exit test portal"
         );
         console.log("Portal created at:", portal);
@@ -153,7 +152,6 @@ contract ExitFunctionalityTest is Test {
             _makeTokenArray(address(paymentToken)),
             MIN_STAKE,
             block.number + 100,
-            bytes("peer_no_exit"),
             "no exit portal"
         );
 
@@ -178,7 +176,6 @@ contract ExitFunctionalityTest is Test {
             _makeTokenArray(address(paymentToken)),
             MIN_STAKE * 2,
             block.number + 100,
-            bytes("peer_multi_exit"),
             "multi exit portal"
         );
 
@@ -230,7 +227,6 @@ contract ExitFunctionalityTest is Test {
             _makeTokenArray(address(paymentToken)),
             MIN_STAKE,
             block.number + 100,
-            bytes("peer_insufficient"),
             "insufficient stake portal"
         );
 
@@ -256,22 +252,18 @@ contract ExitFunctionalityTest is Test {
             _makeTokenArray(address(paymentToken)),
             MIN_STAKE,
             block.number + 100,
-            bytes("peer_zero_exit"),
             "zero exit portal"
         );
 
         vm.prank(provider);
         PortalImplementation(portal).stake(MIN_STAKE);
 
-
-
-
+        // Zero amount should revert with InvalidAmount
         vm.prank(provider);
+        vm.expectRevert(PortalErrors.InvalidAmount.selector);
         PortalImplementation(portal).requestExit(0);
 
-        PortalStorage.ExitRequest memory exitRequest = PortalImplementation(portal).getExitRequest(provider);
-        assertEq(exitRequest.amount, 0, "Exit amount should be 0");
-        emit log_string("PASS: Zero amount exit request handled (no revert)");
+        emit log_string("PASS: Zero amount exit request reverts correctly");
     }
 
     function testExitRequestUnlockEpochCalculation() public {
@@ -283,7 +275,6 @@ contract ExitFunctionalityTest is Test {
             _makeTokenArray(address(paymentToken)),
             MIN_STAKE * 10,
             block.number + 100,
-            bytes("peer_epoch_calc"),
             "epoch calc portal"
         );
 
@@ -338,7 +329,6 @@ contract ExitFunctionalityTest is Test {
             _makeTokenArray(address(paymentToken)),
             MIN_STAKE * 2,
             block.number + 100,
-            bytes("peer_persist"),
             "persist portal"
         );
 
@@ -380,7 +370,6 @@ contract ExitFunctionalityTest is Test {
             _makeTokenArray(address(paymentToken)),
             MIN_STAKE * 4,
             block.number + 100,
-            bytes("peer_multi_provider"),
             "multi provider portal"
         );
 
@@ -450,7 +439,6 @@ contract ExitFunctionalityTest is Test {
             _makeTokenArray(address(paymentToken)),
             MIN_STAKE,
             block.number + 100,
-            bytes("peer_full_exit"),
             "full exit portal"
         );
 
@@ -483,7 +471,6 @@ contract ExitFunctionalityTest is Test {
             _makeTokenArray(address(paymentToken)),
             MIN_STAKE * 100,
             block.number + 100,
-            bytes("peer_small_exit"),
             "small exit portal"
         );
 

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
-import { PORTAL_POOL_ABI, ERC20_ABI, contractAddresses } from "@/config/contracts";
+import { PORTAL_ABI, ERC20_ABI, contractAddresses, targetChainId } from "@/config/contracts";
 import { parseUnits, formatUnits } from "viem";
 
 export function DepositSQD({ portalAddress }: { portalAddress: `0x${string}` }) {
@@ -11,6 +11,7 @@ export function DepositSQD({ portalAddress }: { portalAddress: `0x${string}` }) 
   const { writeContract, data: hash, isPending } = useWriteContract();
   const { isLoading: isConfirming } = useWaitForTransactionReceipt({ hash });
 
+  // Read user's SQD balance
   const { data: userBalance } = useReadContract({
     address: contractAddresses.sqdToken as `0x${string}`,
     abi: ERC20_ABI,
@@ -18,18 +19,20 @@ export function DepositSQD({ portalAddress }: { portalAddress: `0x${string}` }) 
     args: address ? [address] : undefined,
   });
 
+  // Read user's stake in this portal
   const { data: stakedBalance } = useReadContract({
     address: portalAddress,
-    abi: PORTAL_POOL_ABI,
-    functionName: "balances",
+    abi: PORTAL_ABI,
+    functionName: "getProviderStake",
     args: address ? [address] : undefined,
   });
 
+  // Read allowance for GatewayRegistry (which is where tokens are transferred)
   const { data: allowance } = useReadContract({
     address: contractAddresses.sqdToken as `0x${string}`,
     abi: ERC20_ABI,
     functionName: "allowance",
-    args: address ? [address, portalAddress] : undefined,
+    args: address ? [address, contractAddresses.gatewayRegistry] : undefined,
   });
 
   const handleApprove = async () => {
@@ -39,18 +42,21 @@ export function DepositSQD({ portalAddress }: { portalAddress: `0x${string}` }) 
       address: contractAddresses.sqdToken as `0x${string}`,
       abi: ERC20_ABI,
       functionName: "approve",
-      args: [portalAddress, parseUnits(amount, 18)],
+      args: [contractAddresses.gatewayRegistry, parseUnits(amount, 18)],
+      chainId: targetChainId,
     });
   };
 
   const handleDeposit = async () => {
     if (!amount) return;
 
+    // Stake through the Portal (which internally calls GatewayRegistry)
     writeContract({
       address: portalAddress,
-      abi: PORTAL_POOL_ABI,
-      functionName: "depositSQD",
+      abi: PORTAL_ABI,
+      functionName: "stake",
       args: [parseUnits(amount, 18)],
+      chainId: targetChainId,
     });
   };
 
@@ -85,7 +91,7 @@ export function DepositSQD({ portalAddress }: { portalAddress: `0x${string}` }) 
                 disabled={!amount || isPending || isConfirming}
                 className="w-full bg-sqd-primary hover:bg-sqd-divider disabled:opacity-50 disabled:cursor-not-allowed text-sqd-text-primary text-sm font-medium py-2.5 rounded-full transition-colors"
               >
-                {isPending || isConfirming ? "Approving..." : "Approve SQD"}
+                {isPending || isConfirming ? "Approving..." : "Approve SQD for GatewayRegistry"}
               </button>
             )}
             <button
@@ -93,7 +99,7 @@ export function DepositSQD({ portalAddress }: { portalAddress: `0x${string}` }) 
               disabled={!amount || needsApproval || isPending || isConfirming}
               className="w-full bg-sqd-accent hover:bg-sqd-accent/90 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-semibold py-2.5 rounded-full transition-colors"
             >
-              {isPending || isConfirming ? "Depositing..." : "Deposit SQD"}
+              {isPending || isConfirming ? "Staking..." : "Stake SQD"}
             </button>
           </div>
         ) : (

@@ -1,66 +1,57 @@
 "use client";
 
 import { useState } from "react";
-import { useAccount, useWriteContract, useWaitForTransactionReceipt, useReadContract } from "wagmi";
-import { PORTAL_FACTORY_ABI, ERC20_ABI, contractAddresses } from "@/config/contracts";
-import { parseUnits } from "viem";
+import { useAccount, useWriteContract, useWaitForTransactionReceipt, useReadContract, useBlockNumber } from "wagmi";
+import { PORTAL_FACTORY_ABI, contractAddresses, targetChainId } from "@/config/contracts";
+import { parseUnits, toHex, stringToHex } from "viem";
 
 export function PortalCreation({ onPortalCreated }: { onPortalCreated?: () => void }) {
   const { address } = useAccount();
   const [showForm, setShowForm] = useState(false);
-  const [targetSQD, setTargetSQD] = useState("");
-  const [budget, setBudget] = useState("");
-  const [days, setDays] = useState("30");
+  const [maxCapacity, setMaxCapacity] = useState("");
+  const [peerId, setPeerId] = useState("");
+  const [blocksUntilDeadline, setBlocksUntilDeadline] = useState("50000"); // ~7 days at 12s/block
 
   const { writeContract, data: hash, isPending } = useWriteContract();
   const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash });
-
-  const { data: usdcAllowance } = useReadContract({
-    address: contractAddresses.usdcToken,
-    abi: ERC20_ABI,
-    functionName: "allowance",
-    args: address ? [address, contractAddresses.portalFactory] : undefined,
-  });
-
-  const handleApprove = async () => {
-    if (!budget) return;
-
-    writeContract({
-      address: contractAddresses.usdcToken,
-      abi: ERC20_ABI,
-      functionName: "approve",
-      args: [contractAddresses.portalFactory, parseUnits(budget, 6)],
-    });
-  };
+  const { data: currentBlock } = useBlockNumber();
 
   const handleCreatePortal = async () => {
-    if (!targetSQD || !budget || !days || !address) return;
+    if (!maxCapacity || !blocksUntilDeadline || !address) return;
 
-    const depositDeadline = Math.floor(Date.now() / 1000) + parseInt(days) * 24 * 60 * 60;
+    // Calculate deposit deadline as block number
+    const depositDeadline = currentBlock
+      ? currentBlock + BigInt(blocksUntilDeadline)
+      : BigInt(Date.now() / 1000) + BigInt(blocksUntilDeadline); // Fallback
+
+    // Default payment tokens: USDC
+    const paymentTokens = [contractAddresses.usdcToken];
+
+    // PeerId as bytes (use a default if not provided)
+    const peerIdBytes = peerId ? stringToHex(peerId) : stringToHex(`portal-${Date.now()}`);
 
     writeContract({
       address: contractAddresses.portalFactory,
       abi: PORTAL_FACTORY_ABI,
       functionName: "createPortal",
       args: [
-        address,
-        parseUnits(targetSQD, 18),
-        BigInt(depositDeadline),
-        contractAddresses.usdcToken,
-        parseUnits(budget, 6),
+        address,                          // operator
+        paymentTokens,                    // paymentTokens array
+        parseUnits(maxCapacity, 18),      // maxCapacity
+        depositDeadline,                  // depositDeadline (block number)
+        peerIdBytes,                      // peerId as bytes
       ],
+      chainId: targetChainId,
     });
   };
 
   if (isSuccess && onPortalCreated) {
     onPortalCreated();
     setShowForm(false);
-    setTargetSQD("");
-    setBudget("");
-    setDays("30");
+    setMaxCapacity("");
+    setPeerId("");
+    setBlocksUntilDeadline("50000");
   }
-
-  const needsApproval = !usdcAllowance || (budget && usdcAllowance < parseUnits(budget, 6));
 
   if (!showForm) {
     return (
@@ -96,66 +87,57 @@ export function PortalCreation({ onPortalCreated }: { onPortalCreated?: () => vo
       <div className="space-y-4">
         <div>
           <label className="block text-sm font-medium text-sqd-text-secondary mb-2">
-            Target SQD Amount (Operational Capacity)
+            Max Capacity (SQD)
           </label>
           <input
             type="number"
-            value={targetSQD}
-            onChange={(e) => setTargetSQD(e.target.value)}
+            value={maxCapacity}
+            onChange={(e) => setMaxCapacity(e.target.value)}
             placeholder="100000"
             className="w-full bg-white border border-sqd-divider rounded-lg px-3.5 py-2.5 text-sqd-text-primary placeholder-sqd-text-disabled focus:outline-none focus:border-sqd-secondary"
           />
           <p className="text-xs text-sqd-text-secondary mt-1">
-            Portal will collect 120% ({targetSQD ? (parseFloat(targetSQD) * 1.2).toLocaleString() : "0"} SQD) and stake 100% in GatewayRegistry
+            Maximum SQD that can be staked in this portal (min: 100,000 SQD)
           </p>
         </div>
 
         <div>
           <label className="block text-sm font-medium text-sqd-text-secondary mb-2">
-            Budget (USDC Payment to Providers)
+            Peer ID (Optional)
           </label>
           <input
-            type="number"
-            value={budget}
-            onChange={(e) => setBudget(e.target.value)}
-            placeholder="10000"
+            type="text"
+            value={peerId}
+            onChange={(e) => setPeerId(e.target.value)}
+            placeholder="my-portal-peer-id"
             className="w-full bg-white border border-sqd-divider rounded-lg px-3.5 py-2.5 text-sqd-text-primary placeholder-sqd-text-disabled focus:outline-none focus:border-sqd-secondary"
           />
           <p className="text-xs text-sqd-text-secondary mt-1">
-            Payment tokens for SQD liquidity providers (70% to providers, 30% to workers)
+            Identifier for the gateway node (auto-generated if empty)
           </p>
         </div>
 
         <div>
           <label className="block text-sm font-medium text-sqd-text-secondary mb-2">
-            Collection Period (Days)
+            Collection Period (Blocks)
           </label>
           <input
             type="number"
-            value={days}
-            onChange={(e) => setDays(e.target.value)}
-            placeholder="30"
+            value={blocksUntilDeadline}
+            onChange={(e) => setBlocksUntilDeadline(e.target.value)}
+            placeholder="50000"
             className="w-full bg-white border border-sqd-divider rounded-lg px-3.5 py-2.5 text-sqd-text-primary placeholder-sqd-text-disabled focus:outline-none focus:border-sqd-secondary"
           />
           <p className="text-xs text-sqd-text-secondary mt-1">
-            Time window for liquidity providers to deposit SQD
+            Number of blocks from now until deposit deadline (~{Math.round(parseInt(blocksUntilDeadline || "0") * 12 / 86400)} days at 12s/block)
           </p>
         </div>
 
         {address ? (
           <div className="space-y-2 pt-2">
-            {needsApproval && (
-              <button
-                onClick={handleApprove}
-                disabled={!budget || isPending || isConfirming}
-                className="w-full bg-sqd-primary hover:bg-sqd-divider disabled:opacity-50 disabled:cursor-not-allowed text-sqd-text-primary text-sm font-medium py-2.5 rounded-full transition-colors"
-              >
-                {isPending || isConfirming ? "Approving USDC..." : "Approve USDC"}
-              </button>
-            )}
             <button
               onClick={handleCreatePortal}
-              disabled={!targetSQD || !budget || needsApproval || isPending || isConfirming}
+              disabled={!maxCapacity || isPending || isConfirming}
               className="w-full bg-sqd-accent hover:bg-sqd-accent/90 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-semibold py-2.5 rounded-full transition-colors"
             >
               {isPending || isConfirming ? "Creating Portal..." : "Create Portal"}
@@ -174,10 +156,11 @@ export function PortalCreation({ onPortalCreated }: { onPortalCreated?: () => vo
       <div className="mt-6 p-4 bg-sqd-primary rounded-lg">
         <h4 className="text-sm font-medium text-sqd-text-primary mb-2">What happens next?</h4>
         <ul className="space-y-1.5 text-xs text-sqd-text-secondary">
-          <li>• Portal collects SQD from liquidity providers (120% of target)</li>
-          <li>• Once target met, portal stakes 100% in GatewayRegistry</li>
-          <li>• Keeps 20% buffer for instant exits (Kiln pattern)</li>
-          <li>• You distribute payments to providers over time</li>
+          <li>• Portal collects SQD from liquidity providers until deadline</li>
+          <li>• You can manually activate the portal once enough SQD is staked</li>
+          <li>• Portal auto-activates when max capacity is reached</li>
+          <li>• You distribute payment tokens to providers over time</li>
+          <li>• Providers earn fees based on their active stake</li>
         </ul>
       </div>
     </div>

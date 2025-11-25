@@ -1,9 +1,9 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useAccount, useWriteContract, useWaitForTransactionReceipt, useReadContract, useChainId, useSwitchChain } from "wagmi";
+import { useAccount, useWriteContract, useWaitForTransactionReceipt, useReadContract, useChainId, useSwitchChain, useBlockNumber } from "wagmi";
 import { PORTAL_FACTORY_ABI, ERC20_ABI, contractAddresses, targetChainId } from "@/config/contracts";
-import { parseUnits, formatUnits } from "viem";
+import { parseUnits, formatUnits, stringToHex } from "viem";
 
 export function PortalDeployer({ onPortalCreated }: { onPortalCreated?: () => void }) {
   const { address } = useAccount();
@@ -21,6 +21,7 @@ export function PortalDeployer({ onPortalCreated }: { onPortalCreated?: () => vo
 
   const { writeContract, data: hash, isPending } = useWriteContract();
   const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash });
+  const { data: currentBlock } = useBlockNumber();
 
   // Check if on correct chain
   const isWrongChain = chainId !== targetChainId;
@@ -105,10 +106,15 @@ export function PortalDeployer({ onPortalCreated }: { onPortalCreated?: () => vo
       return;
     }
 
-    const depositDeadline = Math.floor(Date.now() / 1000) + collectionDays * 24 * 60 * 60;
-    const peerIdBytes = `0x${Buffer.from(peerId).toString("hex")}` as `0x${string}`;
+    // Calculate deposit deadline as block number (roughly 12 seconds per block)
+    const blocksPerDay = (24 * 60 * 60) / 12; // ~7200 blocks per day
+    const depositDeadline = currentBlock
+      ? currentBlock + BigInt(Math.floor(collectionDays * blocksPerDay))
+      : BigInt(Math.floor(Date.now() / 1000) + collectionDays * 24 * 60 * 60); // Fallback
 
-    const txArgs = {
+    const peerIdBytes = peerId ? stringToHex(peerId) : stringToHex(`portal-${Date.now()}`);
+
+    writeContract({
       address: contractAddresses.portalFactory,
       abi: PORTAL_FACTORY_ABI,
       functionName: "createPortal",
@@ -116,14 +122,11 @@ export function PortalDeployer({ onPortalCreated }: { onPortalCreated?: () => vo
         address, // operator
         selectedTokens as `0x${string}`[], // paymentTokens
         parseUnits(maxCapacity.toString(), 18), // maxCapacity
-        BigInt(depositDeadline), // depositDeadline
-        peerIdBytes, // peerId
-        `Capacity: ${maxCapacity.toLocaleString()} SQD | CUs: ${getCUEstimate()}`, // metadata
+        depositDeadline, // depositDeadline (block number)
+        peerIdBytes, // peerId as bytes
       ],
       chainId: targetChainId,
-    };
-
-    writeContract(txArgs);
+    });
   };
 
   useEffect(() => {

@@ -5,6 +5,7 @@ library PortalErrors {
     error InvalidState();
     error InsufficientStake();
     error DeadlinePassed();
+    error DeadlineNotPassed();
     error NotOperator();
     error PortalPaused();
     error InvalidAmount();
@@ -14,5 +15,12 @@ library PortalErrors {
     error PortalNotFailed();
     error NoStakeToWithdraw();
     error TokenNotAllowed();
+    error InvalidAddress();
+    error InvalidDeadline();
+    error BelowMinimum();
+    error NotAuthorized();
+    error TooManyTokens();
+    error AlreadyInitialized();
+    error TokenAlreadyAdded();
+    error NothingToClaim();
 }
-

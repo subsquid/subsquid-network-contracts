@@ -10,63 +10,64 @@ import {INetworkController} from "./interfaces/INetworkController.sol";
 
 contract GatewayRegistry is AccessControl, Pausable {
     using SafeERC20 for IERC20;
-    
+
     bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
-    
+
     struct Portal {
         bytes peerId;
         address portalAddress;
         uint256 totalStaked;
         uint256 registeredAt;
         bool active;
-        string metadata;
     }
-    
+
     struct UnlockRequest {
         uint256 amount;
         uint256 requestedAt;
         uint256 withdrawn;
     }
-    
+
     IERC20 public immutable SQD;
     INetworkController public networkController;
-    address public factory;
-    
+
     mapping(address => Portal) public portals;
     mapping(bytes32 => address) public peerIdToPortal;
-    
+
     mapping(address => mapping(address => uint256)) public providerAllocations;
 
     mapping(address => address[]) private _providerPortals;
 
     mapping(address => UnlockRequest) public unlockRequests;
-    
+
     uint256 public constant MAX_UNLOCK_PER_EPOCH_BPS = 100;
     uint256 public minStake;
     uint256 public mana;
-    
+
     event PortalRegistered(address indexed portal, bytes peerId, address operator);
     event PortalActivated(address indexed portal);
     event Staked(address indexed portal, address indexed provider, uint256 amount);
-    event StakeReallocated(
-        address indexed fromPortal,
-        address indexed toPortal,
-        address indexed provider,
-        uint256 amount
-    );
     event UnlockRequested(address indexed provider, uint256 amount, uint256 requestedAt);
     event Withdrawn(address indexed provider, uint256 amount);
     event MinStakeUpdated(uint256 oldValue, uint256 newValue);
     event ManaUpdated(uint256 oldValue, uint256 newValue);
-    
+
+    error InvalidAddress();
+    error PortalNotRegistered();
+    error PortalAlreadyRegistered();
+    error PeerIdInUse();
+    error OnlyPortal();
+    error InsufficientAllocation();
+    error NoUnlockRequest();
+    error NothingToWithdraw();
+
     constructor(
         address _sqd,
         address _networkController,
         uint256 _minStake,
         uint256 _mana
     ) {
-        require(_sqd != address(0), "Invalid SQD");
-        require(_networkController != address(0), "Invalid controller");
+        if (_sqd == address(0)) revert InvalidAddress();
+        if (_networkController == address(0)) revert InvalidAddress();
 
         SQD = IERC20(_sqd);
         networkController = INetworkController(_networkController);
@@ -77,129 +78,74 @@ contract GatewayRegistry is AccessControl, Pausable {
         _grantRole(PAUSER_ROLE, msg.sender);
     }
 
-    function setFactory(address _factory) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        require(_factory != address(0), "Invalid factory");
-        factory = _factory;
-    }
-    
     function registerPortal(
         bytes calldata peerId,
         address portalAddress,
         address operator
     ) external {
-        require(msg.sender == portalAddress, "Only portal");
-        require(portals[portalAddress].portalAddress == address(0), "Already registered");
-        
+        if (msg.sender != portalAddress) revert OnlyPortal();
+        if (portals[portalAddress].portalAddress != address(0)) revert PortalAlreadyRegistered();
+
         bytes32 peerIdHash = keccak256(peerId);
-        require(peerIdToPortal[peerIdHash] == address(0), "PeerId in use");
-        
+        if (peerIdToPortal[peerIdHash] != address(0)) revert PeerIdInUse();
+
         portals[portalAddress] = Portal({
             peerId: peerId,
             portalAddress: portalAddress,
             totalStaked: 0,
             registeredAt: block.number,
-            active: false,
-            metadata: ""
+            active: false
         });
-        
+
         peerIdToPortal[peerIdHash] = portalAddress;
-        
+
         emit PortalRegistered(portalAddress, peerId, operator);
     }
-    
+
     function stake(
         address portalAddress,
         address provider,
         uint256 amount
     ) external whenNotPaused {
-        require(msg.sender == portalAddress, "Only portal");
-        require(portals[portalAddress].portalAddress != address(0), "Portal not registered");
-        
+        if (msg.sender != portalAddress) revert OnlyPortal();
+        if (portals[portalAddress].portalAddress == address(0)) revert PortalNotRegistered();
+
         SQD.safeTransferFrom(provider, address(this), amount);
 
-        // Track portal for provider if first allocation
         if (providerAllocations[portalAddress][provider] == 0) {
             _providerPortals[provider].push(portalAddress);
         }
 
         providerAllocations[portalAddress][provider] += amount;
-        
+
         Portal storage portal = portals[portalAddress];
         portal.totalStaked += amount;
-        
+
         if (!portal.active && portal.totalStaked >= minStake) {
             portal.active = true;
             emit PortalActivated(portalAddress);
         }
-        
+
         emit Staked(portalAddress, provider, amount);
     }
-    // in progress, -> do zobaczennia bo testsy sie wysadzaja 
-    function reallocate(
-        address fromPortal,
-        address toPortal,
-        address provider,
-        uint256 amount
-    ) external whenNotPaused {
-        require(fromPortal != address(0), "Invalid source");
-        require(toPortal != address(0), "Invalid destination");
-        require(provider != address(0), "Invalid provider");
-        require(fromPortal != toPortal, "Same portal");
-        require(amount > 0, "Invalid amount");
 
-        require(
-            msg.sender == fromPortal || msg.sender == factory,
-            "Only portal or factory"
-        );
-
-        require(portals[fromPortal].portalAddress != address(0), "Source not registered");
-        require(portals[toPortal].portalAddress != address(0), "Destination not registered");
-
-        require(
-            providerAllocations[fromPortal][provider] >= amount,
-            "Insufficient allocation"
-        );
-        
-        providerAllocations[fromPortal][provider] -= amount;
-
-        if (providerAllocations[fromPortal][provider] == 0) {
-            _removeProviderPortal(provider, fromPortal);
-        }
-        if (providerAllocations[toPortal][provider] == 0) {
-            _providerPortals[provider].push(toPortal);
-        }
-
-        providerAllocations[toPortal][provider] += amount;
-        
-        portals[fromPortal].totalStaked -= amount;
-        portals[toPortal].totalStaked += amount;
-        
-        if (portals[fromPortal].totalStaked < minStake) {
-            portals[fromPortal].active = false;
-        }
-        if (!portals[toPortal].active && portals[toPortal].totalStaked >= minStake) {
-            portals[toPortal].active = true;
-        }
-        
-        emit StakeReallocated(fromPortal, toPortal, provider, amount);
-    }
-    
     function requestUnlock(address provider, uint256 amount) external whenNotPaused {
+        if (portals[msg.sender].portalAddress == address(0)) revert OnlyPortal();
+
         uint256 totalAllocation = getTotalAllocation(provider);
-        
-        require(totalAllocation >= amount, "Insufficient total");
-        
+        if (totalAllocation < amount) revert InsufficientAllocation();
+
         UnlockRequest storage request = unlockRequests[provider];
         request.amount = amount;
         request.requestedAt = networkController.epochNumber();
         request.withdrawn = 0;
-        
+
         emit UnlockRequested(provider, amount, request.requestedAt);
     }
-    
+
     function withdrawUnlocked() external whenNotPaused {
         UnlockRequest storage request = unlockRequests[msg.sender];
-        require(request.amount > 0, "No unlock request");
+        if (request.amount == 0) revert NoUnlockRequest();
 
         uint256 currentEpoch = networkController.epochNumber();
         uint256 epochsPassed = currentEpoch - request.requestedAt;
@@ -213,7 +159,7 @@ contract GatewayRegistry is AccessControl, Pausable {
         }
 
         uint256 withdrawable = totalUnlocked - request.withdrawn;
-        require(withdrawable > 0, "Nothing to withdraw");
+        if (withdrawable == 0) revert NothingToWithdraw();
 
         request.withdrawn += withdrawable;
 
@@ -229,21 +175,17 @@ contract GatewayRegistry is AccessControl, Pausable {
     }
 
     function withdrawFailedPortal(address provider, uint256 amount) external whenNotPaused {
-        // Only portals can call this function for their providers
         address portalAddress = msg.sender;
-        require(portals[portalAddress].portalAddress != address(0), "Portal not registered");
-        require(providerAllocations[portalAddress][provider] >= amount, "Insufficient allocation");
+        if (portals[portalAddress].portalAddress == address(0)) revert PortalNotRegistered();
+        if (providerAllocations[portalAddress][provider] < amount) revert InsufficientAllocation();
 
-        // Immediate withdrawal for FAILED portals (no unlock delay)
         providerAllocations[portalAddress][provider] -= amount;
         portals[portalAddress].totalStaked -= amount;
 
-        // Remove portal from provider's list if allocation becomes zero
         if (providerAllocations[portalAddress][provider] == 0) {
             _removeProviderPortal(provider, portalAddress);
         }
 
-        // Clear any existing unlock request for this provider
         if (unlockRequests[provider].amount > 0) {
             delete unlockRequests[provider];
         }
@@ -254,56 +196,60 @@ contract GatewayRegistry is AccessControl, Pausable {
     }
 
     function _reduceAllocations(address provider, uint256 amount) internal {
-        address[] memory providerPortals = getProviderPortals(provider);
+        address[] memory providerPortalList = getProviderPortals(provider);
         uint256 totalAllocation = getTotalAllocation(provider);
-        
+
         uint256 remaining = amount;
-        for (uint256 i = 0; i < providerPortals.length && remaining > 0; ++i) {
-            address portal = providerPortals[i];
+        for (uint256 i = 0; i < providerPortalList.length && remaining > 0; ++i) {
+            address portal = providerPortalList[i];
             uint256 allocation = providerAllocations[portal][provider];
-            
+
             uint256 reduction = (amount * allocation) / totalAllocation;
             if (reduction > remaining) reduction = remaining;
             if (reduction > allocation) reduction = allocation;
-            
+
             providerAllocations[portal][provider] -= reduction;
             portals[portal].totalStaked -= reduction;
-            
+
             remaining -= reduction;
-            
+
             IPortal(portal).onAllocationReduced(provider, reduction);
+
+            if (providerAllocations[portal][provider] == 0) {
+                _removeProviderPortal(provider, portal);
+            }
         }
     }
-    
-    function getComputationUnits(address portalAddress) 
-        external 
-        view 
-        returns (uint256) 
+
+    function getComputationUnits(address portalAddress)
+        external
+        view
+        returns (uint256)
     {
         Portal storage portal = portals[portalAddress];
-        
+
         if (!portal.active) return 0;
-        
+
         uint256 epochLength = networkController.workerEpochLength();
         uint256 boostFactor = 30000;
-        
+
         uint256 cus = (
-            portal.totalStaked 
-            * epochLength 
-            * mana 
+            portal.totalStaked
+            * epochLength
+            * mana
             * boostFactor
         ) / (10000 * 1e18 * 1000);
-        
+
         return cus;
     }
-    
+
     function getTotalAllocation(address provider) public view returns (uint256 total) {
-        address[] memory providerPortals = getProviderPortals(provider);
-        for (uint256 i = 0; i < providerPortals.length; ++i) {
-            total += providerAllocations[providerPortals[i]][provider];
+        address[] memory providerPortalList = getProviderPortals(provider);
+        for (uint256 i = 0; i < providerPortalList.length; ++i) {
+            total += providerAllocations[providerPortalList[i]][provider];
         }
     }
-    
+
     function getProviderPortals(address provider) public view returns (address[] memory) {
         return _providerPortals[provider];
     }
@@ -318,21 +264,21 @@ contract GatewayRegistry is AccessControl, Pausable {
             }
         }
     }
-    
+
     function pause() external onlyRole(PAUSER_ROLE) {
         _pause();
     }
-    
+
     function unpause() external onlyRole(PAUSER_ROLE) {
         _unpause();
     }
-    
+
     function setMinStake(uint256 _minStake) external onlyRole(DEFAULT_ADMIN_ROLE) {
         uint256 oldValue = minStake;
         minStake = _minStake;
         emit MinStakeUpdated(oldValue, _minStake);
     }
-    
+
     function setMana(uint256 _mana) external onlyRole(DEFAULT_ADMIN_ROLE) {
         uint256 oldValue = mana;
         mana = _mana;

@@ -7,6 +7,8 @@ interface Config {
   portalFactoryAddress: string;
   sqdTokenAddress: string;
   usdcTokenAddress: string;
+  gatewayRegistryAddress: string;
+  networkControllerAddress: string;
 }
 
 const DEFAULT_CONFIG: Config = {
@@ -14,6 +16,8 @@ const DEFAULT_CONFIG: Config = {
   portalFactoryAddress: "0x0000000000000000000000000000000000000000",
   sqdTokenAddress: "0x0000000000000000000000000000000000000000",
   usdcTokenAddress: "0x0000000000000000000000000000000000000000",
+  gatewayRegistryAddress: "0x0000000000000000000000000000000000000000",
+  networkControllerAddress: "0x0000000000000000000000000000000000000000",
 };
 
 export function ConfigPanel() {
@@ -25,7 +29,7 @@ export function ConfigPanel() {
     const saved = localStorage.getItem("portal-config");
     if (saved) {
       try {
-        setConfig(JSON.parse(saved));
+        setConfig({ ...DEFAULT_CONFIG, ...JSON.parse(saved) });
       } catch (e) {
         console.error("Failed to load config:", e);
       }
@@ -43,13 +47,25 @@ export function ConfigPanel() {
     setConfig(DEFAULT_CONFIG);
   };
 
+  // Quick fill with latest deployment addresses
+  const handleFillLatestDeployment = () => {
+    setConfig({
+      ...config,
+      portalFactoryAddress: "0xf8F8eAb7BF83fd23A87070A1f445840c0bF2e16F",
+      sqdTokenAddress: "0x330E8eF0d0eD2f9Dcb1a30A139598AB2531fd9AD",
+      usdcTokenAddress: "0xE8C38fF9c5B37e202Fa1d456C59b12a1e7FD87Da",
+      gatewayRegistryAddress: "0x41FceF68E56E07FAFF1cc87bA4aA52059ea8A4Ef",
+      networkControllerAddress: "0x2368B049a4a0CF0e12628F7664Cf7c7C537917e5",
+    });
+  };
+
   if (!showConfig) {
     return (
       <button
         onClick={() => setShowConfig(true)}
         className="text-sm text-sqd-text-secondary hover:text-sqd-text-primary transition-colors"
       >
-        ⚙️ Configuration
+        Configuration
       </button>
     );
   }
@@ -64,7 +80,7 @@ export function ConfigPanel() {
               onClick={() => setShowConfig(false)}
               className="text-sqd-text-secondary hover:text-sqd-text-primary"
             >
-              ✕
+              X
             </button>
           </div>
           <p className="text-sm text-sqd-text-secondary mt-1">
@@ -73,6 +89,19 @@ export function ConfigPanel() {
         </div>
 
         <div className="p-6 space-y-5">
+          {/* Quick Fill Button */}
+          <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+            <div className="text-sm font-medium text-green-800 mb-2">
+              Quick Fill - Latest Deployment (Nov 25, 2024)
+            </div>
+            <button
+              onClick={handleFillLatestDeployment}
+              className="w-full bg-green-600 hover:bg-green-700 text-white text-sm font-medium py-2 rounded-full transition-colors"
+            >
+              Fill with Latest Deployed Addresses
+            </button>
+          </div>
+
           {/* RPC URL */}
           <div>
             <label className="block text-sm font-medium text-sqd-text-primary mb-2">
@@ -82,7 +111,7 @@ export function ConfigPanel() {
               type="text"
               value={config.rpcUrl}
               onChange={(e) => setConfig({ ...config, rpcUrl: e.target.value })}
-              placeholder="https://arb1.arbitrum.io/rpc"
+              placeholder="https://sepolia-rollup.arbitrum.io/rpc"
               className="w-full bg-white border border-sqd-divider rounded-lg px-3.5 py-2.5 text-sqd-text-primary placeholder-sqd-text-disabled focus:outline-none focus:border-sqd-secondary font-mono text-sm"
             />
             <p className="text-xs text-sqd-text-secondary mt-1">
@@ -106,6 +135,44 @@ export function ConfigPanel() {
             />
             <p className="text-xs text-sqd-text-secondary mt-1">
               Address of the PortalFactory contract
+            </p>
+          </div>
+
+          {/* Gateway Registry Address */}
+          <div>
+            <label className="block text-sm font-medium text-sqd-text-primary mb-2">
+              Gateway Registry Address
+            </label>
+            <input
+              type="text"
+              value={config.gatewayRegistryAddress}
+              onChange={(e) =>
+                setConfig({ ...config, gatewayRegistryAddress: e.target.value })
+              }
+              placeholder="0x..."
+              className="w-full bg-white border border-sqd-divider rounded-lg px-3.5 py-2.5 text-sqd-text-primary placeholder-sqd-text-disabled focus:outline-none focus:border-sqd-secondary font-mono text-sm"
+            />
+            <p className="text-xs text-sqd-text-secondary mt-1">
+              Address of the GatewayRegistry contract (IMPORTANT: approvals go here!)
+            </p>
+          </div>
+
+          {/* Network Controller Address */}
+          <div>
+            <label className="block text-sm font-medium text-sqd-text-primary mb-2">
+              Network Controller Address
+            </label>
+            <input
+              type="text"
+              value={config.networkControllerAddress}
+              onChange={(e) =>
+                setConfig({ ...config, networkControllerAddress: e.target.value })
+              }
+              placeholder="0x..."
+              className="w-full bg-white border border-sqd-divider rounded-lg px-3.5 py-2.5 text-sqd-text-primary placeholder-sqd-text-disabled focus:outline-none focus:border-sqd-secondary font-mono text-sm"
+            />
+            <p className="text-xs text-sqd-text-secondary mt-1">
+              Address of the NetworkController contract (for epoch info)
             </p>
           </div>
 
@@ -144,16 +211,24 @@ export function ConfigPanel() {
           {/* Info Box */}
           <div className="bg-sqd-primary rounded-lg p-4">
             <h4 className="text-sm font-medium text-sqd-text-primary mb-2">
-              💡 Configuration Tips
+              Configuration Tips
             </h4>
             <ul className="space-y-1 text-xs text-sqd-text-secondary">
-              <li>• Changes are saved to browser localStorage</li>
-              <li>• Page will reload after saving to apply new settings</li>
-              <li>• Use &quot;Reset to Defaults&quot; to clear all custom values</li>
-              <li>
-                • Get Portal Pool addresses from PortalCreated events after factory deployment
-              </li>
+              <li>* Changes are saved to browser localStorage</li>
+              <li>* Page will reload after saving to apply new settings</li>
+              <li>* Use &quot;Reset to Defaults&quot; to clear all custom values</li>
+              <li>* GatewayRegistry is where SQD approvals need to go for staking!</li>
             </ul>
+          </div>
+
+          {/* Current Config Display */}
+          <div className="bg-gray-50 rounded-lg p-4">
+            <h4 className="text-sm font-medium text-sqd-text-primary mb-2">
+              Current Saved Config
+            </h4>
+            <pre className="text-xs text-sqd-text-secondary overflow-x-auto">
+              {JSON.stringify(config, null, 2)}
+            </pre>
           </div>
         </div>
 

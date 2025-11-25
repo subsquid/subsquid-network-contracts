@@ -108,8 +108,7 @@ contract PortalBugsTest is Test {
             _makeTokenArray(address(paymentToken)),
             MIN_STAKE,
             block.number + 100,
-            bytes("peer123"),
-            "test portal"
+            bytes("peer1")
         );
 
 
@@ -147,32 +146,4 @@ contract PortalBugsTest is Test {
         assertTrue(true, "If this compiles, Issue #5 might be fixed or ignored by compiler");
     }
 
-    function testIssue2_FactoryCannotCallReallocate() public {
-
-        vm.startPrank(operator);
-        address portal1 = factory.createPortal(
-            operator,
-            _makeTokenArray(address(paymentToken)),
-            MIN_STAKE,
-            block.number + 100,
-            bytes("peer1"),
-            "portal 1"
-        );
-
-        address portal2 = factory.createPortal(
-            operator,
-            _makeTokenArray(address(paymentToken)),
-            MIN_STAKE,
-            block.number + 100,
-            bytes("peer2"),
-            "portal 2"
-        );
-        vm.stopPrank();
-
-
-
-        vm.prank(provider);
-        vm.expectRevert();
-        factory.moveStake(portal1, portal2, 100 ether);
-    }
 }

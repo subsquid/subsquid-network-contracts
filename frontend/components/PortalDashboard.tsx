@@ -1,33 +1,38 @@
 "use client";
 
 import { useReadContract } from "wagmi";
-import { PORTAL_POOL_ABI, STATE_NAMES } from "@/config/contracts";
+import { PORTAL_ABI, STATE_NAMES } from "@/config/contracts";
 import { formatUnits } from "viem";
 
+interface PortalInfo {
+  operator: string;
+  maxCapacity: bigint;
+  totalStaked: bigint;
+  depositDeadline: bigint;
+  activationTime: bigint;
+  state: number;
+  paused: boolean;
+}
+
 export function PortalDashboard({ portalAddress }: { portalAddress: `0x${string}` }) {
-  const { data: state } = useReadContract({
+  // Read portal info
+  const { data: portalInfo } = useReadContract({
     address: portalAddress,
-    abi: PORTAL_POOL_ABI,
-    functionName: "state",
+    abi: PORTAL_ABI,
+    functionName: "getPortalInfo",
+  }) as { data: PortalInfo | undefined };
+
+  // Read active stake
+  const { data: activeStake } = useReadContract({
+    address: portalAddress,
+    abi: PORTAL_ABI,
+    functionName: "getActiveStake",
   });
 
-  const { data: totalActiveSQD } = useReadContract({
-    address: portalAddress,
-    abi: PORTAL_POOL_ABI,
-    functionName: "totalActiveSQD",
-  });
-
-  const { data: totalRewards } = useReadContract({
-    address: portalAddress,
-    abi: PORTAL_POOL_ABI,
-    functionName: "totalRewardsDistributed",
-  });
-
-  const { data: targetSQD } = useReadContract({
-    address: portalAddress,
-    abi: PORTAL_POOL_ABI,
-    functionName: "targetSQD",
-  });
+  const state = portalInfo?.state;
+  const totalStaked = portalInfo?.totalStaked;
+  const maxCapacity = portalInfo?.maxCapacity;
+  const activeStakeAmount = activeStake as bigint | undefined;
 
   return (
     <div className="space-y-4">
@@ -36,39 +41,52 @@ export function PortalDashboard({ portalAddress }: { portalAddress: `0x${string}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <MetricCard
           title="Portal State"
-          value={state !== undefined ? STATE_NAMES[Number(state)] : "Loading..."}
+          value={state !== undefined ? STATE_NAMES[state] : "Loading..."}
         />
 
         <MetricCard
           title="Total SQD Staked"
-          value={totalActiveSQD ? formatUnits(totalActiveSQD as bigint, 18) : "0"}
+          value={totalStaked ? Number(formatUnits(totalStaked, 18)).toLocaleString() : "0"}
           suffix="SQD"
         />
 
         <MetricCard
-          title="Rewards Distributed"
-          value={totalRewards ? formatUnits(totalRewards as bigint, 6) : "0"}
-          suffix="Tokens"
+          title="Active Stake"
+          value={activeStakeAmount ? Number(formatUnits(activeStakeAmount, 18)).toLocaleString() : "0"}
+          suffix="SQD"
         />
       </div>
 
       <div className="bg-white rounded-lg p-4 border border-sqd-divider">
-        <h3 className="text-sm font-medium mb-3 text-sqd-text-primary">Target Information</h3>
+        <h3 className="text-sm font-medium mb-3 text-sqd-text-primary">Capacity Information</h3>
         <div className="space-y-2 text-sm">
           <div className="flex justify-between">
-            <span className="text-sqd-text-secondary">Target SQD:</span>
+            <span className="text-sqd-text-secondary">Max Capacity:</span>
             <span className="font-medium text-sqd-text-primary">
-              {targetSQD ? formatUnits(targetSQD as bigint, 18) : "0"} SQD
+              {maxCapacity ? Number(formatUnits(maxCapacity, 18)).toLocaleString() : "0"} SQD
             </span>
           </div>
           <div className="flex justify-between">
-            <span className="text-sqd-text-secondary">Current Progress:</span>
+            <span className="text-sqd-text-secondary">Capacity Utilization:</span>
             <span className="font-medium text-sqd-text-primary">
-              {totalActiveSQD && targetSQD
-                ? `${((Number(totalActiveSQD) / Number(targetSQD)) * 100).toFixed(2)}%`
+              {totalStaked && maxCapacity
+                ? `${((Number(totalStaked) / Number(maxCapacity)) * 100).toFixed(2)}%`
                 : "0%"}
             </span>
           </div>
+          {activeStakeAmount && totalStaked && activeStakeAmount !== totalStaked && (
+            <div className="flex justify-between">
+              <span className="text-sqd-text-secondary">Pending Exits:</span>
+              <span className="font-medium text-sqd-accent">
+                {Number(formatUnits(totalStaked - activeStakeAmount, 18)).toLocaleString()} SQD
+              </span>
+            </div>
+          )}
+          {portalInfo?.paused && (
+            <div className="flex justify-between">
+              <span className="text-red-600 font-medium">⚠️ Portal is Paused</span>
+            </div>
+          )}
         </div>
       </div>
     </div>

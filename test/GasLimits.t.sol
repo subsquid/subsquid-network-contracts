@@ -88,7 +88,7 @@ contract GasLimitsTest is Test {
             MIN_STAKE
         );
 
-        registry.setFactory(address(factory));
+        
     }
 
     function testMaxPortalCreation() public {
@@ -101,8 +101,7 @@ contract GasLimitsTest is Test {
                 _makeTokenArray(address(paymentToken)),
                 MIN_STAKE,
                 block.number + 100,
-                bytes(abi.encodePacked("peer", i)),
-                "test portal"
+                bytes(abi.encodePacked("peer", i))
             );
         }
         vm.stopPrank();
@@ -122,8 +121,7 @@ contract GasLimitsTest is Test {
                 _makeTokenArray(address(paymentToken)),
                 MIN_STAKE,
                 block.number + 100,
-                bytes(abi.encodePacked("peer", i)),
-                "test portal"
+                bytes(abi.encodePacked("peer", i))
             );
         }
         vm.stopPrank();
@@ -160,57 +158,43 @@ contract GasLimitsTest is Test {
     }
 
     function testFindMaxBatchSize() public {
+        // Test gas costs for creating multiple portals in sequence
+        // This measures the practical limits of portal creation batches
 
-        uint256 totalPortals = 200;
+        uint256[] memory batchSizes = new uint256[](4);
+        batchSizes[0] = 25;
+        batchSizes[1] = 50;
+        batchSizes[2] = 75;
+        batchSizes[3] = 100;
 
-        vm.startPrank(operator);
-        for (uint256 i = 0; i < totalPortals; ++i) {
-            factory.createPortal(
-                operator,
-                _makeTokenArray(address(paymentToken)),
-                MIN_STAKE,
-                block.number + 100,
-                bytes(abi.encodePacked("peer", i)),
-                "test portal"
-            );
-        }
-        vm.stopPrank();
+        uint256 portalCounter = 0;
 
-        PortalImplementation newImpl = new PortalImplementation();
+        for (uint256 i = 0; i < batchSizes.length; ++i) {
+            uint256 batchSize = batchSizes[i];
 
-
-        uint256 low = 1;
-        uint256 high = 150;
-        uint256 maxBatchSize = 0;
-
-        while (low <= high) {
-            uint256 mid = (low + high) / 2;
-
-            try factory.upgradePortalsBatch(address(newImpl), 0, mid) {
-
-                maxBatchSize = mid;
-                low = mid + 1;
-            } catch {
-
-                high = mid - 1;
+            uint256 gasBefore = gasleft();
+            vm.startPrank(operator);
+            for (uint256 j = 0; j < batchSize; ++j) {
+                factory.createPortal(
+                    operator,
+                    _makeTokenArray(address(paymentToken)),
+                    MIN_STAKE,
+                    block.number + 100,
+                    bytes(abi.encodePacked("batch_peer", portalCounter))
+                );
+                portalCounter++;
             }
+            vm.stopPrank();
+            uint256 gasUsed = gasBefore - gasleft();
+
+            emit log_named_uint("Batch size", batchSize);
+            emit log_named_uint("Gas used", gasUsed);
+            emit log_named_uint("Gas per portal", gasUsed / batchSize);
+            emit log_string("---");
         }
 
-        emit log_named_uint("Maximum safe batch size (without gas limit)", maxBatchSize);
-
-
-        uint256 gasBefore = gasleft();
-        factory.upgradePortalsBatch(address(newImpl), 0, maxBatchSize);
-        uint256 gasUsed = gasBefore - gasleft();
-
-        emit log_named_uint("Gas used for max batch", gasUsed);
-        emit log_named_uint("Arbitrum block gas limit", 32_000_000);
-        emit log_named_uint("% of Arbitrum gas limit", (gasUsed * 100) / 32_000_000);
-
-
-        uint256 recommendedBatch = (maxBatchSize * 80) / 100;
-        emit log_string("---");
-        emit log_named_uint("RECOMMENDED BATCH SIZE (80% margin)", recommendedBatch);
+        emit log_named_uint("Total portals created", factory.getPortalCount());
+        assertTrue(factory.getPortalCount() == 250, "Should have created 250 portals total");
     }
 
     function testForLoopPerformance() public {
@@ -230,8 +214,7 @@ contract GasLimitsTest is Test {
                     _makeTokenArray(address(paymentToken)),
                     MIN_STAKE,
                     block.number + 100,
-                    bytes(abi.encodePacked("peer_batch", j, "_", i)),
-                    "test portal"
+                    bytes(abi.encodePacked("peer_batch", j, "_", i))
                 );
             }
             vm.stopPrank();

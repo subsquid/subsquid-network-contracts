@@ -6,7 +6,6 @@ export const PORTAL_FACTORY_ABI = [
       { internalType: "uint256", name: "maxCapacity", type: "uint256" },
       { internalType: "uint256", name: "depositDeadline", type: "uint256" },
       { internalType: "bytes", name: "peerId", type: "bytes" },
-      { internalType: "string", name: "metadata", type: "string" },
     ],
     name: "createPortal",
     outputs: [{ internalType: "address", name: "portal", type: "address" }],
@@ -64,6 +63,13 @@ export const PORTAL_ABI = [
     type: "function",
   },
   {
+    inputs: [],
+    name: "withdrawFromFailed",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
     inputs: [
       { internalType: "address", name: "token", type: "address" },
       { internalType: "uint256", name: "amount", type: "uint256" },
@@ -90,8 +96,8 @@ export const PORTAL_ABI = [
         type: "tuple",
         components: [
           { internalType: "address", name: "operator", type: "address" },
-          { internalType: "uint96", name: "maxCapacity", type: "uint96" },
-          { internalType: "uint96", name: "totalStaked", type: "uint96" },
+          { internalType: "uint256", name: "maxCapacity", type: "uint256" },
+          { internalType: "uint256", name: "totalStaked", type: "uint256" },
           { internalType: "uint64", name: "depositDeadline", type: "uint64" },
           { internalType: "uint64", name: "activationTime", type: "uint64" },
           { internalType: "uint8", name: "state", type: "uint8" },
@@ -118,7 +124,7 @@ export const PORTAL_ABI = [
         name: "",
         type: "tuple",
         components: [
-          { internalType: "uint128", name: "amount", type: "uint128" },
+          { internalType: "uint256", name: "amount", type: "uint256" },
           { internalType: "uint64", name: "requestEpoch", type: "uint64" },
           { internalType: "uint64", name: "unlockEpoch", type: "uint64" },
         ],
@@ -138,9 +144,9 @@ export const PORTAL_ABI = [
     type: "function",
   },
   {
-    inputs: [{ internalType: "address", name: "token", type: "address" }],
-    name: "getCurrentAPY",
-    outputs: [{ internalType: "uint256", name: "apy", type: "uint256" }],
+    inputs: [],
+    name: "getActiveStake",
+    outputs: [{ internalType: "uint256", name: "", type: "uint256" }],
     stateMutability: "view",
     type: "function",
   },
@@ -155,6 +161,27 @@ export const PORTAL_ABI = [
     inputs: [],
     name: "getPeerId",
     outputs: [{ internalType: "bytes", name: "", type: "bytes" }],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [{ internalType: "address", name: "", type: "address" }],
+    name: "allowedPaymentTokens",
+    outputs: [{ internalType: "bool", name: "", type: "bool" }],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [{ internalType: "address", name: "", type: "address" }],
+    name: "totalFeesDistributed",
+    outputs: [{ internalType: "uint256", name: "", type: "uint256" }],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [{ internalType: "address", name: "", type: "address" }],
+    name: "lastDistributionTime",
+    outputs: [{ internalType: "uint256", name: "", type: "uint256" }],
     stateMutability: "view",
     type: "function",
   },
@@ -195,6 +222,16 @@ export const ERC20_ABI = [
     stateMutability: "view",
     type: "function",
   },
+  {
+    inputs: [
+      { internalType: "address", name: "to", type: "address" },
+      { internalType: "uint256", name: "amount", type: "uint256" },
+    ],
+    name: "mint",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
 ] as const;
 
 // Add Gateway Registry ABI for staking and exit operations
@@ -206,6 +243,16 @@ export const GATEWAY_REGISTRY_ABI = [
       { internalType: "uint256", name: "amount", type: "uint256" },
     ],
     name: "stake",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [
+      { internalType: "address", name: "provider", type: "address" },
+      { internalType: "uint256", name: "amount", type: "uint256" },
+    ],
+    name: "requestUnlock",
     outputs: [],
     stateMutability: "nonpayable",
     type: "function",
@@ -235,6 +282,57 @@ export const GATEWAY_REGISTRY_ABI = [
     stateMutability: "view",
     type: "function",
   },
+  {
+    inputs: [{ internalType: "address", name: "provider", type: "address" }],
+    name: "getProviderPortals",
+    outputs: [{ internalType: "address[]", name: "", type: "address[]" }],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [
+      { internalType: "address", name: "portal", type: "address" },
+      { internalType: "address", name: "provider", type: "address" },
+    ],
+    name: "providerAllocations",
+    outputs: [{ internalType: "uint256", name: "", type: "uint256" }],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [{ internalType: "address", name: "portal", type: "address" }],
+    name: "portals",
+    outputs: [
+      { internalType: "bytes", name: "peerId", type: "bytes" },
+      { internalType: "address", name: "portalAddress", type: "address" },
+      { internalType: "uint256", name: "totalStaked", type: "uint256" },
+      { internalType: "uint256", name: "registeredAt", type: "uint256" },
+      { internalType: "bool", name: "active", type: "bool" },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [],
+    name: "minStake",
+    outputs: [{ internalType: "uint256", name: "", type: "uint256" }],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [],
+    name: "mana",
+    outputs: [{ internalType: "uint256", name: "", type: "uint256" }],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [{ internalType: "address", name: "portalAddress", type: "address" }],
+    name: "getComputationUnits",
+    outputs: [{ internalType: "uint256", name: "", type: "uint256" }],
+    stateMutability: "view",
+    type: "function",
+  },
 ] as const;
 
 // Network Controller ABI for epoch info
@@ -250,6 +348,20 @@ export const NETWORK_CONTROLLER_ABI = [
     inputs: [],
     name: "workerEpochLength",
     outputs: [{ internalType: "uint256", name: "", type: "uint256" }],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [],
+    name: "minStakeThreshold",
+    outputs: [{ internalType: "uint256", name: "", type: "uint256" }],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [],
+    name: "workerRewardPool",
+    outputs: [{ internalType: "address", name: "", type: "address" }],
     stateMutability: "view",
     type: "function",
   },
@@ -298,4 +410,5 @@ const config = loadContractAddresses();
 export const contractAddresses = config.addresses;
 export const targetChainId = config.chainId;
 
-export const STATE_NAMES = ["Collecting", "Active", "Failed", "Closed"];
+// Portal states - SUNSET was removed, only COLLECTING, ACTIVE, FAILED
+export const STATE_NAMES = ["Collecting", "Active", "Failed"];

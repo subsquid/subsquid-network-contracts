@@ -90,7 +90,7 @@ contract PortalFixesTest is Test {
         );
 
 
-        registry.setFactory(address(factory));
+        
 
 
         sqd.mint(provider, 10000 ether);
@@ -111,8 +111,7 @@ contract PortalFixesTest is Test {
             _makeTokenArray(address(paymentToken)),
             MIN_STAKE,
             block.number + 100,
-            bytes("peer123"),
-            "test portal"
+            bytes("peer1")
         );
 
 
@@ -145,8 +144,7 @@ contract PortalFixesTest is Test {
             _makeTokenArray(address(paymentToken)),
             MIN_STAKE,
             block.number + 100,
-            bytes("peer1"),
-            "portal 1"
+            bytes("peer1")
         );
 
         address portal2 = factory.createPortal(
@@ -154,8 +152,7 @@ contract PortalFixesTest is Test {
             _makeTokenArray(address(paymentToken)),
             MIN_STAKE,
             block.number + 100,
-            bytes("peer2"),
-            "portal 2"
+            bytes("peer2")
         );
 
         PortalImplementation(portal1).activate();
@@ -181,86 +178,4 @@ contract PortalFixesTest is Test {
         assertEq(totalAlloc, 3000 ether, "Total allocation should be 3000");
     }
 
-    function testFix2_FactoryCanCallReallocate() public {
-
-        vm.startPrank(operator);
-        address portal1 = factory.createPortal(
-            operator,
-            _makeTokenArray(address(paymentToken)),
-            MIN_STAKE,
-            block.number + 100,
-            bytes("peer1"),
-            "portal 1"
-        );
-
-        address portal2 = factory.createPortal(
-            operator,
-            _makeTokenArray(address(paymentToken)),
-            MIN_STAKE,
-            block.number + 100,
-            bytes("peer2"),
-            "portal 2"
-        );
-
-        PortalImplementation(portal1).activate();
-        PortalImplementation(portal2).activate();
-        vm.stopPrank();
-
-
-        vm.startPrank(provider);
-        sqd.approve(address(registry), 2000 ether);
-        PortalImplementation(portal1).stake(2000 ether);
-        vm.stopPrank();
-
-
-        vm.prank(provider);
-        factory.moveStake(portal1, portal2, 500 ether);
-
-
-        assertEq(registry.providerAllocations(portal1, provider), 1500 ether, "Portal1 allocation reduced");
-        assertEq(registry.providerAllocations(portal2, provider), 500 ether, "Portal2 allocation increased");
-    }
-
-    function testFix3_PortalTrackingCleanup() public {
-        vm.prank(operator);
-        address portal = factory.createPortal(
-            operator,
-            _makeTokenArray(address(paymentToken)),
-            MIN_STAKE,
-            block.number + 100,
-            bytes("peer1"),
-            "portal 1"
-        );
-
-        vm.prank(operator);
-        PortalImplementation(portal).activate();
-
-
-        vm.prank(operator);
-        address portal2 = factory.createPortal(
-            operator,
-            _makeTokenArray(address(paymentToken)),
-            MIN_STAKE,
-            block.number + 100,
-            bytes("peer2"),
-            "portal 2"
-        );
-
-        vm.prank(operator);
-        PortalImplementation(portal2).activate();
-
-        vm.startPrank(provider);
-        sqd.approve(address(registry), 1000 ether);
-        PortalImplementation(portal).stake(1000 ether);
-        vm.stopPrank();
-
-
-        vm.prank(provider);
-        factory.moveStake(portal, portal2, 1000 ether);
-
-
-        address[] memory portals = registry.getProviderPortals(provider);
-        assertEq(portals.length, 1, "Should only track portal2");
-        assertEq(portals[0], portal2, "Should track portal2");
-    }
 }

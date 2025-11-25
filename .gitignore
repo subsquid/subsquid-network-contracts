@@ -15,6 +15,7 @@ docs/
 .env
 
 # Frontend (Next.js)
+node_modules/
 frontend/node_modules/
 frontend/.pnp
 frontend/.pnp.js
@@ -41,3 +42,5 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 *.log
+
+script/local/*

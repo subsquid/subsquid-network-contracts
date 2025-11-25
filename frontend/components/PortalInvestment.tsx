@@ -15,7 +15,7 @@ interface PortalInfo {
   paused: boolean;
 }
 
-const STATE_NAMES = ["Collecting", "Active", "Sunset", "Failed"];
+const STATE_NAMES = ["Collecting", "Active", "Failed"];
 
 export function PortalInvestment({ portalAddress, onClose }: { portalAddress: string; onClose: () => void }) {
   const { address } = useAccount();
@@ -86,16 +86,15 @@ export function PortalInvestment({ portalAddress, onClose }: { portalAddress: st
   // Read minimum stake threshold
   const { data: minStakeThreshold } = useReadContract({
     address: contractAddresses.networkController,
-    abi: [
-      {
-        inputs: [],
-        name: "minStakeThreshold",
-        outputs: [{ name: "", type: "uint256" }],
-        stateMutability: "view",
-        type: "function",
-      },
-    ],
+    abi: NETWORK_CONTROLLER_ABI,
     functionName: "minStakeThreshold",
+  });
+
+  // Read active stake (total staked minus pending exits)
+  const { data: activeStake } = useReadContract({
+    address: portalAddress as `0x${string}`,
+    abi: PORTAL_ABI,
+    functionName: "getActiveStake",
   });
 
   // Read current epoch number
@@ -160,9 +159,11 @@ export function PortalInvestment({ portalAddress, onClose }: { portalAddress: st
 
   const maxCapacity = Number(formatUnits(portalInfo.maxCapacity, 18));
   const totalStaked = Number(formatUnits(portalInfo.totalStaked, 18));
+  const activeStakeAmount = activeStake ? Number(formatUnits(activeStake, 18)) : totalStaked;
+  const pendingExitsAmount = totalStaked - activeStakeAmount;
   const myStake = userStake ? Number(formatUnits(userStake, 18)) : 0;
   const minStake = minStakeThreshold ? Number(formatUnits(minStakeThreshold, 18)) : 100000;
-  const cus = Math.floor(totalStaked / minStake);
+  const cus = Math.floor(activeStakeAmount / minStake); // CUs based on active stake
   const progressPercent = maxCapacity > 0 ? (totalStaked / maxCapacity) * 100 : 0;
   const balance = sqdBalance ? Number(formatUnits(sqdBalance, 18)) : 0;
 
@@ -176,7 +177,7 @@ export function PortalInvestment({ portalAddress, onClose }: { portalAddress: st
   // Portal allowance (for display - Portal doesn't actually need approval)
   const hasPortalApproval = portalAllowance && portalAllowance > 0n;
 
-  const handleApproveSQD = async (approveMax: boolean = false) => {
+  const handleApproveGatewayRegistry = async (approveMax: boolean = false) => {
     // check if on correct chain
     if (chainId !== targetChainId) {
       alert("Please switch to Arbitrum Sepolia network");
@@ -201,11 +202,47 @@ export function PortalInvestment({ portalAddress, onClose }: { portalAddress: st
       approveAmount = parseUnits(stakeAmount, 18);
     }
 
+    console.log("Approving GatewayRegistry:", contractAddresses.gatewayRegistry, "Amount:", approveAmount.toString());
     writeContract({
       address: contractAddresses.sqdToken,
       abi: ERC20_ABI,
       functionName: "approve",
       args: [contractAddresses.gatewayRegistry, approveAmount],
+      chainId: targetChainId,
+    });
+  };
+
+  const handleApprovePortal = async (approveMax: boolean = false) => {
+    // check if on correct chain
+    if (chainId !== targetChainId) {
+      alert("Please switch to Arbitrum Sepolia network");
+      return;
+    }
+
+    let approveAmount: bigint;
+    if (approveMax) {
+      // approve max uint256 for unlimited approval
+      approveAmount = BigInt("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
+    } else {
+      if (!stakeAmount) {
+        alert("Please enter a stake amount first");
+        return;
+      }
+      // validate stake amount
+      const amount = parseFloat(stakeAmount);
+      if (isNaN(amount) || amount <= 0) {
+        alert("Please enter a valid stake amount");
+        return;
+      }
+      approveAmount = parseUnits(stakeAmount, 18);
+    }
+
+    console.log("Approving Portal:", portalAddress, "Amount:", approveAmount.toString());
+    writeContract({
+      address: contractAddresses.sqdToken,
+      abi: ERC20_ABI,
+      functionName: "approve",
+      args: [portalAddress as `0x${string}`, approveAmount],
       chainId: targetChainId,
     });
   };
@@ -471,12 +508,19 @@ export function PortalInvestment({ portalAddress, onClose }: { portalAddress: st
               <div className="text-lg font-semibold text-sqd-accent">{cus} CUs</div>
             </div>
             <div>
-              <div className="text-xs text-sqd-text-secondary mb-1">Total Staked</div>
-              <div className="text-lg font-semibold text-sqd-text-primary">{totalStaked.toLocaleString()} SQD</div>
+              <div className="text-xs text-sqd-text-secondary mb-1">Active Stake</div>
+              <div className="text-lg font-semibold text-sqd-accent">{activeStakeAmount.toLocaleString()} SQD</div>
+              {pendingExitsAmount > 0 && (
+                <div className="text-xs text-sqd-text-secondary">
+                  ({pendingExitsAmount.toLocaleString()} pending exit)
+                </div>
+              )}
             </div>
             <div>
-              <div className="text-xs text-sqd-text-secondary mb-1">Capacity</div>
-              <div className="text-lg font-semibold text-sqd-text-primary">{maxCapacity.toLocaleString()} SQD</div>
+              <div className="text-xs text-sqd-text-secondary mb-1">Total / Capacity</div>
+              <div className="text-lg font-semibold text-sqd-text-primary">
+                {totalStaked.toLocaleString()} / {maxCapacity.toLocaleString()}
+              </div>
             </div>
           </div>
 
@@ -593,58 +637,73 @@ export function PortalInvestment({ portalAddress, onClose }: { portalAddress: st
                     <div className="text-xs font-medium text-sqd-text-primary mb-2">Approval Status</div>
                     <div className="space-y-1 text-xs">
                       <div className={`flex justify-between ${hasGatewayApproval ? 'text-green-700' : 'text-red-700'}`}>
-                        <span>GatewayRegistry:</span>
+                        <span>GatewayRegistry ({contractAddresses.gatewayRegistry.slice(0,6)}...{contractAddresses.gatewayRegistry.slice(-4)}):</span>
                         <span className="font-medium">
-                          {hasGatewayApproval 
+                          {hasGatewayApproval
                             ? `✓ ${Number(formatUnits(sqdAllowance!, 18)).toLocaleString()} SQD`
                             : '✗ Not Approved'}
                         </span>
                       </div>
-                      <div className={`flex justify-between ${hasPortalApproval ? 'text-green-700' : 'text-sqd-text-secondary'}`}>
-                        <span>Portal (not required):</span>
+                      <div className={`flex justify-between ${hasPortalApproval ? 'text-green-700' : 'text-red-700'}`}>
+                        <span>Portal ({portalAddress.slice(0,6)}...{portalAddress.slice(-4)}):</span>
                         <span className="font-medium">
-                          {hasPortalApproval 
+                          {hasPortalApproval
                             ? `✓ ${Number(formatUnits(portalAllowance!, 18)).toLocaleString()} SQD`
-                            : '— Not Needed'}
+                            : '✗ Not Approved'}
                         </span>
                       </div>
                     </div>
                   </div>
 
-                  {/* Approval Section - Show when GatewayRegistry approval is needed */}
-                  {(needsGatewayApproval || !hasGatewayApproval) && (
-                    <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-                      <div className="text-sm font-medium text-yellow-800 mb-2">
-                        ⚠️ Approval Required for GatewayRegistry
+                  {/* Separate Approval Buttons */}
+                  <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                    <div className="text-sm font-medium text-blue-800 mb-3">
+                      Approve SQD Spending
+                    </div>
+
+                    {/* GatewayRegistry Approval */}
+                    <div className="mb-4">
+                      <div className="text-xs text-blue-700 mb-2 font-medium">
+                        1. GatewayRegistry (Required for staking)
                       </div>
-                      <div className="text-xs text-yellow-700 mb-3">
-                        GatewayRegistry needs approval to transfer your SQD tokens. Portal doesn't need approval - it calls GatewayRegistry which handles the transfer.
+                      <div className="text-xs text-blue-600 mb-2">
+                        Address: {contractAddresses.gatewayRegistry}
                       </div>
                       <div className="space-y-2">
-                        {stakeAmount && (
-                          <button
-                            onClick={() => handleApproveSQD(false)}
-                            disabled={!stakeAmount || isPending || isConfirming}
-                            className="w-full bg-yellow-600 hover:bg-yellow-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium py-2 rounded-full transition-colors"
-                          >
-                            {isPending || isConfirming ? "Approving..." : `Approve ${stakeAmount} SQD to GatewayRegistry`}
-                          </button>
-                        )}
                         <button
-                          onClick={() => handleApproveSQD(true)}
+                          onClick={() => handleApproveGatewayRegistry(true)}
                           disabled={isPending || isConfirming}
-                          className="w-full bg-sqd-primary hover:bg-sqd-divider disabled:opacity-50 disabled:cursor-not-allowed text-sqd-text-primary text-sm font-medium py-2 rounded-full transition-colors border border-sqd-divider"
+                          className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium py-2 rounded-full transition-colors"
                         >
-                          {isPending || isConfirming ? "Approving..." : "Approve Max (Unlimited) to GatewayRegistry"}
+                          {isPending || isConfirming ? "Approving..." : "Approve Max to GatewayRegistry"}
                         </button>
                       </div>
                     </div>
-                  )}
-                  
+
+                    {/* Portal Approval */}
+                    <div>
+                      <div className="text-xs text-blue-700 mb-2 font-medium">
+                        2. Portal (Optional - for direct transfers)
+                      </div>
+                      <div className="text-xs text-blue-600 mb-2">
+                        Address: {portalAddress}
+                      </div>
+                      <div className="space-y-2">
+                        <button
+                          onClick={() => handleApprovePortal(true)}
+                          disabled={isPending || isConfirming}
+                          className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium py-2 rounded-full transition-colors"
+                        >
+                          {isPending || isConfirming ? "Approving..." : "Approve Max to Portal"}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
                   {/* Stake Button */}
                   <button
                     onClick={handleStake}
-                    disabled={!stakeAmount || needsGatewayApproval || isPending || isConfirming}
+                    disabled={!stakeAmount || !hasGatewayApproval || isPending || isConfirming}
                     className="w-full bg-sqd-accent hover:bg-sqd-accent/90 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-semibold py-3 rounded-full transition-colors"
                   >
                     {isPending || isConfirming ? "Staking..." : "Stake SQD"}
@@ -1257,24 +1316,18 @@ function TokenRewardCard({
     args: userAddress ? [userAddress, tokenAddress as `0x${string}`] : undefined,
   });
 
-  const { data: apy } = useReadContract({
-    address: portalAddress as `0x${string}`,
-    abi: PORTAL_ABI,
-    functionName: "getCurrentAPY",
-    args: [tokenAddress as `0x${string}`],
-  });
-
   const tokenName = tokenAddress === contractAddresses.usdcToken ? "USDC" : "Token";
   const decimals = tokenAddress === contractAddresses.usdcToken ? 6 : 18;
   const claimableAmount = claimable ? Number(formatUnits(claimable, decimals)) : 0;
-  const apyPercent = apy ? Number(apy) / 100 : 0;
 
   return (
     <div className="border border-sqd-divider rounded-lg p-4">
       <div className="flex justify-between items-center mb-3">
         <div>
           <div className="font-medium text-sqd-text-primary">{tokenName}</div>
-          <div className="text-xs text-sqd-text-secondary">APY: {apyPercent.toFixed(2)}%</div>
+          <div className="text-xs text-sqd-text-secondary font-mono">
+            {tokenAddress.slice(0, 6)}...{tokenAddress.slice(-4)}
+          </div>
         </div>
         <div className="text-right">
           <div className="text-sm text-sqd-text-secondary">Claimable</div>

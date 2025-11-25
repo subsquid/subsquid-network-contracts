@@ -150,7 +150,7 @@ contract SecurityAuditTest is Test {
         );
 
 
-        registry.setFactory(address(factory));
+        
 
 
         sqd.mint(provider, 1000000 ether);
@@ -167,7 +167,6 @@ contract SecurityAuditTest is Test {
             _makeTokenArray(address(maliciousToken)),
             MIN_STAKE,
             block.number + 100,
-            bytes("peer123"),
             "malicious portal"
         );
 
@@ -210,8 +209,7 @@ contract SecurityAuditTest is Test {
                 _makeTokenArray(address(paymentToken)),
                 MIN_STAKE,
                 block.number + 100,
-                bytes(abi.encodePacked("peer", i)),
-                "test portal"
+                bytes(abi.encodePacked("peer", i))
             );
         }
         vm.stopPrank();
@@ -222,82 +220,6 @@ contract SecurityAuditTest is Test {
         assertTrue(true, "Batch upgrade pattern documented for future upgradeable proxy implementation");
     }
 
-    function testH3_ReallocateToUnregisteredPortal() public {
-        vm.startPrank(operator);
-        address portal1 = factory.createPortal(
-            operator,
-            _makeTokenArray(address(paymentToken)),
-            MIN_STAKE,
-            block.number + 100,
-            bytes("peer1"),
-            "portal 1"
-        );
-        PortalImplementation(portal1).activate();
-        vm.stopPrank();
-
-
-        vm.prank(provider);
-        sqd.approve(address(registry), MIN_STAKE);
-        vm.prank(provider);
-        PortalImplementation(portal1).stake(MIN_STAKE);
-
-
-        address fakePortal = address(0x9999);
-
-        vm.prank(provider);
-        vm.expectRevert();
-        factory.moveStake(portal1, fakePortal, 1000 ether);
-    }
-
-    function testH3_ReallocateToSamePortal() public {
-        vm.startPrank(operator);
-        address portal1 = factory.createPortal(
-            operator,
-            _makeTokenArray(address(paymentToken)),
-            MIN_STAKE,
-            block.number + 100,
-            bytes("peer1"),
-            "portal 1"
-        );
-        PortalImplementation(portal1).activate();
-        vm.stopPrank();
-
-
-        vm.prank(provider);
-        sqd.approve(address(registry), MIN_STAKE);
-        vm.prank(provider);
-        PortalImplementation(portal1).stake(MIN_STAKE);
-
-
-        vm.prank(provider);
-        vm.expectRevert();
-        factory.moveStake(portal1, portal1, 1000 ether);
-    }
-
-    function testH3_ReallocateToZeroAddress() public {
-        vm.startPrank(operator);
-        address portal1 = factory.createPortal(
-            operator,
-            _makeTokenArray(address(paymentToken)),
-            MIN_STAKE,
-            block.number + 100,
-            bytes("peer1"),
-            "portal 1"
-        );
-        PortalImplementation(portal1).activate();
-        vm.stopPrank();
-
-
-        vm.prank(provider);
-        sqd.approve(address(registry), MIN_STAKE);
-        vm.prank(provider);
-        PortalImplementation(portal1).stake(MIN_STAKE);
-
-
-        vm.prank(provider);
-        vm.expectRevert();
-        factory.moveStake(portal1, address(0), 1000 ether);
-    }
 
     function testH4_IntegerOverflowInFeeCalc() public {
         vm.prank(operator);
@@ -306,7 +228,6 @@ contract SecurityAuditTest is Test {
             _makeTokenArray(address(paymentToken)),
             MIN_STAKE,
             block.number + 100,
-            bytes("peer1"),
             "portal"
         );
 
@@ -334,63 +255,7 @@ contract SecurityAuditTest is Test {
         PortalImplementation(portal).distributeFees(address(paymentToken), hugeAmount);
     }
 
-    function testH5_MoveStakeWithZeroAddress() public {
-        vm.startPrank(operator);
-        address portal1 = factory.createPortal(
-            operator,
-            _makeTokenArray(address(paymentToken)),
-            MIN_STAKE,
-            block.number + 100,
-            bytes("peer1"),
-            "portal 1"
-        );
-        PortalImplementation(portal1).activate();
-        vm.stopPrank();
 
-
-        vm.prank(provider);
-        sqd.approve(address(registry), MIN_STAKE);
-        vm.prank(provider);
-        PortalImplementation(portal1).stake(MIN_STAKE);
-
-
-        vm.prank(provider);
-        vm.expectRevert();
-        factory.moveStake(address(0), portal1, 1000 ether);
-    }
-
-    function testH6_APYDivisionByZero() public {
-        vm.prank(operator);
-        address portal = factory.createPortal(
-            operator,
-            _makeTokenArray(address(paymentToken)),
-            MIN_STAKE,
-            block.number + 100,
-            bytes("peer1"),
-            "portal"
-        );
-
-        vm.prank(operator);
-        PortalImplementation(portal).activate();
-
-
-        vm.prank(provider);
-        sqd.approve(address(registry), MIN_STAKE);
-        vm.prank(provider);
-        PortalImplementation(portal).stake(MIN_STAKE);
-
-
-        vm.prank(operator);
-        paymentToken.approve(portal, 1000 ether);
-        vm.prank(operator);
-        PortalImplementation(portal).distributeFees(address(paymentToken), 1000 ether);
-
-
-        uint256 apy = PortalImplementation(portal).getCurrentAPY(address(paymentToken));
-
-
-        assertEq(apy, 0, "APY should be 0 when timeElapsed is 0");
-    }
 
     function testH7_MissingEvents() public {
 
@@ -421,7 +286,6 @@ contract SecurityAuditTest is Test {
             _makeTokenArray(address(paymentToken)),
             MIN_STAKE,
             block.number + 100,
-            bytes("peer1"),
             "portal 1"
         );
         PortalImplementation(portal1).activate();
@@ -434,8 +298,9 @@ contract SecurityAuditTest is Test {
         PortalImplementation(portal1).stake(MIN_STAKE);
 
 
+        // Request exit through the portal (which calls registry.requestUnlock internally)
         vm.prank(provider);
-        registry.requestUnlock(provider, MIN_STAKE);
+        PortalImplementation(portal1).requestExit(MIN_STAKE);
 
 
         vm.roll(block.number + 10000);
@@ -457,7 +322,6 @@ contract SecurityAuditTest is Test {
             _makeTokenArray(address(paymentToken)),
             MIN_STAKE,
             block.number + 100,
-            bytes("peer1"),
             "portal"
         );
 
@@ -483,5 +347,40 @@ contract SecurityAuditTest is Test {
 
         assertTrue(sum <= amount, "Sum should not exceed amount");
         assertTrue(amount - sum < 3, "Rounding error should be minimal");
+    }
+
+
+    function testRequestUnlockOnlyPortal() public {
+
+        vm.startPrank(operator);
+        address portal1 = factory.createPortal(
+            operator,
+            _makeTokenArray(address(paymentToken)),
+            MIN_STAKE,
+            block.number + 100,
+            "portal 1"
+        );
+        PortalImplementation(portal1).activate();
+        vm.stopPrank();
+
+        vm.prank(provider);
+        sqd.approve(address(registry), MIN_STAKE);
+        vm.prank(provider);
+        PortalImplementation(portal1).stake(MIN_STAKE);
+
+        vm.prank(provider);
+        vm.expectRevert(GatewayRegistry.OnlyPortal.selector);
+        registry.requestUnlock(provider, MIN_STAKE);
+
+
+        address randomAttacker = makeAddr("randomAttacker");
+        vm.prank(randomAttacker);
+        vm.expectRevert(GatewayRegistry.OnlyPortal.selector);
+        registry.requestUnlock(provider, MIN_STAKE);
+
+        vm.prank(provider);
+        PortalImplementation(portal1).requestExit(MIN_STAKE);
+
+        assertTrue(true, "Only portals can call requestUnlock");
     }
 }

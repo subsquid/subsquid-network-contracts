@@ -79,7 +79,6 @@ contract BatchSizeLimitsTest is Test {
             MIN_STAKE
         );
 
-        registry.setFactory(address(factory));
     }
 
     function testPortalCreationGasCosts() public {
@@ -108,8 +107,7 @@ contract BatchSizeLimitsTest is Test {
                     _makeTokenArray(address(paymentToken)),
                     MIN_STAKE,
                     block.number + 100,
-                    bytes(abi.encodePacked("peer_", startingPortals + j)),
-                    "test portal"
+                    bytes(abi.encodePacked("peer_", startingPortals + j))
                 );
             }
 
@@ -146,8 +144,7 @@ contract BatchSizeLimitsTest is Test {
                 _makeTokenArray(address(paymentToken)),
                 MIN_STAKE,
                 block.number + 100,
-                bytes(abi.encodePacked("peer_iter_", i)),
-                "test portal"
+                bytes(abi.encodePacked("peer_iter_", i))
             );
         }
 
@@ -206,8 +203,7 @@ contract BatchSizeLimitsTest is Test {
                 _makeTokenArray(address(paymentToken)),
                 MIN_STAKE,
                 block.number + 100,
-                bytes(abi.encodePacked("peer_test_", i)),
-                "test portal"
+                bytes(abi.encodePacked("peer_test_", i))
             );
         }
 
@@ -264,8 +260,7 @@ contract BatchSizeLimitsTest is Test {
                     _makeTokenArray(address(paymentToken)),
                     MIN_STAKE,
                     block.number + 100,
-                    bytes(abi.encodePacked("peer_max_", batch, "_", i)),
-                    "test portal"
+                    bytes(abi.encodePacked("peer_max_", batch, "_", i))
                 );
             }
         }

@@ -1,30 +1,43 @@
 "use client";
 
 import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
-import { PORTAL_POOL_ABI } from "@/config/contracts";
+import { PORTAL_ABI, contractAddresses, targetChainId } from "@/config/contracts";
 import { formatUnits } from "viem";
 
-export function ClaimRewards({ portalAddress }: { portalAddress: `0x${string}` }) {
+export function ClaimRewards({
+  portalAddress,
+  tokenAddress = contractAddresses.usdcToken
+}: {
+  portalAddress: `0x${string}`;
+  tokenAddress?: `0x${string}`;
+}) {
   const { address } = useAccount();
   const { writeContract, data: hash, isPending } = useWriteContract();
   const { isLoading: isConfirming } = useWaitForTransactionReceipt({ hash });
 
-  const { data: pendingRewards, refetch } = useReadContract({
+  // Read claimable fees for the specified token
+  const { data: claimableFees, refetch } = useReadContract({
     address: portalAddress,
-    abi: PORTAL_POOL_ABI,
-    functionName: "pendingRewards",
-    args: address ? [address] : undefined,
+    abi: PORTAL_ABI,
+    functionName: "getClaimableFees",
+    args: address && tokenAddress ? [address, tokenAddress] : undefined,
   });
 
   const handleClaim = async () => {
+    if (!tokenAddress) return;
+
     writeContract({
       address: portalAddress,
-      abi: PORTAL_POOL_ABI,
-      functionName: "claimRewards",
+      abi: PORTAL_ABI,
+      functionName: "claimFees",
+      args: [tokenAddress],
+      chainId: targetChainId,
     });
   };
 
-  const hasPendingRewards = pendingRewards && Number(pendingRewards) > 0;
+  const tokenName = tokenAddress === contractAddresses.usdcToken ? "USDC" : "Token";
+  const decimals = tokenAddress === contractAddresses.usdcToken ? 6 : 18;
+  const hasPendingRewards = claimableFees && Number(claimableFees) > 0;
 
   return (
     <div className="bg-white rounded-lg p-4 border border-sqd-divider">
@@ -32,10 +45,10 @@ export function ClaimRewards({ portalAddress }: { portalAddress: `0x${string}` }
 
       <div className="space-y-3">
         <div className="bg-sqd-primary rounded-lg p-4">
-          <div className="text-xs text-sqd-text-secondary mb-2 font-medium">Your Pending Rewards</div>
+          <div className="text-xs text-sqd-text-secondary mb-2 font-medium">Your Claimable {tokenName}</div>
           <div className="text-2xl font-medium text-sqd-text-primary">
-            {pendingRewards ? formatUnits(pendingRewards as bigint, 6) : "0"}
-            <span className="text-base text-sqd-text-secondary ml-1.5 font-normal">Tokens</span>
+            {claimableFees ? formatUnits(claimableFees as bigint, decimals) : "0"}
+            <span className="text-base text-sqd-text-secondary ml-1.5 font-normal">{tokenName}</span>
           </div>
         </div>
 
@@ -48,7 +61,7 @@ export function ClaimRewards({ portalAddress }: { portalAddress: `0x${string}` }
             {isPending || isConfirming
               ? "Claiming..."
               : hasPendingRewards
-              ? "Claim Rewards"
+              ? `Claim ${tokenName}`
               : "No Rewards to Claim"}
           </button>
         ) : (

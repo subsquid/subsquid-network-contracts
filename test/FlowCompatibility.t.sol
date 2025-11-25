@@ -87,7 +87,7 @@ contract FlowCompatibilityTest is Test {
             MIN_STAKE
         );
 
-        registry.setFactory(address(factory));
+        
 
 
         sqd.mint(provider, 1_000_000 ether);
@@ -117,7 +117,6 @@ contract FlowCompatibilityTest is Test {
             _makeTokenArray(address(paymentToken)),
             MIN_STAKE,
             block.number + 100,
-            bytes("peer_failed_test"),
             "failed test portal"
         );
 
@@ -165,7 +164,6 @@ contract FlowCompatibilityTest is Test {
             _makeTokenArray(address(paymentToken)),
             MIN_STAKE,
             block.number + 100,
-            bytes("peer_active"),
             "active portal"
         );
 
@@ -194,7 +192,6 @@ contract FlowCompatibilityTest is Test {
             _makeTokenArray(address(paymentToken)),
             MIN_STAKE,
             block.number + 100,
-            bytes("peer_exit_delay"),
             "exit delay test"
         );
 
@@ -222,7 +219,6 @@ contract FlowCompatibilityTest is Test {
             _makeTokenArray(address(paymentToken)),
             MIN_STAKE,
             block.number + 100,
-            bytes("peer_exit_delay_2"),
             "exit delay test 2"
         );
 
@@ -249,7 +245,6 @@ contract FlowCompatibilityTest is Test {
             _makeTokenArray(address(paymentToken)),
             MIN_STAKE * 2,
             block.number + 100,
-            bytes("peer_exit_delay_3"),
             "exit delay test 3"
         );
 
@@ -286,7 +281,6 @@ contract FlowCompatibilityTest is Test {
             _makeTokenArray(address(paymentToken)),
             MIN_STAKE,
             block.number + 100,
-            bytes("peer_reward_stop"),
             "reward stopping test"
         );
 
@@ -350,7 +344,6 @@ contract FlowCompatibilityTest is Test {
             _makeTokenArray(address(paymentToken)),
             MIN_STAKE * 2,
             block.number + 100,
-            bytes("peer_multi_provider"),
             "multi provider test"
         );
 
@@ -417,7 +410,6 @@ contract FlowCompatibilityTest is Test {
             _makeTokenArray(address(paymentToken)),
             MIN_STAKE,
             block.number + 100,
-            bytes("peer_exit_clear"),
             "exit clear test"
         );
 

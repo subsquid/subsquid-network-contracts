@@ -8,6 +8,7 @@ import {GatewayRegistry} from "../src/GatewayRegistry.sol";
 import {FeeRouterModule} from "../src/FeeRouterModule.sol";
 import {MockNetworkController} from "./mocks/MockNetworkController.sol";
 import {PortalStorage} from "../src/storage/PortalStorage.sol";
+import {PortalErrors} from "../src/libs/PortalErrors.sol";
 
 contract MockERC20 {
     string public name;
@@ -122,7 +123,7 @@ contract MultiTokenPaymentTest is Test {
             MIN_STAKE
         );
 
-        registry.setFactory(address(factory));
+        
 
 
         sqd.mint(provider, 1_000_000 ether);
@@ -154,7 +155,6 @@ contract MultiTokenPaymentTest is Test {
             _makeTokenArray(address(usdc)),
             MIN_STAKE,
             block.number + 100,
-            bytes("peer_single"),
             "Single token portal"
         );
 
@@ -178,16 +178,12 @@ contract MultiTokenPaymentTest is Test {
             _makeTokenArray(address(usdc)),
             MIN_STAKE,
             block.number + 100,
-            bytes("peer_single_fee"),
             "Single token fee test"
         );
 
         vm.prank(provider);
         PortalImplementation(portal).stake(MIN_STAKE);
-
-        vm.prank(operator);
-        PortalImplementation(portal).activate();
-
+        // Portal auto-activates when stake reaches maxCapacity
 
         vm.prank(operator);
         usdc.approve(portal, type(uint256).max);
@@ -224,7 +220,6 @@ contract MultiTokenPaymentTest is Test {
             _makeTokenArray2(address(usdc), address(dai)),
             MIN_STAKE,
             block.number + 100,
-            bytes("peer_dual"),
             "Dual token portal"
         );
 
@@ -248,16 +243,12 @@ contract MultiTokenPaymentTest is Test {
             _makeTokenArray2(address(usdc), address(dai)),
             MIN_STAKE,
             block.number + 100,
-            bytes("peer_dual_fee"),
             "Dual fee test"
         );
 
         vm.prank(provider);
         PortalImplementation(portal).stake(MIN_STAKE);
-
-        vm.prank(operator);
-        PortalImplementation(portal).activate();
-
+        // Portal auto-activates when stake reaches maxCapacity
 
         vm.prank(operator);
         usdc.approve(portal, type(uint256).max);
@@ -307,7 +298,6 @@ contract MultiTokenPaymentTest is Test {
             _makeTokenArray3(address(usdc), address(dai), address(usdt)),
             MIN_STAKE,
             block.number + 100,
-            bytes("peer_triple"),
             "Triple token portal"
         );
 
@@ -336,7 +326,6 @@ contract MultiTokenPaymentTest is Test {
             tokens,
             MIN_STAKE,
             block.number + 100,
-            bytes("peer_five"),
             "Five token portal"
         );
 
@@ -360,15 +349,12 @@ contract MultiTokenPaymentTest is Test {
             _makeTokenArray(address(usdc)),
             MIN_STAKE,
             block.number + 100,
-            bytes("peer_restrict"),
             "Restricted token test"
         );
 
         vm.prank(provider);
         PortalImplementation(portal).stake(MIN_STAKE);
-
-        vm.prank(operator);
-        PortalImplementation(portal).activate();
+        // Portal auto-activates when stake reaches maxCapacity
 
         vm.prank(operator);
         dai.approve(portal, type(uint256).max);
@@ -391,7 +377,6 @@ contract MultiTokenPaymentTest is Test {
             _makeTokenArray(address(usdc)),
             MIN_STAKE,
             block.number + 100,
-            bytes("peer_claim_restrict"),
             "Claim restriction test"
         );
 
@@ -412,13 +397,12 @@ contract MultiTokenPaymentTest is Test {
         address[] memory emptyTokens = new address[](0);
 
         vm.prank(operator);
-        vm.expectRevert("No payment tokens provided");
+        vm.expectRevert(PortalFactory.NoPaymentTokens.selector);
         factory.createPortal(
             operator,
             emptyTokens,
             MIN_STAKE,
             block.number + 100,
-            bytes("peer_empty"),
             "Empty tokens test"
         );
 
@@ -433,13 +417,12 @@ contract MultiTokenPaymentTest is Test {
         tokensWithZero[1] = address(0);
 
         vm.prank(operator);
-        vm.expectRevert("Invalid payment token");
+        vm.expectRevert(PortalFactory.InvalidAddress.selector);
         factory.createPortal(
             operator,
             tokensWithZero,
             MIN_STAKE,
             block.number + 100,
-            bytes("peer_zero"),
             "Zero address test"
         );
 
@@ -460,7 +443,6 @@ contract MultiTokenPaymentTest is Test {
             _makeTokenArray2(address(usdc), address(dai)),
             MIN_STAKE * 2,
             block.number + 100,
-            bytes("peer_multi_provider"),
             "Multi-provider test"
         );
 
@@ -510,56 +492,6 @@ contract MultiTokenPaymentTest is Test {
 
 
 
-    function testAPYCalculationPerToken() public {
-        emit log_string("=== Test 12: APY Calculation Per Token ===");
-
-
-        vm.prank(operator);
-        address portal = factory.createPortal(
-            operator,
-            _makeTokenArray2(address(usdc), address(dai)),
-            MIN_STAKE,
-            block.number + 100,
-            bytes("peer_apy"),
-            "APY test"
-        );
-
-        vm.prank(provider);
-        PortalImplementation(portal).stake(MIN_STAKE);
-
-        vm.prank(operator);
-        PortalImplementation(portal).activate();
-
-        vm.prank(operator);
-        usdc.approve(portal, type(uint256).max);
-        vm.prank(operator);
-        dai.approve(portal, type(uint256).max);
-
-
-
-        vm.prank(operator);
-        PortalImplementation(portal).distributeFees(address(usdc), 100_000e6);
-
-        vm.warp(block.timestamp + 1 days);
-
-        vm.prank(operator);
-        PortalImplementation(portal).distributeFees(address(dai), 50_000 ether);
-
-
-        vm.warp(block.timestamp + 1 days);
-
-
-        uint256 usdcAPY = PortalImplementation(portal).getCurrentAPY(address(usdc));
-        uint256 daiAPY = PortalImplementation(portal).getCurrentAPY(address(dai));
-
-        emit log_named_uint("USDC APY (bps)", usdcAPY);
-        emit log_named_uint("DAI APY (bps)", daiAPY);
-
-
-        assertTrue(daiAPY > 0, "DAI APY should be greater than 0");
-
-        emit log_string("PASS: APY calculated independently per token");
-    }
 
 
 
@@ -574,15 +506,12 @@ contract MultiTokenPaymentTest is Test {
             _makeTokenArray(address(usdc)),
             MIN_STAKE,
             block.number + 100,
-            bytes("peer_deprecated"),
             "Deprecated test"
         );
 
         vm.prank(provider);
         PortalImplementation(portal).stake(MIN_STAKE);
-
-        vm.prank(operator);
-        PortalImplementation(portal).activate();
+        // Portal auto-activates when stake reaches maxCapacity
 
         vm.prank(operator);
         usdc.approve(portal, type(uint256).max);
@@ -610,7 +539,6 @@ contract MultiTokenPaymentTest is Test {
             _makeTokenArray(address(usdc)),
             MIN_STAKE,
             block.number + 100,
-            bytes("peer_double_init"),
             "Double init test"
         );
 
@@ -619,7 +547,7 @@ contract MultiTokenPaymentTest is Test {
         newTokens[0] = address(dai);
 
         vm.prank(operator);
-        vm.expectRevert("Tokens already initialized");
+        vm.expectRevert(PortalErrors.AlreadyInitialized.selector);
         PortalImplementation(portal).initializePaymentTokens(newTokens);
 
         emit log_string("PASS: Cannot initialize tokens twice");
@@ -643,15 +571,12 @@ contract MultiTokenPaymentTest is Test {
             tokens,
             MIN_STAKE,
             block.number + 100,
-            bytes("peer_decimals"),
             "Different decimals test"
         );
 
         vm.prank(provider);
         PortalImplementation(portal).stake(MIN_STAKE);
-
-        vm.prank(operator);
-        PortalImplementation(portal).activate();
+        // Portal auto-activates when stake reaches maxCapacity
 
         vm.prank(operator);
         usdc.approve(portal, type(uint256).max);
