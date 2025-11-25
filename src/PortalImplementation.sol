@@ -30,7 +30,9 @@ contract PortalImplementation is
     event Staked(address indexed provider, uint256 amount, uint256 newTotal);
     event ExitRequested(address indexed provider, uint256 amount, uint256 unlockEpoch);
     event Withdrawn(address indexed provider, uint256 amount);
-    event FeesDistributed(address indexed token, uint256 totalAmount, uint256 toProviders, uint256 toWorkers, uint256 toBurn);
+    event FeesDistributed(
+        address indexed token, uint256 totalAmount, uint256 toProviders, uint256 toWorkers, uint256 toBurn
+    );
     event FeesClaimed(address indexed provider, address indexed token, uint256 amount);
     event StateChanged(PortalState oldState, PortalState newState);
     event AllocationReduced(address indexed provider, uint256 amount);
@@ -112,15 +114,10 @@ contract PortalImplementation is
         emit PaymentTokensInitialized(paymentTokens);
     }
 
-    function stake(uint256 amount)
-        external
-        whenNotPaused
-        whenPortalNotPaused
-    {
+    function stake(uint256 amount) external whenNotPaused whenPortalNotPaused {
         if (amount == 0) revert PortalErrors.InvalidAmount();
 
-        if (_portalInfo.state != PortalState.COLLECTING &&
-            _portalInfo.state != PortalState.ACTIVE) {
+        if (_portalInfo.state != PortalState.COLLECTING && _portalInfo.state != PortalState.ACTIVE) {
             revert PortalErrors.InvalidState();
         }
 
@@ -149,11 +146,7 @@ contract PortalImplementation is
         emit Staked(msg.sender, amount, _portalInfo.totalStaked);
     }
 
-    function activate()
-        external
-        onlyOperator
-        inState(PortalState.COLLECTING)
-    {
+    function activate() external onlyOperator inState(PortalState.COLLECTING) {
         PortalState oldState = _portalInfo.state;
         _portalInfo.state = PortalState.ACTIVE;
         _portalInfo.activationTime = uint64(block.number);
@@ -161,18 +154,12 @@ contract PortalImplementation is
         emit StateChanged(oldState, PortalState.ACTIVE);
     }
 
-    function requestExit(uint256 amount)
-        external
-        whenNotPaused
-        whenPortalNotPaused
-    {
+    function requestExit(uint256 amount) external whenNotPaused whenPortalNotPaused {
         if (amount == 0) revert PortalErrors.InvalidAmount();
         if (_stakes[msg.sender] < amount) revert PortalErrors.InsufficientStake();
 
         uint256 currentEpoch = _networkController.epochNumber();
-        uint256 percentage = (_portalInfo.totalStaked > 0)
-            ? (amount * 100) / _portalInfo.totalStaked
-            : 0;
+        uint256 percentage = (_portalInfo.totalStaked > 0) ? (amount * 100) / _portalInfo.totalStaked : 0;
         uint256 requiredEpochs = 1 + percentage;
 
         ExitRequest storage request = _exitRequests[msg.sender];
@@ -188,9 +175,7 @@ contract PortalImplementation is
         emit ExitRequested(msg.sender, amount, request.unlockEpoch);
     }
 
-    function onAllocationReduced(address provider, uint256 amount)
-        external
-    {
+    function onAllocationReduced(address provider, uint256 amount) external {
         if (msg.sender != address(_gatewayRegistry)) revert PortalErrors.NotGatewayRegistry();
 
         _stakes[provider] -= amount;
@@ -242,13 +227,11 @@ contract PortalImplementation is
 
         IERC20 paymentToken = IERC20(token);
 
-        (uint256 toProviders, uint256 toWorkerPool, uint256 toBurn) =
-            _feeRouter.calculateSplit(amount);
+        (uint256 toProviders, uint256 toWorkerPool, uint256 toBurn) = _feeRouter.calculateSplit(amount);
 
         // Defensive check: ensure _totalExitAmounts never exceeds totalStaked
-        uint256 activeStake = _portalInfo.totalStaked > _totalExitAmounts
-            ? _portalInfo.totalStaked - _totalExitAmounts
-            : 0;
+        uint256 activeStake =
+            _portalInfo.totalStaked > _totalExitAmounts ? _portalInfo.totalStaked - _totalExitAmounts : 0;
         if (activeStake > 0) {
             _cumulativeFeesPerShare[token] += (toProviders * 1e18) / activeStake;
         }
@@ -268,12 +251,7 @@ contract PortalImplementation is
         emit FeesDistributed(token, amount, toProviders, toWorkerPool, toBurn);
     }
 
-    function claimFees(address token)
-        external
-        whenNotPaused
-        whenPortalNotPaused
-        returns (uint256 claimed)
-    {
+    function claimFees(address token) external whenNotPaused whenPortalNotPaused returns (uint256 claimed) {
         if (token == address(0)) revert PortalErrors.InvalidAddress();
         if (!allowedPaymentTokens[token]) revert PortalErrors.TokenNotAllowed();
 
@@ -300,7 +278,7 @@ contract PortalImplementation is
         return _exitRequests[provider];
     }
 
-    function getClaimableFees(address /* provider */) external pure returns (uint256) {
+    function getClaimableFees(address /* provider */ ) external pure returns (uint256) {
         return 0;
     }
 
@@ -332,9 +310,7 @@ contract PortalImplementation is
     }
 
     function getActiveStake() external view returns (uint256) {
-        return _portalInfo.totalStaked > _totalExitAmounts
-            ? _portalInfo.totalStaked - _totalExitAmounts
-            : 0;
+        return _portalInfo.totalStaked > _totalExitAmounts ? _portalInfo.totalStaked - _totalExitAmounts : 0;
     }
 
     function getAllowedPaymentTokens() external view returns (address[] memory tokens) {

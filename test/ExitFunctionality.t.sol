@@ -68,12 +68,7 @@ contract ExitFunctionalityTest is Test {
 
         networkController = new MockNetworkController(7200, MIN_STAKE, workerRewardPool);
 
-        registry = new GatewayRegistry(
-            address(sqd),
-            address(networkController),
-            MIN_STAKE,
-            MANA
-        );
+        registry = new GatewayRegistry(address(sqd), address(networkController), MIN_STAKE, MANA);
 
         feeRouter = new FeeRouterModule();
         portalImpl = new PortalImplementation();
@@ -86,9 +81,6 @@ contract ExitFunctionalityTest is Test {
             address(sqd),
             MIN_STAKE
         );
-
-        
-
 
         sqd.mint(provider, 100_000_000 ether);
         sqd.mint(provider2, 100_000_000 ether);
@@ -107,11 +99,7 @@ contract ExitFunctionalityTest is Test {
 
         vm.prank(operator);
         address portal = factory.createPortal(
-            operator,
-            _makeTokenArray(address(paymentToken)),
-            MIN_STAKE * 2,
-            block.number + 100,
-            "exit test portal"
+            operator, _makeTokenArray(address(paymentToken)), MIN_STAKE * 2, block.number + 100, "exit test portal"
         );
         console.log("Portal created at:", portal);
 
@@ -148,11 +136,7 @@ contract ExitFunctionalityTest is Test {
 
         vm.prank(operator);
         address portal = factory.createPortal(
-            operator,
-            _makeTokenArray(address(paymentToken)),
-            MIN_STAKE,
-            block.number + 100,
-            "no exit portal"
+            operator, _makeTokenArray(address(paymentToken)), MIN_STAKE, block.number + 100, "no exit portal"
         );
 
         vm.prank(provider);
@@ -172,11 +156,7 @@ contract ExitFunctionalityTest is Test {
 
         vm.prank(operator);
         address portal = factory.createPortal(
-            operator,
-            _makeTokenArray(address(paymentToken)),
-            MIN_STAKE * 2,
-            block.number + 100,
-            "multi exit portal"
+            operator, _makeTokenArray(address(paymentToken)), MIN_STAKE * 2, block.number + 100, "multi exit portal"
         );
 
         vm.prank(provider);
@@ -223,16 +203,11 @@ contract ExitFunctionalityTest is Test {
 
         vm.prank(operator);
         address portal = factory.createPortal(
-            operator,
-            _makeTokenArray(address(paymentToken)),
-            MIN_STAKE,
-            block.number + 100,
-            "insufficient stake portal"
+            operator, _makeTokenArray(address(paymentToken)), MIN_STAKE, block.number + 100, "insufficient stake portal"
         );
 
         vm.prank(provider);
         PortalImplementation(portal).stake(MIN_STAKE);
-
 
         uint256 exitAmount = MIN_STAKE + 1;
 
@@ -248,11 +223,7 @@ contract ExitFunctionalityTest is Test {
 
         vm.prank(operator);
         address portal = factory.createPortal(
-            operator,
-            _makeTokenArray(address(paymentToken)),
-            MIN_STAKE,
-            block.number + 100,
-            "zero exit portal"
+            operator, _makeTokenArray(address(paymentToken)), MIN_STAKE, block.number + 100, "zero exit portal"
         );
 
         vm.prank(provider);
@@ -271,11 +242,7 @@ contract ExitFunctionalityTest is Test {
 
         vm.prank(operator);
         address portal = factory.createPortal(
-            operator,
-            _makeTokenArray(address(paymentToken)),
-            MIN_STAKE * 10,
-            block.number + 100,
-            "epoch calc portal"
+            operator, _makeTokenArray(address(paymentToken)), MIN_STAKE * 10, block.number + 100, "epoch calc portal"
         );
 
         vm.prank(provider);
@@ -285,7 +252,6 @@ contract ExitFunctionalityTest is Test {
 
         networkController.setEpochNumber(1000);
         console.log("Epoch set to: 1000");
-
 
         uint256 exitAmount1Percent = MIN_STAKE / 10;
         uint256 percentage1 = (exitAmount1Percent * 100) / (MIN_STAKE * 10);
@@ -302,7 +268,6 @@ contract ExitFunctionalityTest is Test {
 
         networkController.setEpochNumber(2000);
         console.log("Epoch set to: 2000");
-
 
         uint256 exitAmount10Percent = MIN_STAKE;
         uint256 percentage10 = (exitAmount10Percent * 100) / (MIN_STAKE * 10);
@@ -325,16 +290,11 @@ contract ExitFunctionalityTest is Test {
 
         vm.prank(operator);
         address portal = factory.createPortal(
-            operator,
-            _makeTokenArray(address(paymentToken)),
-            MIN_STAKE * 2,
-            block.number + 100,
-            "persist portal"
+            operator, _makeTokenArray(address(paymentToken)), MIN_STAKE * 2, block.number + 100, "persist portal"
         );
 
         vm.prank(provider);
         PortalImplementation(portal).stake(MIN_STAKE * 2);
-
 
         networkController.setEpochNumber(100);
         uint256 exitAmount = MIN_STAKE;
@@ -343,8 +303,6 @@ contract ExitFunctionalityTest is Test {
         PortalImplementation(portal).requestExit(exitAmount);
 
         PortalStorage.ExitRequest memory exitRequest1 = PortalImplementation(portal).getExitRequest(provider);
-
-
 
         vm.prank(operator);
         paymentToken.approve(portal, type(uint256).max);
@@ -366,11 +324,7 @@ contract ExitFunctionalityTest is Test {
 
         vm.prank(operator);
         address portal = factory.createPortal(
-            operator,
-            _makeTokenArray(address(paymentToken)),
-            MIN_STAKE * 4,
-            block.number + 100,
-            "multi provider portal"
+            operator, _makeTokenArray(address(paymentToken)), MIN_STAKE * 4, block.number + 100, "multi provider portal"
         );
 
         vm.prank(provider);
@@ -435,16 +389,11 @@ contract ExitFunctionalityTest is Test {
 
         vm.prank(operator);
         address portal = factory.createPortal(
-            operator,
-            _makeTokenArray(address(paymentToken)),
-            MIN_STAKE,
-            block.number + 100,
-            "full exit portal"
+            operator, _makeTokenArray(address(paymentToken)), MIN_STAKE, block.number + 100, "full exit portal"
         );
 
         vm.prank(provider);
         PortalImplementation(portal).stake(MIN_STAKE);
-
 
         networkController.setEpochNumber(100);
 
@@ -467,19 +416,13 @@ contract ExitFunctionalityTest is Test {
 
         vm.prank(operator);
         address portal = factory.createPortal(
-            operator,
-            _makeTokenArray(address(paymentToken)),
-            MIN_STAKE * 100,
-            block.number + 100,
-            "small exit portal"
+            operator, _makeTokenArray(address(paymentToken)), MIN_STAKE * 100, block.number + 100, "small exit portal"
         );
 
         vm.prank(provider);
         PortalImplementation(portal).stake(MIN_STAKE * 100);
 
-
         networkController.setEpochNumber(500);
-
 
         uint256 exitAmount = MIN_STAKE;
         vm.prank(provider);
@@ -496,4 +439,3 @@ contract ExitFunctionalityTest is Test {
         emit log_string("PASS: Small percentage exit works correctly");
     }
 }
-

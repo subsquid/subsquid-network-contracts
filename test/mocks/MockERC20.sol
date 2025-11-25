@@ -12,10 +12,10 @@ contract MockERC20 is IERC20 {
     string public name;
     string public symbol;
     uint8 public decimals;
-    
+
     mapping(address => uint256) private _balances;
     mapping(address => mapping(address => uint256)) private _allowances;
-    
+
     uint256 private _totalSupply;
 
     constructor(string memory _name, string memory _symbol, uint8 _decimals) {
@@ -112,9 +112,3 @@ contract MockERC20 is IERC20 {
         }
     }
 }
-
-
-
-
-
-

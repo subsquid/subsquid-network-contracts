@@ -7,7 +7,6 @@ import {IFeeRouter} from "../interfaces/IFeeRouter.sol";
 import {INetworkController} from "../interfaces/INetworkController.sol";
 
 abstract contract PortalStorage {
-
     enum PortalState {
         COLLECTING,
         ACTIVE,

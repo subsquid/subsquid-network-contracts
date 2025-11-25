@@ -55,7 +55,6 @@ contract FlowCompatibilityTest is Test {
     uint256 public constant MANA = 1000;
     address public workerRewardPool = address(0x4);
 
-
     function _makeTokenArray(address token) internal pure returns (address[] memory) {
         address[] memory tokens = new address[](1);
         tokens[0] = token;
@@ -68,12 +67,7 @@ contract FlowCompatibilityTest is Test {
 
         networkController = new MockNetworkController(7200, MIN_STAKE, workerRewardPool);
 
-        registry = new GatewayRegistry(
-            address(sqd),
-            address(networkController),
-            MIN_STAKE,
-            MANA
-        );
+        registry = new GatewayRegistry(address(sqd), address(networkController), MIN_STAKE, MANA);
 
         feeRouter = new FeeRouterModule();
         portalImpl = new PortalImplementation();
@@ -87,13 +81,9 @@ contract FlowCompatibilityTest is Test {
             MIN_STAKE
         );
 
-        
-
-
         sqd.mint(provider, 1_000_000 ether);
         sqd.mint(provider2, 1_000_000 ether);
         paymentToken.mint(operator, 1_000_000 ether);
-
 
         vm.prank(provider);
         sqd.approve(address(registry), type(uint256).max);
@@ -103,43 +93,28 @@ contract FlowCompatibilityTest is Test {
         paymentToken.approve(address(factory), type(uint256).max);
     }
 
-
-
-
-
     function testRefundFromFailedPortal() public {
         emit log_string("=== Test 1: FAILED Portal Refunds ===");
 
-
         vm.prank(operator);
         address portal = factory.createPortal(
-            operator,
-            _makeTokenArray(address(paymentToken)),
-            MIN_STAKE,
-            block.number + 100,
-            "failed test portal"
+            operator, _makeTokenArray(address(paymentToken)), MIN_STAKE, block.number + 100, "failed test portal"
         );
-
 
         uint256 stakeAmount = MIN_STAKE / 2;
         vm.prank(provider);
         PortalImplementation(portal).stake(stakeAmount);
 
-
         assertEq(PortalImplementation(portal).getProviderStake(provider), stakeAmount);
-
 
         vm.roll(block.number + 101);
 
-
         PortalImplementation(portal).checkAndFailPortal();
-
 
         PortalStorage.PortalInfo memory info = PortalImplementation(portal).getPortalInfo();
         assertEq(uint256(info.state), uint256(PortalStorage.PortalState.FAILED));
 
         emit log_string("Portal is FAILED, provider can now withdraw");
-
 
         uint256 providerBalanceBefore = sqd.balanceOf(provider);
 
@@ -147,7 +122,6 @@ contract FlowCompatibilityTest is Test {
         PortalImplementation(portal).withdrawFromFailed();
 
         uint256 providerBalanceAfter = sqd.balanceOf(provider);
-
 
         assertEq(providerBalanceAfter - providerBalanceBefore, stakeAmount);
         assertEq(PortalImplementation(portal).getProviderStake(provider), 0);
@@ -157,48 +131,29 @@ contract FlowCompatibilityTest is Test {
     }
 
     function testCannotWithdrawFromNonFailedPortal() public {
-
         vm.prank(operator);
         address portal = factory.createPortal(
-            operator,
-            _makeTokenArray(address(paymentToken)),
-            MIN_STAKE,
-            block.number + 100,
-            "active portal"
+            operator, _makeTokenArray(address(paymentToken)), MIN_STAKE, block.number + 100, "active portal"
         );
-
-
 
         vm.prank(provider);
         PortalImplementation(portal).stake(MIN_STAKE);
-
 
         vm.prank(provider);
         vm.expectRevert();
         PortalImplementation(portal).withdrawFromFailed();
     }
 
-
-
-
-
     function testExitDelayCalculation() public {
         emit log_string("=== Test 2: Exit Delay Calculation ===");
 
-
         vm.prank(operator);
         address portal = factory.createPortal(
-            operator,
-            _makeTokenArray(address(paymentToken)),
-            MIN_STAKE,
-            block.number + 100,
-            "exit delay test"
+            operator, _makeTokenArray(address(paymentToken)), MIN_STAKE, block.number + 100, "exit delay test"
         );
-
 
         vm.prank(provider);
         PortalImplementation(portal).stake(MIN_STAKE);
-
 
         uint256 exitAmount1Percent = MIN_STAKE / 100;
         networkController.setEpochNumber(100);
@@ -206,22 +161,15 @@ contract FlowCompatibilityTest is Test {
         vm.prank(provider);
         PortalImplementation(portal).requestExit(exitAmount1Percent);
 
-
         uint256 expectedUnlockEpoch1 = 100 + 1 + 1;
 
         emit log_named_uint("1% exit - Current epoch", 100);
         emit log_named_uint("1% exit - Expected unlock epoch", expectedUnlockEpoch1);
 
-
         vm.prank(operator);
         address portal2 = factory.createPortal(
-            operator,
-            _makeTokenArray(address(paymentToken)),
-            MIN_STAKE,
-            block.number + 100,
-            "exit delay test 2"
+            operator, _makeTokenArray(address(paymentToken)), MIN_STAKE, block.number + 100, "exit delay test 2"
         );
-
 
         vm.prank(provider);
         PortalImplementation(portal2).stake(MIN_STAKE);
@@ -232,22 +180,15 @@ contract FlowCompatibilityTest is Test {
         vm.prank(provider);
         PortalImplementation(portal2).requestExit(exitAmount10Percent);
 
-
         uint256 expectedUnlockEpoch10 = 200 + 1 + 10;
 
         emit log_named_uint("10% exit - Current epoch", 200);
         emit log_named_uint("10% exit - Expected unlock epoch", expectedUnlockEpoch10);
 
-
         vm.prank(operator);
         address portal3 = factory.createPortal(
-            operator,
-            _makeTokenArray(address(paymentToken)),
-            MIN_STAKE * 2,
-            block.number + 100,
-            "exit delay test 3"
+            operator, _makeTokenArray(address(paymentToken)), MIN_STAKE * 2, block.number + 100, "exit delay test 3"
         );
-
 
         vm.prank(provider);
         PortalImplementation(portal3).stake(MIN_STAKE * 2);
@@ -258,7 +199,6 @@ contract FlowCompatibilityTest is Test {
         vm.prank(provider);
         PortalImplementation(portal3).requestExit(exitAmount50Percent);
 
-
         uint256 expectedUnlockEpoch50 = 300 + 1 + 50;
 
         emit log_named_uint("50% exit - Current epoch", 300);
@@ -267,31 +207,19 @@ contract FlowCompatibilityTest is Test {
         emit log_string("PASS: Exit delay calculation working correctly");
     }
 
-
-
-
-
     function testRewardStoppingDuringExit() public {
         emit log_string("=== Test 3: Reward Stopping During Exit ===");
 
-
         vm.prank(operator);
         address portal = factory.createPortal(
-            operator,
-            _makeTokenArray(address(paymentToken)),
-            MIN_STAKE,
-            block.number + 100,
-            "reward stopping test"
+            operator, _makeTokenArray(address(paymentToken)), MIN_STAKE, block.number + 100, "reward stopping test"
         );
-
 
         vm.prank(provider);
         PortalImplementation(portal).stake(MIN_STAKE);
 
-
         vm.prank(operator);
         paymentToken.approve(portal, type(uint256).max);
-
 
         vm.prank(operator);
         PortalImplementation(portal).distributeFees(address(paymentToken), 100 ether);
@@ -299,10 +227,8 @@ contract FlowCompatibilityTest is Test {
         uint256 claimableBefore = PortalImplementation(portal).getClaimableFees(provider, address(paymentToken));
         emit log_named_uint("Claimable fees before exit", claimableBefore);
 
-
         vm.prank(provider);
         PortalImplementation(portal).claimFees(address(paymentToken));
-
 
         uint256 exitAmount = MIN_STAKE / 2;
         networkController.setEpochNumber(100);
@@ -313,22 +239,12 @@ contract FlowCompatibilityTest is Test {
         emit log_named_uint("Exit amount requested", exitAmount);
         emit log_named_uint("Remaining active stake", MIN_STAKE - exitAmount);
 
-
         vm.prank(operator);
         PortalImplementation(portal).distributeFees(address(paymentToken), 100 ether);
-
 
         uint256 claimableAfterExit = PortalImplementation(portal).getClaimableFees(provider, address(paymentToken));
 
         emit log_named_uint("Claimable fees after exit request", claimableAfterExit);
-
-
-
-
-
-
-
-
 
         assertTrue(claimableAfterExit > 0, "Should have some claimable fees");
         emit log_string("PASS: Rewards stopped on exit amount");
@@ -337,16 +253,10 @@ contract FlowCompatibilityTest is Test {
     function testRewardStoppingMultipleProviders() public {
         emit log_string("=== Test 3b: Reward Stopping with Multiple Providers ===");
 
-
         vm.prank(operator);
         address portal = factory.createPortal(
-            operator,
-            _makeTokenArray(address(paymentToken)),
-            MIN_STAKE * 2,
-            block.number + 100,
-            "multi provider test"
+            operator, _makeTokenArray(address(paymentToken)), MIN_STAKE * 2, block.number + 100, "multi provider test"
         );
-
 
         vm.prank(provider);
         PortalImplementation(portal).stake(MIN_STAKE);
@@ -354,10 +264,8 @@ contract FlowCompatibilityTest is Test {
         vm.prank(provider2);
         PortalImplementation(portal).stake(MIN_STAKE);
 
-
         vm.prank(operator);
         paymentToken.approve(portal, type(uint256).max);
-
 
         vm.prank(operator);
         PortalImplementation(portal).distributeFees(address(paymentToken), 200 ether);
@@ -368,12 +276,10 @@ contract FlowCompatibilityTest is Test {
         emit log_named_uint("Provider1 claimable (before exit)", p1Claimable1);
         emit log_named_uint("Provider2 claimable (before exit)", p2Claimable1);
 
-
         vm.prank(provider);
         PortalImplementation(portal).claimFees(address(paymentToken));
         vm.prank(provider2);
         PortalImplementation(portal).claimFees(address(paymentToken));
-
 
         networkController.setEpochNumber(100);
 
@@ -381,7 +287,6 @@ contract FlowCompatibilityTest is Test {
         PortalImplementation(portal).requestExit(MIN_STAKE);
 
         emit log_string("Provider1 requested full exit - should stop earning");
-
 
         vm.prank(operator);
         PortalImplementation(portal).distributeFees(address(paymentToken), 200 ether);
@@ -392,8 +297,6 @@ contract FlowCompatibilityTest is Test {
         emit log_named_uint("Provider1 claimable (after exit)", p1Claimable2);
         emit log_named_uint("Provider2 claimable (after exit)", p2Claimable2);
 
-
-
         assertEq(p1Claimable2, 0, "Provider1 should not earn on exiting stake");
         assertTrue(p2Claimable2 > 0, "Provider2 should earn all fees");
 
@@ -403,24 +306,16 @@ contract FlowCompatibilityTest is Test {
     function testExitAmountsClearedOnWithdrawal() public {
         emit log_string("=== Test 3c: Exit Amounts Cleared After Withdrawal ===");
 
-
         vm.prank(operator);
         address portal = factory.createPortal(
-            operator,
-            _makeTokenArray(address(paymentToken)),
-            MIN_STAKE,
-            block.number + 100,
-            "exit clear test"
+            operator, _makeTokenArray(address(paymentToken)), MIN_STAKE, block.number + 100, "exit clear test"
         );
-
 
         vm.prank(provider);
         PortalImplementation(portal).stake(MIN_STAKE);
 
-
         vm.prank(operator);
         paymentToken.approve(portal, type(uint256).max);
-
 
         uint256 exitAmount = MIN_STAKE / 2;
         networkController.setEpochNumber(100);
@@ -428,26 +323,23 @@ contract FlowCompatibilityTest is Test {
         vm.prank(provider);
         PortalImplementation(portal).requestExit(exitAmount);
 
-
         vm.prank(operator);
         PortalImplementation(portal).distributeFees(address(paymentToken), 100 ether);
 
         uint256 claimableDuringExit = PortalImplementation(portal).getClaimableFees(provider, address(paymentToken));
         emit log_named_uint("Claimable during exit", claimableDuringExit);
 
-
         networkController.setEpochNumber(200);
 
         vm.prank(provider);
         registry.withdrawUnlocked();
 
-
         vm.prank(operator);
         PortalImplementation(portal).distributeFees(address(paymentToken), 100 ether);
 
-        uint256 claimableAfterWithdrawal = PortalImplementation(portal).getClaimableFees(provider, address(paymentToken));
+        uint256 claimableAfterWithdrawal =
+            PortalImplementation(portal).getClaimableFees(provider, address(paymentToken));
         emit log_named_uint("Claimable after withdrawal", claimableAfterWithdrawal);
-
 
         assertTrue(claimableAfterWithdrawal > 0, "Should earn on remaining stake");
 

@@ -60,12 +60,7 @@ contract GatewayRegistry is AccessControl, Pausable {
     error NoUnlockRequest();
     error NothingToWithdraw();
 
-    constructor(
-        address _sqd,
-        address _networkController,
-        uint256 _minStake,
-        uint256 _mana
-    ) {
+    constructor(address _sqd, address _networkController, uint256 _minStake, uint256 _mana) {
         if (_sqd == address(0)) revert InvalidAddress();
         if (_networkController == address(0)) revert InvalidAddress();
 
@@ -78,11 +73,7 @@ contract GatewayRegistry is AccessControl, Pausable {
         _grantRole(PAUSER_ROLE, msg.sender);
     }
 
-    function registerPortal(
-        bytes calldata peerId,
-        address portalAddress,
-        address operator
-    ) external {
+    function registerPortal(bytes calldata peerId, address portalAddress, address operator) external {
         if (msg.sender != portalAddress) revert OnlyPortal();
         if (portals[portalAddress].portalAddress != address(0)) revert PortalAlreadyRegistered();
 
@@ -102,11 +93,7 @@ contract GatewayRegistry is AccessControl, Pausable {
         emit PortalRegistered(portalAddress, peerId, operator);
     }
 
-    function stake(
-        address portalAddress,
-        address provider,
-        uint256 amount
-    ) external whenNotPaused {
+    function stake(address portalAddress, address provider, uint256 amount) external whenNotPaused {
         if (msg.sender != portalAddress) revert OnlyPortal();
         if (portals[portalAddress].portalAddress == address(0)) revert PortalNotRegistered();
 
@@ -221,11 +208,7 @@ contract GatewayRegistry is AccessControl, Pausable {
         }
     }
 
-    function getComputationUnits(address portalAddress)
-        external
-        view
-        returns (uint256)
-    {
+    function getComputationUnits(address portalAddress) external view returns (uint256) {
         Portal storage portal = portals[portalAddress];
 
         if (!portal.active) return 0;
@@ -233,12 +216,7 @@ contract GatewayRegistry is AccessControl, Pausable {
         uint256 epochLength = networkController.workerEpochLength();
         uint256 boostFactor = 30000;
 
-        uint256 cus = (
-            portal.totalStaked
-            * epochLength
-            * mana
-            * boostFactor
-        ) / (10000 * 1e18 * 1000);
+        uint256 cus = (portal.totalStaked * epochLength * mana * boostFactor) / (10000 * 1e18 * 1000);
 
         return cus;
     }

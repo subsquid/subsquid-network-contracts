@@ -53,28 +53,19 @@ contract GasLimitsTest is Test {
     uint256 public constant MANA = 1000;
     address public workerRewardPool = address(0x4);
 
-
     function _makeTokenArray(address token) internal pure returns (address[] memory) {
         address[] memory tokens = new address[](1);
         tokens[0] = token;
         return tokens;
     }
+
     function setUp() public {
         sqd = new MockERC20();
         paymentToken = new MockERC20();
 
-        networkController = new MockNetworkController(
-            7200,
-            MIN_STAKE,
-            workerRewardPool
-        );
+        networkController = new MockNetworkController(7200, MIN_STAKE, workerRewardPool);
 
-        registry = new GatewayRegistry(
-            address(sqd),
-            address(networkController),
-            MIN_STAKE,
-            MANA
-        );
+        registry = new GatewayRegistry(address(sqd), address(networkController), MIN_STAKE, MANA);
 
         feeRouter = new FeeRouterModule();
         portalImpl = new PortalImplementation();
@@ -87,8 +78,6 @@ contract GasLimitsTest is Test {
             address(sqd),
             MIN_STAKE
         );
-
-        
     }
 
     function testMaxPortalCreation() public {
@@ -111,7 +100,6 @@ contract GasLimitsTest is Test {
     }
 
     function testMaxBatchUpgradeSize() public {
-
         uint256 totalPortals = 100;
 
         vm.startPrank(operator);
@@ -126,9 +114,7 @@ contract GasLimitsTest is Test {
         }
         vm.stopPrank();
 
-
         PortalImplementation newImpl = new PortalImplementation();
-
 
         uint256[] memory batchSizes = new uint256[](5);
         batchSizes[0] = 10;
@@ -139,7 +125,6 @@ contract GasLimitsTest is Test {
 
         for (uint256 i = 0; i < batchSizes.length; ++i) {
             uint256 batchSize = batchSizes[i];
-
 
             uint256 gasBefore = gasleft();
 

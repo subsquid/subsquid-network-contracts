@@ -45,27 +45,21 @@ contract BatchSizeLimitsTest is Test {
     uint256 public constant MANA = 1000;
     address public workerRewardPool = address(0x4);
 
-
     uint256 public constant ARBITRUM_GAS_LIMIT = 32_000_000;
-
 
     function _makeTokenArray(address token) internal pure returns (address[] memory) {
         address[] memory tokens = new address[](1);
         tokens[0] = token;
         return tokens;
     }
+
     function setUp() public {
         sqd = new MockERC20();
         paymentToken = new MockERC20();
 
         networkController = new MockNetworkController(7200, MIN_STAKE, workerRewardPool);
 
-        registry = new GatewayRegistry(
-            address(sqd),
-            address(networkController),
-            MIN_STAKE,
-            MANA
-        );
+        registry = new GatewayRegistry(address(sqd), address(networkController), MIN_STAKE, MANA);
 
         feeRouter = new FeeRouterModule();
         portalImpl = new PortalImplementation();
@@ -78,7 +72,6 @@ contract BatchSizeLimitsTest is Test {
             address(sqd),
             MIN_STAKE
         );
-
     }
 
     function testPortalCreationGasCosts() public {
@@ -134,7 +127,6 @@ contract BatchSizeLimitsTest is Test {
         emit log_string("=== Iteration Gas Cost Analysis ===");
         emit log_string("");
 
-
         uint256 totalPortals = 200;
 
         vm.prank(operator);
@@ -151,7 +143,6 @@ contract BatchSizeLimitsTest is Test {
         emit log_named_uint("Total portals created", factory.getPortalCount());
         emit log_string("");
 
-
         uint256[] memory batchSizes = new uint256[](7);
         batchSizes[0] = 10;
         batchSizes[1] = 20;
@@ -164,12 +155,10 @@ contract BatchSizeLimitsTest is Test {
         for (uint256 i = 0; i < batchSizes.length; ++i) {
             uint256 batchSize = batchSizes[i];
 
-
             uint256 gasStart = gasleft();
 
             address[] memory portals = new address[](batchSize);
             for (uint256 j = 0; j < batchSize; ++j) {
-
                 portals[j] = factory.allPortals(j);
             }
 
@@ -193,7 +182,6 @@ contract BatchSizeLimitsTest is Test {
         emit log_string("=== Recommended Batch Size Calculation ===");
         emit log_string("");
 
-
         uint256 testPortals = 150;
 
         vm.prank(operator);
@@ -207,18 +195,15 @@ contract BatchSizeLimitsTest is Test {
             );
         }
 
-
         uint256 testBatchSize = 50;
         uint256 gasStart = gasleft();
 
         for (uint256 j = 0; j < testBatchSize; ++j) {
-
             factory.allPortals(j);
         }
 
         uint256 gasUsed = gasStart - gasleft();
         uint256 gasPerPortal = gasUsed / testBatchSize;
-
 
         uint256 safeGasLimit = (ARBITRUM_GAS_LIMIT * 30) / 100;
         uint256 recommendedBatchSize = safeGasLimit / gasPerPortal;
@@ -236,7 +221,6 @@ contract BatchSizeLimitsTest is Test {
         emit log_string("- Network congestion");
         emit log_string("- Future contract complexity");
 
-
         assertTrue(recommendedBatchSize > 0, "Batch size must be > 0");
         assertTrue(recommendedBatchSize >= 20, "Batch size should be at least 20");
     }
@@ -244,7 +228,6 @@ contract BatchSizeLimitsTest is Test {
     function testMaximumTotalPortals() public {
         emit log_string("=== Maximum Total Portals Test ===");
         emit log_string("");
-
 
         uint256 batchSize = 50;
         uint256 totalBatches = 6;

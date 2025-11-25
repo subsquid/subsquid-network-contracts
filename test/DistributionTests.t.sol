@@ -115,11 +115,7 @@ contract DistributionTests is Test {
     function testSingleProviderDistribution() public {
         vm.prank(operator);
         address portal = factory.createPortal(
-            operator,
-            _makeTokenArray(address(usdc)),
-            MIN_STAKE,
-            block.number + 100,
-            "single provider test"
+            operator, _makeTokenArray(address(usdc)), MIN_STAKE, block.number + 100, "single provider test"
         );
 
         // Provider stakes
@@ -233,11 +229,7 @@ contract DistributionTests is Test {
     function testMultipleDistributionRounds() public {
         vm.prank(operator);
         address portal = factory.createPortal(
-            operator,
-            _makeTokenArray(address(usdc)),
-            MIN_STAKE,
-            block.number + 100,
-            "multiple rounds test"
+            operator, _makeTokenArray(address(usdc)), MIN_STAKE, block.number + 100, "multiple rounds test"
         );
 
         vm.prank(provider1);
@@ -278,11 +270,7 @@ contract DistributionTests is Test {
     function testExitRequestExcludedFromFees() public {
         vm.prank(operator);
         address portal = factory.createPortal(
-            operator,
-            _makeTokenArray(address(usdc)),
-            MIN_STAKE * 2,
-            block.number + 100,
-            "exit exclusion test"
+            operator, _makeTokenArray(address(usdc)), MIN_STAKE * 2, block.number + 100, "exit exclusion test"
         );
 
         // Both providers stake equal amounts
@@ -316,11 +304,7 @@ contract DistributionTests is Test {
     function testPartialExitReducesFeeShare() public {
         vm.prank(operator);
         address portal = factory.createPortal(
-            operator,
-            _makeTokenArray(address(usdc)),
-            MIN_STAKE * 2,
-            block.number + 100,
-            "partial exit test"
+            operator, _makeTokenArray(address(usdc)), MIN_STAKE * 2, block.number + 100, "partial exit test"
         );
 
         // Provider 1 stakes double
@@ -352,11 +336,7 @@ contract DistributionTests is Test {
     function testDistributionWithZeroActiveStake() public {
         vm.prank(operator);
         address portal = factory.createPortal(
-            operator,
-            _makeTokenArray(address(usdc)),
-            MIN_STAKE,
-            block.number + 100,
-            "zero active stake test"
+            operator, _makeTokenArray(address(usdc)), MIN_STAKE, block.number + 100, "zero active stake test"
         );
 
         vm.prank(provider1);
@@ -385,11 +365,7 @@ contract DistributionTests is Test {
     function testWorkerPoolReceivesFees() public {
         vm.prank(operator);
         address portal = factory.createPortal(
-            operator,
-            _makeTokenArray(address(usdc)),
-            MIN_STAKE,
-            block.number + 100,
-            "worker pool test"
+            operator, _makeTokenArray(address(usdc)), MIN_STAKE, block.number + 100, "worker pool test"
         );
 
         vm.prank(provider1);
@@ -406,21 +382,13 @@ contract DistributionTests is Test {
         uint256 workerPoolBalanceAfter = usdc.balanceOf(workerRewardPool);
 
         // Worker pool should receive 50% of fees
-        assertEq(
-            workerPoolBalanceAfter - workerPoolBalanceBefore,
-            500e6,
-            "Worker pool should receive 50% of fees"
-        );
+        assertEq(workerPoolBalanceAfter - workerPoolBalanceBefore, 500e6, "Worker pool should receive 50% of fees");
     }
 
     function testCannotDistributeZeroAmount() public {
         vm.prank(operator);
         address portal = factory.createPortal(
-            operator,
-            _makeTokenArray(address(usdc)),
-            MIN_STAKE,
-            block.number + 100,
-            "zero amount test"
+            operator, _makeTokenArray(address(usdc)), MIN_STAKE, block.number + 100, "zero amount test"
         );
 
         vm.prank(provider1);
@@ -437,11 +405,7 @@ contract DistributionTests is Test {
     function testCannotDistributeUnallowedToken() public {
         vm.prank(operator);
         address portal = factory.createPortal(
-            operator,
-            _makeTokenArray(address(usdc)),
-            MIN_STAKE,
-            block.number + 100,
-            "unallowed token test"
+            operator, _makeTokenArray(address(usdc)), MIN_STAKE, block.number + 100, "unallowed token test"
         );
 
         vm.prank(provider1);
@@ -462,11 +426,7 @@ contract DistributionTests is Test {
     function testOnlyOperatorCanDistribute() public {
         vm.prank(operator);
         address portal = factory.createPortal(
-            operator,
-            _makeTokenArray(address(usdc)),
-            MIN_STAKE,
-            block.number + 100,
-            "operator only test"
+            operator, _makeTokenArray(address(usdc)), MIN_STAKE, block.number + 100, "operator only test"
         );
 
         vm.prank(provider1);
@@ -487,11 +447,7 @@ contract DistributionTests is Test {
     function testTotalFeesDistributedTracking() public {
         vm.prank(operator);
         address portal = factory.createPortal(
-            operator,
-            _makeTokenArray(address(usdc)),
-            MIN_STAKE,
-            block.number + 100,
-            "tracking test"
+            operator, _makeTokenArray(address(usdc)), MIN_STAKE, block.number + 100, "tracking test"
         );
 
         vm.prank(provider1);
@@ -518,11 +474,7 @@ contract DistributionTests is Test {
     function testLastDistributionTimeTracking() public {
         vm.prank(operator);
         address portal = factory.createPortal(
-            operator,
-            _makeTokenArray(address(usdc)),
-            MIN_STAKE,
-            block.number + 100,
-            "time tracking test"
+            operator, _makeTokenArray(address(usdc)), MIN_STAKE, block.number + 100, "time tracking test"
         );
 
         vm.prank(provider1);

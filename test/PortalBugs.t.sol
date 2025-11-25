@@ -57,24 +57,12 @@ contract PortalBugsTest is Test {
     uint256 public constant MANA = 1000;
 
     function setUp() public {
-
         sqd = new MockERC20();
         paymentToken = new MockERC20();
 
+        networkController = new MockNetworkController(7200, MIN_STAKE, workerRewardPool);
 
-        networkController = new MockNetworkController(
-            7200,
-            MIN_STAKE,
-            workerRewardPool
-        );
-
-
-        registry = new GatewayRegistry(
-            address(sqd),
-            address(networkController),
-            MIN_STAKE,
-            MANA
-        );
+        registry = new GatewayRegistry(address(sqd), address(networkController), MIN_STAKE, MANA);
 
         feeRouter = new FeeRouterModule();
 
@@ -89,10 +77,8 @@ contract PortalBugsTest is Test {
             MIN_STAKE
         );
 
-
         sqd.mint(provider, 1000 ether);
     }
-
 
     function _makeTokenArray(address token) internal pure returns (address[] memory) {
         address[] memory tokens = new address[](1);
@@ -101,27 +87,16 @@ contract PortalBugsTest is Test {
     }
 
     function testIssue1_DoubleTransferAttempt() public {
-
         vm.prank(operator);
         address portal = factory.createPortal(
-            operator,
-            _makeTokenArray(address(paymentToken)),
-            MIN_STAKE,
-            block.number + 100,
-            bytes("peer1")
+            operator, _makeTokenArray(address(paymentToken)), MIN_STAKE, block.number + 100, bytes("peer1")
         );
-
 
         vm.prank(operator);
         PortalImplementation(portal).activate();
 
-
         vm.prank(provider);
         sqd.approve(portal, 1000 ether);
-
-
-
-
 
         vm.prank(provider);
         vm.expectRevert();
@@ -129,21 +104,15 @@ contract PortalBugsTest is Test {
     }
 
     function testIssue3_GetProviderPortalsReturnsEmpty() public {
-
-
         address[] memory portals = registry.getProviderPortals(provider);
 
         assertEq(portals.length, 0, "getProviderPortals always returns empty array");
-
 
         uint256 totalAlloc = registry.getTotalAllocation(provider);
         assertEq(totalAlloc, 0, "getTotalAllocation returns 0 because getProviderPortals is broken");
     }
 
     function testIssue5_ErrorReferenceCompiles() public {
-
-
         assertTrue(true, "If this compiles, Issue #5 might be fixed or ignored by compiler");
     }
-
 }

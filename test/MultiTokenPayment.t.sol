@@ -69,7 +69,6 @@ contract MultiTokenPaymentTest is Test {
     uint256 public constant MANA = 1000;
     address public workerRewardPool = address(0x4);
 
-
     function _makeTokenArray(address token) internal pure returns (address[] memory) {
         address[] memory tokens = new address[](1);
         tokens[0] = token;
@@ -83,7 +82,11 @@ contract MultiTokenPaymentTest is Test {
         return tokens;
     }
 
-    function _makeTokenArray3(address token1, address token2, address token3) internal pure returns (address[] memory) {
+    function _makeTokenArray3(address token1, address token2, address token3)
+        internal
+        pure
+        returns (address[] memory)
+    {
         address[] memory tokens = new address[](3);
         tokens[0] = token1;
         tokens[1] = token2;
@@ -92,9 +95,7 @@ contract MultiTokenPaymentTest is Test {
     }
 
     function setUp() public {
-
         sqd = new MockERC20("Subsquid", "SQD", 18);
-
 
         usdc = new MockERC20("USD Coin", "USDC", 6);
         dai = new MockERC20("Dai Stablecoin", "DAI", 18);
@@ -104,12 +105,7 @@ contract MultiTokenPaymentTest is Test {
 
         networkController = new MockNetworkController(7200, MIN_STAKE, workerRewardPool);
 
-        registry = new GatewayRegistry(
-            address(sqd),
-            address(networkController),
-            MIN_STAKE,
-            MANA
-        );
+        registry = new GatewayRegistry(address(sqd), address(networkController), MIN_STAKE, MANA);
 
         feeRouter = new FeeRouterModule();
         portalImpl = new PortalImplementation();
@@ -123,9 +119,6 @@ contract MultiTokenPaymentTest is Test {
             MIN_STAKE
         );
 
-        
-
-
         sqd.mint(provider, 1_000_000 ether);
         sqd.mint(provider2, 1_000_000 ether);
 
@@ -135,29 +128,19 @@ contract MultiTokenPaymentTest is Test {
         weth.mint(operator, 1_000 ether);
         wbtc.mint(operator, 100e8);
 
-
         vm.prank(provider);
         sqd.approve(address(registry), type(uint256).max);
         vm.prank(provider2);
         sqd.approve(address(registry), type(uint256).max);
     }
 
-
-
-
-
     function testSingleTokenPortalCreation() public {
         emit log_string("=== Test 1: Single Token Portal ===");
 
         vm.prank(operator);
         address portal = factory.createPortal(
-            operator,
-            _makeTokenArray(address(usdc)),
-            MIN_STAKE,
-            block.number + 100,
-            "Single token portal"
+            operator, _makeTokenArray(address(usdc)), MIN_STAKE, block.number + 100, "Single token portal"
         );
-
 
         address[] memory allowedTokens = PortalImplementation(portal).getAllowedPaymentTokens();
         assertEq(allowedTokens.length, 1);
@@ -171,14 +154,9 @@ contract MultiTokenPaymentTest is Test {
     function testSingleTokenFeeDistribution() public {
         emit log_string("=== Test 2: Single Token Fee Distribution ===");
 
-
         vm.prank(operator);
         address portal = factory.createPortal(
-            operator,
-            _makeTokenArray(address(usdc)),
-            MIN_STAKE,
-            block.number + 100,
-            "Single token fee test"
+            operator, _makeTokenArray(address(usdc)), MIN_STAKE, block.number + 100, "Single token fee test"
         );
 
         vm.prank(provider);
@@ -191,11 +169,9 @@ contract MultiTokenPaymentTest is Test {
         vm.prank(operator);
         PortalImplementation(portal).distributeFees(address(usdc), 1000e6);
 
-
         uint256 claimable = PortalImplementation(portal).getClaimableFees(provider, address(usdc));
         emit log_named_uint("Claimable USDC (6 decimals)", claimable);
         assertTrue(claimable > 0);
-
 
         vm.prank(provider);
         uint256 claimed = PortalImplementation(portal).claimFees(address(usdc));
@@ -207,22 +183,13 @@ contract MultiTokenPaymentTest is Test {
         emit log_string("PASS: Single token distribution and claiming works");
     }
 
-
-
-
-
     function testDualTokenPortalCreation() public {
         emit log_string("=== Test 3: Dual Token Portal (USDC + DAI) ===");
 
         vm.prank(operator);
         address portal = factory.createPortal(
-            operator,
-            _makeTokenArray2(address(usdc), address(dai)),
-            MIN_STAKE,
-            block.number + 100,
-            "Dual token portal"
+            operator, _makeTokenArray2(address(usdc), address(dai)), MIN_STAKE, block.number + 100, "Dual token portal"
         );
-
 
         address[] memory allowedTokens = PortalImplementation(portal).getAllowedPaymentTokens();
         assertEq(allowedTokens.length, 2);
@@ -236,14 +203,9 @@ contract MultiTokenPaymentTest is Test {
     function testDualTokenFeeDistribution() public {
         emit log_string("=== Test 4: Dual Token Fee Distribution ===");
 
-
         vm.prank(operator);
         address portal = factory.createPortal(
-            operator,
-            _makeTokenArray2(address(usdc), address(dai)),
-            MIN_STAKE,
-            block.number + 100,
-            "Dual fee test"
+            operator, _makeTokenArray2(address(usdc), address(dai)), MIN_STAKE, block.number + 100, "Dual fee test"
         );
 
         vm.prank(provider);
@@ -255,14 +217,11 @@ contract MultiTokenPaymentTest is Test {
         vm.prank(operator);
         dai.approve(portal, type(uint256).max);
 
-
         vm.prank(operator);
         PortalImplementation(portal).distributeFees(address(usdc), 1000e6);
 
-
         vm.prank(operator);
         PortalImplementation(portal).distributeFees(address(dai), 500 ether);
-
 
         uint256 usdcClaimable = PortalImplementation(portal).getClaimableFees(provider, address(usdc));
         uint256 daiClaimable = PortalImplementation(portal).getClaimableFees(provider, address(dai));
@@ -272,7 +231,6 @@ contract MultiTokenPaymentTest is Test {
 
         assertTrue(usdcClaimable > 0);
         assertTrue(daiClaimable > 0);
-
 
         vm.prank(provider);
         PortalImplementation(portal).claimFees(address(usdc));
@@ -284,10 +242,6 @@ contract MultiTokenPaymentTest is Test {
 
         emit log_string("PASS: Dual token distribution works independently");
     }
-
-
-
-
 
     function testTripleTokenPortal() public {
         emit log_string("=== Test 5: Triple Token Portal (USDC + DAI + USDT) ===");
@@ -321,13 +275,7 @@ contract MultiTokenPaymentTest is Test {
         tokens[4] = address(wbtc);
 
         vm.prank(operator);
-        address portal = factory.createPortal(
-            operator,
-            tokens,
-            MIN_STAKE,
-            block.number + 100,
-            "Five token portal"
-        );
+        address portal = factory.createPortal(operator, tokens, MIN_STAKE, block.number + 100, "Five token portal");
 
         address[] memory allowedTokens = PortalImplementation(portal).getAllowedPaymentTokens();
         assertEq(allowedTokens.length, 5);
@@ -335,21 +283,12 @@ contract MultiTokenPaymentTest is Test {
         emit log_string("PASS: Five token portal supports all tokens");
     }
 
-
-
-
-
     function testCannotDistributeDisallowedToken() public {
         emit log_string("=== Test 7: Cannot Distribute Disallowed Token ===");
 
-
         vm.prank(operator);
         address portal = factory.createPortal(
-            operator,
-            _makeTokenArray(address(usdc)),
-            MIN_STAKE,
-            block.number + 100,
-            "Restricted token test"
+            operator, _makeTokenArray(address(usdc)), MIN_STAKE, block.number + 100, "Restricted token test"
         );
 
         vm.prank(provider);
@@ -358,7 +297,6 @@ contract MultiTokenPaymentTest is Test {
 
         vm.prank(operator);
         dai.approve(portal, type(uint256).max);
-
 
         vm.prank(operator);
         vm.expectRevert();
@@ -370,19 +308,13 @@ contract MultiTokenPaymentTest is Test {
     function testCannotClaimDisallowedToken() public {
         emit log_string("=== Test 8: Cannot Claim Disallowed Token ===");
 
-
         vm.prank(operator);
         address portal = factory.createPortal(
-            operator,
-            _makeTokenArray(address(usdc)),
-            MIN_STAKE,
-            block.number + 100,
-            "Claim restriction test"
+            operator, _makeTokenArray(address(usdc)), MIN_STAKE, block.number + 100, "Claim restriction test"
         );
 
         vm.prank(provider);
         PortalImplementation(portal).stake(MIN_STAKE);
-
 
         vm.prank(provider);
         vm.expectRevert();
@@ -398,13 +330,7 @@ contract MultiTokenPaymentTest is Test {
 
         vm.prank(operator);
         vm.expectRevert(PortalFactory.NoPaymentTokens.selector);
-        factory.createPortal(
-            operator,
-            emptyTokens,
-            MIN_STAKE,
-            block.number + 100,
-            "Empty tokens test"
-        );
+        factory.createPortal(operator, emptyTokens, MIN_STAKE, block.number + 100, "Empty tokens test");
 
         emit log_string("PASS: Cannot create portal with empty token array");
     }
@@ -418,24 +344,13 @@ contract MultiTokenPaymentTest is Test {
 
         vm.prank(operator);
         vm.expectRevert(PortalFactory.InvalidAddress.selector);
-        factory.createPortal(
-            operator,
-            tokensWithZero,
-            MIN_STAKE,
-            block.number + 100,
-            "Zero address test"
-        );
+        factory.createPortal(operator, tokensWithZero, MIN_STAKE, block.number + 100, "Zero address test");
 
         emit log_string("PASS: Cannot create portal with zero address token");
     }
 
-
-
-
-
     function testMultiProviderMultiTokenDistribution() public {
         emit log_string("=== Test 11: Multi-Provider Multi-Token Distribution ===");
-
 
         vm.prank(operator);
         address portal = factory.createPortal(
@@ -446,7 +361,6 @@ contract MultiTokenPaymentTest is Test {
             "Multi-provider test"
         );
 
-
         vm.prank(provider);
         PortalImplementation(portal).stake(60_000 ether);
 
@@ -456,20 +370,16 @@ contract MultiTokenPaymentTest is Test {
         vm.prank(operator);
         PortalImplementation(portal).activate();
 
-
         vm.prank(operator);
         usdc.approve(portal, type(uint256).max);
         vm.prank(operator);
         dai.approve(portal, type(uint256).max);
 
-
         vm.prank(operator);
         PortalImplementation(portal).distributeFees(address(usdc), 1000e6);
 
-
         vm.prank(operator);
         PortalImplementation(portal).distributeFees(address(dai), 500 ether);
-
 
         uint256 p1UsdcClaimable = PortalImplementation(portal).getClaimableFees(provider, address(usdc));
         uint256 p2UsdcClaimable = PortalImplementation(portal).getClaimableFees(provider2, address(usdc));
@@ -481,32 +391,18 @@ contract MultiTokenPaymentTest is Test {
         emit log_named_uint("Provider1 DAI claimable", p1DaiClaimable);
         emit log_named_uint("Provider2 DAI claimable", p2DaiClaimable);
 
-
         assertTrue(p1UsdcClaimable > p2UsdcClaimable);
         assertTrue(p1DaiClaimable > p2DaiClaimable);
 
         emit log_string("PASS: Multi-provider earnings split correctly per token");
     }
 
-
-
-
-
-
-
-
-
-
     function testDeprecatedGetClaimableFeesReturnsZero() public {
         emit log_string("=== Test 13: Deprecated getClaimableFees Returns Zero ===");
 
         vm.prank(operator);
         address portal = factory.createPortal(
-            operator,
-            _makeTokenArray(address(usdc)),
-            MIN_STAKE,
-            block.number + 100,
-            "Deprecated test"
+            operator, _makeTokenArray(address(usdc)), MIN_STAKE, block.number + 100, "Deprecated test"
         );
 
         vm.prank(provider);
@@ -519,29 +415,19 @@ contract MultiTokenPaymentTest is Test {
         vm.prank(operator);
         PortalImplementation(portal).distributeFees(address(usdc), 1000e6);
 
-
         uint256 claimableResult = PortalImplementation(portal).getClaimableFees(provider, address(usdc));
         assertTrue(claimableResult > 0);
 
         emit log_string("PASS: getClaimableFees works correctly");
     }
 
-
-
-
-
     function testCannotInitializeTokensTwice() public {
         emit log_string("=== Test 14: Cannot Initialize Payment Tokens Twice ===");
 
         vm.prank(operator);
         address portal = factory.createPortal(
-            operator,
-            _makeTokenArray(address(usdc)),
-            MIN_STAKE,
-            block.number + 100,
-            "Double init test"
+            operator, _makeTokenArray(address(usdc)), MIN_STAKE, block.number + 100, "Double init test"
         );
-
 
         address[] memory newTokens = new address[](1);
         newTokens[0] = address(dai);
@@ -553,10 +439,6 @@ contract MultiTokenPaymentTest is Test {
         emit log_string("PASS: Cannot initialize tokens twice");
     }
 
-
-
-
-
     function testDifferentDecimalTokens() public {
         emit log_string("=== Test 15: Different Decimal Tokens (6, 8, 18) ===");
 
@@ -566,13 +448,8 @@ contract MultiTokenPaymentTest is Test {
         tokens[2] = address(dai);
 
         vm.prank(operator);
-        address portal = factory.createPortal(
-            operator,
-            tokens,
-            MIN_STAKE,
-            block.number + 100,
-            "Different decimals test"
-        );
+        address portal =
+            factory.createPortal(operator, tokens, MIN_STAKE, block.number + 100, "Different decimals test");
 
         vm.prank(provider);
         PortalImplementation(portal).stake(MIN_STAKE);
@@ -585,7 +462,6 @@ contract MultiTokenPaymentTest is Test {
         vm.prank(operator);
         dai.approve(portal, type(uint256).max);
 
-
         vm.prank(operator);
         PortalImplementation(portal).distributeFees(address(usdc), 1000e6);
 
@@ -594,7 +470,6 @@ contract MultiTokenPaymentTest is Test {
 
         vm.prank(operator);
         PortalImplementation(portal).distributeFees(address(dai), 1000 ether);
-
 
         uint256 usdcClaimable = PortalImplementation(portal).getClaimableFees(provider, address(usdc));
         uint256 wbtcClaimable = PortalImplementation(portal).getClaimableFees(provider, address(wbtc));

@@ -7,7 +7,6 @@ import {Clones} from "@openzeppelin/contracts/proxy/Clones.sol";
 import {IPortal} from "./interfaces/IPortal.sol";
 
 contract PortalFactory is AccessControl, Pausable {
-
     bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
 
     address public implementation;
@@ -22,21 +21,11 @@ contract PortalFactory is AccessControl, Pausable {
 
     uint256 public minStakeThreshold;
 
-    event PortalCreated(
-        address indexed portal,
-        address indexed operator,
-        bytes peerId
-    );
+    event PortalCreated(address indexed portal, address indexed operator, bytes peerId);
 
-    event PortalPaymentTokensSet(
-        address indexed portal,
-        address[] paymentTokens
-    );
+    event PortalPaymentTokensSet(address indexed portal, address[] paymentTokens);
 
-    event PortalUpgraded(
-        address indexed portal,
-        address indexed newImplementation
-    );
+    event PortalUpgraded(address indexed portal, address indexed newImplementation);
 
     error InvalidAddress();
     error InvalidPortal();
@@ -91,14 +80,7 @@ contract PortalFactory is AccessControl, Pausable {
         portal = Clones.clone(implementation);
 
         IPortal(portal).initialize(
-            operator,
-            maxCapacity,
-            depositDeadline,
-            peerId,
-            sqd,
-            gatewayRegistry,
-            feeRouter,
-            networkController
+            operator, maxCapacity, depositDeadline, peerId, sqd, gatewayRegistry, feeRouter, networkController
         );
 
         IPortal(portal).initializePaymentTokens(paymentTokens);
@@ -111,10 +93,7 @@ contract PortalFactory is AccessControl, Pausable {
         emit PortalPaymentTokensSet(portal, paymentTokens);
     }
 
-    function upgradePortal(
-        address portal,
-        address newImplementation
-    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function upgradePortal(address portal, address newImplementation) external onlyRole(DEFAULT_ADMIN_ROLE) {
         if (!isPortal[portal]) revert InvalidPortal();
         if (newImplementation == address(0)) revert InvalidAddress();
 
@@ -123,27 +102,20 @@ contract PortalFactory is AccessControl, Pausable {
         emit PortalUpgraded(portal, newImplementation);
     }
 
-    function upgradeAllPortals(
-        address newImplementation
-    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function upgradeAllPortals(address newImplementation) external onlyRole(DEFAULT_ADMIN_ROLE) {
         if (newImplementation == address(0)) revert InvalidAddress();
 
         _upgradePortalsBatch(newImplementation, 0, allPortals.length);
     }
 
-    function upgradePortalsBatch(
-        address newImplementation,
-        uint256 startIndex,
-        uint256 endIndex
-    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function upgradePortalsBatch(address newImplementation, uint256 startIndex, uint256 endIndex)
+        external
+        onlyRole(DEFAULT_ADMIN_ROLE)
+    {
         _upgradePortalsBatch(newImplementation, startIndex, endIndex);
     }
 
-    function _upgradePortalsBatch(
-        address newImplementation,
-        uint256 startIndex,
-        uint256 endIndex
-    ) internal {
+    function _upgradePortalsBatch(address newImplementation, uint256 startIndex, uint256 endIndex) internal {
         if (newImplementation == address(0)) revert InvalidAddress();
         if (endIndex > allPortals.length) revert InvalidRange();
         if (startIndex >= endIndex) revert InvalidRange();
@@ -158,11 +130,7 @@ contract PortalFactory is AccessControl, Pausable {
         return allPortals.length;
     }
 
-    function getOperatorPortals(address operator)
-        external
-        view
-        returns (address[] memory)
-    {
+    function getOperatorPortals(address operator) external view returns (address[] memory) {
         return operatorPortals[operator];
     }
 
@@ -174,18 +142,12 @@ contract PortalFactory is AccessControl, Pausable {
         _unpause();
     }
 
-    function setImplementation(address _implementation)
-        external
-        onlyRole(DEFAULT_ADMIN_ROLE)
-    {
+    function setImplementation(address _implementation) external onlyRole(DEFAULT_ADMIN_ROLE) {
         if (_implementation == address(0)) revert InvalidAddress();
         implementation = _implementation;
     }
 
-    function setMinStakeThreshold(uint256 _threshold)
-        external
-        onlyRole(DEFAULT_ADMIN_ROLE)
-    {
+    function setMinStakeThreshold(uint256 _threshold) external onlyRole(DEFAULT_ADMIN_ROLE) {
         minStakeThreshold = _threshold;
     }
 }

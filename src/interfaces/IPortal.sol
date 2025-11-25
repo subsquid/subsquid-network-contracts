@@ -2,7 +2,6 @@
 pragma solidity ^0.8.20;
 
 interface IPortal {
-
     enum PortalState {
         COLLECTING,
         ACTIVE,
@@ -28,7 +27,9 @@ interface IPortal {
     event Staked(address indexed provider, uint256 amount, uint256 newTotal);
     event ExitRequested(address indexed provider, uint256 amount, uint256 unlockEpoch);
     event Withdrawn(address indexed provider, uint256 amount);
-    event FeesDistributed(address indexed token, uint256 totalAmount, uint256 toProviders, uint256 toWorkers, uint256 toBurn);
+    event FeesDistributed(
+        address indexed token, uint256 totalAmount, uint256 toProviders, uint256 toWorkers, uint256 toBurn
+    );
     event FeesClaimed(address indexed provider, address indexed token, uint256 amount);
     event StateChanged(PortalState oldState, PortalState newState);
     event AllocationReduced(address indexed provider, uint256 amount);
