@@ -7,7 +7,7 @@ import {PortalImplementation} from "../src/PortalImplementation.sol";
 import {GatewayRegistry} from "../src/GatewayRegistry.sol";
 import {FeeRouterModule} from "../src/FeeRouterModule.sol";
 import {MockNetworkController} from "./mocks/MockNetworkController.sol";
-import {PortalStorage} from "../src/storage/PortalStorage.sol";
+import {IPortal} from "../src/interfaces/IPortal.sol";
 import {PortalErrors} from "../src/libs/PortalErrors.sol";
 
 contract MockERC20 {
@@ -117,7 +117,7 @@ contract ExitFunctionalityTest is Test {
         vm.prank(provider);
         PortalImplementation(portal).requestExit(exitAmount);
 
-        PortalStorage.ExitRequest memory exitRequest = PortalImplementation(portal).getExitRequest(provider);
+        IPortal.ExitRequest memory exitRequest = PortalImplementation(portal).getExitRequest(provider);
 
         console.log("Exit request retrieved:");
         console.log("  Amount:", exitRequest.amount);
@@ -142,7 +142,7 @@ contract ExitFunctionalityTest is Test {
         vm.prank(provider);
         PortalImplementation(portal).stake(MIN_STAKE);
 
-        PortalStorage.ExitRequest memory exitRequest = PortalImplementation(portal).getExitRequest(provider);
+        IPortal.ExitRequest memory exitRequest = PortalImplementation(portal).getExitRequest(provider);
 
         assertEq(exitRequest.amount, 0, "Exit amount should be 0");
         assertEq(exitRequest.requestEpoch, 0, "Request epoch should be 0");
@@ -172,7 +172,7 @@ contract ExitFunctionalityTest is Test {
         vm.prank(provider);
         PortalImplementation(portal).requestExit(firstExit);
 
-        PortalStorage.ExitRequest memory exitRequest1 = PortalImplementation(portal).getExitRequest(provider);
+        IPortal.ExitRequest memory exitRequest1 = PortalImplementation(portal).getExitRequest(provider);
         console.log("After first exit:");
         console.log("  Amount:", exitRequest1.amount);
         console.log("  Request epoch:", exitRequest1.requestEpoch);
@@ -187,7 +187,7 @@ contract ExitFunctionalityTest is Test {
         vm.prank(provider);
         PortalImplementation(portal).requestExit(secondExit);
 
-        PortalStorage.ExitRequest memory exitRequest2 = PortalImplementation(portal).getExitRequest(provider);
+        IPortal.ExitRequest memory exitRequest2 = PortalImplementation(portal).getExitRequest(provider);
         console.log("After second exit:");
         console.log("  Total amount:", exitRequest2.amount);
         console.log("  Request epoch:", exitRequest2.requestEpoch);
@@ -260,7 +260,7 @@ contract ExitFunctionalityTest is Test {
         vm.prank(provider);
         PortalImplementation(portal).requestExit(exitAmount1Percent);
 
-        PortalStorage.ExitRequest memory exitRequest1 = PortalImplementation(portal).getExitRequest(provider);
+        IPortal.ExitRequest memory exitRequest1 = PortalImplementation(portal).getExitRequest(provider);
         uint256 expectedUnlock1 = 1000 + 1 + 1;
         console.log("1% exit unlock epoch:", exitRequest1.unlockEpoch);
         console.log("Expected unlock epoch:", expectedUnlock1);
@@ -276,7 +276,7 @@ contract ExitFunctionalityTest is Test {
         vm.prank(provider);
         PortalImplementation(portal).requestExit(exitAmount10Percent);
 
-        PortalStorage.ExitRequest memory exitRequest2 = PortalImplementation(portal).getExitRequest(provider);
+        IPortal.ExitRequest memory exitRequest2 = PortalImplementation(portal).getExitRequest(provider);
         uint256 expectedUnlock2 = 2000 + 1 + 10;
         console.log("10% exit unlock epoch:", exitRequest2.unlockEpoch);
         console.log("Expected unlock epoch:", expectedUnlock2);
@@ -302,7 +302,7 @@ contract ExitFunctionalityTest is Test {
         vm.prank(provider);
         PortalImplementation(portal).requestExit(exitAmount);
 
-        PortalStorage.ExitRequest memory exitRequest1 = PortalImplementation(portal).getExitRequest(provider);
+        IPortal.ExitRequest memory exitRequest1 = PortalImplementation(portal).getExitRequest(provider);
 
         vm.prank(operator);
         paymentToken.approve(portal, type(uint256).max);
@@ -310,7 +310,7 @@ contract ExitFunctionalityTest is Test {
         vm.prank(operator);
         PortalImplementation(portal).distributeFees(address(paymentToken), 100 ether);
 
-        PortalStorage.ExitRequest memory exitRequest2 = PortalImplementation(portal).getExitRequest(provider);
+        IPortal.ExitRequest memory exitRequest2 = PortalImplementation(portal).getExitRequest(provider);
 
         assertEq(exitRequest1.amount, exitRequest2.amount, "Exit amount should persist");
         assertEq(exitRequest1.requestEpoch, exitRequest2.requestEpoch, "Request epoch should persist");
@@ -354,8 +354,8 @@ contract ExitFunctionalityTest is Test {
         vm.prank(provider2);
         PortalImplementation(portal).requestExit(provider2Exit);
 
-        PortalStorage.ExitRequest memory exitRequest1 = PortalImplementation(portal).getExitRequest(provider);
-        PortalStorage.ExitRequest memory exitRequest2 = PortalImplementation(portal).getExitRequest(provider2);
+        IPortal.ExitRequest memory exitRequest1 = PortalImplementation(portal).getExitRequest(provider);
+        IPortal.ExitRequest memory exitRequest2 = PortalImplementation(portal).getExitRequest(provider2);
 
         console.log("Provider1 exit request:");
         console.log("  Amount:", exitRequest1.amount);
@@ -400,7 +400,7 @@ contract ExitFunctionalityTest is Test {
         vm.prank(provider);
         PortalImplementation(portal).requestExit(MIN_STAKE);
 
-        PortalStorage.ExitRequest memory exitRequest = PortalImplementation(portal).getExitRequest(provider);
+        IPortal.ExitRequest memory exitRequest = PortalImplementation(portal).getExitRequest(provider);
 
         assertEq(exitRequest.amount, MIN_STAKE, "Exit amount should be full stake");
         uint256 expectedUnlock = 100 + 1 + 100;
@@ -428,7 +428,7 @@ contract ExitFunctionalityTest is Test {
         vm.prank(provider);
         PortalImplementation(portal).requestExit(exitAmount);
 
-        PortalStorage.ExitRequest memory exitRequest = PortalImplementation(portal).getExitRequest(provider);
+        IPortal.ExitRequest memory exitRequest = PortalImplementation(portal).getExitRequest(provider);
 
         assertEq(exitRequest.amount, exitAmount, "Exit amount should match");
         uint256 expectedUnlock = 500 + 1 + 1;

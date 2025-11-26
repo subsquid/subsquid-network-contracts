@@ -5,6 +5,7 @@ import {PortalStorage} from "./storage/PortalStorage.sol";
 import {IGatewayRegistry} from "./interfaces/IGatewayRegistry.sol";
 import {IFeeRouter} from "./interfaces/IFeeRouter.sol";
 import {INetworkController} from "./interfaces/INetworkController.sol";
+import {IPortal} from "./interfaces/IPortal.sol";
 import {PortalErrors} from "./libs/PortalErrors.sol";
 import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
@@ -14,6 +15,7 @@ import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 contract PortalImplementation is
+    IPortal,
     PortalStorage,
     Initializable,
     UUPSUpgradeable,
@@ -26,17 +28,6 @@ contract PortalImplementation is
     bytes32 public constant FACTORY_ROLE = keccak256("FACTORY_ROLE");
     uint256 public constant BASIS_POINTS = 10000;
     uint256 public constant MAX_PAYMENT_TOKENS = 10;
-
-    event Staked(address indexed provider, uint256 amount, uint256 newTotal);
-    event ExitRequested(address indexed provider, uint256 amount, uint256 unlockEpoch);
-    event Withdrawn(address indexed provider, uint256 amount);
-    event FeesDistributed(
-        address indexed token, uint256 totalAmount, uint256 toProviders, uint256 toWorkers, uint256 toBurn
-    );
-    event FeesClaimed(address indexed provider, address indexed token, uint256 amount);
-    event StateChanged(PortalState oldState, PortalState newState);
-    event AllocationReduced(address indexed provider, uint256 amount);
-    event PaymentTokensInitialized(address[] paymentTokens);
 
     modifier onlyOperator() {
         if (!hasRole(OPERATOR_ROLE, msg.sender)) revert PortalErrors.NotOperator();

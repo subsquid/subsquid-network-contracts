@@ -5,35 +5,14 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IGatewayRegistry} from "../interfaces/IGatewayRegistry.sol";
 import {IFeeRouter} from "../interfaces/IFeeRouter.sol";
 import {INetworkController} from "../interfaces/INetworkController.sol";
+import {IPortal} from "../interfaces/IPortal.sol";
 
 abstract contract PortalStorage {
-    enum PortalState {
-        COLLECTING,
-        ACTIVE,
-        FAILED
-    }
-
-    struct PortalInfo {
-        address operator;
-        uint256 maxCapacity;
-        uint256 totalStaked;
-        uint64 depositDeadline;
-        uint64 activationTime;
-        PortalState state;
-        bool paused;
-    }
-
-    struct ExitRequest {
-        uint256 amount;
-        uint64 requestEpoch;
-        uint64 unlockEpoch;
-    }
-
-    PortalInfo internal _portalInfo;
+    IPortal.PortalInfo internal _portalInfo;
     bytes internal _peerId;
 
     mapping(address => uint256) internal _stakes;
-    mapping(address => ExitRequest) internal _exitRequests;
+    mapping(address => IPortal.ExitRequest) internal _exitRequests;
 
     // Track amounts that are in exit queue (stop earning rewards)
     mapping(address => uint256) internal _exitAmounts;

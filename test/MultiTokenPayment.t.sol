@@ -7,7 +7,7 @@ import {PortalImplementation} from "../src/PortalImplementation.sol";
 import {GatewayRegistry} from "../src/GatewayRegistry.sol";
 import {FeeRouterModule} from "../src/FeeRouterModule.sol";
 import {MockNetworkController} from "./mocks/MockNetworkController.sol";
-import {PortalStorage} from "../src/storage/PortalStorage.sol";
+import {FactoryErrors} from "../src/libs/FactoryErrors.sol";
 import {PortalErrors} from "../src/libs/PortalErrors.sol";
 
 contract MockERC20 {
@@ -329,7 +329,7 @@ contract MultiTokenPaymentTest is Test {
         address[] memory emptyTokens = new address[](0);
 
         vm.prank(operator);
-        vm.expectRevert(PortalFactory.NoPaymentTokens.selector);
+        vm.expectRevert(FactoryErrors.NoPaymentTokens.selector);
         factory.createPortal(operator, emptyTokens, MIN_STAKE, block.number + 100, "Empty tokens test");
 
         emit log_string("PASS: Cannot create portal with empty token array");
@@ -343,7 +343,7 @@ contract MultiTokenPaymentTest is Test {
         tokensWithZero[1] = address(0);
 
         vm.prank(operator);
-        vm.expectRevert(PortalFactory.InvalidAddress.selector);
+        vm.expectRevert(FactoryErrors.InvalidAddress.selector);
         factory.createPortal(operator, tokensWithZero, MIN_STAKE, block.number + 100, "Zero address test");
 
         emit log_string("PASS: Cannot create portal with zero address token");

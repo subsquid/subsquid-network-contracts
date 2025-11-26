@@ -7,7 +7,7 @@ import {PortalImplementation} from "../src/PortalImplementation.sol";
 import {GatewayRegistry} from "../src/GatewayRegistry.sol";
 import {FeeRouterModule} from "../src/FeeRouterModule.sol";
 import {MockNetworkController} from "./mocks/MockNetworkController.sol";
-import {PortalStorage} from "../src/storage/PortalStorage.sol";
+import {IPortal} from "../src/interfaces/IPortal.sol";
 
 contract MockERC20 {
     mapping(address => uint256) public balanceOf;
@@ -111,8 +111,8 @@ contract FlowCompatibilityTest is Test {
 
         PortalImplementation(portal).checkAndFailPortal();
 
-        PortalStorage.PortalInfo memory info = PortalImplementation(portal).getPortalInfo();
-        assertEq(uint256(info.state), uint256(PortalStorage.PortalState.FAILED));
+        IPortal.PortalInfo memory info = PortalImplementation(portal).getPortalInfo();
+        assertEq(uint256(info.state), uint256(IPortal.PortalState.FAILED));
 
         emit log_string("Portal is FAILED, provider can now withdraw");
 

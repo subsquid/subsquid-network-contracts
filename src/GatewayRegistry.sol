@@ -7,25 +7,13 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {IPortal} from "./interfaces/IPortal.sol";
 import {INetworkController} from "./interfaces/INetworkController.sol";
+import {IGatewayRegistry} from "./interfaces/IGatewayRegistry.sol";
+import {GatewayErrors} from "./libs/GatewayErrors.sol";
 
-contract GatewayRegistry is AccessControl, Pausable {
+contract GatewayRegistry is IGatewayRegistry, AccessControl, Pausable {
     using SafeERC20 for IERC20;
 
     bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
-
-    struct Portal {
-        bytes peerId;
-        address portalAddress;
-        uint256 totalStaked;
-        uint256 registeredAt;
-        bool active;
-    }
-
-    struct UnlockRequest {
-        uint256 amount;
-        uint256 requestedAt;
-        uint256 withdrawn;
-    }
 
     IERC20 public immutable SQD;
     INetworkController public networkController;
@@ -43,26 +31,9 @@ contract GatewayRegistry is AccessControl, Pausable {
     uint256 public minStake;
     uint256 public mana;
 
-    event PortalRegistered(address indexed portal, bytes peerId, address operator);
-    event PortalActivated(address indexed portal);
-    event Staked(address indexed portal, address indexed provider, uint256 amount);
-    event UnlockRequested(address indexed provider, uint256 amount, uint256 requestedAt);
-    event Withdrawn(address indexed provider, uint256 amount);
-    event MinStakeUpdated(uint256 oldValue, uint256 newValue);
-    event ManaUpdated(uint256 oldValue, uint256 newValue);
-
-    error InvalidAddress();
-    error PortalNotRegistered();
-    error PortalAlreadyRegistered();
-    error PeerIdInUse();
-    error OnlyPortal();
-    error InsufficientAllocation();
-    error NoUnlockRequest();
-    error NothingToWithdraw();
-
     constructor(address _sqd, address _networkController, uint256 _minStake, uint256 _mana) {
-        if (_sqd == address(0)) revert InvalidAddress();
-        if (_networkController == address(0)) revert InvalidAddress();
+        if (_sqd == address(0)) revert GatewayErrors.InvalidAddress();
+        if (_networkController == address(0)) revert GatewayErrors.InvalidAddress();
 
         SQD = IERC20(_sqd);
         networkController = INetworkController(_networkController);
@@ -74,11 +45,11 @@ contract GatewayRegistry is AccessControl, Pausable {
     }
 
     function registerPortal(bytes calldata peerId, address portalAddress, address operator) external {
-        if (msg.sender != portalAddress) revert OnlyPortal();
-        if (portals[portalAddress].portalAddress != address(0)) revert PortalAlreadyRegistered();
+        if (msg.sender != portalAddress) revert GatewayErrors.OnlyPortal();
+        if (portals[portalAddress].portalAddress != address(0)) revert GatewayErrors.PortalAlreadyRegistered();
 
         bytes32 peerIdHash = keccak256(peerId);
-        if (peerIdToPortal[peerIdHash] != address(0)) revert PeerIdInUse();
+        if (peerIdToPortal[peerIdHash] != address(0)) revert GatewayErrors.PeerIdInUse();
 
         portals[portalAddress] = Portal({
             peerId: peerId,
@@ -94,8 +65,8 @@ contract GatewayRegistry is AccessControl, Pausable {
     }
 
     function stake(address portalAddress, address provider, uint256 amount) external whenNotPaused {
-        if (msg.sender != portalAddress) revert OnlyPortal();
-        if (portals[portalAddress].portalAddress == address(0)) revert PortalNotRegistered();
+        if (msg.sender != portalAddress) revert GatewayErrors.OnlyPortal();
+        if (portals[portalAddress].portalAddress == address(0)) revert GatewayErrors.PortalNotRegistered();
 
         SQD.safeTransferFrom(provider, address(this), amount);
 
@@ -117,10 +88,10 @@ contract GatewayRegistry is AccessControl, Pausable {
     }
 
     function requestUnlock(address provider, uint256 amount) external whenNotPaused {
-        if (portals[msg.sender].portalAddress == address(0)) revert OnlyPortal();
+        if (portals[msg.sender].portalAddress == address(0)) revert GatewayErrors.OnlyPortal();
 
         uint256 totalAllocation = getTotalAllocation(provider);
-        if (totalAllocation < amount) revert InsufficientAllocation();
+        if (totalAllocation < amount) revert GatewayErrors.InsufficientAllocation();
 
         UnlockRequest storage request = unlockRequests[provider];
         request.amount = amount;
@@ -132,7 +103,7 @@ contract GatewayRegistry is AccessControl, Pausable {
 
     function withdrawUnlocked() external whenNotPaused {
         UnlockRequest storage request = unlockRequests[msg.sender];
-        if (request.amount == 0) revert NoUnlockRequest();
+        if (request.amount == 0) revert GatewayErrors.NoUnlockRequest();
 
         uint256 currentEpoch = networkController.epochNumber();
         uint256 epochsPassed = currentEpoch - request.requestedAt;
@@ -146,7 +117,7 @@ contract GatewayRegistry is AccessControl, Pausable {
         }
 
         uint256 withdrawable = totalUnlocked - request.withdrawn;
-        if (withdrawable == 0) revert NothingToWithdraw();
+        if (withdrawable == 0) revert GatewayErrors.NothingToWithdraw();
 
         request.withdrawn += withdrawable;
 
@@ -163,8 +134,8 @@ contract GatewayRegistry is AccessControl, Pausable {
 
     function withdrawFailedPortal(address provider, uint256 amount) external whenNotPaused {
         address portalAddress = msg.sender;
-        if (portals[portalAddress].portalAddress == address(0)) revert PortalNotRegistered();
-        if (providerAllocations[portalAddress][provider] < amount) revert InsufficientAllocation();
+        if (portals[portalAddress].portalAddress == address(0)) revert GatewayErrors.PortalNotRegistered();
+        if (providerAllocations[portalAddress][provider] < amount) revert GatewayErrors.InsufficientAllocation();
 
         providerAllocations[portalAddress][provider] -= amount;
         portals[portalAddress].totalStaked -= amount;

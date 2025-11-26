@@ -6,6 +6,7 @@ import "../src/PortalImplementation.sol";
 import "../src/PortalFactory.sol";
 import "../src/GatewayRegistry.sol";
 import "../src/FeeRouterModule.sol";
+import "../src/libs/GatewayErrors.sol";
 import "../test/mocks/MockNetworkController.sol";
 
 contract MaliciousToken {
@@ -294,12 +295,12 @@ contract SecurityAuditTest is Test {
         PortalImplementation(portal1).stake(MIN_STAKE);
 
         vm.prank(provider);
-        vm.expectRevert(GatewayRegistry.OnlyPortal.selector);
+        vm.expectRevert(GatewayErrors.OnlyPortal.selector);
         registry.requestUnlock(provider, MIN_STAKE);
 
         address randomAttacker = makeAddr("randomAttacker");
         vm.prank(randomAttacker);
-        vm.expectRevert(GatewayRegistry.OnlyPortal.selector);
+        vm.expectRevert(GatewayErrors.OnlyPortal.selector);
         registry.requestUnlock(provider, MIN_STAKE);
 
         vm.prank(provider);
