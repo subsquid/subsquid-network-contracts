@@ -149,21 +149,17 @@ contract PortalImplementation is
         if (amount == 0) revert PortalErrors.InvalidAmount();
         if (_stakes[msg.sender] < amount) revert PortalErrors.InsufficientStake();
 
-        uint256 currentEpoch = _networkController.epochNumber();
-        uint256 percentage = (_portalInfo.totalStaked > 0) ? (amount * 100) / _portalInfo.totalStaked : 0;
-        uint256 requiredEpochs = 1 + percentage;
-
-        ExitRequest storage request = _exitRequests[msg.sender];
-        request.amount += amount;
-        request.requestEpoch = uint64(currentEpoch);
-        request.unlockEpoch = uint64(currentEpoch + requiredEpochs);
-
         _exitAmounts[msg.sender] += amount;
         _totalExitAmounts += amount;
 
-        _gatewayRegistry.requestUnlock(msg.sender, _exitAmounts[msg.sender]);
+        uint256 unlockEpoch = _gatewayRegistry.requestUnlock(msg.sender, _exitAmounts[msg.sender]);
 
-        emit ExitRequested(msg.sender, amount, request.unlockEpoch);
+        ExitRequest storage request = _exitRequests[msg.sender];
+        request.amount += amount;
+        request.requestEpoch = uint64(_networkController.epochNumber());
+        request.unlockEpoch = uint64(unlockEpoch);
+
+        emit ExitRequested(msg.sender, amount, unlockEpoch);
     }
 
     function onAllocationReduced(address provider, uint256 amount) external {

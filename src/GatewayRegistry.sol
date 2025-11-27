@@ -30,6 +30,7 @@ contract GatewayRegistry is IGatewayRegistry, AccessControl, Pausable {
     uint256 public constant MAX_UNLOCK_PER_EPOCH_BPS = 100;
     uint256 public minStake;
     uint256 public mana;
+    uint256 public baseExitEpochs;
 
     constructor(address _sqd, address _networkController, uint256 _minStake, uint256 _mana) {
         if (_sqd == address(0)) revert GatewayErrors.InvalidAddress();
@@ -39,6 +40,7 @@ contract GatewayRegistry is IGatewayRegistry, AccessControl, Pausable {
         networkController = INetworkController(_networkController);
         minStake = _minStake;
         mana = _mana;
+        baseExitEpochs = 1;
 
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
         _grantRole(PAUSER_ROLE, msg.sender);
@@ -87,15 +89,22 @@ contract GatewayRegistry is IGatewayRegistry, AccessControl, Pausable {
         emit Staked(portalAddress, provider, amount);
     }
 
-    function requestUnlock(address provider, uint256 amount) external whenNotPaused {
+    function requestUnlock(address provider, uint256 amount) external whenNotPaused returns (uint256 unlockEpoch) {
         if (portals[msg.sender].portalAddress == address(0)) revert GatewayErrors.OnlyPortal();
 
         uint256 totalAllocation = getTotalAllocation(provider);
         if (totalAllocation < amount) revert GatewayErrors.InsufficientAllocation();
 
+        uint256 currentEpoch = networkController.epochNumber();
+        uint256 portalTotalStaked = portals[msg.sender].totalStaked;
+        uint256 percentage = (portalTotalStaked > 0) ? (amount * 100) / portalTotalStaked : 0;
+        uint256 base = baseExitEpochs > 0 ? baseExitEpochs : 1;
+        uint256 requiredEpochs = base + percentage;
+        unlockEpoch = currentEpoch + requiredEpochs;
+
         UnlockRequest storage request = unlockRequests[provider];
         request.amount = amount;
-        request.requestedAt = networkController.epochNumber();
+        request.requestedAt = currentEpoch;
         request.withdrawn = 0;
 
         emit UnlockRequested(provider, amount, request.requestedAt);
@@ -232,5 +241,11 @@ contract GatewayRegistry is IGatewayRegistry, AccessControl, Pausable {
         uint256 oldValue = mana;
         mana = _mana;
         emit ManaUpdated(oldValue, _mana);
+    }
+
+    function setBaseExitEpochs(uint256 _baseExitEpochs) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        uint256 oldValue = baseExitEpochs;
+        baseExitEpochs = _baseExitEpochs;
+        emit BaseExitEpochsUpdated(oldValue, _baseExitEpochs);
     }
 }

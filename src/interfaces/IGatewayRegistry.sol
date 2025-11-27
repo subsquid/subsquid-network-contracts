@@ -25,11 +25,12 @@ interface IGatewayRegistry {
     event Withdrawn(address indexed provider, uint256 amount);
     event MinStakeUpdated(uint256 oldValue, uint256 newValue);
     event ManaUpdated(uint256 oldValue, uint256 newValue);
+    event BaseExitEpochsUpdated(uint256 oldValue, uint256 newValue);
 
     // Functions
     function registerPortal(bytes calldata peerId, address portalAddress, address operator) external;
     function stake(address portalAddress, address provider, uint256 amount) external;
-    function requestUnlock(address provider, uint256 amount) external;
+    function requestUnlock(address provider, uint256 amount) external returns (uint256 unlockEpoch);
     function withdrawUnlocked() external;
     function withdrawFailedPortal(address provider, uint256 amount) external;
 
@@ -41,4 +42,5 @@ interface IGatewayRegistry {
     function unpause() external;
     function setMinStake(uint256 minStake) external;
     function setMana(uint256 mana) external;
+    function setBaseExitEpochs(uint256 baseExitEpochs) external;
 }

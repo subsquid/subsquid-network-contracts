@@ -270,17 +270,17 @@ contract ExitFunctionalityTest is Test {
         console.log("Epoch set to: 2000");
 
         uint256 exitAmount10Percent = MIN_STAKE;
-        uint256 percentage10 = (exitAmount10Percent * 100) / (MIN_STAKE * 10);
+        uint256 totalExitPercentage = ((exitAmount1Percent + exitAmount10Percent) * 100) / (MIN_STAKE * 10);
         console.log("Exit amount (10%%):", exitAmount10Percent);
-        console.log("Exit percentage:", percentage10);
+        console.log("Total exit percentage (cumulative):", totalExitPercentage);
         vm.prank(provider);
         PortalImplementation(portal).requestExit(exitAmount10Percent);
 
         IPortal.ExitRequest memory exitRequest2 = PortalImplementation(portal).getExitRequest(provider);
-        uint256 expectedUnlock2 = 2000 + 1 + 10;
-        console.log("10% exit unlock epoch:", exitRequest2.unlockEpoch);
+        uint256 expectedUnlock2 = 2000 + 1 + totalExitPercentage;
+        console.log("Total exit unlock epoch:", exitRequest2.unlockEpoch);
         console.log("Expected unlock epoch:", expectedUnlock2);
-        assertEq(exitRequest2.unlockEpoch, expectedUnlock2, "10% exit should unlock at epoch 2011");
+        assertEq(exitRequest2.unlockEpoch, expectedUnlock2, "Cumulative exit should unlock based on total exit amount");
 
         console.log("PASS: Unlock epoch calculation is correct");
     }

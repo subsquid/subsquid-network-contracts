@@ -1,11 +1,28 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import { useAccount, useConnect, useDisconnect } from "wagmi";
 
 export function WalletConnect() {
   const { address, isConnected } = useAccount();
   const { connect, connectors } = useConnect();
   const { disconnect } = useDisconnect();
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  // Prevent hydration mismatch - connectors differ between server/client
+  if (!mounted) {
+    return (
+      <div className="flex gap-2">
+        <button className="bg-sqd-accent hover:bg-sqd-accent/90 text-white text-xs font-semibold px-4 py-2 rounded-full transition-all">
+          Connect Wallet
+        </button>
+      </div>
+    );
+  }
 
   if (isConnected) {
     return (

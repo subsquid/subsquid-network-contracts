@@ -6,15 +6,17 @@ import { ConfigPanel } from "@/components/ConfigPanel";
 import { PortalDeployer } from "@/components/PortalDeployer";
 import { PortalList } from "@/components/PortalList";
 import { PortalInvestment } from "@/components/PortalInvestment";
+import { MockPortalInvestment } from "@/components/MockPortalInvestment";
 import { MintSQD } from "@/components/MintSQD";
 import { MintUSDC } from "@/components/MintUSDC";
+import { useMock } from "@/context/MockContext";
 
 export default function Home() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [selectedPortal, setSelectedPortal] = useState<string | null>(null);
+  const { isMockMode, setMockMode, advanceEpochMock, mockCurrentEpoch } = useMock();
 
   const handlePortalCreated = () => {
-    // Trigger refresh of portal list
     setRefreshKey((prev) => prev + 1);
   };
 
@@ -40,28 +42,90 @@ export default function Home() {
               </p>
             </div>
             <div className="flex items-center gap-4">
-              <ConfigPanel />
-              <WalletConnect />
+              {/* Mock Mode Toggle */}
+              <div className="flex items-center gap-2 px-3 py-2 bg-gray-50 rounded-lg border border-gray-200">
+                <span className="text-sm text-sqd-text-secondary">Mock Mode</span>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={isMockMode}
+                    onChange={(e) => setMockMode(e.target.checked)}
+                    className="sr-only peer"
+                  />
+                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-purple-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-600"></div>
+                </label>
+              </div>
+              {!isMockMode && <ConfigPanel />}
+              {!isMockMode && <WalletConnect />}
             </div>
           </div>
         </div>
       </header>
 
+      {/* Mock Mode Banner */}
+      {isMockMode && (
+        <div className="bg-purple-600 text-white py-3">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <span className="text-lg">🧪</span>
+                <span className="font-medium">Mock Mode Active</span>
+                <span className="text-purple-200 text-sm">- No blockchain connection required</span>
+              </div>
+              <div className="flex items-center gap-4">
+                <span className="text-sm text-purple-200">Epoch: {mockCurrentEpoch.toString()}</span>
+                <button
+                  onClick={advanceEpochMock}
+                  className="px-3 py-1 bg-purple-500 hover:bg-purple-400 rounded-full text-sm font-medium transition-colors"
+                >
+                  Advance Epoch
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="space-y-8">
-          {/* Mint Tokens Section */}
-          <div className="flex items-center gap-4">
-            <MintSQD />
-            <MintUSDC />
-          </div>
+          {/* Mint Tokens Section - Only show in real mode */}
+          {!isMockMode && (
+            <>
+              <div className="flex items-center gap-4">
+                <MintSQD />
+                <MintUSDC />
+              </div>
+              <div className="border-t border-sqd-divider" />
+            </>
+          )}
 
-          {/* Divider */}
-          <div className="border-t border-sqd-divider" />
+          {/* Mock Balances Display */}
+          {isMockMode && (
+            <>
+              <div className="bg-purple-50 rounded-lg p-4 border border-purple-200">
+                <h3 className="text-sm font-medium text-purple-800 mb-3">Mock Wallet</h3>
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="bg-white rounded-lg p-3 border border-purple-200">
+                    <div className="text-xs text-sqd-text-secondary">Address</div>
+                    <div className="font-mono text-sm truncate">0xd409...7c34</div>
+                  </div>
+                  <div className="bg-white rounded-lg p-3 border border-purple-200">
+                    <div className="text-xs text-sqd-text-secondary">SQD Balance</div>
+                    <div className="font-semibold text-sqd-text-primary">10,000,000 SQD</div>
+                  </div>
+                  <div className="bg-white rounded-lg p-3 border border-purple-200">
+                    <div className="text-xs text-sqd-text-secondary">USDC Balance</div>
+                    <div className="font-semibold text-sqd-text-primary">100,000 USDC</div>
+                  </div>
+                </div>
+              </div>
+              <div className="border-t border-sqd-divider" />
+            </>
+          )}
 
           {/* Portal Deployment Section */}
           <PortalDeployer onPortalCreated={handlePortalCreated} />
 
-          {/* Divider */}
           <div className="border-t border-sqd-divider" />
 
           {/* Portal List Section */}
@@ -69,10 +133,14 @@ export default function Home() {
         </div>
 
         {/* Portal Investment Modal */}
-        {selectedPortal && (
+        {selectedPortal && !isMockMode && (
           <PortalInvestment portalAddress={selectedPortal} onClose={handleClosePortal} />
         )}
 
+        {/* Mock Portal Investment Modal */}
+        {selectedPortal && isMockMode && (
+          <MockPortalInvestment portalAddress={selectedPortal} onClose={handleClosePortal} />
+        )}
 
         {/* How It Works Section */}
         <div className="bg-white rounded-lg p-6 border border-sqd-divider mt-8">
