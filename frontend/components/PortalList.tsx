@@ -3,8 +3,9 @@
 import { useState, useEffect } from "react";
 import { usePublicClient, useReadContract } from "wagmi";
 import { PORTAL_FACTORY_ABI, PORTAL_ABI, contractAddresses } from "@/config/contracts";
-import { formatUnits } from "viem";
+import { formatUnits, hexToString } from "viem";
 import { useMock, MockPortal } from "@/context/MockContext";
+import { getPortalMetadata } from "./PortalDeployer";
 
 interface PortalInfo {
   operator: string;
@@ -152,18 +153,18 @@ function PortalCard({ address, onClick }: { address: string; onClick: () => void
     functionName: "getPortalInfo",
   }) as { data: PortalInfo | undefined };
 
-  const { data: minStakeThreshold } = useReadContract({
-    address: contractAddresses.networkController,
-    abi: [
-      {
-        inputs: [],
-        name: "minStakeThreshold",
-        outputs: [{ name: "", type: "uint256" }],
-        stateMutability: "view",
-        type: "function",
-      },
-    ],
-    functionName: "minStakeThreshold",
+  // Read description from peerId
+  const { data: peerIdBytes } = useReadContract({
+    address: address as `0x${string}`,
+    abi: PORTAL_ABI,
+    functionName: "getPeerId",
+  }) as { data: `0x${string}` | undefined };
+
+  // Read active stake (total minus pending exits)
+  const { data: activeStake } = useReadContract({
+    address: address as `0x${string}`,
+    abi: PORTAL_ABI,
+    functionName: "getActiveStake",
   });
 
   if (!portalInfo) {
@@ -177,16 +178,39 @@ function PortalCard({ address, onClick }: { address: string; onClick: () => void
 
   const maxCapacity = Number(formatUnits(portalInfo.maxCapacity, 18));
   const totalStaked = Number(formatUnits(portalInfo.totalStaked, 18));
-  const cus = Math.floor(totalStaked / 10); // 10 SQD = 1 CU
+  const activeStakedAmount = activeStake ? Number(formatUnits(activeStake, 18)) : totalStaked;
+  const pendingExitsAmount = totalStaked - activeStakedAmount;
+
+  const meetsThreshold = totalStaked >= MIN_THRESHOLD;
+  const cus = meetsThreshold ? Math.floor(totalStaked / 10) : 0; // 10 SQD = 1 CU, only if >= 100k
   const progressPercent = maxCapacity > 0 ? (totalStaked / maxCapacity) * 100 : 0;
-  const stateColor = STATE_COLORS[portalInfo.state as keyof typeof STATE_COLORS] || STATE_COLORS[2];
+  const activePercent = maxCapacity > 0 ? (activeStakedAmount / maxCapacity) * 100 : 0;
+  const pendingExitPercent = maxCapacity > 0 ? (pendingExitsAmount / maxCapacity) * 100 : 0;
+
+  // Use red color for inactive or when below threshold
+  const effectiveState = meetsThreshold ? portalInfo.state : 2;
+  const stateColor = STATE_COLORS[effectiveState as keyof typeof STATE_COLORS] || STATE_COLORS[2];
+
+  // Parse description from peerId bytes
+  let description = "";
+  try {
+    if (peerIdBytes && peerIdBytes !== "0x") {
+      description = hexToString(peerIdBytes);
+    }
+  } catch (e) {
+    // Ignore parse errors
+  }
+
+  // Get expected rate from localStorage
+  const metadata = getPortalMetadata(address);
+  const expectedRatePerDay = metadata ? parseFloat(metadata.expectedRatePerDay) : 0;
 
   return (
     <div
       onClick={onClick}
       className="bg-white rounded-lg p-6 border border-sqd-divider hover:border-sqd-accent hover:shadow-lg transition-all cursor-pointer"
     >
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
           <div className="w-2 h-2 rounded-full bg-sqd-accent"></div>
           <span className="text-sm font-mono text-sqd-text-secondary">
@@ -194,9 +218,14 @@ function PortalCard({ address, onClick }: { address: string; onClick: () => void
           </span>
         </div>
         <span className={`px-2.5 py-1 rounded-full text-xs font-medium border ${stateColor}`}>
-          {STATE_NAMES[portalInfo.state]}
+          {effectiveState === 2 || !meetsThreshold ? "Inactive" : STATE_NAMES[portalInfo.state]}
         </span>
       </div>
+
+      {/* Description */}
+      {description && (
+        <p className="text-xs text-sqd-text-secondary mb-4 line-clamp-2">{description}</p>
+      )}
 
       <div className="mb-4">
         <div className="flex justify-between text-sm mb-2">
@@ -205,14 +234,35 @@ function PortalCard({ address, onClick }: { address: string; onClick: () => void
             {totalStaked.toLocaleString()} / {maxCapacity.toLocaleString()} SQD
           </span>
         </div>
-        <div className="w-full bg-gray-200 rounded-full h-2.5">
+        <div className="w-full bg-gray-200 rounded-full h-2.5 overflow-hidden flex">
           <div
-            className="bg-sqd-accent h-2.5 rounded-full transition-all"
-            style={{ width: `${Math.min(progressPercent, 100)}%` }}
+            className="bg-sqd-accent h-2.5 transition-all"
+            style={{ width: `${Math.min(activePercent, 100)}%` }}
           ></div>
+          {pendingExitPercent > 0 && (
+            <div
+              className="bg-red-500 h-2.5 transition-all"
+              style={{ width: `${Math.min(pendingExitPercent, 100 - activePercent)}%` }}
+            ></div>
+          )}
         </div>
-        <div className="text-xs text-sqd-text-secondary mt-1">{progressPercent.toFixed(1)}% filled</div>
+        <div className="flex justify-between text-xs text-sqd-text-secondary mt-1">
+          <span>{progressPercent.toFixed(1)}% filled</span>
+          {pendingExitPercent > 0 && (
+            <span className="text-red-500">{pendingExitPercent.toFixed(1)}% pending exit</span>
+          )}
+        </div>
       </div>
+
+      {/* Expected Rate */}
+      {expectedRatePerDay > 0 && (
+        <div className="mb-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
+          <div className="flex justify-between text-sm">
+            <span className="text-blue-700">Expected Rate</span>
+            <span className="font-semibold text-blue-800">${expectedRatePerDay.toFixed(2)}/day</span>
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-2 gap-4">
         <div>
@@ -221,8 +271,8 @@ function PortalCard({ address, onClick }: { address: string; onClick: () => void
         </div>
         <div>
           <div className="text-xs text-sqd-text-secondary mb-1">Status</div>
-          <div className="text-lg font-semibold text-sqd-text-primary">
-            {portalInfo.state === 1 ? "Active" : portalInfo.state === 0 ? "Accepting Tokens" : "Inactive"}
+          <div className={`text-lg font-semibold ${effectiveState === 2 ? "text-red-600" : "text-sqd-text-primary"}`}>
+            {effectiveState === 1 ? "Active" : effectiveState === 0 ? "Accepting Tokens" : "Insufficient funds"}
           </div>
         </div>
       </div>

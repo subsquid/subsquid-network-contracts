@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useAccount, useWriteContract, useWaitForTransactionReceipt, useReadContract, useBlockNumber } from "wagmi";
 import { PORTAL_FACTORY_ABI, contractAddresses, targetChainId } from "@/config/contracts";
 import { parseUnits, toHex, stringToHex } from "viem";
@@ -11,6 +11,7 @@ export function PortalCreation({ onPortalCreated }: { onPortalCreated?: () => vo
   const [maxCapacity, setMaxCapacity] = useState("");
   const [description, setDescription] = useState("");
   const [blocksUntilDeadline, setBlocksUntilDeadline] = useState("50000"); // ~7 days at 12s/block
+  const hasHandledSuccess = useRef(false);
 
   const { writeContract, data: hash, isPending } = useWriteContract();
   const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash });
@@ -18,6 +19,9 @@ export function PortalCreation({ onPortalCreated }: { onPortalCreated?: () => vo
 
   const handleCreatePortal = async () => {
     if (!maxCapacity || !blocksUntilDeadline || !address) return;
+
+    // Reset success handler for new transaction
+    hasHandledSuccess.current = false;
 
     // Calculate deposit deadline as block number
     const depositDeadline = currentBlock
@@ -45,13 +49,19 @@ export function PortalCreation({ onPortalCreated }: { onPortalCreated?: () => vo
     });
   };
 
-  if (isSuccess && onPortalCreated) {
-    onPortalCreated();
-    setShowForm(false);
-    setMaxCapacity("");
-    setDescription("");
-    setBlocksUntilDeadline("50000");
-  }
+  // Handle success in useEffect to avoid infinite re-renders
+  useEffect(() => {
+    if (isSuccess && !hasHandledSuccess.current) {
+      hasHandledSuccess.current = true;
+      setShowForm(false);
+      setMaxCapacity("");
+      setDescription("");
+      setBlocksUntilDeadline("50000");
+      if (onPortalCreated) {
+        onPortalCreated();
+      }
+    }
+  }, [isSuccess, onPortalCreated]);
 
   if (!showForm) {
     return (

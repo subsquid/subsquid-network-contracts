@@ -1,16 +1,41 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useAccount, useWriteContract, useWaitForTransactionReceipt, useReadContract, useChainId, useSwitchChain, useBlockNumber } from "wagmi";
+import { useState, useEffect, useRef } from "react";
+import { useAccount, useWriteContract, useWaitForTransactionReceipt, useReadContract, useChainId, useSwitchChain, useBlockNumber, usePublicClient } from "wagmi";
 import { PORTAL_FACTORY_ABI, ERC20_ABI, contractAddresses, targetChainId } from "@/config/contracts";
 import { parseUnits, formatUnits, stringToHex } from "viem";
 import { useMock } from "@/context/MockContext";
+
+// Helper to save portal metadata to localStorage
+function savePortalMetadata(portalAddress: string, metadata: { expectedRatePerDay: string; rateType: "day" | "month" }) {
+  try {
+    const existing = JSON.parse(localStorage.getItem("portal-metadata") || "{}");
+    existing[portalAddress.toLowerCase()] = metadata;
+    localStorage.setItem("portal-metadata", JSON.stringify(existing));
+  } catch (e) {
+    console.error("Failed to save portal metadata:", e);
+  }
+}
+
+// Helper to get portal metadata from localStorage
+export function getPortalMetadata(portalAddress: string): { expectedRatePerDay: string; rateType: "day" | "month" } | null {
+  try {
+    const existing = JSON.parse(localStorage.getItem("portal-metadata") || "{}");
+    return existing[portalAddress.toLowerCase()] || null;
+  } catch (e) {
+    console.error("Failed to load portal metadata:", e);
+    return null;
+  }
+}
 
 export function PortalDeployer({ onPortalCreated }: { onPortalCreated?: () => void }) {
   const { address } = useAccount();
   const chainId = useChainId();
   const { switchChain } = useSwitchChain();
+  const publicClient = usePublicClient();
   const [showForm, setShowForm] = useState(false);
+  const hasHandledSuccess = useRef(false);
+  const pendingMetadata = useRef<{ expectedRate: string; rateType: "day" | "month" } | null>(null);
 
   // Mock context
   const { isMockMode, addMockPortal, mockMinStakeThreshold, mockUserAddress } = useMock();
@@ -29,7 +54,7 @@ export function PortalDeployer({ onPortalCreated }: { onPortalCreated?: () => vo
   const [rateType, setRateType] = useState<"day" | "month">("day");
 
   const { writeContract, data: hash, isPending } = useWriteContract();
-  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash });
+  const { isLoading: isConfirming, isSuccess, data: receipt } = useWaitForTransactionReceipt({ hash });
   const { data: currentBlock } = useBlockNumber();
 
   const isWrongChain = chainId !== targetChainId;
@@ -112,6 +137,9 @@ export function PortalDeployer({ onPortalCreated }: { onPortalCreated?: () => vo
     const effectiveAddress = isMockMode ? mockUserAddress : address;
     if (!effectiveAddress || !description) return;
 
+    // Reset success handler for new transaction
+    hasHandledSuccess.current = false;
+
     // Mock mode - just add to mock state
     if (isMockMode) {
       const ratePerDay = rateType === "day"
@@ -141,7 +169,12 @@ export function PortalDeployer({ onPortalCreated }: { onPortalCreated?: () => vo
       return;
     }
 
-    // Real mode
+    // Real mode - store pending metadata to save after success
+    pendingMetadata.current = {
+      expectedRate: rateType === "day" ? (expectedRate || "0") : (parseFloat(expectedRate || "0") / 30).toString(),
+      rateType: "day", // Always store as per-day rate
+    };
+
     if (isWrongChain && switchChain) {
       try {
         await switchChain({ chainId: targetChainId });
@@ -191,14 +224,37 @@ export function PortalDeployer({ onPortalCreated }: { onPortalCreated?: () => vo
   };
 
   useEffect(() => {
-    if (isSuccess) {
+    if (isSuccess && !hasHandledSuccess.current) {
+      hasHandledSuccess.current = true;
+
+      // Try to extract portal address from transaction logs and save metadata
+      if (receipt && receipt.logs && pendingMetadata.current) {
+        // PortalCreated event has portal address as first indexed topic
+        const portalCreatedLog = receipt.logs.find(log =>
+          log.address.toLowerCase() === contractAddresses.portalFactory.toLowerCase()
+        );
+
+        if (portalCreatedLog && portalCreatedLog.topics[1]) {
+          // Extract portal address from topics (remove padding)
+          const portalAddress = "0x" + portalCreatedLog.topics[1].slice(26);
+          console.log("New portal created at:", portalAddress);
+
+          // Save expected rate to localStorage
+          savePortalMetadata(portalAddress, {
+            expectedRatePerDay: pendingMetadata.current.expectedRate,
+            rateType: pendingMetadata.current.rateType,
+          });
+        }
+        pendingMetadata.current = null;
+      }
+
       setShowForm(false);
       resetForm();
       if (onPortalCreated) {
         onPortalCreated();
       }
     }
-  }, [isSuccess, onPortalCreated]);
+  }, [isSuccess, receipt, onPortalCreated]);
 
   const needsSQDApproval =
     !isMockMode &&
