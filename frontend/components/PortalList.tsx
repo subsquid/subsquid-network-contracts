@@ -26,11 +26,28 @@ const STATE_COLORS = {
 const MIN_THRESHOLD = 100000; // 100k SQD minimum for CUs
 
 function MockPortalCard({ portal, onClick }: { portal: MockPortal; onClick: () => void }) {
+  const { mockProviders } = useMock();
+
   const maxCapacity = Number(formatUnits(portal.maxCapacity, 18));
   const totalStaked = Number(formatUnits(portal.totalStaked, 18));
+
+  // Calculate total pending exits for this portal from all providers
+  const pendingExits = mockProviders.reduce((total, provider) => {
+    const portalAddrLower = portal.address.toLowerCase();
+    for (const [addr, exitReq] of Object.entries(provider.exitRequests)) {
+      if (addr.toLowerCase() === portalAddrLower) {
+        total += Number(formatUnits(exitReq.amount, 18));
+      }
+    }
+    return total;
+  }, 0);
+
+  const activeStaked = totalStaked - pendingExits;
   const meetsThreshold = totalStaked >= MIN_THRESHOLD;
   const cus = meetsThreshold ? Math.floor(totalStaked / 10) : 0; // 10 SQD = 1 CU, only if >= 100k
   const progressPercent = maxCapacity > 0 ? (totalStaked / maxCapacity) * 100 : 0;
+  const activePercent = maxCapacity > 0 ? (activeStaked / maxCapacity) * 100 : 0;
+  const pendingExitPercent = maxCapacity > 0 ? (pendingExits / maxCapacity) * 100 : 0;
   // Use red color for inactive or when below threshold
   const effectiveState = meetsThreshold ? portal.state : 2;
   const stateColor = STATE_COLORS[effectiveState as keyof typeof STATE_COLORS] || STATE_COLORS[2];
@@ -68,13 +85,24 @@ function MockPortalCard({ portal, onClick }: { portal: MockPortal; onClick: () =
             {totalStaked.toLocaleString()} / {maxCapacity.toLocaleString()} SQD
           </span>
         </div>
-        <div className="w-full bg-gray-200 rounded-full h-2.5">
+        <div className="w-full bg-gray-200 rounded-full h-2.5 overflow-hidden flex">
           <div
-            className="bg-sqd-accent h-2.5 rounded-full transition-all"
-            style={{ width: `${Math.min(progressPercent, 100)}%` }}
+            className="bg-sqd-accent h-2.5 transition-all"
+            style={{ width: `${Math.min(activePercent, 100)}%` }}
           ></div>
+          {pendingExitPercent > 0 && (
+            <div
+              className="bg-red-500 h-2.5 transition-all"
+              style={{ width: `${Math.min(pendingExitPercent, 100 - activePercent)}%` }}
+            ></div>
+          )}
         </div>
-        <div className="text-xs text-sqd-text-secondary mt-1">{progressPercent.toFixed(1)}% filled</div>
+        <div className="flex justify-between text-xs text-sqd-text-secondary mt-1">
+          <span>{progressPercent.toFixed(1)}% filled</span>
+          {pendingExitPercent > 0 && (
+            <span className="text-red-500">{pendingExitPercent.toFixed(1)}% pending exit</span>
+          )}
+        </div>
       </div>
 
       {expectedRatePerDay > 0 && (
