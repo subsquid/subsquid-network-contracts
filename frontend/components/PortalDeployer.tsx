@@ -22,7 +22,7 @@ export function PortalDeployer({ onPortalCreated }: { onPortalCreated?: () => vo
   const [preDepositAmount, setPreDepositAmount] = useState("");
   const [enablePreDeposit, setEnablePreDeposit] = useState(false);
   const [selectedTokens, setSelectedTokens] = useState<string[]>([contractAddresses.usdcToken]);
-  const [peerId, setPeerId] = useState("");
+  const [description, setDescription] = useState("");
 
   // Expected USDC rate state
   const [expectedRate, setExpectedRate] = useState("");
@@ -86,7 +86,7 @@ export function PortalDeployer({ onPortalCreated }: { onPortalCreated?: () => vo
   };
 
   const getCUEstimate = () => {
-    return Math.floor(maxCapacity / minStake);
+    return Math.floor(maxCapacity / 10); // 10 SQD = 1 CU
   };
 
   const { data: sqdAllowance } = useReadContract({
@@ -110,7 +110,7 @@ export function PortalDeployer({ onPortalCreated }: { onPortalCreated?: () => vo
 
   const handleDeployPortal = async () => {
     const effectiveAddress = isMockMode ? mockUserAddress : address;
-    if (!effectiveAddress || !peerId) return;
+    if (!effectiveAddress || !description) return;
 
     // Mock mode - just add to mock state
     if (isMockMode) {
@@ -120,7 +120,7 @@ export function PortalDeployer({ onPortalCreated }: { onPortalCreated?: () => vo
 
       addMockPortal({
         operator: effectiveAddress,
-        peerId,
+        description,
         maxCapacity: parseUnits(maxCapacity.toString(), 18),
         totalStaked: BigInt(0),
         state: 0,
@@ -162,7 +162,7 @@ export function PortalDeployer({ onPortalCreated }: { onPortalCreated?: () => vo
       ? currentBlock + BigInt(Math.floor(collectionDays * blocksPerDay))
       : BigInt(Math.floor(Date.now() / 1000) + collectionDays * 24 * 60 * 60);
 
-    const peerIdBytes = peerId ? stringToHex(peerId) : stringToHex(`portal-${Date.now()}`);
+    const peerIdBytes = description ? stringToHex(description) : stringToHex(`portal-${Date.now()}`);
 
     writeContract({
       address: contractAddresses.portalFactory,
@@ -185,7 +185,7 @@ export function PortalDeployer({ onPortalCreated }: { onPortalCreated?: () => vo
     setCollectionDays(30);
     setPreDepositAmount("");
     setEnablePreDeposit(false);
-    setPeerId("");
+    setDescription("");
     setExpectedRate("");
     setRateType("day");
   };
@@ -242,17 +242,17 @@ export function PortalDeployer({ onPortalCreated }: { onPortalCreated?: () => vo
       </div>
 
       <div className="space-y-6">
-        {/* Peer ID Input */}
+        {/* Description Input */}
         <div>
           <label className="block text-sm font-medium text-sqd-text-secondary mb-2">
-            Peer ID
+            Description
           </label>
-          <input
-            type="text"
-            value={peerId}
-            onChange={(e) => setPeerId(e.target.value)}
-            placeholder="peer_12D3KooW..."
-            className="w-full bg-white border border-sqd-divider rounded-lg px-3.5 py-2.5 text-sqd-text-primary placeholder-sqd-text-disabled focus:outline-none focus:border-sqd-secondary"
+          <textarea
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="This portal is hosted and maintained by..."
+            rows={2}
+            className="w-full bg-white border border-sqd-divider rounded-lg px-3.5 py-2.5 text-sqd-text-primary placeholder-sqd-text-disabled focus:outline-none focus:border-sqd-secondary resize-none"
           />
         </div>
 
@@ -493,7 +493,7 @@ export function PortalDeployer({ onPortalCreated }: { onPortalCreated?: () => vo
             )}
             <button
               onClick={handleDeployPortal}
-              disabled={!peerId || (enablePreDeposit && needsSQDApproval) || isPending || isConfirming || (!isMockMode && isWrongChain)}
+              disabled={!description || (enablePreDeposit && needsSQDApproval) || isPending || isConfirming || (!isMockMode && isWrongChain)}
               className="w-full bg-sqd-accent hover:bg-sqd-accent/90 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-semibold py-2.5 rounded-full transition-colors"
             >
               {isPending || isConfirming ? "Deploying Portal..." : isMockMode ? "Deploy Portal (Mock)" : "Deploy Portal"}
@@ -515,7 +515,7 @@ export function PortalDeployer({ onPortalCreated }: { onPortalCreated?: () => vo
         <ul className="space-y-1.5 text-xs text-sqd-text-secondary">
           <li>Portal collects SQD from liquidity providers until capacity is met</li>
           <li>Once activated, portal stakes 100% in GatewayRegistry</li>
-          <li>CUs (Compute Units) are calculated: floor(totalStaked / minThreshold)</li>
+          <li>CUs (Compute Units) are calculated: 10 SQD = 1 CU</li>
           <li>Optimal capacity (10x) maximizes CU efficiency</li>
           <li>Expected rate helps providers estimate their earnings</li>
         </ul>

@@ -74,15 +74,15 @@ export function PortalCard({ portalAddress, filterState, onClick }: PortalCardPr
   const progress = maxCapacity > 0 ? (totalStaked / maxCapacity) * 100 : 0;
 
   const stateColors: Record<string, string> = {
-    Collecting: "bg-blue-100 text-blue-700 border-blue-200",
+    "Accepting Tokens": "bg-blue-100 text-blue-700 border-blue-200",
     Active: "bg-green-100 text-green-700 border-green-200",
-    Failed: "bg-red-100 text-red-700 border-red-200",
+    Inactive: "bg-red-100 text-red-700 border-red-200",
   };
 
   const progressColors: Record<string, string> = {
-    Collecting: "bg-blue-500",
+    "Accepting Tokens": "bg-blue-500",
     Active: "bg-green-500",
-    Failed: "bg-red-500",
+    Inactive: "bg-red-500",
   };
 
   // Deadline is in block number, not timestamp
@@ -103,14 +103,14 @@ export function PortalCard({ portalAddress, filterState, onClick }: PortalCardPr
         </div>
         <div
           className={`px-2.5 py-1 rounded-full text-xs font-medium border ${
-            stateColors[stateName] || stateColors.Collecting
+            stateColors[stateName] || stateColors["Accepting Tokens"]
           }`}
         >
           {stateName}
         </div>
       </div>
 
-      {/* Progress Bar (only for Collecting state) */}
+      {/* Progress Bar (only for Accepting Tokens state) */}
       {stateNum === 0 && (
         <div className="mb-4">
           <div className="flex justify-between text-xs text-sqd-text-secondary mb-1.5">

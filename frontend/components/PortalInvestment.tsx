@@ -15,7 +15,7 @@ interface PortalInfo {
   paused: boolean;
 }
 
-const STATE_NAMES = ["Collecting", "Active", "Failed"];
+const STATE_NAMES = ["Accepting Tokens", "Active", "Inactive"];
 
 export function PortalInvestment({ portalAddress, onClose }: { portalAddress: string; onClose: () => void }) {
   const { address } = useAccount();
@@ -163,7 +163,7 @@ export function PortalInvestment({ portalAddress, onClose }: { portalAddress: st
   const pendingExitsAmount = totalStaked - activeStakeAmount;
   const myStake = userStake ? Number(formatUnits(userStake, 18)) : 0;
   const minStake = minStakeThreshold ? Number(formatUnits(minStakeThreshold, 18)) : 100000;
-  const cus = Math.floor(activeStakeAmount / minStake); // CUs based on active stake
+  const cus = Math.floor(activeStakeAmount / 10); // 10 SQD = 1 CU
   const progressPercent = maxCapacity > 0 ? (totalStaked / maxCapacity) * 100 : 0;
   const balance = sqdBalance ? Number(formatUnits(sqdBalance, 18)) : 0;
 

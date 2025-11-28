@@ -6,7 +6,7 @@ import { createContext, useContext, useState, useRef, useEffect, ReactNode } fro
 export interface MockPortal {
   address: `0x${string}`;
   operator: `0x${string}`;
-  peerId: string;
+  description: string;
   maxCapacity: bigint;
   totalStaked: bigint;
   state: number; // 0=Collecting, 1=Active, 2=Failed
@@ -70,24 +70,24 @@ const INITIAL_PORTALS: MockPortal[] = [
   {
     address: "0x1111111111111111111111111111111111111111" as `0x${string}`,
     operator: MOCK_OPERATOR,
-    peerId: "peer_12D3KooWDemo1",
+    description: "This portal is hosted and maintained by SQD",
     maxCapacity: BigInt("1000000000000000000000000"), // 1M SQD
     totalStaked: BigInt("750000000000000000000000"), // 750k SQD
-    state: 1, // Active
+    state: 0, // Accepting Tokens (not full yet)
     depositDeadline: BigInt(Date.now() + 30 * 24 * 60 * 60 * 1000),
     activationTime: BigInt(Date.now() - 7 * 24 * 60 * 60 * 1000),
     paused: false,
     paymentTokens: [MOCK_USDC],
-    expectedRatePerDay: BigInt("100000000"), // 100 USDC/day
+    expectedRatePerDay: BigInt("10000000"), // $10 USDC/day
     rateType: "day",
-    gradualBalance: BigInt("3000000000"), // 3000 USDC
-    gradualRatePerSecond: BigInt("1157"), // ~100 USDC/day
+    gradualBalance: BigInt("300000000"), // 300 USDC
+    gradualRatePerSecond: BigInt("116"), // ~$10 USDC/day
     gradualLastUpdate: Date.now(),
   },
   {
     address: "0x2222222222222222222222222222222222222222" as `0x${string}`,
     operator: MOCK_USER,
-    peerId: "peer_12D3KooWDemo2",
+    description: "This portal is hosted and maintained by Lambda, an official partner of SQD",
     maxCapacity: BigInt("500000000000000000000000"), // 500k SQD
     totalStaked: BigInt("200000000000000000000000"), // 200k SQD
     state: 0, // Collecting
@@ -95,7 +95,7 @@ const INITIAL_PORTALS: MockPortal[] = [
     activationTime: BigInt(0),
     paused: false,
     paymentTokens: [MOCK_USDC],
-    expectedRatePerDay: BigInt("50000000"), // 50 USDC/day
+    expectedRatePerDay: BigInt("12000000"), // $12 USDC/day
     rateType: "day",
     gradualBalance: BigInt("0"),
     gradualRatePerSecond: BigInt("0"),
@@ -104,18 +104,18 @@ const INITIAL_PORTALS: MockPortal[] = [
   {
     address: "0x3333333333333333333333333333333333333333" as `0x${string}`,
     operator: MOCK_OPERATOR,
-    peerId: "peer_12D3KooWDemo3",
-    maxCapacity: BigInt("2000000000000000000000000"), // 2M SQD
-    totalStaked: BigInt("2000000000000000000000000"), // 2M SQD (full)
+    description: "High-performance portal operated by SQD Labs",
+    maxCapacity: BigInt("1200000000000000000000000"), // 1.2M SQD (12x max)
+    totalStaked: BigInt("1200000000000000000000000"), // 1.2M SQD (full)
     state: 1, // Active
     depositDeadline: BigInt(Date.now() - 10 * 24 * 60 * 60 * 1000),
     activationTime: BigInt(Date.now() - 5 * 24 * 60 * 60 * 1000),
     paused: false,
     paymentTokens: [MOCK_USDC],
-    expectedRatePerDay: BigInt("500000000"), // 500 USDC/day
-    rateType: "month",
-    gradualBalance: BigInt("15000000000"), // 15000 USDC
-    gradualRatePerSecond: BigInt("5787"), // ~500 USDC/day
+    expectedRatePerDay: BigInt("16000000"), // $16 USDC/day
+    rateType: "day",
+    gradualBalance: BigInt("480000000"), // 480 USDC
+    gradualRatePerSecond: BigInt("185"), // ~$16 USDC/day
     gradualLastUpdate: Date.now(),
   },
 ];
@@ -165,9 +165,22 @@ export function MockProvider({ children }: { children: ReactNode }) {
   };
 
   const addMockPortal = (portal: Omit<MockPortal, "address">) => {
+    const MIN_THRESHOLD = BigInt("100000000000000000000000"); // 100k SQD
+
+    // Determine correct state based on totalStaked
+    let state = portal.state;
+    if (portal.totalStaked >= portal.maxCapacity) {
+      state = 1; // Active (full)
+    } else if (portal.totalStaked >= MIN_THRESHOLD) {
+      state = 0; // Accepting Tokens
+    } else {
+      state = 2; // Inactive (insufficient funds)
+    }
+
     const newPortal: MockPortal = {
       ...portal,
       address: randomAddress(),
+      state,
     };
     setMockPortals((prev) => [...prev, newPortal]);
   };
@@ -184,13 +197,35 @@ export function MockProvider({ children }: { children: ReactNode }) {
     if (availableCapacity <= 0n) return; // Portal is full
     const actualAmount = amount > availableCapacity ? availableCapacity : amount;
 
-    // Update portal
+    // Update portal - dynamically set state based on thresholds
+    // State 2 (Inactive): below 100k SQD
+    // State 0 (Accepting Tokens): 100k+ but not full
+    // State 1 (Active): full
+    const MIN_THRESHOLD = BigInt("100000000000000000000000"); // 100k SQD
+
     setMockPortals((prev) =>
-      prev.map((p) =>
-        p.address.toLowerCase() === portalAddress.toLowerCase()
-          ? { ...p, totalStaked: p.totalStaked + actualAmount }
-          : p
-      )
+      prev.map((p) => {
+        if (p.address.toLowerCase() !== portalAddress.toLowerCase()) return p;
+        const newTotalStaked = p.totalStaked + actualAmount;
+        const isFull = newTotalStaked >= p.maxCapacity;
+        const meetsThreshold = newTotalStaked >= MIN_THRESHOLD;
+
+        let newState = p.state;
+        if (isFull) {
+          newState = 1; // Active
+        } else if (meetsThreshold) {
+          newState = 0; // Accepting Tokens
+        } else {
+          newState = 2; // Inactive (insufficient funds)
+        }
+
+        return {
+          ...p,
+          totalStaked: newTotalStaked,
+          state: newState,
+          activationTime: isFull && p.state !== 1 ? BigInt(Date.now()) : p.activationTime,
+        };
+      })
     );
     // Update provider
     setMockProviders((prev) => {
@@ -320,13 +355,26 @@ export function MockProvider({ children }: { children: ReactNode }) {
       })
     );
 
-    // Reduce total staked on portal
+    // Reduce total staked on portal and update state
+    const MIN_THRESHOLD = BigInt("100000000000000000000000"); // 100k SQD
     setMockPortals((prev) =>
-      prev.map((p) =>
-        p.address.toLowerCase() === portalAddrLower
-          ? { ...p, totalStaked: p.totalStaked - withdrawAmount }
-          : p
-      )
+      prev.map((p) => {
+        if (p.address.toLowerCase() !== portalAddrLower) return p;
+        const newTotalStaked = p.totalStaked - withdrawAmount;
+        const isFull = newTotalStaked >= p.maxCapacity;
+        const meetsThreshold = newTotalStaked >= MIN_THRESHOLD;
+
+        let newState = p.state;
+        if (isFull) {
+          newState = 1; // Active
+        } else if (meetsThreshold) {
+          newState = 0; // Accepting Tokens
+        } else {
+          newState = 2; // Inactive (insufficient funds)
+        }
+
+        return { ...p, totalStaked: newTotalStaked, state: newState };
+      })
     );
   };
 

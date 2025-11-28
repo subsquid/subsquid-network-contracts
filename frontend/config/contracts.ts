@@ -411,4 +411,4 @@ export const contractAddresses = config.addresses;
 export const targetChainId = config.chainId;
 
 // Portal states - SUNSET was removed, only COLLECTING, ACTIVE, FAILED
-export const STATE_NAMES = ["Collecting", "Active", "Failed"];
+export const STATE_NAMES = ["Accepting Tokens", "Active", "Inactive"];

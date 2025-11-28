@@ -9,7 +9,7 @@ export function PortalCreation({ onPortalCreated }: { onPortalCreated?: () => vo
   const { address } = useAccount();
   const [showForm, setShowForm] = useState(false);
   const [maxCapacity, setMaxCapacity] = useState("");
-  const [peerId, setPeerId] = useState("");
+  const [description, setDescription] = useState("");
   const [blocksUntilDeadline, setBlocksUntilDeadline] = useState("50000"); // ~7 days at 12s/block
 
   const { writeContract, data: hash, isPending } = useWriteContract();
@@ -27,8 +27,8 @@ export function PortalCreation({ onPortalCreated }: { onPortalCreated?: () => vo
     // Default payment tokens: USDC
     const paymentTokens = [contractAddresses.usdcToken];
 
-    // PeerId as bytes (use a default if not provided)
-    const peerIdBytes = peerId ? stringToHex(peerId) : stringToHex(`portal-${Date.now()}`);
+    // Description as bytes (used as peerId placeholder until real peerId is set)
+    const peerIdBytes = description ? stringToHex(description) : stringToHex(`portal-${Date.now()}`);
 
     writeContract({
       address: contractAddresses.portalFactory,
@@ -49,7 +49,7 @@ export function PortalCreation({ onPortalCreated }: { onPortalCreated?: () => vo
     onPortalCreated();
     setShowForm(false);
     setMaxCapacity("");
-    setPeerId("");
+    setDescription("");
     setBlocksUntilDeadline("50000");
   }
 
@@ -103,17 +103,17 @@ export function PortalCreation({ onPortalCreated }: { onPortalCreated?: () => vo
 
         <div>
           <label className="block text-sm font-medium text-sqd-text-secondary mb-2">
-            Peer ID (Optional)
+            Description
           </label>
-          <input
-            type="text"
-            value={peerId}
-            onChange={(e) => setPeerId(e.target.value)}
-            placeholder="my-portal-peer-id"
-            className="w-full bg-white border border-sqd-divider rounded-lg px-3.5 py-2.5 text-sqd-text-primary placeholder-sqd-text-disabled focus:outline-none focus:border-sqd-secondary"
+          <textarea
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="This portal is hosted and maintained by..."
+            rows={2}
+            className="w-full bg-white border border-sqd-divider rounded-lg px-3.5 py-2.5 text-sqd-text-primary placeholder-sqd-text-disabled focus:outline-none focus:border-sqd-secondary resize-none"
           />
           <p className="text-xs text-sqd-text-secondary mt-1">
-            Identifier for the gateway node (auto-generated if empty)
+            Describe who operates this portal (peer IDs will be added once active)
           </p>
         </div>
 

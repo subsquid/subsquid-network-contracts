@@ -166,7 +166,7 @@ export default function Home() {
                 <p className="font-medium text-sqd-text-primary mb-1">Stake & Earn CUs</p>
                 <p className="leading-relaxed">
                   SQD holders stake tokens via GatewayRegistry during the Collecting phase. CUs (Compute Units)
-                  are calculated as floor(totalStaked / minThreshold). More CUs = more network capacity
+                  are calculated as 10 SQD = 1 CU. More CUs = more network capacity
                 </p>
               </div>
             </div>

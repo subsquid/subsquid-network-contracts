@@ -16,22 +16,24 @@ interface PortalInfo {
   paused: boolean;
 }
 
-const STATE_NAMES = ["Collecting", "Active", "Failed"];
+const STATE_NAMES = ["Accepting Tokens", "Active", "Inactive"];
 const STATE_COLORS = {
   0: "bg-yellow-100 text-yellow-800 border-yellow-300",
   1: "bg-green-100 text-green-800 border-green-300",
   2: "bg-red-100 text-red-800 border-red-300",
 };
 
-function MockPortalCard({ portal, onClick }: { portal: MockPortal; onClick: () => void }) {
-  const { mockMinStakeThreshold } = useMock();
+const MIN_THRESHOLD = 100000; // 100k SQD minimum for CUs
 
+function MockPortalCard({ portal, onClick }: { portal: MockPortal; onClick: () => void }) {
   const maxCapacity = Number(formatUnits(portal.maxCapacity, 18));
   const totalStaked = Number(formatUnits(portal.totalStaked, 18));
-  const minStake = Number(formatUnits(mockMinStakeThreshold, 18));
-  const cus = Math.floor(totalStaked / minStake);
+  const meetsThreshold = totalStaked >= MIN_THRESHOLD;
+  const cus = meetsThreshold ? Math.floor(totalStaked / 10) : 0; // 10 SQD = 1 CU, only if >= 100k
   const progressPercent = maxCapacity > 0 ? (totalStaked / maxCapacity) * 100 : 0;
-  const stateColor = STATE_COLORS[portal.state as keyof typeof STATE_COLORS] || STATE_COLORS[2];
+  // Use red color for inactive or when below threshold
+  const effectiveState = meetsThreshold ? portal.state : 2;
+  const stateColor = STATE_COLORS[effectiveState as keyof typeof STATE_COLORS] || STATE_COLORS[2];
 
   const expectedRatePerDay = Number(formatUnits(portal.expectedRatePerDay, 6));
   const runway = portal.gradualBalance > 0n && portal.gradualRatePerSecond > 0n
@@ -43,7 +45,7 @@ function MockPortalCard({ portal, onClick }: { portal: MockPortal; onClick: () =
       onClick={onClick}
       className="bg-white rounded-lg p-6 border border-sqd-divider hover:border-sqd-accent hover:shadow-lg transition-all cursor-pointer"
     >
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
           <div className="w-2 h-2 rounded-full bg-sqd-accent"></div>
           <span className="text-sm font-mono text-sqd-text-secondary">
@@ -52,9 +54,12 @@ function MockPortalCard({ portal, onClick }: { portal: MockPortal; onClick: () =
           <span className="px-1.5 py-0.5 bg-purple-100 text-purple-700 text-xs rounded">MOCK</span>
         </div>
         <span className={`px-2.5 py-1 rounded-full text-xs font-medium border ${stateColor}`}>
-          {STATE_NAMES[portal.state]}
+          {portal.state === 2 || !meetsThreshold ? "Inactive" : STATE_NAMES[portal.state]}
         </span>
       </div>
+
+      {/* Description */}
+      <p className="text-xs text-sqd-text-secondary mb-4 line-clamp-2">{portal.description}</p>
 
       <div className="mb-4">
         <div className="flex justify-between text-sm mb-2">
@@ -94,8 +99,8 @@ function MockPortalCard({ portal, onClick }: { portal: MockPortal; onClick: () =
         </div>
         <div>
           <div className="text-xs text-sqd-text-secondary mb-1">Status</div>
-          <div className="text-lg font-semibold text-sqd-text-primary">
-            {portal.state === 1 ? "Active" : portal.state === 0 ? "Collecting" : "Inactive"}
+          <div className={`text-lg font-semibold ${effectiveState === 2 ? "text-red-600" : "text-sqd-text-primary"}`}>
+            {effectiveState === 1 ? "Active" : effectiveState === 0 ? "Accepting Tokens" : "Insufficient funds"}
           </div>
         </div>
       </div>
@@ -144,8 +149,7 @@ function PortalCard({ address, onClick }: { address: string; onClick: () => void
 
   const maxCapacity = Number(formatUnits(portalInfo.maxCapacity, 18));
   const totalStaked = Number(formatUnits(portalInfo.totalStaked, 18));
-  const minStake = minStakeThreshold ? Number(formatUnits(minStakeThreshold, 18)) : 100000;
-  const cus = Math.floor(totalStaked / minStake);
+  const cus = Math.floor(totalStaked / 10); // 10 SQD = 1 CU
   const progressPercent = maxCapacity > 0 ? (totalStaked / maxCapacity) * 100 : 0;
   const stateColor = STATE_COLORS[portalInfo.state as keyof typeof STATE_COLORS] || STATE_COLORS[2];
 
@@ -190,7 +194,7 @@ function PortalCard({ address, onClick }: { address: string; onClick: () => void
         <div>
           <div className="text-xs text-sqd-text-secondary mb-1">Status</div>
           <div className="text-lg font-semibold text-sqd-text-primary">
-            {portalInfo.state === 1 ? "Active" : portalInfo.state === 0 ? "Collecting" : "Inactive"}
+            {portalInfo.state === 1 ? "Active" : portalInfo.state === 0 ? "Accepting Tokens" : "Inactive"}
           </div>
         </div>
       </div>

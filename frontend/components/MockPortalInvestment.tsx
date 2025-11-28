@@ -4,7 +4,7 @@ import { useState } from "react";
 import { formatUnits, parseUnits } from "viem";
 import { useMock } from "@/context/MockContext";
 
-const STATE_NAMES = ["Collecting", "Active", "Failed"];
+const STATE_NAMES = ["Accepting Tokens", "Active", "Inactive"];
 
 export function MockPortalInvestment({ portalAddress, onClose }: { portalAddress: string; onClose: () => void }) {
   const {
@@ -98,7 +98,8 @@ export function MockPortalInvestment({ portalAddress, onClose }: { portalAddress
                 <h2 className="text-xl font-semibold text-sqd-text-primary">Mock Portal</h2>
                 <span className="px-2 py-0.5 bg-purple-100 text-purple-700 text-xs rounded-full">MOCK</span>
               </div>
-              <p className="text-sm text-sqd-text-secondary font-mono mt-1">
+              <p className="text-sm text-sqd-text-secondary mt-1">{portal.description}</p>
+              <p className="text-xs text-sqd-text-disabled font-mono mt-1">
                 {portalAddress.slice(0, 10)}...{portalAddress.slice(-8)}
               </p>
             </div>
