@@ -17,6 +17,7 @@ export function MockPortalInvestment({ portalAddress, onClose }: { portalAddress
     mockUsdcBalance,
     stakeMock,
     requestExitMock,
+    withdrawExitMock,
     claimFeesMock,
     distributeFeesMock,
   } = useMock();
@@ -253,59 +254,106 @@ export function MockPortalInvestment({ portalAddress, onClose }: { portalAddress
           {/* Exit Tab */}
           {activeTab === "exit" && (
             <div className="space-y-4">
+              {/* Show existing exit request if any */}
               {exitRequest && (
-                <div className="p-4 bg-yellow-50 rounded-lg border border-yellow-200 mb-4">
-                  <div className="text-sm text-yellow-800 font-medium mb-2">Pending Exit Request</div>
-                  <div className="text-sm text-yellow-700">
-                    Amount: {Number(formatUnits(exitRequest.amount, 18)).toLocaleString()} SQD
-                  </div>
-                  <div className="text-sm text-yellow-700">
-                    Unlock Epoch: {exitRequest.unlockEpoch.toString()} (Current: {mockCurrentEpoch.toString()})
-                  </div>
-                </div>
+                <>
+                  {mockCurrentEpoch >= exitRequest.unlockEpoch ? (
+                    /* Ready to withdraw */
+                    <div className="p-4 bg-green-50 rounded-lg border border-green-200">
+                      <div className="text-sm text-green-800 font-medium mb-2">Ready to Withdraw!</div>
+                      <div className="text-sm text-green-700">
+                        Amount: {Number(formatUnits(exitRequest.amount, 18)).toLocaleString()} SQD
+                      </div>
+                      <div className="text-xs text-green-600 mt-1">
+                        Unlock epoch {exitRequest.unlockEpoch.toString()} reached (Current: {mockCurrentEpoch.toString()})
+                      </div>
+                      <button
+                        onClick={() => withdrawExitMock(portalAddress)}
+                        className="mt-3 w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-2 rounded-lg transition-colors"
+                      >
+                        Withdraw {Number(formatUnits(exitRequest.amount, 18)).toLocaleString()} SQD
+                      </button>
+                    </div>
+                  ) : (
+                    /* Pending - show epochs remaining */
+                    <div className="p-4 bg-yellow-50 rounded-lg border border-yellow-200">
+                      <div className="text-sm text-yellow-800 font-medium mb-2">Exit Request Pending</div>
+                      <div className="text-sm text-yellow-700">
+                        Amount: {Number(formatUnits(exitRequest.amount, 18)).toLocaleString()} SQD
+                      </div>
+                      <div className="text-sm text-yellow-700">
+                        Epochs remaining: {(exitRequest.unlockEpoch - mockCurrentEpoch).toString()}
+                      </div>
+                      <div className="text-xs text-yellow-600 mt-1">
+                        Unlock at epoch {exitRequest.unlockEpoch.toString()} (Current: {mockCurrentEpoch.toString()})
+                      </div>
+                      <div className="mt-3 w-full bg-gray-200 rounded-full h-2">
+                        <div
+                          className="bg-yellow-500 h-2 rounded-full transition-all"
+                          style={{
+                            width: `${Math.min(100, ((Number(mockCurrentEpoch) - Number(exitRequest.requestEpoch)) / (Number(exitRequest.unlockEpoch) - Number(exitRequest.requestEpoch))) * 100)}%`
+                          }}
+                        />
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
 
-              <div>
-                <label className="block text-sm font-medium text-sqd-text-secondary mb-2">Exit Amount (SQD)</label>
-                <div className="flex gap-2">
-                  <input
-                    type="number"
-                    value={exitAmount}
-                    onChange={(e) => setExitAmount(e.target.value)}
-                    placeholder="0.0"
-                    max={userStake}
-                    className="flex-1 bg-white border border-sqd-divider rounded-lg px-4 py-3 text-sqd-text-primary focus:outline-none focus:border-sqd-accent"
-                  />
+              {/* Always show the exit form if user has remaining stake */}
+              {userStake > 0 && (
+                <>
+                  <div className="border-t border-sqd-divider pt-4">
+                    <label className="block text-sm font-medium text-sqd-text-secondary mb-2">
+                      {exitRequest ? "Request Additional Exit (SQD)" : "Exit Amount (SQD)"}
+                    </label>
+                    <div className="flex gap-2">
+                      <input
+                        type="number"
+                        value={exitAmount}
+                        onChange={(e) => setExitAmount(e.target.value)}
+                        placeholder="0.0"
+                        max={userStake}
+                        className="flex-1 bg-white border border-sqd-divider rounded-lg px-4 py-3 text-sqd-text-primary focus:outline-none focus:border-sqd-accent"
+                      />
+                      <button
+                        onClick={() => setExitAmount(userStake.toString())}
+                        className="px-4 py-2 bg-gray-100 text-sqd-text-secondary rounded-lg hover:bg-gray-200 text-sm"
+                      >
+                        MAX
+                      </button>
+                    </div>
+                    <p className="text-xs text-sqd-text-secondary mt-1">
+                      Staked: {userStake.toLocaleString()} SQD
+                    </p>
+                  </div>
+
+                  {exitAmount && Number(exitAmount) > 0 && (
+                    <div className="p-4 bg-orange-50 rounded-lg border border-orange-200">
+                      <div className="text-sm text-orange-800">
+                        Exit delay: {Math.ceil(1 + (Number(exitAmount) / totalStaked) * 100)} epochs
+                      </div>
+                      <div className="text-xs text-orange-700 mt-1">
+                        Formula: 1 base epoch + (exit% of total stake)
+                      </div>
+                    </div>
+                  )}
+
                   <button
-                    onClick={() => setExitAmount(userStake.toString())}
-                    className="px-4 py-2 bg-gray-100 text-sqd-text-secondary rounded-lg hover:bg-gray-200 text-sm"
+                    onClick={handleExit}
+                    disabled={!exitAmount || Number(exitAmount) <= 0 || Number(exitAmount) > userStake}
+                    className="w-full bg-orange-500 hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold py-3 rounded-lg transition-colors"
                   >
-                    MAX
+                    {exitRequest ? "Add to Exit Request (Mock)" : "Request Exit (Mock)"}
                   </button>
-                </div>
-                <p className="text-xs text-sqd-text-secondary mt-1">
-                  Staked: {userStake.toLocaleString()} SQD
-                </p>
-              </div>
-
-              {exitAmount && Number(exitAmount) > 0 && (
-                <div className="p-4 bg-orange-50 rounded-lg border border-orange-200">
-                  <div className="text-sm text-orange-800">
-                    Exit delay: {Math.ceil(1 + (Number(exitAmount) / totalStaked) * 100)} epochs
-                  </div>
-                  <div className="text-xs text-orange-700 mt-1">
-                    Formula: 1 base epoch + (exit% of total stake)
-                  </div>
-                </div>
+                </>
               )}
 
-              <button
-                onClick={handleExit}
-                disabled={!exitAmount || Number(exitAmount) <= 0 || Number(exitAmount) > userStake}
-                className="w-full bg-orange-500 hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold py-3 rounded-lg transition-colors"
-              >
-                Request Exit (Mock)
-              </button>
+              {userStake === 0 && !exitRequest && (
+                <div className="text-center text-sqd-text-secondary py-4">
+                  No stake to exit
+                </div>
+              )}
             </div>
           )}
 

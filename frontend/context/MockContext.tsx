@@ -43,6 +43,7 @@ interface MockContextType {
   addMockPortal: (portal: Omit<MockPortal, "address">) => void;
   stakeMock: (portalAddress: string, amount: bigint) => void;
   requestExitMock: (portalAddress: string, amount: bigint) => void;
+  withdrawExitMock: (portalAddress: string) => void;
   claimFeesMock: (portalAddress: string, token: string) => void;
   distributeFeesMock: (portalAddress: string, token: string, amount: bigint) => void;
   advanceEpochMock: () => void;
@@ -220,7 +221,34 @@ export function MockProvider({ children }: { children: ReactNode }) {
   };
 
   const requestExitMock = (portalAddress: string, amount: bigint) => {
-    const unlockEpoch = mockCurrentEpoch + BigInt(10);
+    const portalAddrLower = portalAddress.toLowerCase();
+
+    // Get portal's total staked for percentage calculation
+    const portal = portalsRef.current.find(
+      (p) => p.address.toLowerCase() === portalAddrLower
+    );
+    const portalTotalStaked = portal?.totalStaked || BigInt(1);
+
+    // Get existing exit request amount (if any)
+    const provider = providersRef.current.find(p => p.address === MOCK_USER);
+    let existingAmount = BigInt(0);
+    if (provider) {
+      for (const [addr, req] of Object.entries(provider.exitRequests)) {
+        if (addr.toLowerCase() === portalAddrLower) {
+          existingAmount = req.amount;
+          break;
+        }
+      }
+    }
+
+    // New total = existing + new amount
+    const totalExitAmount = existingAmount + amount;
+
+    // Calculate unlock epoch: base (1) + percentage of total stake
+    const percentage = (totalExitAmount * BigInt(100)) / portalTotalStaked;
+    const requiredEpochs = BigInt(1) + percentage;
+    const unlockEpoch = mockCurrentEpoch + requiredEpochs;
+
     setMockProviders((prev) =>
       prev.map((p) =>
         p.address === MOCK_USER
@@ -229,12 +257,74 @@ export function MockProvider({ children }: { children: ReactNode }) {
               exitRequests: {
                 ...p.exitRequests,
                 [portalAddress]: {
-                  amount,
-                  requestEpoch: mockCurrentEpoch,
-                  unlockEpoch,
+                  amount: totalExitAmount,  // Add to existing
+                  requestEpoch: mockCurrentEpoch,  // Reset timer
+                  unlockEpoch,  // Recalculate based on new total
                 },
               },
             }
+          : p
+      )
+    );
+  };
+
+  const withdrawExitMock = (portalAddress: string) => {
+    const portalAddrLower = portalAddress.toLowerCase();
+
+    // Find the exit request
+    const provider = providersRef.current.find(p => p.address === MOCK_USER);
+    if (!provider) return;
+
+    // Find the exit request for this portal (case-insensitive)
+    let exitRequest: { amount: bigint; requestEpoch: bigint; unlockEpoch: bigint } | undefined;
+    let exitPortalKey: string | undefined;
+    for (const [addr, req] of Object.entries(provider.exitRequests)) {
+      if (addr.toLowerCase() === portalAddrLower) {
+        exitRequest = req;
+        exitPortalKey = addr;
+        break;
+      }
+    }
+
+    if (!exitRequest || !exitPortalKey) return;
+
+    // Check if unlock epoch has been reached
+    if (mockCurrentEpoch < exitRequest.unlockEpoch) return;
+
+    const withdrawAmount = exitRequest.amount;
+
+    // Reduce stake from provider and portal
+    setMockProviders((prev) =>
+      prev.map((p) => {
+        if (p.address !== MOCK_USER) return p;
+
+        // Find and reduce stake (case-insensitive)
+        const newStakes = { ...p.stakes };
+        for (const addr of Object.keys(newStakes)) {
+          if (addr.toLowerCase() === portalAddrLower) {
+            newStakes[addr] = (newStakes[addr] || BigInt(0)) - withdrawAmount;
+            if (newStakes[addr] <= 0n) delete newStakes[addr];
+            break;
+          }
+        }
+
+        // Remove exit request
+        const newExitRequests = { ...p.exitRequests };
+        delete newExitRequests[exitPortalKey!];
+
+        return {
+          ...p,
+          stakes: newStakes,
+          exitRequests: newExitRequests,
+        };
+      })
+    );
+
+    // Reduce total staked on portal
+    setMockPortals((prev) =>
+      prev.map((p) =>
+        p.address.toLowerCase() === portalAddrLower
+          ? { ...p, totalStaked: p.totalStaked - withdrawAmount }
           : p
       )
     );
@@ -371,6 +461,7 @@ export function MockProvider({ children }: { children: ReactNode }) {
         addMockPortal,
         stakeMock,
         requestExitMock,
+        withdrawExitMock,
         claimFeesMock,
         distributeFeesMock,
         advanceEpochMock,
