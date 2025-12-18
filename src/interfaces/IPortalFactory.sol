@@ -1,33 +1,49 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
+pragma solidity 0.8.28;
 
 interface IPortalFactory {
-    // Events
     event PortalCreated(address indexed portal, address indexed operator, bytes peerId);
-    event PortalPaymentTokensSet(address indexed portal, address[] paymentTokens);
-    event PortalUpgraded(address indexed portal, address indexed newImplementation);
-    event ImplementationUpdated(address indexed oldImplementation, address indexed newImplementation);
-    event MinStakeThresholdUpdated(uint256 oldValue, uint256 newValue);
+    event BeaconUpgraded(address indexed newImplementation);
+    event MaxPoolCapacityUpdated(uint256 oldValue, uint256 newValue);
+    event DefaultMaxStakePerWalletUpdated(uint256 oldValue, uint256 newValue);
+    event UsdcUpdated(address indexed oldUsdc, address indexed newUsdc);
+    event PaymentTokenAdded(address indexed token);
+    event PaymentTokenRemoved(address indexed token);
+    event MaxPaymentTokensUpdated(uint256 oldValue, uint256 newValue);
+    event ExitUnlockRateUpdated(uint256 oldValue, uint256 newValue);
+    event CollectionDeadlineUpdated(uint256 oldValue, uint256 newValue);
 
-    // Functions
-    function createPortal(
-        address operator,
-        address[] calldata paymentTokens,
-        uint256 maxCapacity,
-        uint256 depositDeadline,
-        bytes calldata peerId
-    ) external returns (address portal);
+    struct CreatePortalParams {
+        address operator;
+        uint256 maxCapacity;
+        bytes peerId;
+        string portalName;
+        uint256 distributionRatePerSecond;
+        uint256 maxStakePerWallet;
+    }
 
-    function upgradePortal(address portal, address newImplementation) external;
-    function upgradeAllPortals(address newImplementation) external;
-    function upgradePortalsBatch(address newImplementation, uint256 startIndex, uint256 endIndex) external;
+    function createPortal(CreatePortalParams calldata params) external returns (address portal);
+
+    function upgradeBeacon(address newImplementation) external;
 
     function getPortalCount() external view returns (uint256);
     function getOperatorPortals(address operator) external view returns (address[] memory);
     function isPortal(address portal) external view returns (bool);
 
+    function addPaymentToken(address token) external;
+    function removePaymentToken(address token) external;
+    function isAllowedPaymentToken(address token) external view returns (bool);
+    function getAllowedPaymentTokens() external view returns (address[] memory);
+
+    function maxPaymentTokens() external view returns (uint256);
+    function exitUnlockRatePerSecond() external view returns (uint256);
+    function collectionDeadlineSeconds() external view returns (uint256);
+
+    function setMaxPaymentTokens(uint256 value) external;
+    function setExitUnlockRate(uint256 ratePerSecond) external;
+    function setCollectionDeadline(uint256 seconds_) external;
+
     function pause() external;
     function unpause() external;
-    function setImplementation(address implementation) external;
-    function setMinStakeThreshold(uint256 threshold) external;
+    function setMaxPoolCapacity(uint256 maxCapacity) external;
 }

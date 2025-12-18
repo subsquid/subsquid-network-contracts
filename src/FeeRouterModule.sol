@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
+pragma solidity 0.8.28;
 
 import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
 import {IFeeRouter} from "./interfaces/IFeeRouter.sol";
+import {PortalErrors} from "./libs/PortalErrors.sol";
+import {FullMath} from "./libs/FullMath.sol";
 
 contract FeeRouterModule is AccessControl, IFeeRouter {
     uint256 public constant BASIS_POINTS = 10000;
@@ -21,10 +23,8 @@ contract FeeRouterModule is AccessControl, IFeeRouter {
         view
         returns (uint256 toProviders, uint256 toWorkerPool, uint256 toBurn)
     {
-        // M-11: Calculate first two portions, then assign remainder to toBurn
-        // This ensures sum always equals amount (no rounding loss)
-        toProviders = (amount * feeConfig.toProvidersBPS) / BASIS_POINTS;
-        toWorkerPool = (amount * feeConfig.toWorkerPoolBPS) / BASIS_POINTS;
+        toProviders = FullMath.mulDiv(amount, feeConfig.toProvidersBPS, BASIS_POINTS);
+        toWorkerPool = FullMath.mulDiv(amount, feeConfig.toWorkerPoolBPS, BASIS_POINTS);
         toBurn = amount - toProviders - toWorkerPool;
     }
 
@@ -32,7 +32,9 @@ contract FeeRouterModule is AccessControl, IFeeRouter {
         external
         onlyRole(DEFAULT_ADMIN_ROLE)
     {
-        require(toProvidersBPS + toWorkerPoolBPS + toBurnBPS == BASIS_POINTS, "Must sum to 100%");
+        if (toProvidersBPS + toWorkerPoolBPS + toBurnBPS != BASIS_POINTS) {
+            revert PortalErrors.InvalidFeeConfig();
+        }
 
         feeConfig = FeeConfig({toProvidersBPS: toProvidersBPS, toWorkerPoolBPS: toWorkerPoolBPS, toBurnBPS: toBurnBPS});
 

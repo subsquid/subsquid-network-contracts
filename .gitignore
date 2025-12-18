@@ -32,6 +32,11 @@ frontend/yarn.lock
 # Testing
 coverage/
 coverage.json
+tmp/
+
+# remix
+.deps/
+artifacts/
 
 # Misc
 .DS_Store
