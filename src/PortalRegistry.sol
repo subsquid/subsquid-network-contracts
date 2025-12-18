@@ -56,7 +56,11 @@ contract PortalRegistry is IPortalRegistry, AccessControl, Pausable {
     }
 
     /// @inheritdoc IPortalRegistry
-    function registerDirectPortal(bytes calldata peerId) external whenNotPaused returns (address portalId) {
+    function registerDirectPortal(bytes calldata peerId, string calldata metadata)
+        external
+        whenNotPaused
+        returns (address portalId)
+    {
         if (operatorToDirectPortal[msg.sender] != address(0)) {
             revert PortalRegistryErrors.AlreadyHasDirectPortal();
         }
@@ -78,7 +82,8 @@ contract PortalRegistry is IPortalRegistry, AccessControl, Pausable {
             totalStaked: 0,
             registeredAt: block.number,
             active: false,
-            portalType: PortalType.DIRECT
+            portalType: PortalType.DIRECT,
+            metadata: metadata
         });
 
         peerIdToPortal[peerIdHash] = portalId;
@@ -146,10 +151,12 @@ contract PortalRegistry is IPortalRegistry, AccessControl, Pausable {
     }
 
     /// @inheritdoc IPortalRegistry
-    function registerPortalPool(bytes calldata peerId, address portalAddress, address operator)
-        external
-        whenNotPaused
-    {
+    function registerPortalPool(
+        bytes calldata peerId,
+        address portalAddress,
+        address operator,
+        string calldata metadata
+    ) external whenNotPaused {
         if (msg.sender != portalAddress) revert PortalRegistryErrors.OnlyPortal();
         if (operator == address(0)) revert PortalRegistryErrors.InvalidAddress();
         if (peerId.length == 0) revert PortalRegistryErrors.InvalidPeerId();
@@ -169,7 +176,8 @@ contract PortalRegistry is IPortalRegistry, AccessControl, Pausable {
             totalStaked: 0,
             registeredAt: block.number,
             active: false,
-            portalType: PortalType.POOL
+            portalType: PortalType.POOL,
+            metadata: metadata
         });
 
         peerIdToPortal[peerIdHash] = portalAddress;
@@ -340,5 +348,24 @@ contract PortalRegistry is IPortalRegistry, AccessControl, Pausable {
     function setPortalStatus(address portal, bool status) external onlyRole(DEFAULT_ADMIN_ROLE) {
         isPortal[portal] = status;
         emit PortalStatusChanged(portal, status);
+    }
+
+    /// @inheritdoc IPortalRegistry
+    function setMetadata(address portalAddress, string calldata metadata) external {
+        Portal storage portal = portals[portalAddress];
+        if (portal.portalAddress == address(0)) {
+            revert PortalRegistryErrors.PortalNotRegistered();
+        }
+        if (msg.sender != portal.operator) {
+            revert PortalRegistryErrors.NotOperator();
+        }
+
+        portal.metadata = metadata;
+        emit MetadataChanged(portalAddress, metadata);
+    }
+
+    /// @inheritdoc IPortalRegistry
+    function getMetadata(address portalAddress) external view returns (string memory) {
+        return portals[portalAddress].metadata;
     }
 }

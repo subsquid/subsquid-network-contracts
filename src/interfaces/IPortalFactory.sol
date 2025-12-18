@@ -13,16 +13,16 @@ interface IPortalFactory {
     event ExitUnlockRateUpdated(uint256 oldValue, uint256 newValue);
     event CollectionDeadlineUpdated(uint256 oldValue, uint256 newValue);
 
-    struct CreatePortalParams {
+    struct CreatePortalPoolParams {
         address operator;
-        uint256 maxCapacity;
+        uint256 capacity;
         bytes peerId;
         string portalName;
         uint256 distributionRatePerSecond;
-        uint256 maxStakePerWallet;
+        string metadata;
     }
 
-    function createPortal(CreatePortalParams calldata params) external returns (address portal);
+    function createPortalPool(CreatePortalPoolParams calldata params) external returns (address portal);
 
     function upgradeBeacon(address newImplementation) external;
 

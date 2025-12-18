@@ -45,75 +45,75 @@ contract PortalPoolFactoryTest is BaseTest {
     }
 
     function test_CreatePortal_EmitsEvent() public {
-        IPortalFactory.CreatePortalParams memory params = IPortalFactory.CreatePortalParams({
+        IPortalFactory.CreatePortalPoolParams memory params = IPortalFactory.CreatePortalPoolParams({
             operator: operator,
-            maxCapacity: MIN_STAKE_THRESHOLD,
+            capacity: MIN_STAKE_THRESHOLD,
             peerId: "test-peer-id",
             portalName: "TestPortal",
             distributionRatePerSecond: 1 ether,
-            maxStakePerWallet: DEFAULT_MAX_STAKE_PER_WALLET
+            metadata: ""
         });
 
         vm.expectEmit(false, true, false, true);
         emit IPortalFactory.PortalCreated(address(0), operator, "test-peer-id");
 
-        factory.createPortal(params);
+        factory.createPortalPool(params);
     }
 
     function test_CreatePortal_RevertOnZeroOperator() public {
-        IPortalFactory.CreatePortalParams memory params = IPortalFactory.CreatePortalParams({
+        IPortalFactory.CreatePortalPoolParams memory params = IPortalFactory.CreatePortalPoolParams({
             operator: address(0),
-            maxCapacity: MIN_STAKE_THRESHOLD,
+            capacity: MIN_STAKE_THRESHOLD,
             peerId: "test-peer-id",
             portalName: "TestPortal",
             distributionRatePerSecond: 1 ether,
-            maxStakePerWallet: DEFAULT_MAX_STAKE_PER_WALLET
+            metadata: ""
         });
 
         vm.expectRevert(PortalErrors.InvalidAddress.selector);
-        factory.createPortal(params);
+        factory.createPortalPool(params);
     }
 
     function test_CreatePortal_RevertOnCapacityBelowMinimum() public {
-        IPortalFactory.CreatePortalParams memory params = IPortalFactory.CreatePortalParams({
+        IPortalFactory.CreatePortalPoolParams memory params = IPortalFactory.CreatePortalPoolParams({
             operator: operator,
-            maxCapacity: MIN_STAKE_THRESHOLD - 1,
+            capacity: MIN_STAKE_THRESHOLD - 1,
             peerId: "test-peer-id",
             portalName: "TestPortal",
             distributionRatePerSecond: 1 ether,
-            maxStakePerWallet: DEFAULT_MAX_STAKE_PER_WALLET
+            metadata: ""
         });
 
         vm.expectRevert(PortalErrors.BelowMinimum.selector);
-        factory.createPortal(params);
+        factory.createPortalPool(params);
     }
 
     function test_CreatePortal_RevertOnCapacityAboveMaximum() public {
-        IPortalFactory.CreatePortalParams memory params = IPortalFactory.CreatePortalParams({
+        IPortalFactory.CreatePortalPoolParams memory params = IPortalFactory.CreatePortalPoolParams({
             operator: operator,
-            maxCapacity: MAX_POOL_CAPACITY + 1,
+            capacity: MAX_POOL_CAPACITY + 1,
             peerId: "test-peer-id",
             portalName: "TestPortal",
             distributionRatePerSecond: 1 ether,
-            maxStakePerWallet: DEFAULT_MAX_STAKE_PER_WALLET
+            metadata: ""
         });
 
         vm.expectRevert(PortalErrors.AboveMaximum.selector);
-        factory.createPortal(params);
+        factory.createPortalPool(params);
     }
 
     function test_CreatePortal_RevertOnEmptyPeerId() public {
-        IPortalFactory.CreatePortalParams memory params = IPortalFactory.CreatePortalParams({
+        IPortalFactory.CreatePortalPoolParams memory params = IPortalFactory.CreatePortalPoolParams({
             operator: operator,
-            maxCapacity: MIN_STAKE_THRESHOLD,
+            capacity: MIN_STAKE_THRESHOLD,
             peerId: "",
             portalName: "TestPortal",
             distributionRatePerSecond: 1 ether,
-            maxStakePerWallet: DEFAULT_MAX_STAKE_PER_WALLET
+            metadata: ""
         });
 
         vm.expectRevert(PortalErrors.EmptyPeerId.selector);
-        factory.createPortal(params);
+        factory.createPortalPool(params);
     }
 
     function test_CreatePortal_MultiplePortals() public {
@@ -132,33 +132,33 @@ contract PortalPoolFactoryTest is BaseTest {
     }
 
     function test_CreatePortal_UsesDefaultMaxStakePerWallet() public {
-        IPortalFactory.CreatePortalParams memory params = IPortalFactory.CreatePortalParams({
+        IPortalFactory.CreatePortalPoolParams memory params = IPortalFactory.CreatePortalPoolParams({
             operator: operator,
-            maxCapacity: MIN_STAKE_THRESHOLD,
+            capacity: MIN_STAKE_THRESHOLD,
             peerId: "test-peer-id",
             portalName: "TestPortal",
             distributionRatePerSecond: 1 ether,
-            maxStakePerWallet: 0
+            metadata: ""
         });
 
-        address portal = factory.createPortal(params);
+        address portal = factory.createPortalPool(params);
         assertEq(PortalPoolImplementation(portal).maxStakePerWallet(), DEFAULT_MAX_STAKE_PER_WALLET);
     }
 
     function test_CreatePortal_RevertWhenPaused() public {
         factory.pause();
 
-        IPortalFactory.CreatePortalParams memory params = IPortalFactory.CreatePortalParams({
+        IPortalFactory.CreatePortalPoolParams memory params = IPortalFactory.CreatePortalPoolParams({
             operator: operator,
-            maxCapacity: MIN_STAKE_THRESHOLD,
+            capacity: MIN_STAKE_THRESHOLD,
             peerId: "test-peer-id",
             portalName: "TestPortal",
             distributionRatePerSecond: 1 ether,
-            maxStakePerWallet: DEFAULT_MAX_STAKE_PER_WALLET
+            metadata: ""
         });
 
         vm.expectRevert();
-        factory.createPortal(params);
+        factory.createPortalPool(params);
     }
 
     function test_AddPaymentToken_Success() public {
@@ -385,17 +385,17 @@ contract PortalPoolFactoryTest is BaseTest {
         factory.removePaymentToken(address(usdc));
         factory.removePaymentToken(address(dai));
 
-        IPortalFactory.CreatePortalParams memory params = IPortalFactory.CreatePortalParams({
+        IPortalFactory.CreatePortalPoolParams memory params = IPortalFactory.CreatePortalPoolParams({
             operator: operator,
-            maxCapacity: MIN_STAKE_THRESHOLD,
+            capacity: MIN_STAKE_THRESHOLD,
             peerId: "test-peer-id",
             portalName: "TestPortal",
             distributionRatePerSecond: 1 ether,
-            maxStakePerWallet: DEFAULT_MAX_STAKE_PER_WALLET
+            metadata: ""
         });
 
         vm.expectRevert(PortalErrors.NoPaymentTokens.selector);
-        factory.createPortal(params);
+        factory.createPortalPool(params);
     }
 
     function test_Unpause_RevertOnNonPauser() public {

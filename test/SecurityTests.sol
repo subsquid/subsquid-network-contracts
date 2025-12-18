@@ -88,25 +88,28 @@ contract SecurityTests is BaseTest {
     }
 
     function test_OnLPTTransfer_RevertOnExceedsWalletLimit() public {
-        IPortalFactory.CreatePortalParams memory params = IPortalFactory.CreatePortalParams({
+        sqd.mint(user1, DEFAULT_MAX_STAKE_PER_WALLET);
+        sqd.mint(user2, DEFAULT_MAX_STAKE_PER_WALLET);
+
+        IPortalFactory.CreatePortalPoolParams memory params = IPortalFactory.CreatePortalPoolParams({
             operator: operator,
-            maxCapacity: MIN_STAKE_THRESHOLD * 2,
+            capacity: DEFAULT_MAX_STAKE_PER_WALLET * 2,
             peerId: "limit-portal",
             portalName: "LimitPortal",
             distributionRatePerSecond: 1 ether,
-            maxStakePerWallet: SMALL_STAKE
+            metadata: ""
         });
-        address limitPortal = factory.createPortal(params);
+        address limitPortal = factory.createPortalPool(params);
         LiquidPortalToken limitLpt = PortalPoolImplementation(limitPortal).lptToken();
 
         vm.startPrank(user1);
-        sqd.approve(limitPortal, SMALL_STAKE);
-        IPortalPool(limitPortal).deposit(SMALL_STAKE);
+        sqd.approve(limitPortal, DEFAULT_MAX_STAKE_PER_WALLET);
+        IPortalPool(limitPortal).deposit(DEFAULT_MAX_STAKE_PER_WALLET);
         vm.stopPrank();
 
         vm.startPrank(user2);
-        sqd.approve(limitPortal, SMALL_STAKE);
-        IPortalPool(limitPortal).deposit(SMALL_STAKE);
+        sqd.approve(limitPortal, DEFAULT_MAX_STAKE_PER_WALLET);
+        IPortalPool(limitPortal).deposit(DEFAULT_MAX_STAKE_PER_WALLET);
         vm.stopPrank();
 
         vm.prank(user1);

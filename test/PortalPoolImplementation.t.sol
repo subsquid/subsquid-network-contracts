@@ -73,21 +73,21 @@ contract PortalPoolImplementationTest is BaseTest {
     }
 
     function test_Deposit_RevertOnExceedsWalletLimit() public {
-        IPortalFactory.CreatePortalParams memory params = IPortalFactory.CreatePortalParams({
+        IPortalFactory.CreatePortalPoolParams memory params = IPortalFactory.CreatePortalPoolParams({
             operator: operator,
-            maxCapacity: 1_000_000 ether,
-            peerId: "small-wallet-limit",
-            portalName: "SmallLimit",
+            capacity: DEFAULT_MAX_STAKE_PER_WALLET * 2,
+            peerId: "wallet-limit-test",
+            portalName: "WalletLimitTest",
             distributionRatePerSecond: 1 ether,
-            maxStakePerWallet: SMALL_STAKE
+            metadata: ""
         });
-        address smallLimitPortal = factory.createPortal(params);
+        address testPortal = factory.createPortalPool(params);
 
         vm.startPrank(user1);
-        sqd.approve(smallLimitPortal, SMALL_STAKE + 1);
+        sqd.approve(testPortal, DEFAULT_MAX_STAKE_PER_WALLET + 1);
 
         vm.expectRevert(PortalErrors.ExceedsWalletLimit.selector);
-        IPortalPool(smallLimitPortal).deposit(SMALL_STAKE + 1);
+        IPortalPool(testPortal).deposit(DEFAULT_MAX_STAKE_PER_WALLET + 1);
         vm.stopPrank();
     }
 
@@ -380,15 +380,15 @@ contract PortalPoolImplementationTest is BaseTest {
     }
 
     function test_ClaimRewards_Success() public {
-        IPortalFactory.CreatePortalParams memory params = IPortalFactory.CreatePortalParams({
+        IPortalFactory.CreatePortalPoolParams memory params = IPortalFactory.CreatePortalPoolParams({
             operator: operator,
-            maxCapacity: MIN_STAKE_THRESHOLD,
+            capacity: MIN_STAKE_THRESHOLD,
             peerId: "reward-portal",
             portalName: "RewardPortal",
             distributionRatePerSecond: 1e6,
-            maxStakePerWallet: DEFAULT_MAX_STAKE_PER_WALLET
+            metadata: ""
         });
-        portal = factory.createPortal(params);
+        portal = factory.createPortalPool(params);
         pool = PortalPoolImplementation(portal);
 
         vm.startPrank(user1);
@@ -432,24 +432,24 @@ contract PortalPoolImplementationTest is BaseTest {
     }
 
     function test_OnLPTTransfer_RevertOnExceedsWalletLimit() public {
-        IPortalFactory.CreatePortalParams memory params = IPortalFactory.CreatePortalParams({
+        IPortalFactory.CreatePortalPoolParams memory params = IPortalFactory.CreatePortalPoolParams({
             operator: operator,
-            maxCapacity: MIN_STAKE_THRESHOLD,
+            capacity: DEFAULT_MAX_STAKE_PER_WALLET * 2,
             peerId: "transfer-limit",
             portalName: "TransferLimit",
             distributionRatePerSecond: 1 ether,
-            maxStakePerWallet: SMALL_STAKE
+            metadata: ""
         });
-        address limitPortal = factory.createPortal(params);
+        address limitPortal = factory.createPortalPool(params);
 
         vm.startPrank(user1);
-        sqd.approve(limitPortal, MIN_STAKE_THRESHOLD);
-        IPortalPool(limitPortal).deposit(SMALL_STAKE);
+        sqd.approve(limitPortal, DEFAULT_MAX_STAKE_PER_WALLET);
+        IPortalPool(limitPortal).deposit(DEFAULT_MAX_STAKE_PER_WALLET);
         vm.stopPrank();
 
         vm.startPrank(user2);
-        sqd.approve(limitPortal, MIN_STAKE_THRESHOLD);
-        IPortalPool(limitPortal).deposit(SMALL_STAKE);
+        sqd.approve(limitPortal, DEFAULT_MAX_STAKE_PER_WALLET);
+        IPortalPool(limitPortal).deposit(DEFAULT_MAX_STAKE_PER_WALLET);
         vm.stopPrank();
 
         LiquidPortalToken lpt = PortalPoolImplementation(limitPortal).lptToken();
@@ -863,15 +863,15 @@ contract PortalPoolImplementationTest is BaseTest {
 
     function test_Deposit_InActiveState_AdditionalUser() public {
         // Create portal with larger capacity to allow additional deposits
-        IPortalFactory.CreatePortalParams memory params = IPortalFactory.CreatePortalParams({
+        IPortalFactory.CreatePortalPoolParams memory params = IPortalFactory.CreatePortalPoolParams({
             operator: operator,
-            maxCapacity: MIN_STAKE_THRESHOLD * 2,
+            capacity: MIN_STAKE_THRESHOLD * 2,
             peerId: "active-deposit-portal",
             portalName: "ActiveDepositPortal",
             distributionRatePerSecond: 1 ether,
-            maxStakePerWallet: DEFAULT_MAX_STAKE_PER_WALLET
+            metadata: ""
         });
-        portal = factory.createPortal(params);
+        portal = factory.createPortalPool(params);
         pool = PortalPoolImplementation(portal);
 
         // Activate by filling to capacity
@@ -937,28 +937,28 @@ contract PortalPoolImplementationTest is BaseTest {
     }
 
     function test_OnLPTTransfer_RevertOnExceedsReceiverLimit() public {
-        // Create portal with small wallet limit
-        IPortalFactory.CreatePortalParams memory params = IPortalFactory.CreatePortalParams({
+        // Create portal with capacity for two users at default wallet limit
+        IPortalFactory.CreatePortalPoolParams memory params = IPortalFactory.CreatePortalPoolParams({
             operator: operator,
-            maxCapacity: MIN_STAKE_THRESHOLD * 2,
+            capacity: DEFAULT_MAX_STAKE_PER_WALLET * 2,
             peerId: "receiver-limit",
             portalName: "ReceiverLimit",
             distributionRatePerSecond: 1 ether,
-            maxStakePerWallet: SMALL_STAKE
+            metadata: ""
         });
-        address limitPortal = factory.createPortal(params);
+        address limitPortal = factory.createPortalPool(params);
         PortalPoolImplementation limitPool = PortalPoolImplementation(limitPortal);
 
         // user1 deposits up to the limit
         vm.startPrank(user1);
-        sqd.approve(limitPortal, SMALL_STAKE);
-        limitPool.deposit(SMALL_STAKE);
+        sqd.approve(limitPortal, DEFAULT_MAX_STAKE_PER_WALLET);
+        limitPool.deposit(DEFAULT_MAX_STAKE_PER_WALLET);
         vm.stopPrank();
 
         // user2 deposits up to the limit
         vm.startPrank(user2);
-        sqd.approve(limitPortal, SMALL_STAKE);
-        limitPool.deposit(SMALL_STAKE);
+        sqd.approve(limitPortal, DEFAULT_MAX_STAKE_PER_WALLET);
+        limitPool.deposit(DEFAULT_MAX_STAKE_PER_WALLET);
         vm.stopPrank();
 
         LiquidPortalToken lpt = limitPool.lptToken();

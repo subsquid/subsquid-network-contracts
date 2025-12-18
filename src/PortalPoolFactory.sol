@@ -70,19 +70,17 @@ contract PortalPoolFactory is IPortalFactory, AccessControl, Pausable {
         collectionDeadlineSeconds = Constants.COLLECTION_DEADLINE_SECONDS;
     }
 
-    function createPortal(CreatePortalParams calldata params) external whenNotPaused returns (address portal) {
+    function createPortalPool(CreatePortalPoolParams calldata params) external whenNotPaused returns (address portal) {
         if (params.operator == address(0)) revert PortalErrors.InvalidAddress();
         if (paymentTokensList.length == 0) revert PortalErrors.NoPaymentTokens();
         uint256 minCapacity = INetworkController(networkController).minStakeThreshold();
-        if (params.maxCapacity < minCapacity) revert PortalErrors.BelowMinimum();
-        if (params.maxCapacity > maxPoolCapacity) revert PortalErrors.AboveMaximum();
+        if (params.capacity < minCapacity) revert PortalErrors.BelowMinimum();
+        if (params.capacity > maxPoolCapacity) revert PortalErrors.AboveMaximum();
         if (params.peerId.length == 0) revert PortalErrors.EmptyPeerId();
-
-        uint256 maxStakePerWallet = params.maxStakePerWallet > 0 ? params.maxStakePerWallet : defaultMaxStakePerWallet;
 
         IPortalPool.InitParams memory initParams = IPortalPool.InitParams({
             operator: params.operator,
-            maxCapacity: params.maxCapacity,
+            maxCapacity: params.capacity,
             depositDeadline: 0,
             peerId: params.peerId,
             portalName: params.portalName,
@@ -92,7 +90,8 @@ contract PortalPoolFactory is IPortalFactory, AccessControl, Pausable {
             feeRouter: feeRouter,
             networkController: networkController,
             distributionRatePerSecond: params.distributionRatePerSecond,
-            maxStakePerWallet: maxStakePerWallet
+            maxStakePerWallet: defaultMaxStakePerWallet,
+            metadata: params.metadata
         });
 
         bytes memory initData = abi.encodeWithSelector(IPortalPool.initialize.selector, initParams);

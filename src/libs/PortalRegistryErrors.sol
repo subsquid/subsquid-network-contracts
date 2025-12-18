@@ -9,6 +9,7 @@ library PortalRegistryErrors {
     error PeerIdInUse();
     error OnlyPortal();
     error OnlyOperator();
+    error NotOperator();
     error InsufficientAllocation();
     error AlreadyHasDirectPortal();
     error NoDirectPortal();

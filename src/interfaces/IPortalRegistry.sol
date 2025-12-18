@@ -19,6 +19,7 @@ interface IPortalRegistry {
         uint256 registeredAt;
         bool active;
         PortalType portalType;
+        string metadata;
     }
 
     // Events
@@ -31,8 +32,9 @@ interface IPortalRegistry {
     event MinStakeUpdated(uint256 oldValue, uint256 newValue);
     event ManaUpdated(uint256 oldValue, uint256 newValue);
     event PortalStatusChanged(address indexed portal, bool status);
+    event MetadataChanged(address indexed portal, string metadata);
 
-    function registerDirectPortal(bytes calldata peerId) external returns (address portalId);
+    function registerDirectPortal(bytes calldata peerId, string calldata metadata) external returns (address portalId);
 
     function stakeToDirectPortal(uint256 amount) external;
 
@@ -40,7 +42,12 @@ interface IPortalRegistry {
 
     function getDirectPortalId(address operator) external view returns (address);
 
-    function registerPortalPool(bytes calldata peerId, address portalAddress, address operator) external;
+    function registerPortalPool(
+        bytes calldata peerId,
+        address portalAddress,
+        address operator,
+        string calldata metadata
+    ) external;
 
     function stake(address portalAddress, address provider, uint256 amount) external;
 
@@ -56,6 +63,9 @@ interface IPortalRegistry {
     function getPortal(address portalAddress) external view returns (Portal memory);
     function isDirectPortal(address portalAddress) external view returns (bool);
     function isPortal(address portalAddress) external view returns (bool);
+
+    function setMetadata(address portalAddress, string calldata metadata) external;
+    function getMetadata(address portalAddress) external view returns (string memory);
 
     function pause() external;
     function unpause() external;

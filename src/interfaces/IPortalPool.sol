@@ -44,6 +44,7 @@ interface IPortalPool {
         address networkController;
         uint256 distributionRatePerSecond;
         uint256 maxStakePerWallet;
+        string metadata;
     }
 
     event Staked(address indexed provider, uint256 amount, uint256 newTotal);

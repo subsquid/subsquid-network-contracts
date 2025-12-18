@@ -84,7 +84,7 @@ contract PortalPoolImplementation is
         _grantRole(OPERATOR_ROLE, params.operator);
         _grantRole(FACTORY_ROLE, msg.sender);
 
-        _portalRegistry.registerPortalPool(_peerId, address(this), _portalInfo.operator);
+        _portalRegistry.registerPortalPool(_peerId, address(this), _portalInfo.operator, params.metadata);
 
         // deploy the LPT token for this portal using portalName
         string memory tokenName = string(abi.encodePacked(params.portalName, " Liquidity Portal Token"));

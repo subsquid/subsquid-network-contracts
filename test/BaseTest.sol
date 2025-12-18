@@ -99,16 +99,16 @@ abstract contract BaseTest is Test {
         internal
         returns (address portalAddress)
     {
-        IPortalFactory.CreatePortalParams memory params = IPortalFactory.CreatePortalParams({
+        IPortalFactory.CreatePortalPoolParams memory params = IPortalFactory.CreatePortalPoolParams({
             operator: _operator,
-            maxCapacity: _maxCapacity,
+            capacity: _maxCapacity,
             peerId: abi.encodePacked("peer-", _name),
             portalName: _name,
             distributionRatePerSecond: 1 ether,
-            maxStakePerWallet: DEFAULT_MAX_STAKE_PER_WALLET
+            metadata: ""
         });
 
-        portalAddress = factory.createPortal(params);
+        portalAddress = factory.createPortalPool(params);
     }
 
     function _createAndActivatePortal(address _operator, uint256 _maxCapacity, string memory _name)
