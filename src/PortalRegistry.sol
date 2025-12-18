@@ -146,7 +146,10 @@ contract PortalRegistry is IPortalRegistry, AccessControl, Pausable {
     }
 
     /// @inheritdoc IPortalRegistry
-    function registerPortalPool(bytes calldata peerId, address portalAddress, address operator) external whenNotPaused {
+    function registerPortalPool(bytes calldata peerId, address portalAddress, address operator)
+        external
+        whenNotPaused
+    {
         if (msg.sender != portalAddress) revert PortalRegistryErrors.OnlyPortal();
         if (operator == address(0)) revert PortalRegistryErrors.InvalidAddress();
         if (peerId.length == 0) revert PortalRegistryErrors.InvalidPeerId();

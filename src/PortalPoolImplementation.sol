@@ -139,7 +139,7 @@ contract PortalPoolImplementation is
             _portalInfo.activationTime = uint64(block.timestamp);
         }
 
-        // Route funds based on state 
+        // Route funds based on state
         if (shouldActivate) {
             // activation: Push ALL accumulated funds to Registry
             _sqd.approve(address(_portalRegistry), _portalInfo.totalStaked);

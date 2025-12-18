@@ -786,7 +786,6 @@ contract PortalPoolImplementationTest is BaseTest {
         assertGt(usdc.balanceOf(address(0xdead)), 0);
     }
 
-
     function test_ClaimFees_RevertOnInvalidToken() public {
         portal = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "InvalidTokenPortal");
         pool = PortalPoolImplementation(portal);
@@ -883,7 +882,6 @@ contract PortalPoolImplementationTest is BaseTest {
 
         assertEq(uint8(pool.getState()), uint8(IPortalPool.PortalState.ACTIVE));
     }
-
 
     function test_DistributeFees_RevertOnInvalidToken() public {
         portal = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "InvalidDistributePortal");
@@ -1101,7 +1099,6 @@ contract PortalPoolImplementationTest is BaseTest {
         pool.deposit(SMALL_STAKE);
         vm.stopPrank();
     }
-
 
     function test_GetClaimableRewards_ZeroCapacity() public {
         portal = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "ZeroCapRewardsPortal");

@@ -535,5 +535,4 @@ contract PortalRegistryTest is BaseTest {
         vm.expectRevert(PortalRegistryErrors.PortalAlreadyRegistered.selector);
         registry.registerPortalPool(TEST_PEER_ID_2, portalAddress, operator);
     }
-
 }
