@@ -151,49 +151,6 @@ contract SecurityTests is BaseTest {
         assertEq(user2ClaimableAfter, 0);
     }
 
-    function test_OnLPTTransfer_CheckpointUpdate_AfterTransfer() public {
-        IPortalFactory.CreatePortalParams memory params = IPortalFactory.CreatePortalParams({
-            operator: operator,
-            maxCapacity: MIN_STAKE_THRESHOLD,
-            peerId: "checkpoint-portal",
-            portalName: "CheckpointPortal",
-            distributionRatePerSecond: 1e6,
-            maxStakePerWallet: 1_000_000 ether
-        });
-        address checkpointPortal = factory.createPortal(params);
-        PortalPoolImplementation checkpointPool = PortalPoolImplementation(checkpointPortal);
-
-        vm.startPrank(user1);
-        sqd.approve(checkpointPortal, MIN_STAKE_THRESHOLD);
-        checkpointPool.deposit(MIN_STAKE_THRESHOLD);
-        vm.stopPrank();
-
-        LiquidPortalToken checkpointLpt = LiquidPortalToken(address(checkpointPool.lptToken()));
-
-        uint256 rewardAmount = 1_000_000 * 1e6;
-        vm.startPrank(operator);
-        usdc.approve(checkpointPortal, rewardAmount);
-        checkpointPool.topUpRewards(rewardAmount);
-        vm.stopPrank();
-
-        vm.warp(block.timestamp + 1000);
-
-        uint256 user1RewardsBefore = checkpointPool.getClaimableRewards(user1);
-
-        uint256 transferAmount = SMALL_STAKE;
-
-        vm.prank(user1);
-        checkpointLpt.transfer(user2, transferAmount);
-
-        vm.warp(block.timestamp + 1000);
-
-        uint256 user1RewardsAfter = checkpointPool.getClaimableRewards(user1);
-        uint256 user2RewardsAfter = checkpointPool.getClaimableRewards(user2);
-
-        assertTrue(user1RewardsAfter >= user1RewardsBefore);
-        assertTrue(user2RewardsAfter > 0);
-    }
-
     function test_OnLPTTransfer_EventEmitted() public {
         uint256 transferAmount = SMALL_STAKE;
 

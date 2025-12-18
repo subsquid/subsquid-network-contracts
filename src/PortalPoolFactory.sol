@@ -78,9 +78,7 @@ contract PortalPoolFactory is IPortalFactory, AccessControl, Pausable {
         if (params.maxCapacity > maxPoolCapacity) revert PortalErrors.AboveMaximum();
         if (params.peerId.length == 0) revert PortalErrors.EmptyPeerId();
 
-        uint256 maxStakePerWallet = params.maxStakePerWallet > 0
-            ? params.maxStakePerWallet
-            : defaultMaxStakePerWallet;
+        uint256 maxStakePerWallet = params.maxStakePerWallet > 0 ? params.maxStakePerWallet : defaultMaxStakePerWallet;
 
         IPortalPool.InitParams memory initParams = IPortalPool.InitParams({
             operator: params.operator,
@@ -97,15 +95,12 @@ contract PortalPoolFactory is IPortalFactory, AccessControl, Pausable {
             maxStakePerWallet: maxStakePerWallet
         });
 
-        bytes memory initData = abi.encodeWithSelector(
-            IPortalPool.initialize.selector,
-            initParams
-        );
+        bytes memory initData = abi.encodeWithSelector(IPortalPool.initialize.selector, initParams);
 
         portal = address(new BeaconProxy(address(beacon), initData));
 
         allPortals[portalCount] = portal;
-        portalCount++;
+        ++portalCount;
         operatorPortals[params.operator].push(portal);
         isPortal[portal] = true;
 
@@ -194,7 +189,9 @@ contract PortalPoolFactory is IPortalFactory, AccessControl, Pausable {
                 paymentTokensList.pop();
                 break;
             }
-            unchecked { ++i; }
+            unchecked {
+                ++i;
+            }
         }
 
         emit PaymentTokenRemoved(token);

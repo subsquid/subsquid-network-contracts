@@ -10,7 +10,6 @@ contract FeeRouterModuleTest is BaseTest {
         super.setUp();
     }
 
-
     function test_Constructor_SetsDefaultFeeConfig() public view {
         IFeeRouter.FeeConfig memory config = feeRouter.getFeeConfig();
 
@@ -22,7 +21,6 @@ contract FeeRouterModuleTest is BaseTest {
     function test_Constructor_GrantsAdminRole() public view {
         assertTrue(feeRouter.hasRole(feeRouter.DEFAULT_ADMIN_ROLE(), admin));
     }
-
 
     function test_CalculateSplit_DefaultConfig() public view {
         uint256 amount = 1000 ether;
@@ -120,7 +118,6 @@ contract FeeRouterModuleTest is BaseTest {
         assertEq(toBurn, 1000 ether);
     }
 
-
     function test_SetFeeConfig_Success() public {
         vm.expectEmit(true, true, true, false);
         emit IFeeRouter.FeeConfigUpdated(3000, 5000, 2000);
@@ -176,7 +173,6 @@ contract FeeRouterModuleTest is BaseTest {
         assertEq(config.toBurnBPS, 0);
     }
 
-
     function test_GetFeeConfig_ReturnsCorrectValues() public view {
         IFeeRouter.FeeConfig memory config = feeRouter.getFeeConfig();
 
@@ -184,7 +180,6 @@ contract FeeRouterModuleTest is BaseTest {
         assertEq(config.toWorkerPoolBPS, 5000);
         assertEq(config.toBurnBPS, 0);
     }
-
 
     function testFuzz_CalculateSplit_TotalEqualsInput(uint256 amount) public view {
         vm.assume(amount < type(uint256).max / 10000);

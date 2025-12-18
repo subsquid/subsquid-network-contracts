@@ -13,7 +13,6 @@ contract PortalRegistryTest is BaseTest {
         super.setUp();
     }
 
-
     function test_Constructor_SetsCorrectValues() public view {
         assertEq(address(registry.SQD()), address(sqd));
         assertEq(address(registry.networkController()), address(networkController));
@@ -23,24 +22,13 @@ contract PortalRegistryTest is BaseTest {
 
     function test_Constructor_RevertOnZeroSQD() public {
         vm.expectRevert(PortalRegistryErrors.InvalidAddress.selector);
-        new PortalRegistry(
-            address(0),
-            address(networkController),
-            MIN_STAKE_THRESHOLD,
-            MANA
-        );
+        new PortalRegistry(address(0), address(networkController), MIN_STAKE_THRESHOLD, MANA);
     }
 
     function test_Constructor_RevertOnZeroNetworkController() public {
         vm.expectRevert(PortalRegistryErrors.InvalidAddress.selector);
-        new PortalRegistry(
-            address(sqd),
-            address(0),
-            MIN_STAKE_THRESHOLD,
-            MANA
-        );
+        new PortalRegistry(address(sqd), address(0), MIN_STAKE_THRESHOLD, MANA);
     }
-
 
     function test_RegisterDirectPortal_Success() public {
         vm.prank(operator);
@@ -81,7 +69,6 @@ contract PortalRegistryTest is BaseTest {
         vm.expectRevert(PortalRegistryErrors.PeerIdInUse.selector);
         registry.registerDirectPortal(TEST_PEER_ID);
     }
-
 
     function test_StakeToDirectPortal_Success() public {
         vm.prank(operator);
@@ -128,7 +115,6 @@ contract PortalRegistryTest is BaseTest {
         vm.expectRevert(PortalRegistryErrors.NoDirectPortal.selector);
         registry.stakeToDirectPortal(STAKE_AMOUNT);
     }
-
 
     function test_UnstakeFromDirectPortal_Success() public {
         vm.startPrank(operator);
@@ -185,7 +171,6 @@ contract PortalRegistryTest is BaseTest {
         vm.stopPrank();
     }
 
-
     function test_RegisterPortal_Success() public {
         address portalAddress = _createPortal(operator, MIN_STAKE_THRESHOLD, "TestPortal");
 
@@ -202,7 +187,6 @@ contract PortalRegistryTest is BaseTest {
         assertTrue(registry.isPortal(portalAddress));
     }
 
-
     function test_Stake_Success() public {
         address portalAddress = _createPortal(operator, MIN_STAKE_THRESHOLD, "TestPortal");
 
@@ -215,7 +199,6 @@ contract PortalRegistryTest is BaseTest {
         assertEq(portal.totalStaked, STAKE_AMOUNT);
     }
 
-
     function test_ActivatePortal_Success() public {
         address portalAddress = _createPortal(operator, MIN_STAKE_THRESHOLD, "TestPortal");
 
@@ -227,7 +210,6 @@ contract PortalRegistryTest is BaseTest {
         IPortalRegistry.Portal memory portal = registry.getPortal(portalAddress);
         assertTrue(portal.active);
     }
-
 
     function test_GetComputationUnits_ReturnsZeroWhenInactive() public {
         address portalAddress = _createPortal(operator, MIN_STAKE_THRESHOLD, "TestPortal");
@@ -242,7 +224,6 @@ contract PortalRegistryTest is BaseTest {
         uint256 cus = registry.getComputationUnits(portalAddress);
         assertTrue(cus > 0);
     }
-
 
     function test_GetDirectPortalId() public {
         vm.prank(operator);
@@ -261,7 +242,6 @@ contract PortalRegistryTest is BaseTest {
         assertTrue(registry.isDirectPortal(directPortalId));
         assertFalse(registry.isDirectPortal(poolPortalAddress));
     }
-
 
     function test_SetMinStake_Success() public {
         uint256 newMinStake = 200_000 ether;
@@ -309,7 +289,6 @@ contract PortalRegistryTest is BaseTest {
         assertFalse(registry.isPortal(portalAddress));
     }
 
-
     function test_Pause_Success() public {
         registry.pause();
         assertTrue(registry.paused());
@@ -340,7 +319,6 @@ contract PortalRegistryTest is BaseTest {
         registry.stakeToDirectPortal(STAKE_AMOUNT);
     }
 
-
     function test_WithdrawFailedPortal_Success() public {
         address portalAddress = _createPortal(operator, MIN_STAKE_THRESHOLD, "TestPortal");
 
@@ -362,7 +340,6 @@ contract PortalRegistryTest is BaseTest {
         assertEq(sqd.balanceOf(user1), balanceBefore + partialStake);
     }
 
-
     function test_ImmediateUnlock_ReducesActiveStake() public {
         address portalAddress = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "TestPortal");
 
@@ -376,4 +353,187 @@ contract PortalRegistryTest is BaseTest {
         uint256 activeStakeAfter = IPortalPool(portalAddress).getActiveStake();
         assertEq(activeStakeAfter, 0);
     }
+
+    function test_RegisterPortal_RevertOnZeroOperator() public {
+        vm.prank(address(0x999));
+        vm.expectRevert(PortalRegistryErrors.OnlyPortal.selector);
+        registry.registerPortalPool(TEST_PEER_ID, address(0x888), address(0));
+    }
+
+    function test_RegisterPortal_RevertOnEmptyPeerId() public {
+        vm.prank(address(0x999));
+        vm.expectRevert(PortalRegistryErrors.InvalidPeerId.selector);
+        registry.registerPortalPool("", address(0x999), operator);
+    }
+
+    function test_Stake_RevertOnNonPortal() public {
+        vm.prank(user1);
+        vm.expectRevert(PortalRegistryErrors.PortalNotRegistered.selector);
+        registry.stake(user1, user1, STAKE_AMOUNT);
+    }
+
+    function test_Stake_RevertOnZeroAmount() public {
+        address portalAddress = _createPortal(operator, MIN_STAKE_THRESHOLD, "TestPortal");
+        vm.prank(portalAddress);
+        vm.expectRevert(PortalRegistryErrors.InvalidAmount.selector);
+        registry.stake(portalAddress, user1, 0);
+    }
+
+    function test_ActivatePortalPool_RevertOnNonPortal() public {
+        vm.prank(user1);
+        vm.expectRevert(PortalRegistryErrors.PortalNotRegistered.selector);
+        registry.activatePortalPool();
+    }
+
+    function test_ActivatePortalPool_RevertOnDirectPortal() public {
+        vm.prank(operator);
+        address directPortalId = registry.registerDirectPortal(TEST_PEER_ID);
+
+        vm.prank(directPortalId);
+        vm.expectRevert(PortalRegistryErrors.OnlyPoolPortal.selector);
+        registry.activatePortalPool();
+    }
+
+    function test_ActivatePortalPool_NoOpWhenAlreadyActive() public {
+        address portalAddress = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "TestPortal");
+
+        IPortalRegistry.Portal memory portalBefore = registry.getPortal(portalAddress);
+        assertTrue(portalBefore.active);
+
+        vm.prank(portalAddress);
+        registry.activatePortalPool();
+
+        IPortalRegistry.Portal memory portalAfter = registry.getPortal(portalAddress);
+        assertTrue(portalAfter.active);
+    }
+
+    function test_StakePoolFunds_RevertOnNonPortal() public {
+        vm.prank(user1);
+        vm.expectRevert(PortalRegistryErrors.PortalNotRegistered.selector);
+        registry.stakePoolFunds(STAKE_AMOUNT);
+    }
+
+    function test_StakePoolFunds_RevertOnDirectPortal() public {
+        vm.prank(operator);
+        address directPortalId = registry.registerDirectPortal(TEST_PEER_ID);
+
+        vm.prank(directPortalId);
+        vm.expectRevert(PortalRegistryErrors.OnlyPoolPortal.selector);
+        registry.stakePoolFunds(STAKE_AMOUNT);
+    }
+
+    function test_WithdrawFailedPortal_RevertOnNonPortal() public {
+        vm.prank(user1);
+        vm.expectRevert(PortalRegistryErrors.PortalNotRegistered.selector);
+        registry.withdrawFailedPortal(user1, STAKE_AMOUNT);
+    }
+
+    function test_ImmediateUnlock_RevertOnNonPortal() public {
+        vm.prank(user1);
+        vm.expectRevert(PortalRegistryErrors.PortalNotRegistered.selector);
+        registry.immediateUnlock(user1, STAKE_AMOUNT);
+    }
+
+    function test_ImmediateUnlock_RevertOnInsufficientAllocation() public {
+        address portalAddress = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "TestPortal");
+
+        vm.prank(portalAddress);
+        vm.expectRevert(PortalRegistryErrors.InsufficientAllocation.selector);
+        registry.immediateUnlock(user2, STAKE_AMOUNT);
+    }
+
+    function test_UnstakeFromDirectPortal_RevertWhenPaused() public {
+        vm.startPrank(operator);
+        registry.registerDirectPortal(TEST_PEER_ID);
+        sqd.approve(address(registry), STAKE_AMOUNT);
+        registry.stakeToDirectPortal(STAKE_AMOUNT);
+        vm.stopPrank();
+
+        registry.pause();
+
+        vm.prank(operator);
+        vm.expectRevert();
+        registry.unstakeFromDirectPortal(STAKE_AMOUNT);
+    }
+
+    function test_UnstakeFromDirectPortal_RevertOnNoDirectPortal() public {
+        vm.prank(user1);
+        vm.expectRevert(PortalRegistryErrors.NoDirectPortal.selector);
+        registry.unstakeFromDirectPortal(STAKE_AMOUNT);
+    }
+
+    function test_Pause_RevertOnNonPauser() public {
+        vm.prank(user1);
+        vm.expectRevert();
+        registry.pause();
+    }
+
+    function test_Unpause_RevertOnNonPauser() public {
+        registry.pause();
+        vm.prank(user1);
+        vm.expectRevert();
+        registry.unpause();
+    }
+
+    function test_SetPortalStatus_RevertOnNonAdmin() public {
+        address portalAddress = _createPortal(operator, MIN_STAKE_THRESHOLD, "TestPortal");
+        vm.prank(user1);
+        vm.expectRevert();
+        registry.setPortalStatus(portalAddress, false);
+    }
+
+    function test_StakeToDirectPortal_MultipleStakes() public {
+        vm.prank(operator);
+        address portalId = registry.registerDirectPortal(TEST_PEER_ID);
+
+        vm.startPrank(operator);
+        sqd.approve(address(registry), STAKE_AMOUNT * 2);
+        registry.stakeToDirectPortal(STAKE_AMOUNT);
+        registry.stakeToDirectPortal(STAKE_AMOUNT);
+        vm.stopPrank();
+
+        IPortalRegistry.Portal memory portal = registry.getPortal(portalId);
+        assertEq(portal.totalStaked, STAKE_AMOUNT * 2);
+    }
+
+    function test_UnstakeFromDirectPortal_PartialUnstake() public {
+        uint256 stakeAmount = MIN_STAKE_THRESHOLD * 2;
+        vm.startPrank(operator);
+        address portalId = registry.registerDirectPortal(TEST_PEER_ID);
+        sqd.approve(address(registry), stakeAmount);
+        registry.stakeToDirectPortal(stakeAmount);
+
+        uint256 partialAmount = MIN_STAKE_THRESHOLD / 4;
+        registry.unstakeFromDirectPortal(partialAmount);
+        vm.stopPrank();
+
+        IPortalRegistry.Portal memory portal = registry.getPortal(portalId);
+        assertTrue(portal.active);
+        assertEq(portal.totalStaked, stakeAmount - partialAmount);
+    }
+
+    function test_WithdrawFailedPortal_RevertOnInsufficientAllocation() public {
+        address portalAddress = _createPortal(operator, MIN_STAKE_THRESHOLD, "TestPortal");
+
+        uint256 partialStake = MIN_STAKE_THRESHOLD / 2;
+        vm.startPrank(user1);
+        sqd.approve(portalAddress, partialStake);
+        IPortalPool(portalAddress).deposit(partialStake);
+        vm.stopPrank();
+
+        _warpToAfterDeadline(portalAddress);
+
+        vm.prank(portalAddress);
+        vm.expectRevert(PortalRegistryErrors.InsufficientAllocation.selector);
+        registry.withdrawFailedPortal(user2, partialStake);
+    }
+
+    function test_RegisterPortal_RevertOnPortalAlreadyRegistered() public {
+        address portalAddress = _createPortal(operator, MIN_STAKE_THRESHOLD, "TestPortal");
+
+        vm.prank(portalAddress);
+        vm.expectRevert(PortalRegistryErrors.PortalAlreadyRegistered.selector);
+        registry.registerPortalPool(TEST_PEER_ID_2, portalAddress, operator);
+    }
+
 }

@@ -55,7 +55,6 @@ contract PortalRegistry is IPortalRegistry, AccessControl, Pausable {
         _grantRole(PAUSER_ROLE, msg.sender);
     }
 
-
     /// @inheritdoc IPortalRegistry
     function registerDirectPortal(bytes calldata peerId) external whenNotPaused returns (address portalId) {
         if (operatorToDirectPortal[msg.sender] != address(0)) {
@@ -68,8 +67,9 @@ contract PortalRegistry is IPortalRegistry, AccessControl, Pausable {
         }
 
         // Generate unique portal ID for direct portals
-        _directPortalNonce++;
-        portalId = address(uint160(uint256(keccak256(abi.encodePacked(msg.sender, _directPortalNonce, block.timestamp)))));
+        ++_directPortalNonce;
+        portalId =
+            address(uint160(uint256(keccak256(abi.encodePacked(msg.sender, _directPortalNonce, block.timestamp)))));
 
         portals[portalId] = Portal({
             peerId: peerId,
@@ -145,9 +145,8 @@ contract PortalRegistry is IPortalRegistry, AccessControl, Pausable {
         return operatorToDirectPortal[operator];
     }
 
-
     /// @inheritdoc IPortalRegistry
-    function registerPortal(bytes calldata peerId, address portalAddress, address operator) external whenNotPaused {
+    function registerPortalPool(bytes calldata peerId, address portalAddress, address operator) external whenNotPaused {
         if (msg.sender != portalAddress) revert PortalRegistryErrors.OnlyPortal();
         if (operator == address(0)) revert PortalRegistryErrors.InvalidAddress();
         if (peerId.length == 0) revert PortalRegistryErrors.InvalidPeerId();
@@ -195,7 +194,7 @@ contract PortalRegistry is IPortalRegistry, AccessControl, Pausable {
     }
 
     /// @inheritdoc IPortalRegistry
-    function activatePortal() external whenNotPaused {
+    function activatePortalPool() external whenNotPaused {
         address portalAddress = msg.sender;
         Portal storage portal = portals[portalAddress];
 
@@ -295,11 +294,7 @@ contract PortalRegistry is IPortalRegistry, AccessControl, Pausable {
 
         // Use FullMath for 512-bit precision to prevent overflow
         // Formula: (totalStaked * epochLength * mana * boostFactor) / (10000 * 1e18 * 1000)
-        uint256 cus = FullMath.mulDiv(
-            portal.totalStaked * epochLength,
-            mana * boostFactor,
-            10000 * 1e18 * 1000
-        );
+        uint256 cus = FullMath.mulDiv(portal.totalStaked * epochLength, mana * boostFactor, 10000 * 1e18 * 1000);
 
         return cus;
     }
@@ -313,7 +308,6 @@ contract PortalRegistry is IPortalRegistry, AccessControl, Pausable {
     function isDirectPortal(address portalAddress) external view returns (bool) {
         return portals[portalAddress].portalType == PortalType.DIRECT;
     }
-
 
     /// @inheritdoc IPortalRegistry
     function pause() external onlyRole(PAUSER_ROLE) {

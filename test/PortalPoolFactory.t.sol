@@ -11,7 +11,6 @@ contract PortalPoolFactoryTest is BaseTest {
         super.setUp();
     }
 
-
     function test_Constructor_SetsCorrectValues() public view {
         assertEq(factory.portalRegistry(), address(registry));
         assertEq(factory.feeRouter(), address(feeRouter));
@@ -35,7 +34,6 @@ contract PortalPoolFactoryTest is BaseTest {
             DEFAULT_MAX_STAKE_PER_WALLET
         );
     }
-
 
     function test_CreatePortal_Success() public {
         address portal = _createPortal(operator, MIN_STAKE_THRESHOLD, "TestPortal");
@@ -163,7 +161,6 @@ contract PortalPoolFactoryTest is BaseTest {
         factory.createPortal(params);
     }
 
-
     function test_AddPaymentToken_Success() public {
         MockERC20 newToken = new MockERC20("New Token", "NEW", 18);
 
@@ -228,7 +225,6 @@ contract PortalPoolFactoryTest is BaseTest {
         assertEq(tokens[1], address(dai));
     }
 
-
     function test_SetMaxPoolCapacity() public {
         uint256 newCapacity = 20_000_000 ether;
 
@@ -267,7 +263,6 @@ contract PortalPoolFactoryTest is BaseTest {
         factory.setUsdc(address(0));
     }
 
-
     function test_Pause_Success() public {
         factory.pause();
         assertTrue(factory.paused());
@@ -284,7 +279,6 @@ contract PortalPoolFactoryTest is BaseTest {
         vm.expectRevert();
         factory.pause();
     }
-
 
     function test_UpgradeBeacon_Success() public {
         PortalPoolImplementation newImpl = new PortalPoolImplementation();
@@ -307,7 +301,6 @@ contract PortalPoolFactoryTest is BaseTest {
         vm.expectRevert();
         factory.upgradeBeacon(address(newImpl));
     }
-
 
     function test_GetPortalCount() public {
         assertEq(factory.getPortalCount(), 0);
@@ -335,5 +328,98 @@ contract PortalPoolFactoryTest is BaseTest {
 
         assertTrue(factory.isPortal(portal));
         assertFalse(factory.isPortal(address(0x999)));
+    }
+
+    function test_SetMaxPaymentTokens_Success() public {
+        uint256 newValue = 20;
+
+        vm.expectEmit(true, true, false, false);
+        emit IPortalFactory.MaxPaymentTokensUpdated(Constants.MAX_PAYMENT_TOKENS, newValue);
+
+        factory.setMaxPaymentTokens(newValue);
+
+        assertEq(factory.maxPaymentTokens(), newValue);
+    }
+
+    function test_SetMaxPaymentTokens_RevertOnNonAdmin() public {
+        vm.prank(user1);
+        vm.expectRevert();
+        factory.setMaxPaymentTokens(20);
+    }
+
+    function test_SetExitUnlockRate_Success() public {
+        uint256 newValue = 2e18;
+
+        vm.expectEmit(true, true, false, false);
+        emit IPortalFactory.ExitUnlockRateUpdated(Constants.EXIT_UNLOCK_RATE_PER_SECOND, newValue);
+
+        factory.setExitUnlockRate(newValue);
+
+        assertEq(factory.exitUnlockRatePerSecond(), newValue);
+    }
+
+    function test_SetExitUnlockRate_RevertOnNonAdmin() public {
+        vm.prank(user1);
+        vm.expectRevert();
+        factory.setExitUnlockRate(2e18);
+    }
+
+    function test_SetCollectionDeadline_Success() public {
+        uint256 newValue = 14 days;
+
+        vm.expectEmit(true, true, false, false);
+        emit IPortalFactory.CollectionDeadlineUpdated(Constants.COLLECTION_DEADLINE_SECONDS, newValue);
+
+        factory.setCollectionDeadline(newValue);
+
+        assertEq(factory.collectionDeadlineSeconds(), newValue);
+    }
+
+    function test_SetCollectionDeadline_RevertOnNonAdmin() public {
+        vm.prank(user1);
+        vm.expectRevert();
+        factory.setCollectionDeadline(14 days);
+    }
+
+    function test_CreatePortal_RevertOnNoPaymentTokens() public {
+        factory.removePaymentToken(address(usdc));
+        factory.removePaymentToken(address(dai));
+
+        IPortalFactory.CreatePortalParams memory params = IPortalFactory.CreatePortalParams({
+            operator: operator,
+            maxCapacity: MIN_STAKE_THRESHOLD,
+            peerId: "test-peer-id",
+            portalName: "TestPortal",
+            distributionRatePerSecond: 1 ether,
+            maxStakePerWallet: DEFAULT_MAX_STAKE_PER_WALLET
+        });
+
+        vm.expectRevert(PortalErrors.NoPaymentTokens.selector);
+        factory.createPortal(params);
+    }
+
+    function test_Unpause_RevertOnNonPauser() public {
+        factory.pause();
+        vm.prank(user1);
+        vm.expectRevert();
+        factory.unpause();
+    }
+
+    function test_SetMaxPoolCapacity_RevertOnNonAdmin() public {
+        vm.prank(user1);
+        vm.expectRevert();
+        factory.setMaxPoolCapacity(20_000_000 ether);
+    }
+
+    function test_SetDefaultMaxStakePerWallet_RevertOnNonAdmin() public {
+        vm.prank(user1);
+        vm.expectRevert();
+        factory.setDefaultMaxStakePerWallet(2_000_000 ether);
+    }
+
+    function test_SetUsdc_RevertOnNonAdmin() public {
+        vm.prank(user1);
+        vm.expectRevert();
+        factory.setUsdc(address(0x123));
     }
 }

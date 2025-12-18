@@ -16,7 +16,6 @@ contract PortalPoolImplementationTest is BaseTest {
         pool = PortalPoolImplementation(portal);
     }
 
-
     function test_Initialize_SetsCorrectValues() public view {
         IPortalPool.PortalInfo memory info = pool.getPortalInfo();
 
@@ -33,7 +32,6 @@ contract PortalPoolImplementationTest is BaseTest {
         assertEq(lpt.name(), "TestPortal Liquidity Portal Token");
         assertEq(lpt.symbol(), "TestPortal-LPT");
     }
-
 
     function test_Deposit_InCollectingState() public {
         uint256 amount = SMALL_STAKE;
@@ -127,7 +125,6 @@ contract PortalPoolImplementationTest is BaseTest {
         assertEq(pool.getProviderStake(user2), user2StakeBefore);
     }
 
-
     function test_Deposit_InActiveState() public {
         portal = _createPortal(operator, MIN_STAKE_THRESHOLD * 2, "ActivePortal");
         pool = PortalPoolImplementation(portal);
@@ -141,7 +138,6 @@ contract PortalPoolImplementationTest is BaseTest {
 
         assertEq(pool.getProviderStake(user1), MIN_STAKE_THRESHOLD * 2);
     }
-
 
     function test_RequestExit_Success() public {
         portal = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "ExitPortal");
@@ -205,7 +201,6 @@ contract PortalPoolImplementationTest is BaseTest {
         assertEq(pool.getTicketCount(user1), 2);
     }
 
-
     function test_WithdrawExit_QueueMechanics() public {
         portal = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "ExitPortal");
         pool = PortalPoolImplementation(portal);
@@ -217,7 +212,8 @@ contract PortalPoolImplementationTest is BaseTest {
         assertEq(ticket.amount, SMALL_STAKE);
         assertFalse(ticket.withdrawn);
 
-        (uint256 processed, uint256 userEndPos, uint256 secondsRemaining, bool ready) = pool.getQueueStatus(user1, ticketId);
+        (uint256 processed, uint256 userEndPos, uint256 secondsRemaining, bool ready) =
+            pool.getQueueStatus(user1, ticketId);
         assertFalse(ready);
         assertTrue(secondsRemaining > 0);
 
@@ -258,7 +254,6 @@ contract PortalPoolImplementationTest is BaseTest {
         pool.withdrawExit(ticketId);
     }
 
-
     function test_WithdrawFromFailed_Success() public {
         _approveAndDeposit(user1, portal, SMALL_STAKE);
 
@@ -283,7 +278,6 @@ contract PortalPoolImplementationTest is BaseTest {
         vm.expectRevert(PortalErrors.PortalNotFailed.selector);
         pool.withdrawFromFailed();
     }
-
 
     function test_DistributeFees_Success() public {
         portal = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "FeePortal");
@@ -327,7 +321,6 @@ contract PortalPoolImplementationTest is BaseTest {
         vm.stopPrank();
     }
 
-
     function test_ClaimFees_Success() public {
         portal = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "FeePortal");
         pool = PortalPoolImplementation(portal);
@@ -354,12 +347,10 @@ contract PortalPoolImplementationTest is BaseTest {
         portal = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "FeePortal");
         pool = PortalPoolImplementation(portal);
 
-
         vm.prank(user1);
         vm.expectRevert(PortalErrors.NothingToClaim.selector);
         pool.claimFees(address(usdc));
     }
-
 
     function test_TopUpRewards_Success() public {
         portal = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "RewardPortal");
@@ -423,7 +414,6 @@ contract PortalPoolImplementationTest is BaseTest {
         assertEq(usdc.balanceOf(user1), balanceBefore + claimed);
     }
 
-
     function test_OnLPTTransfer_UpdatesStakes() public {
         portal = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "TransferPortal");
         pool = PortalPoolImplementation(portal);
@@ -469,7 +459,6 @@ contract PortalPoolImplementationTest is BaseTest {
         lpt.transfer(user2, 1);
     }
 
-
     function test_GetState_COLLECTING() public view {
         assertEq(uint8(pool.getState()), uint8(IPortalPool.PortalState.COLLECTING));
     }
@@ -496,7 +485,6 @@ contract PortalPoolImplementationTest is BaseTest {
         assertTrue(pool.getPortalInfo().totalStaked >= MIN_STAKE_THRESHOLD);
     }
 
-
     function test_Pause_BlocksDeposit() public {
         vm.prank(operator);
         pool.pause();
@@ -519,7 +507,6 @@ contract PortalPoolImplementationTest is BaseTest {
         _approveAndDeposit(user1, portal, SMALL_STAKE);
         assertEq(pool.getProviderStake(user1), SMALL_STAKE);
     }
-
 
     function test_GetPortalInfo() public {
         _approveAndDeposit(user1, portal, SMALL_STAKE);
@@ -591,7 +578,6 @@ contract PortalPoolImplementationTest is BaseTest {
         assertEq(pool.distributionRateScaled(), newRate * Constants.PRECISION);
     }
 
-
     function test_CheckAndFailPortal_Success() public {
         _warpToAfterDeadline(portal);
 
@@ -610,5 +596,640 @@ contract PortalPoolImplementationTest is BaseTest {
     function test_CheckAndFailPortal_RevertBeforeDeadline() public {
         vm.expectRevert(PortalErrors.DeadlineNotPassed.selector);
         PortalPoolImplementation(portal).checkAndFailPortal();
+    }
+
+    function test_WithdrawFromFailed_WithExitRequest() public {
+        portal = _createPortal(operator, MIN_STAKE_THRESHOLD, "FailedExitPortal");
+        pool = PortalPoolImplementation(portal);
+
+        vm.startPrank(user1);
+        sqd.approve(portal, SMALL_STAKE);
+        pool.deposit(SMALL_STAKE);
+        pool.requestExit(SMALL_STAKE / 2);
+        vm.stopPrank();
+
+        _warpToAfterDeadline(portal);
+
+        uint256 balanceBefore = sqd.balanceOf(user1);
+
+        vm.prank(user1);
+        pool.withdrawFromFailed();
+
+        assertEq(sqd.balanceOf(user1), balanceBefore + SMALL_STAKE);
+        assertEq(pool.getProviderStake(user1), 0);
+    }
+
+    function test_Pause_RevertOnNonOperator() public {
+        vm.prank(user1);
+        vm.expectRevert();
+        pool.pause();
+    }
+
+    function test_Unpause_RevertOnNonOperator() public {
+        vm.prank(operator);
+        pool.pause();
+
+        vm.prank(user1);
+        vm.expectRevert();
+        pool.unpause();
+    }
+
+    function test_SetDistributionRate_RevertOnNonOperator() public {
+        portal = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "RatePortal");
+
+        vm.prank(user1);
+        vm.expectRevert(PortalErrors.NotOperator.selector);
+        PortalPoolImplementation(portal).setDistributionRate(2 ether);
+    }
+
+    function test_SetDistributionRate_InCollectingState() public {
+        uint256 newRate = 2 ether;
+        vm.prank(operator);
+        pool.setDistributionRate(newRate);
+
+        assertEq(pool.distributionRateScaled(), newRate * Constants.PRECISION);
+    }
+
+    function test_RequestExit_RevertOnFailed() public {
+        _approveAndDeposit(user1, portal, SMALL_STAKE);
+
+        _warpToAfterDeadline(portal);
+
+        vm.prank(user1);
+        vm.expectRevert(PortalErrors.UseWithdrawFromFailed.selector);
+        pool.requestExit(SMALL_STAKE);
+    }
+
+    function test_GetClaimableRewards_ZeroWhenNoRewards() public view {
+        uint256 rewards = pool.getClaimableRewards(user1);
+        assertEq(rewards, 0);
+    }
+
+    function test_GetProviderStake_ReturnsCorrectValue() public {
+        _approveAndDeposit(user1, portal, SMALL_STAKE);
+        assertEq(pool.getProviderStake(user1), SMALL_STAKE);
+        assertEq(pool.getProviderStake(user2), 0);
+    }
+
+    function test_OnLPTTransfer_SenderZeroStakeAfterFullTransfer() public {
+        portal = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "TransferPortal");
+        pool = PortalPoolImplementation(portal);
+
+        LiquidPortalToken lpt = pool.lptToken();
+
+        uint256 user1Stake = pool.getProviderStake(user1);
+
+        vm.prank(user1);
+        lpt.transfer(user2, user1Stake);
+
+        assertEq(pool.getProviderStake(user1), 0);
+        assertEq(pool.getProviderStake(user2), user1Stake);
+    }
+
+    function test_ClaimRewards_RevertOnNothingToClaim() public {
+        portal = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "NoRewardsPortal");
+        pool = PortalPoolImplementation(portal);
+
+        vm.prank(user1);
+        vm.expectRevert(PortalErrors.NothingToClaim.selector);
+        pool.claimRewards();
+    }
+
+    function test_TopUpRewards_RevertOnNonOperator() public {
+        portal = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "RewardsPortal");
+        pool = PortalPoolImplementation(portal);
+
+        uint256 rewardAmount = 1_000_000 * 1e6;
+        vm.startPrank(user2);
+        usdc.mint(user2, rewardAmount);
+        usdc.approve(portal, rewardAmount);
+        vm.expectRevert(PortalErrors.NotOperator.selector);
+        pool.topUpRewards(rewardAmount);
+        vm.stopPrank();
+    }
+
+    function test_DistributeFees_TransfersTokens() public {
+        portal = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "FeesPortal");
+        pool = PortalPoolImplementation(portal);
+
+        uint256 feeAmount = 100_000 * 1e6;
+        uint256 operatorBalanceBefore = usdc.balanceOf(operator);
+
+        vm.startPrank(operator);
+        usdc.mint(operator, feeAmount);
+        usdc.approve(portal, feeAmount);
+        pool.distributeFees(address(usdc), feeAmount);
+        vm.stopPrank();
+
+        assertEq(usdc.balanceOf(operator), operatorBalanceBefore);
+    }
+
+    function test_DistributeFees_RevertOnZeroAmount() public {
+        portal = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "ZeroFeesPortal");
+        pool = PortalPoolImplementation(portal);
+
+        vm.prank(operator);
+        vm.expectRevert(PortalErrors.InvalidAmount.selector);
+        pool.distributeFees(address(usdc), 0);
+    }
+
+    function test_WithdrawFromFailed_RevertOnNoStake() public {
+        portal = _createPortal(operator, MIN_STAKE_THRESHOLD, "NoStakeFailedPortal");
+        pool = PortalPoolImplementation(portal);
+
+        _warpToAfterDeadline(portal);
+
+        vm.prank(user1);
+        vm.expectRevert(PortalErrors.NoStakeToWithdraw.selector);
+        pool.withdrawFromFailed();
+    }
+
+    function test_RequestExit_UpdatesExitAmounts() public {
+        portal = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "ExitAmountsPortal");
+        pool = PortalPoolImplementation(portal);
+
+        uint256 exitAmount = SMALL_STAKE;
+
+        vm.prank(user1);
+        pool.requestExit(exitAmount);
+
+        uint256 activeStake = pool.getActiveStake();
+        assertEq(activeStake, MIN_STAKE_THRESHOLD - exitAmount);
+    }
+
+    function test_Deposit_RevertOnFailed() public {
+        _warpToAfterDeadline(portal);
+
+        vm.startPrank(user1);
+        sqd.approve(portal, SMALL_STAKE);
+        vm.expectRevert(PortalErrors.InvalidState.selector);
+        pool.deposit(SMALL_STAKE);
+        vm.stopPrank();
+    }
+
+    function test_DistributeFees_WithBurn() public {
+        portal = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "BurnFeesPortal");
+        pool = PortalPoolImplementation(portal);
+
+        // Set fee config with burn > 0
+        feeRouter.setFeeConfig(6000, 2000, 2000); // 60% providers, 20% worker pool, 20% burn
+
+        uint256 feeAmount = 100_000 * 1e6;
+
+        vm.startPrank(operator);
+        usdc.mint(operator, feeAmount);
+        usdc.approve(portal, feeAmount);
+        pool.distributeFees(address(usdc), feeAmount);
+        vm.stopPrank();
+
+        // Verify burn happened (to dead address)
+        assertGt(usdc.balanceOf(address(0xdead)), 0);
+    }
+
+
+    function test_ClaimFees_RevertOnInvalidToken() public {
+        portal = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "InvalidTokenPortal");
+        pool = PortalPoolImplementation(portal);
+
+        vm.prank(user1);
+        vm.expectRevert(PortalErrors.InvalidAddress.selector);
+        pool.claimFees(address(0));
+    }
+
+    function test_ClaimFees_RevertOnDisallowedToken() public {
+        portal = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "DisallowedTokenPortal");
+        pool = PortalPoolImplementation(portal);
+
+        MockERC20 unknownToken = new MockERC20("Unknown", "UNK", 18);
+
+        vm.prank(user1);
+        vm.expectRevert(PortalErrors.TokenNotAllowed.selector);
+        pool.claimFees(address(unknownToken));
+    }
+
+    function test_GetClaimableRewards_InCollectingState() public {
+        // In collecting state, rewards shouldn't accrue since not active
+        uint256 rewards = pool.getClaimableRewards(user1);
+        assertEq(rewards, 0);
+    }
+
+    function test_GetClaimableRewards_WithRunwayLimit() public {
+        portal = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "RunwayPortal");
+        pool = PortalPoolImplementation(portal);
+
+        // Top up small amount of rewards
+        uint256 rewardAmount = 100 * 1e6; // Small amount
+        vm.startPrank(operator);
+        usdc.mint(operator, rewardAmount);
+        usdc.approve(portal, rewardAmount);
+        pool.topUpRewards(rewardAmount);
+        vm.stopPrank();
+
+        // Warp far into future - rewards should be capped by runway
+        vm.warp(block.timestamp + 365 days);
+
+        uint256 rewards = pool.getClaimableRewards(user1);
+        // Rewards should be limited by what was topped up (minus precision loss)
+        assertTrue(rewards <= rewardAmount);
+    }
+
+    function test_GetCurrentRewardBalance_WhenExhausted() public {
+        portal = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "ExhaustedRewardsPortal");
+        pool = PortalPoolImplementation(portal);
+
+        // Top up small amount of rewards
+        uint256 rewardAmount = 100 * 1e6;
+        vm.startPrank(operator);
+        usdc.mint(operator, rewardAmount);
+        usdc.approve(portal, rewardAmount);
+        pool.topUpRewards(rewardAmount);
+        vm.stopPrank();
+
+        // Warp far into future - rewards should be exhausted
+        vm.warp(block.timestamp + 365 days);
+
+        uint256 balance = pool.getCurrentRewardBalance();
+        assertEq(balance, 0);
+    }
+
+    function test_SetDistributionRate_ToZero() public {
+        portal = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "ZeroRatePortal");
+        pool = PortalPoolImplementation(portal);
+
+        vm.prank(operator);
+        pool.setDistributionRate(0);
+
+        assertEq(pool.distributionRateScaled(), 0);
+    }
+
+    function test_Deposit_InActiveState_AdditionalUser() public {
+        // Create portal with larger capacity to allow additional deposits
+        IPortalFactory.CreatePortalParams memory params = IPortalFactory.CreatePortalParams({
+            operator: operator,
+            maxCapacity: MIN_STAKE_THRESHOLD * 2,
+            peerId: "active-deposit-portal",
+            portalName: "ActiveDepositPortal",
+            distributionRatePerSecond: 1 ether,
+            maxStakePerWallet: DEFAULT_MAX_STAKE_PER_WALLET
+        });
+        portal = factory.createPortal(params);
+        pool = PortalPoolImplementation(portal);
+
+        // Activate by filling to capacity
+        vm.startPrank(user1);
+        sqd.approve(portal, MIN_STAKE_THRESHOLD * 2);
+        pool.deposit(MIN_STAKE_THRESHOLD * 2);
+        vm.stopPrank();
+
+        assertEq(uint8(pool.getState()), uint8(IPortalPool.PortalState.ACTIVE));
+    }
+
+
+    function test_DistributeFees_RevertOnInvalidToken() public {
+        portal = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "InvalidDistributePortal");
+        pool = PortalPoolImplementation(portal);
+
+        vm.prank(operator);
+        vm.expectRevert(PortalErrors.InvalidAddress.selector);
+        pool.distributeFees(address(0), 100);
+    }
+
+    function test_DistributeFees_RevertOnDisallowedToken() public {
+        portal = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "DisallowedDistributePortal");
+        pool = PortalPoolImplementation(portal);
+
+        MockERC20 unknownToken = new MockERC20("Unknown", "UNK", 18);
+
+        vm.prank(operator);
+        vm.expectRevert(PortalErrors.TokenNotAllowed.selector);
+        pool.distributeFees(address(unknownToken), 100);
+    }
+
+    function test_DistributeFees_RevertOnNonOperator() public {
+        portal = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "NonOperatorDistributePortal");
+        pool = PortalPoolImplementation(portal);
+
+        vm.prank(user1);
+        vm.expectRevert(PortalErrors.NotOperator.selector);
+        pool.distributeFees(address(usdc), 100);
+    }
+
+    function test_DistributeFees_RevertOnNotActive() public {
+        vm.prank(operator);
+        vm.expectRevert(PortalErrors.InvalidState.selector);
+        pool.distributeFees(address(usdc), 100);
+    }
+
+    function test_OnLPTTransfer_RevertOnInsufficientTransferable() public {
+        portal = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "InsufficientTransferPortal");
+        pool = PortalPoolImplementation(portal);
+
+        LiquidPortalToken lpt = pool.lptToken();
+
+        // Request exit for most stake
+        uint256 exitAmount = pool.getProviderStake(user1) - 1;
+        vm.prank(user1);
+        pool.requestExit(exitAmount);
+
+        // User1 has 1 transferable stake, but 0 in LPT (burned)
+        // Try to transfer more than remaining stake
+        vm.prank(user1);
+        vm.expectRevert(); // Will revert with InsufficientTransferableStake or ERC20 error
+        lpt.transfer(user2, exitAmount);
+    }
+
+    function test_OnLPTTransfer_RevertOnExceedsReceiverLimit() public {
+        // Create portal with small wallet limit
+        IPortalFactory.CreatePortalParams memory params = IPortalFactory.CreatePortalParams({
+            operator: operator,
+            maxCapacity: MIN_STAKE_THRESHOLD * 2,
+            peerId: "receiver-limit",
+            portalName: "ReceiverLimit",
+            distributionRatePerSecond: 1 ether,
+            maxStakePerWallet: SMALL_STAKE
+        });
+        address limitPortal = factory.createPortal(params);
+        PortalPoolImplementation limitPool = PortalPoolImplementation(limitPortal);
+
+        // user1 deposits up to the limit
+        vm.startPrank(user1);
+        sqd.approve(limitPortal, SMALL_STAKE);
+        limitPool.deposit(SMALL_STAKE);
+        vm.stopPrank();
+
+        // user2 deposits up to the limit
+        vm.startPrank(user2);
+        sqd.approve(limitPortal, SMALL_STAKE);
+        limitPool.deposit(SMALL_STAKE);
+        vm.stopPrank();
+
+        LiquidPortalToken lpt = limitPool.lptToken();
+
+        // Try to transfer from user1 to user2 (should fail - exceeds receiver limit)
+        vm.prank(user1);
+        vm.expectRevert(PortalErrors.ExceedsWalletLimit.selector);
+        lpt.transfer(user2, 1);
+    }
+
+    function test_OnAllocationReduced_FromRegistry() public {
+        portal = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "AllocationReducedPortal");
+        pool = PortalPoolImplementation(portal);
+
+        uint256 stakeBefore = pool.getProviderStake(user1);
+        uint256 reduction = SMALL_STAKE / 2;
+
+        // Simulate registry calling onAllocationReduced
+        vm.prank(address(registry));
+        pool.onAllocationReduced(user1, reduction);
+
+        assertEq(pool.getProviderStake(user1), stakeBefore - reduction);
+    }
+
+    function test_OnAllocationReduced_RevertOnNonRegistry() public {
+        portal = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "NonRegistryReducePortal");
+        pool = PortalPoolImplementation(portal);
+
+        vm.prank(user1);
+        vm.expectRevert(PortalErrors.NotPortalRegistry.selector);
+        pool.onAllocationReduced(user1, SMALL_STAKE);
+    }
+
+    function test_OnAllocationReduced_WithExitRequest() public {
+        portal = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "ReduceWithExitPortal");
+        pool = PortalPoolImplementation(portal);
+
+        vm.prank(user1);
+        pool.requestExit(SMALL_STAKE / 2);
+
+        uint256 stakeBefore = pool.getProviderStake(user1);
+        uint256 reduction = SMALL_STAKE;
+
+        vm.prank(address(registry));
+        pool.onAllocationReduced(user1, reduction);
+
+        assertEq(pool.getProviderStake(user1), stakeBefore - reduction);
+    }
+
+    function test_GetExitTicket() public {
+        portal = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "TicketPortal");
+        pool = PortalPoolImplementation(portal);
+
+        vm.prank(user1);
+        uint256 ticketId = pool.requestExit(SMALL_STAKE);
+
+        IPortalPool.ExitTicket memory ticket = pool.getExitTicket(user1, ticketId);
+
+        assertEq(ticket.amount, SMALL_STAKE);
+        assertEq(ticket.endPosition, SMALL_STAKE);
+        assertFalse(ticket.withdrawn);
+    }
+
+    function test_GetTicketCount() public {
+        portal = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "TicketCountPortal");
+        pool = PortalPoolImplementation(portal);
+
+        assertEq(pool.getTicketCount(user1), 0);
+
+        vm.prank(user1);
+        pool.requestExit(SMALL_STAKE / 3);
+        assertEq(pool.getTicketCount(user1), 1);
+
+        vm.prank(user1);
+        pool.requestExit(SMALL_STAKE / 3);
+        assertEq(pool.getTicketCount(user1), 2);
+    }
+
+    function test_GetTotalProcessed() public {
+        portal = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "ProcessedPortal");
+        pool = PortalPoolImplementation(portal);
+
+        assertEq(pool.getTotalProcessed(), 0);
+
+        vm.prank(user1);
+        pool.requestExit(SMALL_STAKE);
+
+        // Warp and check processed
+        vm.warp(block.timestamp + SMALL_STAKE / 1e18 + 1);
+
+        assertGt(pool.getTotalProcessed(), 0);
+    }
+
+    function test_GetComputationUnits() public {
+        portal = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "CUsPortal");
+        pool = PortalPoolImplementation(portal);
+
+        uint256 cus = pool.getComputationUnits();
+        assertGt(cus, 0);
+    }
+
+    function test_Deposit_DeadlinePassedViaGetState() public {
+        _approveAndDeposit(user1, portal, SMALL_STAKE);
+
+        _warpToAfterDeadline(portal);
+
+        assertEq(uint8(pool.getState()), uint8(IPortalPool.PortalState.FAILED));
+    }
+
+    function test_OnLPTTransfer_RevertOnNotLPTToken() public {
+        portal = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "NotLPTPortal");
+        pool = PortalPoolImplementation(portal);
+
+        vm.prank(user1);
+        vm.expectRevert(PortalErrors.NotLPTToken.selector);
+        pool.onLPTTransfer(user1, user2, 100);
+    }
+
+    function test_WithdrawExit_RevertOnNoActiveRequest() public {
+        portal = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "NoRequestPortal");
+        pool = PortalPoolImplementation(portal);
+
+        vm.prank(user1);
+        vm.expectRevert(PortalErrors.NoActiveExitRequest.selector);
+        pool.withdrawExit(999);
+    }
+
+    function test_Deposit_TriggerHandleDeadlinePassed() public {
+        _approveAndDeposit(user1, portal, SMALL_STAKE);
+
+        _warpToAfterDeadline(portal);
+
+        assertEq(uint8(pool.getState()), uint8(IPortalPool.PortalState.FAILED));
+
+        vm.startPrank(user2);
+        sqd.approve(portal, SMALL_STAKE);
+        vm.expectRevert(PortalErrors.InvalidState.selector);
+        pool.deposit(SMALL_STAKE);
+        vm.stopPrank();
+    }
+
+
+    function test_GetClaimableRewards_ZeroCapacity() public {
+        portal = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "ZeroCapRewardsPortal");
+        pool = PortalPoolImplementation(portal);
+
+        uint256 rewards = pool.getClaimableRewards(user1);
+        assertTrue(rewards >= 0);
+    }
+
+    function test_GetClaimableRewards_ZeroStake() public {
+        portal = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "ZeroStakeRewardsPortal");
+        pool = PortalPoolImplementation(portal);
+
+        uint256 rewards = pool.getClaimableRewards(user2);
+        assertEq(rewards, 0);
+    }
+
+    function test_GetClaimableRewards_AllStakeInExit() public {
+        portal = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "AllExitRewardsPortal");
+        pool = PortalPoolImplementation(portal);
+
+        // Request exit for all stake
+        vm.prank(user1);
+        pool.requestExit(MIN_STAKE_THRESHOLD);
+
+        // Active stake is 0 since all is in exit queue
+        uint256 rewards = pool.getClaimableRewards(user1);
+        assertEq(rewards, 0);
+    }
+
+    function test_TopUpRewards_RevertOnZeroAmount() public {
+        portal = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "ZeroRewardsPortal");
+        pool = PortalPoolImplementation(portal);
+
+        vm.prank(operator);
+        vm.expectRevert(PortalErrors.InvalidAmount.selector);
+        pool.topUpRewards(0);
+    }
+
+    function test_CalculateRunway_ZeroRate() public {
+        portal = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "ZeroRateRunwayPortal");
+        pool = PortalPoolImplementation(portal);
+
+        vm.prank(operator);
+        pool.setDistributionRate(0);
+
+        vm.startPrank(operator);
+        usdc.mint(operator, 1_000_000 * 1e6);
+        usdc.approve(portal, 1_000_000 * 1e6);
+        pool.topUpRewards(1_000_000 * 1e6);
+        vm.stopPrank();
+
+        vm.warp(block.timestamp + 365 days);
+
+        uint256 balance = pool.getCurrentRewardBalance();
+        assertEq(balance, 1_000_000 * 1e6);
+    }
+
+    function test_WithdrawFromFailed_LptBurnLimit() public {
+        portal = _createPortal(operator, MIN_STAKE_THRESHOLD, "LptLimitPortal");
+        pool = PortalPoolImplementation(portal);
+
+        // User deposits
+        vm.startPrank(user1);
+        sqd.approve(portal, SMALL_STAKE);
+        pool.deposit(SMALL_STAKE);
+
+        pool.requestExit(SMALL_STAKE / 2);
+        vm.stopPrank();
+
+        _warpToAfterDeadline(portal);
+
+        uint256 balanceBefore = sqd.balanceOf(user1);
+
+        vm.prank(user1);
+        pool.withdrawFromFailed();
+
+        assertEq(sqd.balanceOf(user1), balanceBefore + SMALL_STAKE);
+    }
+
+    function test_SettleFees_ZeroActiveStake() public {
+        portal = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "ZeroActiveFeePortal");
+        pool = PortalPoolImplementation(portal);
+
+        // Distribute fees first
+        uint256 feeAmount = 1000 * 1e6;
+        vm.startPrank(operator);
+        usdc.approve(portal, feeAmount);
+        pool.distributeFees(address(usdc), feeAmount);
+        vm.stopPrank();
+
+        // Request ex   it for all stake
+        vm.prank(user1);
+        pool.requestExit(MIN_STAKE_THRESHOLD);
+
+        uint256 claimable = pool.getClaimableFees(user1, address(usdc));
+        assertTrue(claimable >= 0);
+    }
+
+    function test_DistributeFees_ZeroActiveStake() public {
+        portal = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "ZeroActiveDistributePortal");
+        pool = PortalPoolImplementation(portal);
+
+        vm.prank(user1);
+        pool.requestExit(MIN_STAKE_THRESHOLD);
+
+        uint256 feeAmount = 1000 * 1e6;
+        vm.startPrank(operator);
+        usdc.approve(portal, feeAmount);
+        pool.distributeFees(address(usdc), feeAmount);
+        vm.stopPrank();
+
+        assertEq(pool.totalFeesDistributed(address(usdc)), 500 * 1e6);
+    }
+
+    function test_OnAllocationReduced_FullExitAmount() public {
+        portal = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "FullExitReducePortal");
+        pool = PortalPoolImplementation(portal);
+
+        uint256 stakeBefore = pool.getProviderStake(user1);
+
+        vm.prank(user1);
+        pool.requestExit(stakeBefore);
+
+        uint256 reduction = stakeBefore / 2;
+        vm.prank(address(registry));
+        pool.onAllocationReduced(user1, reduction);
+
+        assertEq(pool.getProviderStake(user1), stakeBefore - reduction);
     }
 }

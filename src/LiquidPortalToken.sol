@@ -18,11 +18,7 @@ contract LiquidPortalToken is ERC20 {
         _;
     }
 
-    constructor(
-        string memory name_,
-        string memory symbol_,
-        address portalPool_
-    ) ERC20(name_, symbol_) {
+    constructor(string memory name_, string memory symbol_, address portalPool_) ERC20(name_, symbol_) {
         PORTAL_POOL = portalPool_;
     }
 

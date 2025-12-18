@@ -6,17 +6,17 @@ pragma solidity 0.8.28;
 library ExitQueueLib {
     /// @notice exit queue state (stored in PortalPoolStorage)
     struct Queue {
-        uint256 totalRequested;      // total amount ever requested for exit
-        uint256 processedAmount;     // total amount processed (capped at totalRequested)
-        uint256 lastUpdate;          // timestamp of last sync
+        uint256 totalRequested; // total amount ever requested for exit
+        uint256 processedAmount; // total amount processed (capped at totalRequested)
+        uint256 lastUpdate; // timestamp of last sync
         uint256 unlockRatePerSecond; // SQD unlocked per second (e.g., 1e18 = 1 SQD/sec)
     }
 
     /// @notice individual exit ticket (user can have multiple)
     struct Ticket {
-        uint256 endPosition;    // queue position when this ticket becomes withdrawable
-        uint256 amount;         // SQD amount in this ticket
-        bool withdrawn;         // whether already claimed
+        uint256 endPosition; // queue position when this ticket becomes withdrawable
+        uint256 amount; // SQD amount in this ticket
+        bool withdrawn; // whether already claimed
     }
 
     error StillInQueue(uint256 currentPosition, uint256 requiredPosition);
@@ -97,10 +97,11 @@ library ExitQueueLib {
     /// @return userEndPos the user's end position in queue
     /// @return secondsRemaining the seconds remaining until unlocked
     /// @return ready whether ticket is ready for withdrawal
-    function getStatus(
-        Queue storage self,
-        Ticket storage ticket
-    ) internal view returns (uint256 processed, uint256 userEndPos, uint256 secondsRemaining, bool ready) {
+    function getStatus(Queue storage self, Ticket storage ticket)
+        internal
+        view
+        returns (uint256 processed, uint256 userEndPos, uint256 secondsRemaining, bool ready)
+    {
         processed = totalProcessed(self);
         userEndPos = ticket.endPosition;
         secondsRemaining = secondsUntilUnlocked(self, ticket);

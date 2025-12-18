@@ -16,13 +16,11 @@ contract LiquidPortalTokenTest is BaseTest {
         lpt = PortalPoolImplementation(portal).lptToken();
     }
 
-
     function test_Constructor_SetsCorrectValues() public view {
         assertEq(lpt.PORTAL_POOL(), portal);
         assertEq(lpt.name(), "TestPortal Liquidity Portal Token");
         assertEq(lpt.symbol(), "TestPortal-LPT");
     }
-
 
     function test_Mint_Success() public {
         vm.startPrank(user1);
@@ -40,7 +38,6 @@ contract LiquidPortalTokenTest is BaseTest {
         lpt.mint(user1, STAKE_AMOUNT);
     }
 
-
     function test_Burn_Success() public {
         vm.startPrank(user1);
         sqd.approve(portal, STAKE_AMOUNT);
@@ -57,7 +54,6 @@ contract LiquidPortalTokenTest is BaseTest {
         vm.expectRevert(LiquidPortalToken.OnlyPortalPool.selector);
         lpt.burn(user1, STAKE_AMOUNT);
     }
-
 
     function test_Transfer_UpdatesStakeAccounting() public {
         vm.startPrank(user1);
@@ -125,7 +121,6 @@ contract LiquidPortalTokenTest is BaseTest {
         assertEq(lpt.balanceOf(user1), 0);
     }
 
-
     function test_Transfer_MultipleUsers() public {
         address largePortal = _createPortal(operator, MIN_STAKE_THRESHOLD * 3, "LargePortal");
         LiquidPortalToken largeLpt = PortalPoolImplementation(largePortal).lptToken();
@@ -169,7 +164,6 @@ contract LiquidPortalTokenTest is BaseTest {
         assertEq(user2Stake, STAKE_AMOUNT);
     }
 
-
     function test_Approve_Success() public {
         vm.startPrank(user1);
         sqd.approve(portal, STAKE_AMOUNT);
@@ -206,7 +200,6 @@ contract LiquidPortalTokenTest is BaseTest {
 
         assertEq(largeLpt.totalSupply(), STAKE_AMOUNT);
     }
-
 
     function test_Transfer_ZeroAmount() public {
         vm.startPrank(user1);

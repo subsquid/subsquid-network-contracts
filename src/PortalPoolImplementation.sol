@@ -84,7 +84,7 @@ contract PortalPoolImplementation is
         _grantRole(OPERATOR_ROLE, params.operator);
         _grantRole(FACTORY_ROLE, msg.sender);
 
-        _portalRegistry.registerPortal(_peerId, address(this), _portalInfo.operator);
+        _portalRegistry.registerPortalPool(_peerId, address(this), _portalInfo.operator);
 
         // deploy the LPT token for this portal using portalName
         string memory tokenName = string(abi.encodePacked(params.portalName, " Liquidity Portal Token"));
@@ -96,13 +96,16 @@ contract PortalPoolImplementation is
         if (amount == 0) revert PortalErrors.InvalidAmount();
 
         PortalState currentState = getState();
-        if (currentState != PortalState.COLLECTING && currentState != PortalState.ACTIVE && currentState != PortalState.IDLE) {
+        if (
+            currentState != PortalState.COLLECTING && currentState != PortalState.ACTIVE
+                && currentState != PortalState.IDLE
+        ) {
             revert PortalErrors.InvalidState();
         }
 
         if (currentState == PortalState.COLLECTING) {
             if (block.timestamp > _portalInfo.depositDeadline) {
-                // don't revert 
+                // don't revert
                 // just mark as FAILED and return. User's stake is not accepted.
                 _handleDeadlinePassed();
                 return;
@@ -128,8 +131,7 @@ contract PortalPoolImplementation is
         bool shouldActivate = !_portalInfo.firstActivated && _portalInfo.totalStaked >= _portalInfo.maxCapacity;
 
         uint256 minStakeThreshold = _networkController.minStakeThreshold();
-        bool isRecoveringFromIdle = currentState == PortalState.IDLE &&
-                                    _portalInfo.totalStaked >= minStakeThreshold;
+        bool isRecoveringFromIdle = currentState == PortalState.IDLE && _portalInfo.totalStaked >= minStakeThreshold;
 
         if (shouldActivate) {
             _portalInfo.state = PortalState.ACTIVE;
@@ -137,21 +139,20 @@ contract PortalPoolImplementation is
             _portalInfo.activationTime = uint64(block.timestamp);
         }
 
-        // Route funds based on state
-        if (currentState == PortalState.COLLECTING && !shouldActivate) {
-        } else if (shouldActivate) {
+        // Route funds based on state 
+        if (shouldActivate) {
             // activation: Push ALL accumulated funds to Registry
             _sqd.approve(address(_portalRegistry), _portalInfo.totalStaked);
             _portalRegistry.stakePoolFunds(_portalInfo.totalStaked);
-            _portalRegistry.activatePortal();
+            _portalRegistry.activatePortalPool();
 
             emit StateChanged(PortalState.COLLECTING, PortalState.ACTIVE);
-        } else {
+        } else if (currentState != PortalState.COLLECTING) {
             _sqd.approve(address(_portalRegistry), amount);
             _portalRegistry.stake(address(this), msg.sender, amount);
 
             if (isRecoveringFromIdle) {
-                _portalRegistry.activatePortal();
+                _portalRegistry.activatePortalPool();
                 emit StateChanged(PortalState.IDLE, PortalState.ACTIVE);
             }
         }
@@ -161,7 +162,6 @@ contract PortalPoolImplementation is
         // Emit event AFTER all operations (strict CEI)
         emit Staked(msg.sender, amount, _portalInfo.totalStaked);
     }
-
 
     function requestExit(uint256 amount) external whenNotPaused returns (uint256 ticketId) {
         if (amount == 0) revert PortalErrors.InvalidAmount();
@@ -178,12 +178,9 @@ contract PortalPoolImplementation is
         uint256 endPos = _exitQueue.enqueue(amount);
 
         ticketId = _nextTicketId[msg.sender];
-        _exitTickets[msg.sender][ticketId] = ExitQueueLib.Ticket({
-            endPosition: endPos,
-            amount: amount,
-            withdrawn: false
-        });
-        _nextTicketId[msg.sender]++;
+        _exitTickets[msg.sender][ticketId] =
+            ExitQueueLib.Ticket({endPosition: endPos, amount: amount, withdrawn: false});
+        ++_nextTicketId[msg.sender];
 
         _exitAmounts[msg.sender] += amount;
         _totalExitAmounts += amount;
@@ -246,10 +243,8 @@ contract PortalPoolImplementation is
         emit AllocationReduced(provider, amount);
     }
 
-
     function onLPTTransfer(address from, address to, uint256 amount) external nonReentrant {
         if (msg.sender != address(lptToken)) revert PortalErrors.NotLPTToken();
-
 
         uint256 senderStake = _stakes[from];
         uint256 senderExitAmount = _exitAmounts[from];
@@ -303,7 +298,6 @@ contract PortalPoolImplementation is
             lptToken.burn(msg.sender, lptToBurn);
         }
 
-
         _sqd.safeTransfer(msg.sender, amount);
 
         emit Withdrawn(msg.sender, amount);
@@ -351,11 +345,7 @@ contract PortalPoolImplementation is
         emit DistributionRateChanged(oldRate / Constants.PRECISION, newRatePerSecond);
     }
 
-    function distributeFees(address token, uint256 amount)
-        external
-        onlyOperator
-        whenNotPaused
-    {
+    function distributeFees(address token, uint256 amount) external onlyOperator whenNotPaused {
         PortalState currentState = getState();
         if (currentState != PortalState.ACTIVE) revert PortalErrors.InvalidState();
 
@@ -443,11 +433,7 @@ contract PortalPoolImplementation is
 
     function getExitTicket(address provider, uint256 ticketId) external view returns (ExitTicket memory) {
         ExitQueueLib.Ticket storage ticket = _exitTickets[provider][ticketId];
-        return ExitTicket({
-            endPosition: ticket.endPosition,
-            amount: ticket.amount,
-            withdrawn: ticket.withdrawn
-        });
+        return ExitTicket({endPosition: ticket.endPosition, amount: ticket.amount, withdrawn: ticket.withdrawn});
     }
 
     function getTicketCount(address provider) external view returns (uint256) {
@@ -507,12 +493,11 @@ contract PortalPoolImplementation is
         return _factory.getAllowedPaymentTokens();
     }
 
-    function getQueueStatus(address user, uint256 ticketId) external view returns (
-        uint256 processed,
-        uint256 userEndPos,
-        uint256 secondsRemaining,
-        bool ready
-    ) {
+    function getQueueStatus(address user, uint256 ticketId)
+        external
+        view
+        returns (uint256 processed, uint256 userEndPos, uint256 secondsRemaining, bool ready)
+    {
         ExitQueueLib.Ticket storage ticket = _exitTickets[user][ticketId];
         return ExitQueueLib.getStatus(_exitQueue, ticket);
     }
@@ -626,7 +611,9 @@ contract PortalPoolImplementation is
                 // If stake is 0, reset debt to 0 to keep state clean
                 _feeDebt[token][user] = 0;
             }
-            unchecked { ++i; }
+            unchecked {
+                ++i;
+            }
         }
     }
 
@@ -642,7 +629,9 @@ contract PortalPoolImplementation is
             address token = tokens[i];
             uint256 cumulative = _cumulativeFeesPerShare[token];
             _feeDebt[token][user] = FullMath.mulDiv(activeStake, cumulative, 1e18);
-            unchecked { ++i; }
+            unchecked {
+                ++i;
+            }
         }
     }
 

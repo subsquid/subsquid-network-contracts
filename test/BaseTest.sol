@@ -46,18 +46,9 @@ abstract contract BaseTest is Test {
         usdc = new MockERC20("USD Coin", "USDC", 6);
         dai = new MockERC20("Dai Stablecoin", "DAI", 18);
 
-        networkController = new MockNetworkController(
-            WORKER_EPOCH_LENGTH,
-            MIN_STAKE_THRESHOLD,
-            workerRewardPool
-        );
+        networkController = new MockNetworkController(WORKER_EPOCH_LENGTH, MIN_STAKE_THRESHOLD, workerRewardPool);
 
-        registry = new PortalRegistry(
-            address(sqd),
-            address(networkController),
-            MIN_STAKE_THRESHOLD,
-            MANA
-        );
+        registry = new PortalRegistry(address(sqd), address(networkController), MIN_STAKE_THRESHOLD, MANA);
 
         feeRouter = new FeeRouterModule();
 
@@ -104,11 +95,10 @@ abstract contract BaseTest is Test {
         dai.mint(operator, 10_000_000 ether);
     }
 
-    function _createPortal(
-        address _operator,
-        uint256 _maxCapacity,
-        string memory _name
-    ) internal returns (address portalAddress) {
+    function _createPortal(address _operator, uint256 _maxCapacity, string memory _name)
+        internal
+        returns (address portalAddress)
+    {
         IPortalFactory.CreatePortalParams memory params = IPortalFactory.CreatePortalParams({
             operator: _operator,
             maxCapacity: _maxCapacity,
@@ -121,11 +111,10 @@ abstract contract BaseTest is Test {
         portalAddress = factory.createPortal(params);
     }
 
-    function _createAndActivatePortal(
-        address _operator,
-        uint256 _maxCapacity,
-        string memory _name
-    ) internal returns (address portalAddress) {
+    function _createAndActivatePortal(address _operator, uint256 _maxCapacity, string memory _name)
+        internal
+        returns (address portalAddress)
+    {
         portalAddress = _createPortal(_operator, _maxCapacity, _name);
 
         vm.startPrank(user1);

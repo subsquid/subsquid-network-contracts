@@ -7,14 +7,14 @@ pragma solidity 0.8.28;
  */
 interface IPortalRegistry {
     enum PortalType {
-        POOL,     
-        DIRECT      
+        POOL,
+        DIRECT
     }
 
     struct Portal {
         bytes peerId;
-        address portalAddress;   
-        address operator;        
+        address portalAddress;
+        address operator;
         uint256 totalStaked;
         uint256 registeredAt;
         bool active;
@@ -40,7 +40,7 @@ interface IPortalRegistry {
 
     function getDirectPortalId(address operator) external view returns (address);
 
-    function registerPortal(bytes calldata peerId, address portalAddress, address operator) external;
+    function registerPortalPool(bytes calldata peerId, address portalAddress, address operator) external;
 
     function stake(address portalAddress, address provider, uint256 amount) external;
 
@@ -48,7 +48,7 @@ interface IPortalRegistry {
 
     function immediateUnlock(address provider, uint256 amount) external;
 
-    function activatePortal() external;
+    function activatePortalPool() external;
 
     function stakePoolFunds(uint256 amount) external;
 
