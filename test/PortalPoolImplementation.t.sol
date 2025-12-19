@@ -650,6 +650,151 @@ contract PortalPoolImplementationTest is BaseTest {
         assertEq(pool.distributionRateScaled(), newRate * Constants.PRECISION);
     }
 
+    function test_SetCapacity_Success() public {
+        // First activate the portal
+        portal = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "CapacityTestPortal");
+        pool = PortalPoolImplementation(portal);
+
+        uint256 oldCapacity = pool.getPortalInfo().maxCapacity;
+        uint256 newCapacity = oldCapacity + 100_000 ether;
+
+        vm.prank(operator);
+        vm.expectEmit(true, true, false, false);
+        emit IPortalPool.CapacityUpdated(oldCapacity, newCapacity);
+        pool.setCapacity(newCapacity);
+
+        assertEq(pool.getPortalInfo().maxCapacity, newCapacity);
+    }
+
+    function test_SetCapacity_RevertOnNotActivated() public {
+        // Pool is in COLLECTING state, not activated yet
+        uint256 newCapacity = MIN_STAKE_THRESHOLD + 100_000 ether;
+
+        vm.prank(operator);
+        vm.expectRevert(PortalErrors.NotActivated.selector);
+        pool.setCapacity(newCapacity);
+    }
+
+    function test_SetCapacity_RevertOnNonOperator() public {
+        portal = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "CapacityTestPortal2");
+        pool = PortalPoolImplementation(portal);
+
+        uint256 newCapacity = MIN_STAKE_THRESHOLD + 100_000 ether;
+
+        vm.prank(user1);
+        vm.expectRevert(PortalErrors.NotOperator.selector);
+        pool.setCapacity(newCapacity);
+    }
+
+    function test_SetCapacity_LowerCapacity_Success() public {
+        // Create and activate portal at minimum capacity
+        portal = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "CapacityTestPortal3");
+        pool = PortalPoolImplementation(portal);
+
+        // First increase capacity
+        uint256 higherCapacity = MIN_STAKE_THRESHOLD * 2;
+        vm.prank(operator);
+        pool.setCapacity(higherCapacity);
+        assertEq(pool.getPortalInfo().maxCapacity, higherCapacity);
+
+        // Now lower it back - totalStaked is MIN_STAKE_THRESHOLD, so we can go down to that
+        uint256 lowerCapacity = MIN_STAKE_THRESHOLD + 1000 ether;
+        vm.prank(operator);
+        pool.setCapacity(lowerCapacity);
+
+        assertEq(pool.getPortalInfo().maxCapacity, lowerCapacity);
+        assertTrue(lowerCapacity < higherCapacity, "Should have lowered capacity");
+    }
+
+    function test_SetCapacity_LowerToExactlyCurrentStake() public {
+        // Create and activate portal, then increase capacity
+        portal = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "CapacityTestPortal4");
+        pool = PortalPoolImplementation(portal);
+
+        // Increase capacity
+        uint256 higherCapacity = MIN_STAKE_THRESHOLD * 2;
+        vm.prank(operator);
+        pool.setCapacity(higherCapacity);
+
+        // Lower to exactly the totalStaked amount (MIN_STAKE_THRESHOLD)
+        vm.prank(operator);
+        pool.setCapacity(MIN_STAKE_THRESHOLD);
+
+        assertEq(pool.getPortalInfo().maxCapacity, MIN_STAKE_THRESHOLD);
+    }
+
+    function test_SetCapacity_RevertOnBelowCurrentStake() public {
+        uint256 initialCapacity = MIN_STAKE_THRESHOLD * 2;
+        portal = _createAndActivatePortal(operator, initialCapacity, "CapacityTestPortal5");
+        pool = PortalPoolImplementation(portal);
+
+        vm.prank(operator);
+        vm.expectRevert(PortalErrors.BelowCurrentStake.selector);
+        pool.setCapacity(MIN_STAKE_THRESHOLD);
+    }
+
+    function test_SetCapacity_RevertOnBelowMinimum() public {
+        // Create and activate portal
+        portal = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "CapacityTestPortal6");
+        pool = PortalPoolImplementation(portal);
+
+        // Increase capacity first
+        uint256 higherCapacity = MIN_STAKE_THRESHOLD * 2;
+        vm.prank(operator);
+        pool.setCapacity(higherCapacity);
+
+        // Try to lower capacity below minStakeThreshold
+        uint256 belowMin = MIN_STAKE_THRESHOLD - 1;
+
+        vm.prank(operator);
+        vm.expectRevert(PortalErrors.BelowMinimum.selector);
+        pool.setCapacity(belowMin);
+    }
+
+    function test_SetCapacity_RevertOnSameCapacity() public {
+        portal = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "CapacityTestPortal9");
+        pool = PortalPoolImplementation(portal);
+
+        uint256 currentCapacity = pool.getPortalInfo().maxCapacity;
+
+        vm.prank(operator);
+        vm.expectRevert(PortalErrors.NoChange.selector);
+        pool.setCapacity(currentCapacity);
+    }
+
+    function test_SetCapacity_RevertOnAboveMaxPoolCapacity() public {
+        portal = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "CapacityTestPortal7");
+        pool = PortalPoolImplementation(portal);
+
+        uint256 aboveMaxCapacity = MAX_POOL_CAPACITY + 1;
+
+        vm.prank(operator);
+        vm.expectRevert(PortalErrors.AboveMaximum.selector);
+        pool.setCapacity(aboveMaxCapacity);
+    }
+
+    function test_SetCapacity_AllowsAdditionalDeposits() public {
+        // Activate portal with minimum capacity
+        portal = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "CapacityTestPortal8");
+        pool = PortalPoolImplementation(portal);
+
+        vm.startPrank(user2);
+        sqd.approve(portal, SMALL_STAKE);
+        vm.expectRevert(PortalErrors.CapacityExceeded.selector);
+        pool.deposit(SMALL_STAKE);
+        vm.stopPrank();
+
+        uint256 newCapacity = MIN_STAKE_THRESHOLD + SMALL_STAKE;
+        vm.prank(operator);
+        pool.setCapacity(newCapacity);
+
+        vm.startPrank(user2);
+        pool.deposit(SMALL_STAKE);
+        vm.stopPrank();
+
+        assertEq(pool.getPortalInfo().totalStaked, newCapacity);
+    }
+
     function test_RequestExit_RevertOnFailed() public {
         _approveAndDeposit(user1, portal, SMALL_STAKE);
 
@@ -1138,23 +1283,101 @@ contract PortalPoolImplementationTest is BaseTest {
         pool.topUpRewards(0);
     }
 
-    function test_CalculateRunway_ZeroRate() public {
-        portal = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "ZeroRateRunwayPortal");
+    function test_ZeroDistributionRate_TopUpRevertsWhenOff() public {
+        portal = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "ZeroRatePortal1");
         pool = PortalPoolImplementation(portal);
 
+        // Set rate to 0 to turn off distribution
         vm.prank(operator);
         pool.setDistributionRate(0);
 
+        // topUpRewards should revert
         vm.startPrank(operator);
         usdc.mint(operator, 1_000_000 * 1e6);
         usdc.approve(portal, 1_000_000 * 1e6);
+        vm.expectRevert(PortalErrors.DistributionTurnedOff.selector);
         pool.topUpRewards(1_000_000 * 1e6);
         vm.stopPrank();
+    }
 
-        vm.warp(block.timestamp + 365 days);
+    function test_ZeroDistributionRate_ClaimRevertsWhenOff() public {
+        portal = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "ZeroRatePortal2");
+        pool = PortalPoolImplementation(portal);
 
-        uint256 balance = pool.getCurrentRewardBalance();
-        assertEq(balance, 1_000_000 * 1e6);
+        // Set rate to 0 to turn off distribution
+        vm.prank(operator);
+        pool.setDistributionRate(0);
+
+        // claimRewards should revert
+        vm.prank(user1);
+        vm.expectRevert(PortalErrors.DistributionTurnedOff.selector);
+        pool.claimRewards();
+    }
+
+    function test_ZeroDistributionRate_ViewFunctionsReturnZero() public {
+        portal = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "ZeroRatePortal3");
+        pool = PortalPoolImplementation(portal);
+
+        // Set rate to 0 to turn off distribution
+        vm.prank(operator);
+        pool.setDistributionRate(0);
+
+        // View functions should return 0
+        assertEq(pool.getClaimableRewards(user1), 0);
+        assertEq(pool.getCurrentRewardBalance(), 0);
+    }
+
+    function test_ZeroDistributionRate_CanEnableBySettingRate() public {
+        portal = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "ZeroRatePortal4");
+        pool = PortalPoolImplementation(portal);
+
+        // Set rate to 0 to turn off distribution
+        vm.prank(operator);
+        pool.setDistributionRate(0);
+
+        // Verify it's off
+        vm.prank(user1);
+        vm.expectRevert(PortalErrors.DistributionTurnedOff.selector);
+        pool.claimRewards();
+
+        // Set rate to non-zero to enable distribution
+        vm.prank(operator);
+        pool.setDistributionRate(1e6); // 1 USDC per second
+
+        // Now topUpRewards should work
+        vm.startPrank(operator);
+        usdc.mint(operator, 1000 * 1e6);
+        usdc.approve(portal, 1000 * 1e6);
+        pool.topUpRewards(1000 * 1e6);
+        vm.stopPrank();
+
+        assertEq(pool.getCurrentRewardBalance(), 1000 * 1e6);
+    }
+
+    function test_CreatePoolWithZeroDistributionRate() public {
+        // Create portal with 0 distribution rate
+        IPortalFactory.CreatePortalPoolParams memory params = IPortalFactory.CreatePortalPoolParams({
+            operator: operator,
+            capacity: MIN_STAKE_THRESHOLD,
+            peerId: "peer-zero-rate",
+            portalName: "ZeroRatePool",
+            distributionRatePerSecond: 0, // Zero rate
+            metadata: ""
+        });
+
+        address zeroRatePortal = factory.createPortalPool(params);
+        PortalPoolImplementation zeroRatePool = PortalPoolImplementation(zeroRatePortal);
+
+        // Activate the portal
+        vm.startPrank(user1);
+        sqd.approve(zeroRatePortal, MIN_STAKE_THRESHOLD);
+        zeroRatePool.deposit(MIN_STAKE_THRESHOLD);
+        vm.stopPrank();
+
+        // Verify distribution is off
+        vm.prank(operator);
+        vm.expectRevert(PortalErrors.DistributionTurnedOff.selector);
+        zeroRatePool.topUpRewards(1000 * 1e6);
     }
 
     function test_WithdrawFromFailed_LptBurnLimit() public {

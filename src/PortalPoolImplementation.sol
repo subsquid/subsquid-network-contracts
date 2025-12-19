@@ -84,8 +84,6 @@ contract PortalPoolImplementation is
         _grantRole(OPERATOR_ROLE, params.operator);
         _grantRole(FACTORY_ROLE, msg.sender);
 
-        _portalRegistry.registerPortalPool(_peerId, address(this), _portalInfo.operator, params.metadata);
-
         // deploy the LPT token for this portal using portalName
         string memory tokenName = string(abi.encodePacked(params.portalName, " Liquidity Portal Token"));
         string memory tokenSymbol = string(abi.encodePacked(params.portalName, "-LPT"));
@@ -304,6 +302,7 @@ contract PortalPoolImplementation is
     }
 
     function topUpRewards(uint256 amount) external onlyOperator {
+        if (distributionRateScaled == 0) revert PortalErrors.DistributionTurnedOff();
         if (amount == 0) revert PortalErrors.InvalidAmount();
 
         if (getState() != PortalState.ACTIVE) revert PortalErrors.InvalidState();
@@ -318,6 +317,8 @@ contract PortalPoolImplementation is
     }
 
     function claimRewards() external whenNotPaused returns (uint256) {
+        if (distributionRateScaled == 0) revert PortalErrors.DistributionTurnedOff();
+
         _updateDelegatorCheckpoint(msg.sender);
 
         DelegatorCheckpoint storage checkpoint = _delegatorCheckpoints[msg.sender];
@@ -343,6 +344,20 @@ contract PortalPoolImplementation is
         distributionRateScaled = newRatePerSecond * Constants.PRECISION;
 
         emit DistributionRateChanged(oldRate / Constants.PRECISION, newRatePerSecond);
+    }
+
+    function setCapacity(uint256 newCapacity) external onlyOperator {
+        if (!_portalInfo.firstActivated) revert PortalErrors.NotActivated();
+        if (newCapacity == _portalInfo.maxCapacity) revert PortalErrors.NoChange();
+        if (newCapacity > _factory.maxPoolCapacity()) revert PortalErrors.AboveMaximum();
+        uint256 minCapacity = _networkController.minStakeThreshold();
+        if (newCapacity < minCapacity) revert PortalErrors.BelowMinimum();
+        if (newCapacity < _portalInfo.totalStaked) revert PortalErrors.BelowCurrentStake();
+
+        uint256 oldCapacity = _portalInfo.maxCapacity;
+        _portalInfo.maxCapacity = newCapacity;
+
+        emit CapacityUpdated(oldCapacity, newCapacity);
     }
 
     function distributeFees(address token, uint256 amount) external onlyOperator whenNotPaused {
@@ -445,6 +460,8 @@ contract PortalPoolImplementation is
     }
 
     function getClaimableRewards(address delegator) external view returns (uint256) {
+        if (distributionRateScaled == 0) return 0;
+
         uint256 delegatorStake = _stakes[delegator];
         if (delegatorStake == 0) return 0;
 
@@ -471,6 +488,8 @@ contract PortalPoolImplementation is
     }
 
     function getCurrentRewardBalance() external view returns (uint256) {
+        if (distributionRateScaled == 0) return 0;
+
         uint256 timeDelta = block.timestamp - lastRewardTimestamp;
         uint256 spent = timeDelta * distributionRateScaled;
         if (spent >= lastRewardBalanceScaled) return 0;
@@ -504,6 +523,10 @@ contract PortalPoolImplementation is
 
     function getTotalProcessed() external view returns (uint256) {
         return _exitQueue.totalProcessed();
+    }
+
+    function getMetadata() external view returns (string memory) {
+        return _portalRegistry.getMetadata(address(this));
     }
 
     function pause() external onlyRole(DEFAULT_ADMIN_ROLE) {

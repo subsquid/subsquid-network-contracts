@@ -61,6 +61,7 @@ interface IPortalPool {
     event RewardsToppedUp(address indexed operator, uint256 amount, uint256 newBalanceScaled);
     event RewardsClaimed(address indexed delegator, uint256 amount);
     event DistributionRateChanged(uint256 oldRate, uint256 newRate);
+    event CapacityUpdated(uint256 oldCapacity, uint256 newCapacity);
 
     function initialize(InitParams calldata params) external;
 
@@ -76,6 +77,7 @@ interface IPortalPool {
     function topUpRewards(uint256 amount) external;
     function claimRewards() external returns (uint256);
     function setDistributionRate(uint256 newRatePerSecond) external;
+    function setCapacity(uint256 newCapacity) external;
 
     function getPortalInfo() external view returns (PortalInfo memory);
     function getProviderStake(address provider) external view returns (uint256);
@@ -94,6 +96,7 @@ interface IPortalPool {
         view
         returns (uint256 processed, uint256 userEndPos, uint256 secondsRemaining, bool ready);
     function getTotalProcessed() external view returns (uint256);
+    function getMetadata() external view returns (string memory);
 
     function pause() external;
     function unpause() external;

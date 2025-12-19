@@ -8,6 +8,7 @@ library PortalRegistryErrors {
     error PortalNotRegistered();
     error PeerIdInUse();
     error OnlyPortal();
+    error OnlyFactory();
     error OnlyOperator();
     error NotOperator();
     error InsufficientAllocation();

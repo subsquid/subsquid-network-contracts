@@ -355,15 +355,21 @@ contract PortalRegistryTest is BaseTest {
     }
 
     function test_RegisterPortal_RevertOnZeroOperator() public {
-        vm.prank(address(0x999));
-        vm.expectRevert(PortalRegistryErrors.OnlyPortal.selector);
+        vm.prank(address(factory));
+        vm.expectRevert(PortalRegistryErrors.InvalidAddress.selector);
         registry.registerPortalPool(TEST_PEER_ID, address(0x888), address(0), "");
     }
 
     function test_RegisterPortal_RevertOnEmptyPeerId() public {
-        vm.prank(address(0x999));
+        vm.prank(address(factory));
         vm.expectRevert(PortalRegistryErrors.InvalidPeerId.selector);
         registry.registerPortalPool("", address(0x999), operator, "");
+    }
+
+    function test_RegisterPortal_RevertOnNotFactory() public {
+        vm.prank(address(0x999));
+        vm.expectRevert(PortalRegistryErrors.OnlyFactory.selector);
+        registry.registerPortalPool(TEST_PEER_ID, address(0x888), operator, "");
     }
 
     function test_Stake_RevertOnNonPortal() public {
@@ -531,7 +537,7 @@ contract PortalRegistryTest is BaseTest {
     function test_RegisterPortal_RevertOnPortalAlreadyRegistered() public {
         address portalAddress = _createPortal(operator, MIN_STAKE_THRESHOLD, "TestPortal");
 
-        vm.prank(portalAddress);
+        vm.prank(address(factory));
         vm.expectRevert(PortalRegistryErrors.PortalAlreadyRegistered.selector);
         registry.registerPortalPool(TEST_PEER_ID_2, portalAddress, operator, "");
     }

@@ -42,6 +42,8 @@ contract PortalRegistry is IPortalRegistry, AccessControl, Pausable {
     uint256 public minStake;
     uint256 public mana;
 
+    address public factory;
+
     constructor(address _sqd, address _networkController, uint256 _minStake, uint256 _mana) {
         if (_sqd == address(0)) revert PortalRegistryErrors.InvalidAddress();
         if (_networkController == address(0)) revert PortalRegistryErrors.InvalidAddress();
@@ -157,7 +159,7 @@ contract PortalRegistry is IPortalRegistry, AccessControl, Pausable {
         address operator,
         string calldata metadata
     ) external whenNotPaused {
-        if (msg.sender != portalAddress) revert PortalRegistryErrors.OnlyPortal();
+        if (msg.sender != factory) revert PortalRegistryErrors.OnlyFactory();
         if (operator == address(0)) revert PortalRegistryErrors.InvalidAddress();
         if (peerId.length == 0) revert PortalRegistryErrors.InvalidPeerId();
         if (portals[portalAddress].portalAddress != address(0)) {
@@ -348,6 +350,14 @@ contract PortalRegistry is IPortalRegistry, AccessControl, Pausable {
     function setPortalStatus(address portal, bool status) external onlyRole(DEFAULT_ADMIN_ROLE) {
         isPortal[portal] = status;
         emit PortalStatusChanged(portal, status);
+    }
+
+    /// @inheritdoc IPortalRegistry
+    function setFactory(address _factory) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (_factory == address(0)) revert PortalRegistryErrors.InvalidAddress();
+        address oldFactory = factory;
+        factory = _factory;
+        emit FactoryUpdated(oldFactory, _factory);
     }
 
     /// @inheritdoc IPortalRegistry

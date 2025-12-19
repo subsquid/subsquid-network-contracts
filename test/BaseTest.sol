@@ -65,6 +65,8 @@ abstract contract BaseTest is Test {
             DEFAULT_MAX_STAKE_PER_WALLET
         );
 
+        registry.setFactory(address(factory));
+
         factory.addPaymentToken(address(usdc));
         factory.addPaymentToken(address(dai));
 

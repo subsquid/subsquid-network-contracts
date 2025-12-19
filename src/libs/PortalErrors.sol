@@ -6,6 +6,7 @@ library PortalErrors {
     error InvalidState();
     error PortalPaused();
     error PortalNotFailed();
+    error NotActivated();
 
     // Stake errors
     error InsufficientStake();
@@ -38,6 +39,8 @@ library PortalErrors {
     error InvalidAddress();
     error BelowMinimum();
     error AboveMaximum();
+    error BelowCurrentStake();
+    error NoChange();
     error CapacityOutOfRange();
     error EmptyPeerId();
 
@@ -48,6 +51,9 @@ library PortalErrors {
     error TokenAlreadyAdded();
     error NoPaymentTokens();
     error NothingToClaim();
+
+    // Distribution errors
+    error DistributionTurnedOff();
 
     // Factory errors
     error InvalidPortal();

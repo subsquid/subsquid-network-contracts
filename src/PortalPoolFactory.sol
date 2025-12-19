@@ -7,6 +7,7 @@ import {BeaconProxy} from "@openzeppelin/contracts/proxy/beacon/BeaconProxy.sol"
 import {IPortalPool} from "./interfaces/IPortalPool.sol";
 import {IPortalFactory} from "./interfaces/IPortalFactory.sol";
 import {INetworkController} from "./interfaces/INetworkController.sol";
+import {IPortalRegistry} from "./interfaces/IPortalRegistry.sol";
 import {PortalPoolBeacon} from "./PortalPoolBeacon.sol";
 import {PortalErrors} from "./libs/PortalErrors.sol";
 import {Constants} from "./libs/Constants.sol";
@@ -23,7 +24,8 @@ contract PortalPoolFactory is IPortalFactory, AccessControl, Pausable {
 
     mapping(uint256 => address) public allPortals;
     uint256 public portalCount;
-    mapping(address => address[]) public operatorPortals;
+    mapping(address => mapping(uint256 => address)) public operatorPortalPools;
+    mapping(address => uint256) public operatorPortalCount;
     mapping(address => bool) public isPortal;
 
     mapping(address => bool) public isAllowedPaymentToken;
@@ -98,9 +100,13 @@ contract PortalPoolFactory is IPortalFactory, AccessControl, Pausable {
 
         portal = address(new BeaconProxy(address(beacon), initData));
 
+        // Register the portal in the registry
+        IPortalRegistry(portalRegistry).registerPortalPool(params.peerId, portal, params.operator, params.metadata);
+
         allPortals[portalCount] = portal;
         ++portalCount;
-        operatorPortals[params.operator].push(portal);
+        operatorPortalPools[params.operator][operatorPortalCount[params.operator]] = portal;
+        ++operatorPortalCount[params.operator];
         isPortal[portal] = true;
 
         emit PortalCreated(portal, params.operator, params.peerId);
@@ -117,7 +123,35 @@ contract PortalPoolFactory is IPortalFactory, AccessControl, Pausable {
     }
 
     function getOperatorPortals(address operator) external view returns (address[] memory) {
-        return operatorPortals[operator];
+        uint256 count = operatorPortalCount[operator];
+        address[] memory portals = new address[](count);
+        for (uint256 i = 0; i < count; i++) {
+            portals[i] = operatorPortalPools[operator][i];
+        }
+        return portals;
+    }
+
+    function getOperatorPortalsPaginated(address operator, uint256 offset, uint256 limit)
+        external
+        view
+        returns (address[] memory)
+    {
+        uint256 total = operatorPortalCount[operator];
+        if (offset >= total) {
+            return new address[](0);
+        }
+
+        uint256 end = offset + limit;
+        if (end > total) {
+            end = total;
+        }
+
+        uint256 size = end - offset;
+        address[] memory portals = new address[](size);
+        for (uint256 i = 0; i < size; i++) {
+            portals[i] = operatorPortalPools[operator][offset + i];
+        }
+        return portals;
     }
 
     function pause() external onlyRole(PAUSER_ROLE) {

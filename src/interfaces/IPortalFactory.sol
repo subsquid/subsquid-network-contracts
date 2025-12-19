@@ -38,6 +38,7 @@ interface IPortalFactory {
     function maxPaymentTokens() external view returns (uint256);
     function exitUnlockRatePerSecond() external view returns (uint256);
     function collectionDeadlineSeconds() external view returns (uint256);
+    function maxPoolCapacity() external view returns (uint256);
 
     function setMaxPaymentTokens(uint256 value) external;
     function setExitUnlockRate(uint256 ratePerSecond) external;

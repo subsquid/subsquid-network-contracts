@@ -131,6 +131,77 @@ contract PortalPoolFactoryTest is BaseTest {
         assertEq(operatorPortals[0], portal1);
     }
 
+    function test_CreatePortal_SameOperatorMultiplePools() public {
+        address portal1 = _createPortal(operator, MIN_STAKE_THRESHOLD, "OperatorPool1");
+        address portal2 = _createPortal(operator, MIN_STAKE_THRESHOLD * 2, "OperatorPool2");
+        address portal3 = _createPortal(operator, MIN_STAKE_THRESHOLD * 3, "OperatorPool3");
+
+        assertEq(factory.portalCount(), 3);
+
+        address[] memory operatorPortals = factory.getOperatorPortals(operator);
+        assertEq(operatorPortals.length, 3);
+        assertEq(operatorPortals[0], portal1);
+        assertEq(operatorPortals[1], portal2);
+        assertEq(operatorPortals[2], portal3);
+
+        // Verify all are registered as portals
+        assertTrue(factory.isPortal(portal1));
+        assertTrue(factory.isPortal(portal2));
+        assertTrue(factory.isPortal(portal3));
+    }
+
+    function test_CreatePortal_SameOperator100Pools() public {
+        uint256 numPortals = 100;
+        address[] memory createdPortals = new address[](numPortals);
+
+        for (uint256 i = 0; i < numPortals; i++) {
+            createdPortals[i] = _createPortal(operator, MIN_STAKE_THRESHOLD, string(abi.encodePacked("Pool", i)));
+        }
+
+        assertEq(factory.portalCount(), numPortals);
+        assertEq(factory.operatorPortalCount(operator), numPortals);
+
+        // Verify getOperatorPortals returns all 100
+        address[] memory operatorPortals = factory.getOperatorPortals(operator);
+        assertEq(operatorPortals.length, numPortals);
+
+        // Spot check first, middle, and last
+        assertEq(operatorPortals[0], createdPortals[0]);
+        assertEq(operatorPortals[50], createdPortals[50]);
+        assertEq(operatorPortals[99], createdPortals[99]);
+    }
+
+    function test_GetOperatorPortalsPaginated() public {
+        // Create 10 portals
+        address[] memory createdPortals = new address[](10);
+        for (uint256 i = 0; i < 10; i++) {
+            createdPortals[i] =
+                _createPortal(operator, MIN_STAKE_THRESHOLD, string(abi.encodePacked("PaginatedPool", i)));
+        }
+
+        // Get first page (0-4)
+        address[] memory page1 = factory.getOperatorPortalsPaginated(operator, 0, 5);
+        assertEq(page1.length, 5);
+        assertEq(page1[0], createdPortals[0]);
+        assertEq(page1[4], createdPortals[4]);
+
+        // Get second page (5-9)
+        address[] memory page2 = factory.getOperatorPortalsPaginated(operator, 5, 5);
+        assertEq(page2.length, 5);
+        assertEq(page2[0], createdPortals[5]);
+        assertEq(page2[4], createdPortals[9]);
+
+        // Get partial page (request more than available)
+        address[] memory page3 = factory.getOperatorPortalsPaginated(operator, 8, 5);
+        assertEq(page3.length, 2); // Only 2 remaining
+        assertEq(page3[0], createdPortals[8]);
+        assertEq(page3[1], createdPortals[9]);
+
+        // Get empty page (offset beyond total)
+        address[] memory page4 = factory.getOperatorPortalsPaginated(operator, 100, 5);
+        assertEq(page4.length, 0);
+    }
+
     function test_CreatePortal_UsesDefaultMaxStakePerWallet() public {
         IPortalFactory.CreatePortalPoolParams memory params = IPortalFactory.CreatePortalPoolParams({
             operator: operator,

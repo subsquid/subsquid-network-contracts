@@ -33,8 +33,11 @@ interface IPortalRegistry {
     event ManaUpdated(uint256 oldValue, uint256 newValue);
     event PortalStatusChanged(address indexed portal, bool status);
     event MetadataChanged(address indexed portal, string metadata);
+    event FactoryUpdated(address indexed oldFactory, address indexed newFactory);
 
-    function registerDirectPortal(bytes calldata peerId, string calldata metadata) external returns (address portalId);
+    function registerDirectPortal(bytes calldata peerId, string calldata metadata)
+        external
+        returns (address portalId);
 
     function stakeToDirectPortal(uint256 amount) external;
 
@@ -72,4 +75,6 @@ interface IPortalRegistry {
     function setMinStake(uint256 minStake) external;
     function setMana(uint256 mana) external;
     function setPortalStatus(address portal, bool status) external;
+    function setFactory(address factory) external;
+    function factory() external view returns (address);
 }
