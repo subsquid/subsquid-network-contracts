@@ -74,7 +74,6 @@ contract PortalPoolImplementation is
         _portalInfo.paused = false;
         _portalInfo.firstActivated = false;
 
-        maxStakePerWallet = params.maxStakePerWallet;
         distributionRateScaled = params.distributionRatePerSecond * Constants.PRECISION;
         lastRewardTimestamp = block.timestamp;
 
@@ -84,9 +83,9 @@ contract PortalPoolImplementation is
         _grantRole(OPERATOR_ROLE, params.operator);
         _grantRole(FACTORY_ROLE, msg.sender);
 
-        // deploy the LPT token for this portal using portalName
-        string memory tokenName = string(abi.encodePacked(params.portalName, " Liquidity Portal Token"));
-        string memory tokenSymbol = string(abi.encodePacked(params.portalName, "-LPT"));
+        // deploy the LPT token for this portal using tokenSuffix
+        string memory tokenName = string(abi.encodePacked("Portal Locked SQD ", params.tokenSuffix));
+        string memory tokenSymbol = string(abi.encodePacked("plSQD-", params.tokenSuffix));
         lptToken = new LiquidPortalToken(tokenName, tokenSymbol, address(this));
     }
 
@@ -111,7 +110,7 @@ contract PortalPoolImplementation is
         }
 
         uint256 newUserStake = _stakes[msg.sender] + amount;
-        if (newUserStake > maxStakePerWallet) revert PortalErrors.ExceedsWalletLimit();
+        if (newUserStake > _factory.defaultMaxStakePerWallet()) revert PortalErrors.ExceedsWalletLimit();
 
         uint256 newTotal = _portalInfo.totalStaked + amount;
         if (newTotal > _portalInfo.maxCapacity) revert PortalErrors.CapacityExceeded();
@@ -251,7 +250,7 @@ contract PortalPoolImplementation is
         if (amount > transferableStake) revert PortalErrors.InsufficientTransferableStake();
 
         uint256 receiverNewStake = _stakes[to] + amount;
-        if (receiverNewStake > maxStakePerWallet) revert PortalErrors.ExceedsWalletLimit();
+        if (receiverNewStake > _factory.defaultMaxStakePerWallet()) revert PortalErrors.ExceedsWalletLimit();
 
         _settleFees(from);
         _settleFees(to);
@@ -349,7 +348,6 @@ contract PortalPoolImplementation is
     function setCapacity(uint256 newCapacity) external onlyOperator {
         if (!_portalInfo.firstActivated) revert PortalErrors.NotActivated();
         if (newCapacity == _portalInfo.maxCapacity) revert PortalErrors.NoChange();
-        if (newCapacity > _factory.maxPoolCapacity()) revert PortalErrors.AboveMaximum();
         uint256 minCapacity = _networkController.minStakeThreshold();
         if (newCapacity < minCapacity) revert PortalErrors.BelowMinimum();
         if (newCapacity < _portalInfo.totalStaked) revert PortalErrors.BelowCurrentStake();
@@ -527,6 +525,10 @@ contract PortalPoolImplementation is
 
     function getMetadata() external view returns (string memory) {
         return _portalRegistry.getMetadata(address(this));
+    }
+
+    function getMinCapacity() external view returns (uint256) {
+        return _networkController.minStakeThreshold();
     }
 
     function pause() external onlyRole(DEFAULT_ADMIN_ROLE) {

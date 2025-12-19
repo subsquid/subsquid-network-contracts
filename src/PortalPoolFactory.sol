@@ -31,7 +31,6 @@ contract PortalPoolFactory is IPortalFactory, AccessControl, Pausable {
     mapping(address => bool) public isAllowedPaymentToken;
     address[] public paymentTokensList;
 
-    uint256 public maxPoolCapacity;
     uint256 public defaultMaxStakePerWallet;
 
     uint256 public maxPaymentTokens;
@@ -45,7 +44,6 @@ contract PortalPoolFactory is IPortalFactory, AccessControl, Pausable {
         address _networkController,
         address _sqd,
         address _usdc,
-        uint256 _maxPoolCapacity,
         uint256 _defaultMaxStakePerWallet
     ) {
         if (_implementation == address(0)) revert PortalErrors.InvalidAddress();
@@ -64,7 +62,6 @@ contract PortalPoolFactory is IPortalFactory, AccessControl, Pausable {
         networkController = _networkController;
         sqd = _sqd;
         usdc = _usdc;
-        maxPoolCapacity = _maxPoolCapacity;
         defaultMaxStakePerWallet = _defaultMaxStakePerWallet;
 
         maxPaymentTokens = Constants.MAX_PAYMENT_TOKENS;
@@ -77,7 +74,6 @@ contract PortalPoolFactory is IPortalFactory, AccessControl, Pausable {
         if (paymentTokensList.length == 0) revert PortalErrors.NoPaymentTokens();
         uint256 minCapacity = INetworkController(networkController).minStakeThreshold();
         if (params.capacity < minCapacity) revert PortalErrors.BelowMinimum();
-        if (params.capacity > maxPoolCapacity) revert PortalErrors.AboveMaximum();
         if (params.peerId.length == 0) revert PortalErrors.EmptyPeerId();
 
         IPortalPool.InitParams memory initParams = IPortalPool.InitParams({
@@ -85,14 +81,13 @@ contract PortalPoolFactory is IPortalFactory, AccessControl, Pausable {
             maxCapacity: params.capacity,
             depositDeadline: 0,
             peerId: params.peerId,
-            portalName: params.portalName,
+            tokenSuffix: params.tokenSuffix,
             sqd: sqd,
             usdc: usdc,
             portalRegistry: portalRegistry,
             feeRouter: feeRouter,
             networkController: networkController,
             distributionRatePerSecond: params.distributionRatePerSecond,
-            maxStakePerWallet: defaultMaxStakePerWallet,
             metadata: params.metadata
         });
 
@@ -160,12 +155,6 @@ contract PortalPoolFactory is IPortalFactory, AccessControl, Pausable {
 
     function unpause() external onlyRole(PAUSER_ROLE) {
         _unpause();
-    }
-
-    function setMaxPoolCapacity(uint256 _maxCapacity) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        uint256 oldValue = maxPoolCapacity;
-        maxPoolCapacity = _maxCapacity;
-        emit MaxPoolCapacityUpdated(oldValue, _maxCapacity);
     }
 
     function setDefaultMaxStakePerWallet(uint256 _maxStake) external onlyRole(DEFAULT_ADMIN_ROLE) {

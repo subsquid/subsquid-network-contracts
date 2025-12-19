@@ -95,7 +95,7 @@ contract SecurityTests is BaseTest {
             operator: operator,
             capacity: DEFAULT_MAX_STAKE_PER_WALLET * 2,
             peerId: "limit-portal",
-            portalName: "LimitPortal",
+            tokenSuffix: "LimitPortal",
             distributionRatePerSecond: 1 ether,
             metadata: ""
         });

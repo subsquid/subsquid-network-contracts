@@ -4,7 +4,6 @@ pragma solidity 0.8.28;
 interface IPortalFactory {
     event PortalCreated(address indexed portal, address indexed operator, bytes peerId);
     event BeaconUpgraded(address indexed newImplementation);
-    event MaxPoolCapacityUpdated(uint256 oldValue, uint256 newValue);
     event DefaultMaxStakePerWalletUpdated(uint256 oldValue, uint256 newValue);
     event UsdcUpdated(address indexed oldUsdc, address indexed newUsdc);
     event PaymentTokenAdded(address indexed token);
@@ -17,7 +16,7 @@ interface IPortalFactory {
         address operator;
         uint256 capacity;
         bytes peerId;
-        string portalName;
+        string tokenSuffix;
         uint256 distributionRatePerSecond;
         string metadata;
     }
@@ -38,7 +37,7 @@ interface IPortalFactory {
     function maxPaymentTokens() external view returns (uint256);
     function exitUnlockRatePerSecond() external view returns (uint256);
     function collectionDeadlineSeconds() external view returns (uint256);
-    function maxPoolCapacity() external view returns (uint256);
+    function defaultMaxStakePerWallet() external view returns (uint256);
 
     function setMaxPaymentTokens(uint256 value) external;
     function setExitUnlockRate(uint256 ratePerSecond) external;
@@ -46,5 +45,4 @@ interface IPortalFactory {
 
     function pause() external;
     function unpause() external;
-    function setMaxPoolCapacity(uint256 maxCapacity) external;
 }

@@ -98,7 +98,6 @@ contract DeployPortalSystem is Script {
             d.networkController,
             SQD,
             USDC,
-            MAX_POOL_CAPACITY,
             MAX_STAKE_PER_WALLET
         );
         d.factory = address(factory);
@@ -181,7 +180,6 @@ contract DeployWithExistingController is Script {
             networkController,
             SQD,
             USDC,
-            MAX_POOL_CAPACITY,
             MAX_STAKE_PER_WALLET
         );
         console.log("PortalPoolFactory deployed at:", address(factory));

@@ -36,14 +36,13 @@ interface IPortalPool {
         uint256 maxCapacity;
         uint256 depositDeadline;
         bytes peerId;
-        string portalName;
+        string tokenSuffix;
         address sqd;
         address usdc;
         address portalRegistry;
         address feeRouter;
         address networkController;
         uint256 distributionRatePerSecond;
-        uint256 maxStakePerWallet;
         string metadata;
     }
 
@@ -97,6 +96,7 @@ interface IPortalPool {
         returns (uint256 processed, uint256 userEndPos, uint256 secondsRemaining, bool ready);
     function getTotalProcessed() external view returns (uint256);
     function getMetadata() external view returns (string memory);
+    function getMinCapacity() external view returns (uint256);
 
     function pause() external;
     function unpause() external;

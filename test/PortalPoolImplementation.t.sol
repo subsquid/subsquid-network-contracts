@@ -29,8 +29,8 @@ contract PortalPoolImplementationTest is BaseTest {
 
     function test_Initialize_DeploysLPTToken() public view {
         LiquidPortalToken lpt = LiquidPortalToken(address(pool.lptToken()));
-        assertEq(lpt.name(), "TestPortal Liquidity Portal Token");
-        assertEq(lpt.symbol(), "TestPortal-LPT");
+        assertEq(lpt.name(), "Portal Locked SQD TestPortal");
+        assertEq(lpt.symbol(), "plSQD-TestPortal");
     }
 
     function test_Deposit_InCollectingState() public {
@@ -77,7 +77,7 @@ contract PortalPoolImplementationTest is BaseTest {
             operator: operator,
             capacity: DEFAULT_MAX_STAKE_PER_WALLET * 2,
             peerId: "wallet-limit-test",
-            portalName: "WalletLimitTest",
+            tokenSuffix: "WalletLimitTest",
             distributionRatePerSecond: 1 ether,
             metadata: ""
         });
@@ -384,7 +384,7 @@ contract PortalPoolImplementationTest is BaseTest {
             operator: operator,
             capacity: MIN_STAKE_THRESHOLD,
             peerId: "reward-portal",
-            portalName: "RewardPortal",
+            tokenSuffix: "RewardPortal",
             distributionRatePerSecond: 1e6,
             metadata: ""
         });
@@ -436,7 +436,7 @@ contract PortalPoolImplementationTest is BaseTest {
             operator: operator,
             capacity: DEFAULT_MAX_STAKE_PER_WALLET * 2,
             peerId: "transfer-limit",
-            portalName: "TransferLimit",
+            tokenSuffix: "TransferLimit",
             distributionRatePerSecond: 1 ether,
             metadata: ""
         });
@@ -762,17 +762,6 @@ contract PortalPoolImplementationTest is BaseTest {
         pool.setCapacity(currentCapacity);
     }
 
-    function test_SetCapacity_RevertOnAboveMaxPoolCapacity() public {
-        portal = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "CapacityTestPortal7");
-        pool = PortalPoolImplementation(portal);
-
-        uint256 aboveMaxCapacity = MAX_POOL_CAPACITY + 1;
-
-        vm.prank(operator);
-        vm.expectRevert(PortalErrors.AboveMaximum.selector);
-        pool.setCapacity(aboveMaxCapacity);
-    }
-
     function test_SetCapacity_AllowsAdditionalDeposits() public {
         // Activate portal with minimum capacity
         portal = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "CapacityTestPortal8");
@@ -1012,7 +1001,7 @@ contract PortalPoolImplementationTest is BaseTest {
             operator: operator,
             capacity: MIN_STAKE_THRESHOLD * 2,
             peerId: "active-deposit-portal",
-            portalName: "ActiveDepositPortal",
+            tokenSuffix: "ActiveDepositPortal",
             distributionRatePerSecond: 1 ether,
             metadata: ""
         });
@@ -1087,7 +1076,7 @@ contract PortalPoolImplementationTest is BaseTest {
             operator: operator,
             capacity: DEFAULT_MAX_STAKE_PER_WALLET * 2,
             peerId: "receiver-limit",
-            portalName: "ReceiverLimit",
+            tokenSuffix: "ReceiverLimit",
             distributionRatePerSecond: 1 ether,
             metadata: ""
         });
@@ -1360,7 +1349,7 @@ contract PortalPoolImplementationTest is BaseTest {
             operator: operator,
             capacity: MIN_STAKE_THRESHOLD,
             peerId: "peer-zero-rate",
-            portalName: "ZeroRatePool",
+            tokenSuffix: "ZeroRatePool",
             distributionRatePerSecond: 0, // Zero rate
             metadata: ""
         });

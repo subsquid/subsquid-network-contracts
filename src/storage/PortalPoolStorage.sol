@@ -33,8 +33,6 @@ abstract contract PortalPoolStorage {
     INetworkController internal _networkController;
     IPortalFactory internal _factory;
 
-    uint256 public maxStakePerWallet;
-
     IERC20 internal _usdc;
     uint256 public distributionRateScaled;
     uint256 public lastRewardBalanceScaled;

@@ -17,7 +17,6 @@ contract PortalPoolFactoryTest is BaseTest {
         assertEq(factory.networkController(), address(networkController));
         assertEq(factory.sqd(), address(sqd));
         assertEq(factory.usdc(), address(usdc));
-        assertEq(factory.maxPoolCapacity(), MAX_POOL_CAPACITY);
         assertEq(factory.defaultMaxStakePerWallet(), DEFAULT_MAX_STAKE_PER_WALLET);
     }
 
@@ -30,7 +29,6 @@ contract PortalPoolFactoryTest is BaseTest {
             address(networkController),
             address(sqd),
             address(usdc),
-            MAX_POOL_CAPACITY,
             DEFAULT_MAX_STAKE_PER_WALLET
         );
     }
@@ -49,7 +47,7 @@ contract PortalPoolFactoryTest is BaseTest {
             operator: operator,
             capacity: MIN_STAKE_THRESHOLD,
             peerId: "test-peer-id",
-            portalName: "TestPortal",
+            tokenSuffix: "TestPortal",
             distributionRatePerSecond: 1 ether,
             metadata: ""
         });
@@ -65,7 +63,7 @@ contract PortalPoolFactoryTest is BaseTest {
             operator: address(0),
             capacity: MIN_STAKE_THRESHOLD,
             peerId: "test-peer-id",
-            portalName: "TestPortal",
+            tokenSuffix: "TestPortal",
             distributionRatePerSecond: 1 ether,
             metadata: ""
         });
@@ -79,7 +77,7 @@ contract PortalPoolFactoryTest is BaseTest {
             operator: operator,
             capacity: MIN_STAKE_THRESHOLD - 1,
             peerId: "test-peer-id",
-            portalName: "TestPortal",
+            tokenSuffix: "TestPortal",
             distributionRatePerSecond: 1 ether,
             metadata: ""
         });
@@ -88,26 +86,12 @@ contract PortalPoolFactoryTest is BaseTest {
         factory.createPortalPool(params);
     }
 
-    function test_CreatePortal_RevertOnCapacityAboveMaximum() public {
-        IPortalFactory.CreatePortalPoolParams memory params = IPortalFactory.CreatePortalPoolParams({
-            operator: operator,
-            capacity: MAX_POOL_CAPACITY + 1,
-            peerId: "test-peer-id",
-            portalName: "TestPortal",
-            distributionRatePerSecond: 1 ether,
-            metadata: ""
-        });
-
-        vm.expectRevert(PortalErrors.AboveMaximum.selector);
-        factory.createPortalPool(params);
-    }
-
     function test_CreatePortal_RevertOnEmptyPeerId() public {
         IPortalFactory.CreatePortalPoolParams memory params = IPortalFactory.CreatePortalPoolParams({
             operator: operator,
             capacity: MIN_STAKE_THRESHOLD,
             peerId: "",
-            portalName: "TestPortal",
+            tokenSuffix: "TestPortal",
             distributionRatePerSecond: 1 ether,
             metadata: ""
         });
@@ -207,13 +191,14 @@ contract PortalPoolFactoryTest is BaseTest {
             operator: operator,
             capacity: MIN_STAKE_THRESHOLD,
             peerId: "test-peer-id",
-            portalName: "TestPortal",
+            tokenSuffix: "TestPortal",
             distributionRatePerSecond: 1 ether,
             metadata: ""
         });
 
         address portal = factory.createPortalPool(params);
-        assertEq(PortalPoolImplementation(portal).maxStakePerWallet(), DEFAULT_MAX_STAKE_PER_WALLET);
+        // maxStakePerWallet is now a global value in factory, not per-portal
+        assertEq(factory.defaultMaxStakePerWallet(), DEFAULT_MAX_STAKE_PER_WALLET);
     }
 
     function test_CreatePortal_RevertWhenPaused() public {
@@ -223,7 +208,7 @@ contract PortalPoolFactoryTest is BaseTest {
             operator: operator,
             capacity: MIN_STAKE_THRESHOLD,
             peerId: "test-peer-id",
-            portalName: "TestPortal",
+            tokenSuffix: "TestPortal",
             distributionRatePerSecond: 1 ether,
             metadata: ""
         });
@@ -294,17 +279,6 @@ contract PortalPoolFactoryTest is BaseTest {
         assertEq(tokens.length, 2);
         assertEq(tokens[0], address(usdc));
         assertEq(tokens[1], address(dai));
-    }
-
-    function test_SetMaxPoolCapacity() public {
-        uint256 newCapacity = 20_000_000 ether;
-
-        vm.expectEmit(true, true, false, false);
-        emit IPortalFactory.MaxPoolCapacityUpdated(MAX_POOL_CAPACITY, newCapacity);
-
-        factory.setMaxPoolCapacity(newCapacity);
-
-        assertEq(factory.maxPoolCapacity(), newCapacity);
     }
 
     function test_SetDefaultMaxStakePerWallet() public {
@@ -460,7 +434,7 @@ contract PortalPoolFactoryTest is BaseTest {
             operator: operator,
             capacity: MIN_STAKE_THRESHOLD,
             peerId: "test-peer-id",
-            portalName: "TestPortal",
+            tokenSuffix: "TestPortal",
             distributionRatePerSecond: 1 ether,
             metadata: ""
         });
@@ -474,12 +448,6 @@ contract PortalPoolFactoryTest is BaseTest {
         vm.prank(user1);
         vm.expectRevert();
         factory.unpause();
-    }
-
-    function test_SetMaxPoolCapacity_RevertOnNonAdmin() public {
-        vm.prank(user1);
-        vm.expectRevert();
-        factory.setMaxPoolCapacity(20_000_000 ether);
     }
 
     function test_SetDefaultMaxStakePerWallet_RevertOnNonAdmin() public {

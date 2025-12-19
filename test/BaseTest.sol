@@ -61,7 +61,6 @@ abstract contract BaseTest is Test {
             address(networkController),
             address(sqd),
             address(usdc),
-            MAX_POOL_CAPACITY,
             DEFAULT_MAX_STAKE_PER_WALLET
         );
 
@@ -105,7 +104,7 @@ abstract contract BaseTest is Test {
             operator: _operator,
             capacity: _maxCapacity,
             peerId: abi.encodePacked("peer-", _name),
-            portalName: _name,
+            tokenSuffix: _name,
             distributionRatePerSecond: 1 ether,
             metadata: ""
         });
