@@ -336,14 +336,13 @@ contract PortalPoolImplementation is
         emit Withdrawn(msg.sender, amount);
     }
 
-
     function topUpRewards(uint256 amount) external onlyOperator {
         if (totalDistributionRatePerSec == 0) revert PortalErrors.DistributionTurnedOff();
         if (amount == 0) revert PortalErrors.InvalidAmount();
 
         if (getState() != PortalState.ACTIVE) revert PortalErrors.InvalidState();
 
-        (uint256 toProviders, uint256 toWorkerPool, ) = _feeRouter.calculateSplit(amount);
+        (uint256 toProviders, uint256 toWorkerPool,) = _feeRouter.calculateSplit(amount);
 
         // Get worker pool address from factory (global setting)
         address workerPool = _factory.workerPoolAddress();
@@ -555,19 +554,16 @@ contract PortalPoolImplementation is
         return _unclaimedRewards[delegator] + pending;
     }
 
-
     function getCurrentRewardBalance() external view returns (int256) {
         return currentBalance(block.timestamp);
     }
 
-
     /// @notice Get pool reward status (consolidated view)
-    function getRewardStatus() external view returns (
-        int256 balance,
-        uint256 currentDebt,
-        int256 runwayTimestamp,
-        bool isDry
-    ) {
+    function getRewardStatus()
+        external
+        view
+        returns (int256 balance, uint256 currentDebt, int256 runwayTimestamp, bool isDry)
+    {
         (uint256 currentCredit, uint256 cDebt) = _currentCreditDebt(block.timestamp);
         balance = int256(currentCredit) - int256(cDebt);
         currentDebt = cDebt;
@@ -577,7 +573,7 @@ contract PortalPoolImplementation is
 
     /// @notice get current credit (available funds for distribution)
     function getCredit() external view returns (uint256) {
-        (uint256 currentCredit, ) = _currentCreditDebt(block.timestamp);
+        (uint256 currentCredit,) = _currentCreditDebt(block.timestamp);
         return currentCredit;
     }
 
@@ -589,7 +585,7 @@ contract PortalPoolImplementation is
 
     /// @notice check if pool has run out of rewards (credit exhausted)
     function isOutOfMoney() external view returns (bool) {
-        (uint256 currentCredit, ) = _currentCreditDebt(block.timestamp);
+        (uint256 currentCredit,) = _currentCreditDebt(block.timestamp);
         return currentCredit == 0;
     }
 
@@ -610,15 +606,19 @@ contract PortalPoolImplementation is
     }
 
     /// @notice get consolidated pool status with user rewards
-    function getPoolStatusWithRewards(address user) external view returns (
-        uint256 poolCredit,
-        uint256 poolDebt,
-        int256 poolBalance,
-        int256 runway,
-        bool outOfMoney,
-        uint256 userRewards,
-        uint256 userStake
-    ) {
+    function getPoolStatusWithRewards(address user)
+        external
+        view
+        returns (
+            uint256 poolCredit,
+            uint256 poolDebt,
+            int256 poolBalance,
+            int256 runway,
+            bool outOfMoney,
+            uint256 userRewards,
+            uint256 userStake
+        )
+    {
         (poolCredit, poolDebt) = _currentCreditDebt(block.timestamp);
         poolBalance = int256(poolCredit) - int256(poolDebt);
         runway = getRunway();
@@ -755,18 +755,15 @@ contract PortalPoolImplementation is
         }
     }
 
-
     function _getUserActiveStake(address user) internal view returns (uint256) {
         uint256 stake = _stakes[user];
         uint256 exitAmount = _exitAmounts[user];
         return stake > exitAmount ? stake - exitAmount : 0;
     }
 
-
     function _getActiveStake() internal view returns (uint256) {
         return _portalInfo.totalStaked > _totalExitAmounts ? _portalInfo.totalStaked - _totalExitAmounts : 0;
     }
-
 
     function _totalDrainRate() internal view returns (uint256) {
         uint256 activeStake = _getActiveStake();
@@ -778,7 +775,6 @@ contract PortalPoolImplementation is
         uint256 delegatorDrain = FullMath.mulDiv(delegatorRatePerSec, activeStake, capacity);
         return treasuryRatePerSec + delegatorDrain;
     }
-
 
     function _setDistributionRate(uint256 newRatePerSec) internal {
         totalDistributionRatePerSec = newRatePerSec;
@@ -792,12 +788,7 @@ contract PortalPoolImplementation is
         }
     }
 
-
-    function _simulateGlobalAccrual(uint256 timestamp)
-        internal
-        view
-        returns (uint256 newRPS, uint64 newEffectiveTs)
-    {
+    function _simulateGlobalAccrual(uint256 timestamp) internal view returns (uint256 newRPS, uint64 newEffectiveTs) {
         newRPS = rewardPerStakeStored;
         newEffectiveTs = lastEffectiveRewardTs;
 
@@ -825,7 +816,6 @@ contract PortalPoolImplementation is
 
         return (newRPS, newEffectiveTs);
     }
-
 
     function _accrueGlobal(uint256 timestamp) internal {
         uint256 activeStake = _getActiveStake();
@@ -865,13 +855,13 @@ contract PortalPoolImplementation is
 
             if (runway >= int256(timestamp)) {
                 if (timestamp > uint256(lastEffectiveRewardTs)) {
-                uint256 delta = timestamp - uint256(lastEffectiveRewardTs);
-                rewardPerStakeStored += FullMath.mulDiv(perStakeRateWad, delta, 1);
+                    uint256 delta = timestamp - uint256(lastEffectiveRewardTs);
+                    rewardPerStakeStored += FullMath.mulDiv(perStakeRateWad, delta, 1);
                     lastEffectiveRewardTs = uint64(timestamp);
                 }
             } else if (runway > int256(uint256(lastEffectiveRewardTs))) {
-            uint256 delta = uint256(runway) - uint256(lastEffectiveRewardTs);
-            rewardPerStakeStored += FullMath.mulDiv(perStakeRateWad, delta, 1);
+                uint256 delta = uint256(runway) - uint256(lastEffectiveRewardTs);
+                rewardPerStakeStored += FullMath.mulDiv(perStakeRateWad, delta, 1);
                 lastEffectiveRewardTs = uint64(uint256(runway));
             }
         } else {

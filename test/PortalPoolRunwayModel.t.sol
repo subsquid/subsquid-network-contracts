@@ -163,7 +163,6 @@ contract PortalPoolRunwayModelTest is Test {
     }
 
     function test_RewardRate_BasedOnCapacity() public {
-
         vm.startPrank(operator);
         usdc.approve(address(pool), 100000);
         pool.topUpRewards(100000);
@@ -181,7 +180,6 @@ contract PortalPoolRunwayModelTest is Test {
     }
 
     function test_Runway_CalculatedCorrectly() public {
-
         uint256 topUpAmount = 1000;
         vm.startPrank(operator);
         usdc.approve(address(pool), topUpAmount);
@@ -196,7 +194,6 @@ contract PortalPoolRunwayModelTest is Test {
     }
 
     function test_DrainRate_Formula() public {
-
         uint256 drainRate = pool.getTotalDrainRate();
         uint256 expectedDrainRate = pool.treasuryRatePerSec() + (pool.delegatorRatePerSec() * CAPACITY / CAPACITY);
 
@@ -205,7 +202,6 @@ contract PortalPoolRunwayModelTest is Test {
     }
 
     function test_DryPeriod_RewardsFlatten() public {
-
         uint256 topUpAmount = 1000;
         vm.startPrank(operator);
         usdc.approve(address(pool), topUpAmount);
@@ -217,7 +213,7 @@ contract PortalPoolRunwayModelTest is Test {
 
         vm.warp(block.timestamp + runwayDuration + 1000);
 
-        (int256 balance, uint256 debt, , bool isDry) = pool.getRewardStatus();
+        (int256 balance, uint256 debt,, bool isDry) = pool.getRewardStatus();
 
         assertTrue(isDry, "Should be dry");
         assertTrue(balance <= 0, "Balance should be <= 0");
@@ -225,7 +221,6 @@ contract PortalPoolRunwayModelTest is Test {
     }
 
     function test_DryPeriod_ClaimableStaysConstant() public {
-
         vm.startPrank(operator);
         usdc.approve(address(pool), 750);
         pool.topUpRewards(750);
@@ -275,7 +270,6 @@ contract PortalPoolRunwayModelTest is Test {
     }
 
     function test_CatchUp_TopUpRestoresRewards() public {
-
         vm.startPrank(operator);
         usdc.approve(address(pool), 75000);
         pool.topUpRewards(75000);
@@ -287,7 +281,7 @@ contract PortalPoolRunwayModelTest is Test {
         vm.warp(block.timestamp + runwaySeconds + 500);
 
         uint256 claimableWhileDry = pool.getClaimableRewards(alice);
-        (, , , bool isDry) = pool.getRewardStatus();
+        (,,, bool isDry) = pool.getRewardStatus();
         assertTrue(isDry, "Should be dry");
 
         uint256 debtBefore = pool.getRewardDebt();
@@ -298,7 +292,7 @@ contract PortalPoolRunwayModelTest is Test {
         pool.topUpRewards(topUp);
         vm.stopPrank();
 
-        (, , , bool isDryAfter) = pool.getRewardStatus();
+        (,,, bool isDryAfter) = pool.getRewardStatus();
         assertFalse(isDryAfter, "Should not be dry after top-up");
 
         uint256 claimableAfterTopUp = pool.getClaimableRewards(alice);
@@ -323,7 +317,6 @@ contract PortalPoolRunwayModelTest is Test {
     }
 
     function test_Claim_AccumulatesCorrectly() public {
-
         vm.startPrank(operator);
         usdc.approve(address(pool), 10000000);
         pool.topUpRewards(10000000);
@@ -349,7 +342,6 @@ contract PortalPoolRunwayModelTest is Test {
     }
 
     function test_Attack_AllStakeExited_NoCatchUpOnTopUp() public {
-
         vm.startPrank(operator);
         usdc.approve(address(pool), 5000);
         pool.topUpRewards(5000);
@@ -371,7 +363,6 @@ contract PortalPoolRunwayModelTest is Test {
     }
 
     function test_Attack_DistributionOff_BlocksTopUp() public {
-
         vm.prank(operator);
         pool.setDistributionRate(0);
 
@@ -399,7 +390,6 @@ contract PortalPoolRunwayModelTest is Test {
     }
 
     function test_ExitQueue_StopsRewards() public {
-
         vm.startPrank(operator);
         usdc.approve(address(pool), 10000000);
         pool.topUpRewards(10000000);
@@ -449,7 +439,7 @@ contract PortalPoolRunwayModelTest is Test {
         uint256 debt = pool.getRewardDebt();
         assertTrue(debt > 0, "Should have debt when dry");
 
-        (int256 balance, , , bool isDry) = pool.getRewardStatus();
+        (int256 balance,,, bool isDry) = pool.getRewardStatus();
         assertTrue(isDry, "Should be dry");
         assertTrue(balance < 0, "Balance should be negative");
     }

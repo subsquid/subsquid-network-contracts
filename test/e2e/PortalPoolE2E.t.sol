@@ -66,7 +66,6 @@ contract MockNetworkController {
 }
 
 contract PortalPoolE2ETest is Test {
-
     uint256 constant SQD_DECIMALS = 18;
     uint256 constant SQD_PRICE_CENTS = 5;
 
@@ -106,7 +105,6 @@ contract PortalPoolE2ETest is Test {
     uint256 public totalStaked;
 
     function setUp() public {
-
         sqd = new MockERC20("Subsquid", "SQD", 18);
         usdc = new MockERC20("USD Coin", "USDC", 6);
 
@@ -138,7 +136,6 @@ contract PortalPoolE2ETest is Test {
     }
 
     function _setupStakers() internal {
-
         stakeAmounts[0] = 2500 * 1e18;
         stakeAmounts[1] = 1500 * 1e18;
         stakeAmounts[2] = 1250 * 1e18;
@@ -183,10 +180,17 @@ contract PortalPoolE2ETest is Test {
         if (_i == 0) return "0";
         uint256 j = _i;
         uint256 len;
-        while (j != 0) { len++; j /= 10; }
+        while (j != 0) {
+            len++;
+            j /= 10;
+        }
         bytes memory bstr = new bytes(len);
         uint256 k = len;
-        while (_i != 0) { k--; bstr[k] = bytes1(uint8(48 + _i % 10)); _i /= 10; }
+        while (_i != 0) {
+            k--;
+            bstr[k] = bytes1(uint8(48 + _i % 10));
+            _i /= 10;
+        }
         return string(bstr);
     }
 
@@ -455,9 +459,12 @@ contract PortalPoolE2ETest is Test {
         console.log("Staker 1 (15% stake):", claimables[1] / USDC_UNIT, "USDC");
         console.log("Staker 2 (12.5% stake):", claimables[2] / USDC_UNIT, "USDC");
 
-        uint256 expectedStaker0 = (totalClaimable * stakeAmounts[0]) / (stakeAmounts[0] + stakeAmounts[1] + stakeAmounts[2]);
-        uint256 expectedStaker1 = (totalClaimable * stakeAmounts[1]) / (stakeAmounts[0] + stakeAmounts[1] + stakeAmounts[2]);
-        uint256 expectedStaker2 = (totalClaimable * stakeAmounts[2]) / (stakeAmounts[0] + stakeAmounts[1] + stakeAmounts[2]);
+        uint256 expectedStaker0 =
+            (totalClaimable * stakeAmounts[0]) / (stakeAmounts[0] + stakeAmounts[1] + stakeAmounts[2]);
+        uint256 expectedStaker1 =
+            (totalClaimable * stakeAmounts[1]) / (stakeAmounts[0] + stakeAmounts[1] + stakeAmounts[2]);
+        uint256 expectedStaker2 =
+            (totalClaimable * stakeAmounts[2]) / (stakeAmounts[0] + stakeAmounts[1] + stakeAmounts[2]);
 
         console.log("\nExpected proportions:");
         console.log("Staker 0 expected:", expectedStaker0 / USDC_UNIT, "USDC");

@@ -1519,10 +1519,9 @@ contract PortalPoolImplementationTest is BaseTest {
         assertEq(pool.getProviderStake(user1), stakeBefore - reduction);
     }
 
-
     function test_ClaimRewards_ExactMath_FullCapacityStake() public {
-        uint256 distributionRate = 1e6; 
-        uint256 timeElapsed = 100; 
+        uint256 distributionRate = 1e6;
+        uint256 timeElapsed = 100;
 
         IPortalFactory.CreatePortalPoolParams memory params = IPortalFactory.CreatePortalPoolParams({
             operator: operator,
@@ -1558,10 +1557,10 @@ contract PortalPoolImplementationTest is BaseTest {
     }
 
     function test_ClaimRewards_ExactMath_PartialCapacityStake() public {
-        uint256 distributionRate = 2e6; 
+        uint256 distributionRate = 2e6;
         uint256 capacity = MIN_STAKE_THRESHOLD;
-        uint256 stake = capacity / 2; 
-        uint256 timeElapsed = 200; 
+        uint256 stake = capacity / 2;
+        uint256 timeElapsed = 200;
 
         IPortalFactory.CreatePortalPoolParams memory params = IPortalFactory.CreatePortalPoolParams({
             operator: operator,
@@ -1585,7 +1584,6 @@ contract PortalPoolImplementationTest is BaseTest {
         vm.prank(user1);
         lpt.transfer(user2, stake);
 
-
         // top up rewards
         uint256 rewardAmount = 1_000_000 * 1e6;
         vm.startPrank(operator);
@@ -1593,7 +1591,6 @@ contract PortalPoolImplementationTest is BaseTest {
         usdc.approve(portal, rewardAmount);
         pool.topUpRewards(rewardAmount);
         vm.stopPrank();
-
 
         vm.warp(block.timestamp + timeElapsed);
 
@@ -1613,7 +1610,7 @@ contract PortalPoolImplementationTest is BaseTest {
     }
 
     function test_ClaimRewards_ExactMath_MultipleTimePeriods() public {
-        uint256 distributionRate = 1e6; 
+        uint256 distributionRate = 1e6;
         uint256 capacity = MIN_STAKE_THRESHOLD;
 
         IPortalFactory.CreatePortalPoolParams memory params = IPortalFactory.CreatePortalPoolParams({
@@ -1632,7 +1629,6 @@ contract PortalPoolImplementationTest is BaseTest {
         sqd.approve(portal, capacity);
         pool.deposit(capacity);
         vm.stopPrank();
-
 
         // top up rewards
         uint256 rewardAmount = 1_000_000 * 1e6;
@@ -1660,9 +1656,9 @@ contract PortalPoolImplementationTest is BaseTest {
         assertEq(totalClaimed, (period1 + period2) * distributionRate, "Total claimed incorrect");
     }
 
-    function test_ClaimRewards_ExactMath_RunwayLimit() public { 
-        uint256 distributionRate = 1e6; 
-        uint256 rewardAmount = 100 * 1e6; 
+    function test_ClaimRewards_ExactMath_RunwayLimit() public {
+        uint256 distributionRate = 1e6;
+        uint256 rewardAmount = 100 * 1e6;
 
         IPortalFactory.CreatePortalPoolParams memory params = IPortalFactory.CreatePortalPoolParams({
             operator: operator,
@@ -1680,7 +1676,6 @@ contract PortalPoolImplementationTest is BaseTest {
         pool.deposit(MIN_STAKE_THRESHOLD);
         vm.stopPrank();
 
-
         vm.startPrank(operator);
         usdc.mint(operator, rewardAmount);
         usdc.approve(portal, rewardAmount);
@@ -1688,7 +1683,9 @@ contract PortalPoolImplementationTest is BaseTest {
         vm.stopPrank();
 
         uint256 providerBalance = rewardAmount / 2;
-        assertEq(pool.getCurrentRewardBalance(), int256(providerBalance), "Reward balance should be half of topped up amount");
+        assertEq(
+            pool.getCurrentRewardBalance(), int256(providerBalance), "Reward balance should be half of topped up amount"
+        );
 
         vm.warp(block.timestamp + 49);
 
@@ -1697,12 +1694,11 @@ contract PortalPoolImplementationTest is BaseTest {
 
         uint256 expectedReward = 49 * distributionRate;
         assertEq(claimed, expectedReward, "User gets their share of runway worth of rewards");
-
     }
 
     function test_ClaimRewards_ExactMath_AfterRunwayExhausted() public {
-        uint256 distributionRate = 1e6; 
-        uint256 rewardAmount = 100 * 1e6; 
+        uint256 distributionRate = 1e6;
+        uint256 rewardAmount = 100 * 1e6;
 
         IPortalFactory.CreatePortalPoolParams memory params = IPortalFactory.CreatePortalPoolParams({
             operator: operator,
@@ -1718,7 +1714,6 @@ contract PortalPoolImplementationTest is BaseTest {
         sqd.approve(portal, MIN_STAKE_THRESHOLD);
         pool.deposit(MIN_STAKE_THRESHOLD);
         vm.stopPrank();
-
 
         vm.startPrank(operator);
         usdc.mint(operator, rewardAmount);
@@ -1741,8 +1736,8 @@ contract PortalPoolImplementationTest is BaseTest {
     }
 
     function test_GetClaimableRewards_ExactMath_ViewFunction() public {
-        uint256 distributionRate = 5e6; 
-        uint256 timeElapsed = 60; 
+        uint256 distributionRate = 5e6;
+        uint256 timeElapsed = 60;
 
         IPortalFactory.CreatePortalPoolParams memory params = IPortalFactory.CreatePortalPoolParams({
             operator: operator,
@@ -1760,7 +1755,6 @@ contract PortalPoolImplementationTest is BaseTest {
         sqd.approve(portal, MIN_STAKE_THRESHOLD);
         pool.deposit(MIN_STAKE_THRESHOLD);
         vm.stopPrank();
-
 
         // top up rewards
         uint256 rewardAmount = 1_000_000 * 1e6;

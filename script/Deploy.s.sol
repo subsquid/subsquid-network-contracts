@@ -67,7 +67,7 @@ contract DeployPortalSystem is Script {
     }
 
     function _deployAll(address deployer) internal returns (DeployedContracts memory d) {
-        address workerRewardPool = deployer;
+        address workerRewardPool = 0xFa27FdC303FA02F6F21Ec8F597421b7B34BD61Ee;
 
         console.log("\n--- Deploying NetworkController ---");
         MockNetworkController networkController =
@@ -92,18 +92,21 @@ contract DeployPortalSystem is Script {
 
         console.log("\n--- Deploying PortalPoolFactory ---");
         PortalPoolFactory factory = new PortalPoolFactory(
-            d.implementation,
-            d.portalRegistry,
-            d.feeRouter,
-            d.networkController,
-            SQD,
-            USDC,
-            MAX_STAKE_PER_WALLET
+            d.implementation, d.portalRegistry, d.feeRouter, d.networkController, SQD, USDC, MAX_STAKE_PER_WALLET
         );
         d.factory = address(factory);
         d.beacon = address(factory.beacon());
         console.log("PortalPoolFactory deployed at:", d.factory);
         console.log("PortalPoolBeacon deployed at:", d.beacon);
+
+        console.log("\n--- Setting Factory in Registry ---");
+        portalRegistry.setFactory(d.factory);
+        console.log("Factory set in PortalRegistry");
+
+        console.log("\n--- Setting Worker Pool Address ---");
+        // note: workerPoolAddress should be set after deployment:
+        factory.setWorkerPoolAddress(workerRewardPool);
+        console.log("Worker pool address set to:", workerRewardPool);
 
         console.log("\n--- Adding Payment Tokens ---");
         factory.addPaymentToken(USDC);
@@ -113,6 +116,8 @@ contract DeployPortalSystem is Script {
         require(factory.sqd() == SQD, "SQD address mismatch");
         require(factory.usdc() == USDC, "USDC address mismatch");
         require(factory.isAllowedPaymentToken(USDC), "USDC not added as payment token");
+        require(portalRegistry.factory() == d.factory, "Factory not set in registry");
+        require(factory.workerPoolAddress() == workerRewardPool, "Worker pool address not set");
         console.log("Configuration verified successfully");
     }
 
@@ -140,6 +145,7 @@ contract DeployPortalSystem is Script {
         console.log("  Max Pool Capacity:", MAX_POOL_CAPACITY / 1e18, "SQD");
         console.log("  Max Stake Per Wallet:", MAX_STAKE_PER_WALLET / 1e18, "SQD");
         console.log("  Mana:", MANA);
+        console.log("  Worker Pool Address: 0xFa27FdC303FA02F6F21Ec8F597421b7B34BD61Ee");
         console.log("========================================");
     }
 }
@@ -184,6 +190,10 @@ contract DeployWithExistingController is Script {
         );
         console.log("PortalPoolFactory deployed at:", address(factory));
         console.log("PortalPoolBeacon deployed at:", address(factory.beacon()));
+
+        console.log("\n--- Setting Factory in Registry ---");
+        portalRegistry.setFactory(address(factory));
+        console.log("Factory set in PortalRegistry");
 
         vm.stopBroadcast();
 

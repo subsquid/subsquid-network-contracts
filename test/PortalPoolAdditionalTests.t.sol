@@ -184,7 +184,7 @@ contract PortalPoolAdditionalTests is Test {
         int256 runway = pool.getRunway();
         int256 currentTs = int256(block.timestamp);
 
-        (int256 balance, , , bool isDry) = pool.getRewardStatus();
+        (int256 balance,,, bool isDry) = pool.getRewardStatus();
 
         console.log("current timestamp:", block.timestamp);
         console.log("runway:", runway);
@@ -381,7 +381,7 @@ contract PortalPoolAdditionalTests is Test {
         vm.warp(block.timestamp + exactRunwaySeconds);
 
         int256 balance = pool.getCurrentRewardBalance();
-        (int256 statusBalance, uint256 debt, , bool isDry) = pool.getRewardStatus();
+        (int256 statusBalance, uint256 debt,, bool isDry) = pool.getRewardStatus();
 
         console.log("balance at exact runway:", balance);
         console.log("status balance:", statusBalance);
@@ -415,7 +415,7 @@ contract PortalPoolAdditionalTests is Test {
         for (uint256 i = 0; i < 5; i++) {
             vm.warp(timestamps[i]);
             balances[i] = pool.getCurrentRewardBalance();
-            (, , , isDryFlags[i]) = pool.getRewardStatus();
+            (,,, isDryFlags[i]) = pool.getRewardStatus();
 
             console.log("---");
             console.log("offset from runway:", int256(timestamps[i]) - int256(block.timestamp + runwaySeconds));
