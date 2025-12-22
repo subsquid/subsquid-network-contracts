@@ -88,6 +88,8 @@ contract PortalPoolImplementation is
 
         _exitQueue.initialize(_factory.exitUnlockRatePerSecond());
 
+        burnAddress = address(0xdead);
+
         _grantRole(DEFAULT_ADMIN_ROLE, params.operator);
         _grantRole(OPERATOR_ROLE, params.operator);
         _grantRole(FACTORY_ROLE, msg.sender);
@@ -173,7 +175,7 @@ contract PortalPoolImplementation is
         lptToken.mint(msg.sender, amount);
 
         // Emit event AFTER all operations (strict CEI)
-        emit Staked(msg.sender, amount, _portalInfo.totalStaked);
+        emit Deposited(msg.sender, amount, _portalInfo.totalStaked);
     }
 
     function requestExit(uint256 amount) external whenNotPaused returns (uint256 ticketId) {
@@ -432,6 +434,11 @@ contract PortalPoolImplementation is
         emit CapacityUpdated(oldCapacity, newCapacity);
     }
 
+    function setBurnAddress(address newBurnAddress) external onlyOperator {
+        burnAddress = newBurnAddress;
+        emit BurnAddressUpdated(newBurnAddress);
+    }
+
     function distributeFees(address token, uint256 amount) external onlyOperator whenNotPaused {
         PortalState currentState = getState();
         if (currentState != PortalState.ACTIVE) revert PortalErrors.InvalidState();
@@ -463,7 +470,7 @@ contract PortalPoolImplementation is
         }
 
         if (toBurn > 0) {
-            paymentToken.safeTransfer(address(0xdead), toBurn);
+            paymentToken.safeTransfer(burnAddress, toBurn);
         }
 
         emit FeesDistributed(token, amount, toProviders, toWorkerPool, toBurn);
@@ -682,6 +689,22 @@ contract PortalPoolImplementation is
     {
         ExitQueueLib.Ticket storage ticket = _exitTickets[user][ticketId];
         return ExitQueueLib.getStatus(_exitQueue, ticket);
+    }
+
+    function getQueueStatusWithTimestamp(address user, uint256 ticketId)
+        external
+        view
+        returns (
+            uint256 processed,
+            uint256 userEndPos,
+            uint256 secondsRemaining,
+            bool ready,
+            uint256 unlockTimestamp
+        )
+    {
+        ExitQueueLib.Ticket storage ticket = _exitTickets[user][ticketId];
+        (processed, userEndPos, secondsRemaining, ready) = ExitQueueLib.getStatus(_exitQueue, ticket);
+        unlockTimestamp = ready ? block.timestamp : block.timestamp + secondsRemaining;
     }
 
     function getTotalProcessed() external view returns (uint256) {

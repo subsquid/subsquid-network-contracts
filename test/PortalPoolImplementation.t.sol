@@ -86,7 +86,7 @@ contract PortalPoolImplementationTest is BaseTest {
         sqd.approve(portal, amount);
 
         vm.expectEmit(true, false, false, true);
-        emit IPortalPool.Staked(user1, amount, amount);
+        emit IPortalPool.Deposited(user1, amount, amount);
 
         pool.deposit(amount);
         vm.stopPrank();

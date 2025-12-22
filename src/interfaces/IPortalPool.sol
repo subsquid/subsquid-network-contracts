@@ -46,13 +46,14 @@ interface IPortalPool {
         string metadata;
     }
 
-    event Staked(address indexed provider, uint256 amount, uint256 newTotal);
+    event Deposited(address indexed provider, uint256 amount, uint256 newTotal);
     event ExitRequested(address indexed provider, uint256 amount, uint256 endPosition);
     event ExitClaimed(address indexed provider, uint256 amount);
     event Withdrawn(address indexed provider, uint256 amount);
     event FeesDistributed(
         address indexed token, uint256 totalAmount, uint256 toProviders, uint256 toWorkers, uint256 toBurn
     );
+    event BurnAddressUpdated(address burnAddress);
     event FeesClaimed(address indexed provider, address indexed token, uint256 amount);
     event StateChanged(PortalState oldState, PortalState newState);
     event AllocationReduced(address indexed provider, uint256 amount);
@@ -77,6 +78,7 @@ interface IPortalPool {
     function claimRewards() external returns (uint256);
     function setDistributionRate(uint256 newRatePerSecond) external;
     function setCapacity(uint256 newCapacity) external;
+    function setBurnAddress(address newBurnAddress) external;
 
     function getPortalInfo() external view returns (PortalInfo memory);
     function getProviderStake(address provider) external view returns (uint256);
@@ -112,11 +114,23 @@ interface IPortalPool {
     function getActiveStake() external view returns (uint256);
     function getComputationUnits() external view returns (uint256);
     function getAllowedPaymentTokens() external view returns (address[] memory);
+    function burnAddress() external view returns (address);
     function getState() external view returns (PortalState);
     function getQueueStatus(address user, uint256 ticketId)
         external
         view
         returns (uint256 processed, uint256 userEndPos, uint256 secondsRemaining, bool ready);
+
+    function getQueueStatusWithTimestamp(address user, uint256 ticketId)
+        external
+        view
+        returns (
+            uint256 processed,
+            uint256 userEndPos,
+            uint256 secondsRemaining,
+            bool ready,
+            uint256 unlockTimestamp
+        );
     function getTotalProcessed() external view returns (uint256);
     function getMetadata() external view returns (string memory);
     function getMinCapacity() external view returns (uint256);

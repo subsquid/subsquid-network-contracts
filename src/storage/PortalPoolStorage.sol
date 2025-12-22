@@ -79,5 +79,8 @@ abstract contract PortalPoolStorage {
     mapping(address => mapping(address => uint256)) internal _feeDebt;
     mapping(address => mapping(address => uint256)) internal _unclaimedFees;
 
+    address public workerPoolAddress;
+    address public burnAddress;
+
     uint256[50] private __gap;
 }
