@@ -114,7 +114,6 @@ interface IPortalPool {
     function getActiveStake() external view returns (uint256);
     function getComputationUnits() external view returns (uint256);
     function getAllowedPaymentTokens() external view returns (address[] memory);
-    function burnAddress() external view returns (address);
     function getState() external view returns (PortalState);
     function getQueueStatus(address user, uint256 ticketId)
         external

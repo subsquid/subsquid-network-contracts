@@ -2,7 +2,14 @@
 pragma solidity 0.8.28;
 
 interface IPortalFactory {
-    event PortalCreated(address indexed portal, address indexed operator, bytes peerId);
+    event PortalCreated(
+        address indexed portal,
+        address indexed operator,
+        uint256 capacity,
+        uint256 distributionRatePerSecond,
+        string tokenSuffix,
+        string metadata
+    );
     event BeaconUpgraded(address indexed newImplementation);
     event DefaultMaxStakePerWalletUpdated(uint256 oldValue, uint256 newValue);
     event UsdcUpdated(address indexed oldUsdc, address indexed newUsdc);

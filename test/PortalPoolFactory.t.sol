@@ -52,8 +52,8 @@ contract PortalPoolFactoryTest is BaseTest {
             metadata: ""
         });
 
-        vm.expectEmit(false, true, false, true);
-        emit IPortalFactory.PortalCreated(address(0), operator, "test-peer-id");
+        vm.expectEmit(true, true, false, false);
+        emit IPortalFactory.PortalCreated(address(0), operator, MIN_STAKE_THRESHOLD, 1 ether, "TestPortal", "");
 
         factory.createPortalPool(params);
     }

@@ -105,7 +105,14 @@ contract PortalPoolFactory is IPortalFactory, AccessControl, Pausable {
         ++operatorPortalCount[params.operator];
         isPortal[portal] = true;
 
-        emit PortalCreated(portal, params.operator, params.peerId);
+        emit PortalCreated(
+            portal,
+            params.operator,
+            params.capacity,
+            params.distributionRatePerSecond,
+            params.tokenSuffix,
+            params.metadata
+        );
     }
 
     function upgradeBeacon(address newImplementation) external onlyRole(DEFAULT_ADMIN_ROLE) {

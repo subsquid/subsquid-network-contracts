@@ -2,12 +2,12 @@
 pragma solidity 0.8.28;
 
 import {Script, console} from "forge-std/Script.sol";
-import {PortalPoolImplementation} from "../src/PortalPoolImplementation.sol";
-import {PortalPoolFactory} from "../src/PortalPoolFactory.sol";
-import {PortalRegistry} from "../src/PortalRegistry.sol";
-import {FeeRouterModule} from "../src/FeeRouterModule.sol";
-import {MockNetworkController} from "../test/mocks/MockNetworkController.sol";
-import {MockERC20} from "../test/mocks/MockERC20.sol";
+import {PortalPoolImplementation} from "../../src/PortalPoolImplementation.sol";
+import {PortalPoolFactory} from "../../src/PortalPoolFactory.sol";
+import {PortalRegistry} from "../../src/PortalRegistry.sol";
+import {FeeRouterModule} from "../../src/FeeRouterModule.sol";
+import {MockNetworkController} from "../../test/mocks/MockNetworkController.sol";
+import {MockERC20} from "../../test/mocks/MockERC20.sol";
 
 contract DeploySepoliaWithTSQDAndMockUSDC is Script {
     // provided tSQD on Sepolia
