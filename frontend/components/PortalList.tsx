@@ -9,7 +9,7 @@ import { getPortalMetadata } from "./PortalDeployer";
 
 interface PortalInfo {
   operator: string;
-  maxCapacity: bigint;
+  capacity: bigint;
   totalStaked: bigint;
   depositDeadline: bigint;
   activationTime: bigint;
@@ -29,7 +29,7 @@ const MIN_THRESHOLD = 100000; // 100k SQD minimum for CUs
 function MockPortalCard({ portal, onClick }: { portal: MockPortal; onClick: () => void }) {
   const { mockProviders } = useMock();
 
-  const maxCapacity = Number(formatUnits(portal.maxCapacity, 18));
+  const capacity = Number(formatUnits(portal.capacity, 18));
   const totalStaked = Number(formatUnits(portal.totalStaked, 18));
 
   // Calculate total pending exits for this portal from all providers
@@ -46,9 +46,9 @@ function MockPortalCard({ portal, onClick }: { portal: MockPortal; onClick: () =
   const activeStaked = totalStaked - pendingExits;
   const meetsThreshold = totalStaked >= MIN_THRESHOLD;
   const cus = meetsThreshold ? Math.floor(totalStaked / 10) : 0; // 10 SQD = 1 CU, only if >= 100k
-  const progressPercent = maxCapacity > 0 ? (totalStaked / maxCapacity) * 100 : 0;
-  const activePercent = maxCapacity > 0 ? (activeStaked / maxCapacity) * 100 : 0;
-  const pendingExitPercent = maxCapacity > 0 ? (pendingExits / maxCapacity) * 100 : 0;
+  const progressPercent = capacity > 0 ? (totalStaked / capacity) * 100 : 0;
+  const activePercent = capacity > 0 ? (activeStaked / capacity) * 100 : 0;
+  const pendingExitPercent = capacity > 0 ? (pendingExits / capacity) * 100 : 0;
   // Use red color for inactive or when below threshold
   const effectiveState = meetsThreshold ? portal.state : 2;
   const stateColor = STATE_COLORS[effectiveState as keyof typeof STATE_COLORS] || STATE_COLORS[2];
@@ -83,7 +83,7 @@ function MockPortalCard({ portal, onClick }: { portal: MockPortal; onClick: () =
         <div className="flex justify-between text-sm mb-2">
           <span className="text-sqd-text-secondary">Capacity</span>
           <span className="font-medium text-sqd-text-primary">
-            {totalStaked.toLocaleString()} / {maxCapacity.toLocaleString()} SQD
+            {totalStaked.toLocaleString()} / {capacity.toLocaleString()} SQD
           </span>
         </div>
         <div className="w-full bg-gray-200 rounded-full h-2.5 overflow-hidden flex">
@@ -176,16 +176,16 @@ function PortalCard({ address, onClick }: { address: string; onClick: () => void
     );
   }
 
-  const maxCapacity = Number(formatUnits(portalInfo.maxCapacity, 18));
+  const capacity = Number(formatUnits(portalInfo.capacity, 18));
   const totalStaked = Number(formatUnits(portalInfo.totalStaked, 18));
   const activeStakedAmount = activeStake ? Number(formatUnits(activeStake, 18)) : totalStaked;
   const pendingExitsAmount = totalStaked - activeStakedAmount;
 
   const meetsThreshold = totalStaked >= MIN_THRESHOLD;
   const cus = meetsThreshold ? Math.floor(totalStaked / 10) : 0; // 10 SQD = 1 CU, only if >= 100k
-  const progressPercent = maxCapacity > 0 ? (totalStaked / maxCapacity) * 100 : 0;
-  const activePercent = maxCapacity > 0 ? (activeStakedAmount / maxCapacity) * 100 : 0;
-  const pendingExitPercent = maxCapacity > 0 ? (pendingExitsAmount / maxCapacity) * 100 : 0;
+  const progressPercent = capacity > 0 ? (totalStaked / capacity) * 100 : 0;
+  const activePercent = capacity > 0 ? (activeStakedAmount / capacity) * 100 : 0;
+  const pendingExitPercent = capacity > 0 ? (pendingExitsAmount / capacity) * 100 : 0;
 
   // Use red color for inactive or when below threshold
   const effectiveState = meetsThreshold ? portalInfo.state : 2;
@@ -231,7 +231,7 @@ function PortalCard({ address, onClick }: { address: string; onClick: () => void
         <div className="flex justify-between text-sm mb-2">
           <span className="text-sqd-text-secondary">Capacity</span>
           <span className="font-medium text-sqd-text-primary">
-            {totalStaked.toLocaleString()} / {maxCapacity.toLocaleString()} SQD
+            {totalStaked.toLocaleString()} / {capacity.toLocaleString()} SQD
           </span>
         </div>
         <div className="w-full bg-gray-200 rounded-full h-2.5 overflow-hidden flex">

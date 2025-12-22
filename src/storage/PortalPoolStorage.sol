@@ -34,10 +34,40 @@ abstract contract PortalPoolStorage {
     IPortalFactory internal _factory;
 
     IERC20 internal _usdc;
-    uint256 public distributionRateScaled;
-    uint256 public lastRewardBalanceScaled;
-    uint256 public lastRewardTimestamp;
-    mapping(address => IPortalPool.DelegatorCheckpoint) internal _delegatorCheckpoints;
+
+    /// @notice provider's available credit (funds available for distribution)
+    uint256 public credit;
+    /// @notice provider's accumulated debt (owed but unpaid rewards)
+    uint256 public debt;
+    /// @notice timestamp of last balance checkpoint
+    uint64 public balanceTs;
+    /// @notice global reward per stake accumulator (scaled by ACC)
+    uint256 public rewardPerStakeStored;
+    /// @notice timestamp when rewards were last effectively accrued (stays at runway when dry)
+    uint64 public lastEffectiveRewardTs;
+
+    /// @notice total distribution rate per second (delegators + treasury)
+    uint256 public totalDistributionRatePerSec;
+    /// @notice delegator portion of rate (50% of total)
+    uint256 public delegatorRatePerSec;
+    /// @notice treasury portion of rate (50% of total)
+    uint256 public treasuryRatePerSec;
+    /// @notice per-stake rate = delegatorRate * ACC / capacity
+    uint256 public perStakeRateWad;
+    /// @notice treasury accumulated rewards
+    uint256 public treasuryAccumulated;
+
+    /// @notice per-user reward debt (stake * RPS / ACC at last update)
+    mapping(address => uint256) internal _rewardDebt;
+    /// @notice Per-user unclaimed rewards
+    mapping(address => uint256) internal _unclaimedRewards;
+
+    // legacy fields (kept for storage layout compatibility)
+    uint256 internal _legacy_distributionRateScaled;
+    uint256 internal _legacy_lastRewardBalanceScaled;
+    uint256 internal _legacy_lastRewardTimestamp;
+    uint256 internal _legacy_lastEffectiveRewardTimestamp;
+    mapping(address => IPortalPool.DelegatorCheckpoint) internal _legacy_delegatorCheckpoints;
 
     ExitQueueLib.Queue internal _exitQueue;
 

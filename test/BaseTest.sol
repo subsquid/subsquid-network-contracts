@@ -69,6 +69,9 @@ abstract contract BaseTest is Test {
         factory.addPaymentToken(address(usdc));
         factory.addPaymentToken(address(dai));
 
+        // Set global worker pool address in factory
+        factory.setWorkerPoolAddress(workerRewardPool);
+
         _mintTokensToUsers();
 
         vm.label(address(factory), "Factory");
@@ -96,13 +99,13 @@ abstract contract BaseTest is Test {
         dai.mint(operator, 10_000_000 ether);
     }
 
-    function _createPortal(address _operator, uint256 _maxCapacity, string memory _name)
+    function _createPortal(address _operator, uint256 _capacity, string memory _name)
         internal
         returns (address portalAddress)
     {
         IPortalFactory.CreatePortalPoolParams memory params = IPortalFactory.CreatePortalPoolParams({
             operator: _operator,
-            capacity: _maxCapacity,
+            capacity: _capacity,
             peerId: abi.encodePacked("peer-", _name),
             tokenSuffix: _name,
             distributionRatePerSecond: 1 ether,
@@ -112,15 +115,15 @@ abstract contract BaseTest is Test {
         portalAddress = factory.createPortalPool(params);
     }
 
-    function _createAndActivatePortal(address _operator, uint256 _maxCapacity, string memory _name)
+    function _createAndActivatePortal(address _operator, uint256 _capacity, string memory _name)
         internal
         returns (address portalAddress)
     {
-        portalAddress = _createPortal(_operator, _maxCapacity, _name);
+        portalAddress = _createPortal(_operator, _capacity, _name);
 
         vm.startPrank(user1);
-        sqd.approve(portalAddress, _maxCapacity);
-        IPortalPool(portalAddress).deposit(_maxCapacity);
+        sqd.approve(portalAddress, _capacity);
+        IPortalPool(portalAddress).deposit(_capacity);
         vm.stopPrank();
     }
 

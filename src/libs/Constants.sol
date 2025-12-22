@@ -19,6 +19,6 @@ library Constants {
     uint256 internal constant FEE_PRECISION = 1e18;
 
     /// @notice fixed collection deadline for portal pools (30 days)
-    /// @dev pools must reach maxCapacity within this time or fail
+    /// @dev pools must reach capacity within this time or fail
     uint256 internal constant COLLECTION_DEADLINE_SECONDS = 30 days;
 }

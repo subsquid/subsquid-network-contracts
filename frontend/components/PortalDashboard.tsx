@@ -6,7 +6,7 @@ import { formatUnits } from "viem";
 
 interface PortalInfo {
   operator: string;
-  maxCapacity: bigint;
+  capacity: bigint;
   totalStaked: bigint;
   depositDeadline: bigint;
   activationTime: bigint;
@@ -31,7 +31,7 @@ export function PortalDashboard({ portalAddress }: { portalAddress: `0x${string}
 
   const state = portalInfo?.state;
   const totalStaked = portalInfo?.totalStaked;
-  const maxCapacity = portalInfo?.maxCapacity;
+  const capacity = portalInfo?.capacity;
   const activeStakeAmount = activeStake as bigint | undefined;
 
   return (
@@ -63,14 +63,14 @@ export function PortalDashboard({ portalAddress }: { portalAddress: `0x${string}
           <div className="flex justify-between">
             <span className="text-sqd-text-secondary">Max Capacity:</span>
             <span className="font-medium text-sqd-text-primary">
-              {maxCapacity ? Number(formatUnits(maxCapacity, 18)).toLocaleString() : "0"} SQD
+              {capacity ? Number(formatUnits(capacity, 18)).toLocaleString() : "0"} SQD
             </span>
           </div>
           <div className="flex justify-between">
             <span className="text-sqd-text-secondary">Capacity Utilization:</span>
             <span className="font-medium text-sqd-text-primary">
-              {totalStaked && maxCapacity
-                ? `${((Number(totalStaked) / Number(maxCapacity)) * 100).toFixed(2)}%`
+              {totalStaked && capacity
+                ? `${((Number(totalStaked) / Number(capacity)) * 100).toFixed(2)}%`
                 : "0%"}
             </span>
           </div>

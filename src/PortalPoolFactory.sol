@@ -36,6 +36,7 @@ contract PortalPoolFactory is IPortalFactory, AccessControl, Pausable {
     uint256 public maxPaymentTokens;
     uint256 public exitUnlockRatePerSecond;
     uint256 public collectionDeadlineSeconds;
+    address public workerPoolAddress;
 
     constructor(
         address _implementation,
@@ -78,7 +79,7 @@ contract PortalPoolFactory is IPortalFactory, AccessControl, Pausable {
 
         IPortalPool.InitParams memory initParams = IPortalPool.InitParams({
             operator: params.operator,
-            maxCapacity: params.capacity,
+            capacity: params.capacity,
             depositDeadline: 0,
             peerId: params.peerId,
             tokenSuffix: params.tokenSuffix,
@@ -186,6 +187,12 @@ contract PortalPoolFactory is IPortalFactory, AccessControl, Pausable {
         uint256 oldValue = collectionDeadlineSeconds;
         collectionDeadlineSeconds = seconds_;
         emit CollectionDeadlineUpdated(oldValue, seconds_);
+    }
+
+    function setWorkerPoolAddress(address _workerPoolAddress) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        address oldValue = workerPoolAddress;
+        workerPoolAddress = _workerPoolAddress;
+        emit WorkerPoolAddressUpdated(oldValue, _workerPoolAddress);
     }
 
     function addPaymentToken(address token) external onlyRole(DEFAULT_ADMIN_ROLE) {

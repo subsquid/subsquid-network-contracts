@@ -11,6 +11,7 @@ interface IPortalFactory {
     event MaxPaymentTokensUpdated(uint256 oldValue, uint256 newValue);
     event ExitUnlockRateUpdated(uint256 oldValue, uint256 newValue);
     event CollectionDeadlineUpdated(uint256 oldValue, uint256 newValue);
+    event WorkerPoolAddressUpdated(address indexed oldValue, address indexed newValue);
 
     struct CreatePortalPoolParams {
         address operator;
@@ -42,6 +43,8 @@ interface IPortalFactory {
     function setMaxPaymentTokens(uint256 value) external;
     function setExitUnlockRate(uint256 ratePerSecond) external;
     function setCollectionDeadline(uint256 seconds_) external;
+    function setWorkerPoolAddress(address _workerPoolAddress) external;
+    function workerPoolAddress() external view returns (address);
 
     function pause() external;
     function unpause() external;

@@ -17,6 +17,7 @@ library PortalErrors {
 
     // Exit queue errors
     error UseWithdrawFromFailed();
+    error WaitForActivationOrDeadline();
     error ExistingExitRequest();
     error NoActiveExitRequest();
     error StillInQueue();
@@ -54,6 +55,7 @@ library PortalErrors {
 
     // Distribution errors
     error DistributionTurnedOff();
+    error PoolHasDebt();
 
     // Factory errors
     error InvalidPortal();

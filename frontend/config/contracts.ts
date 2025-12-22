@@ -3,7 +3,7 @@ export const PORTAL_FACTORY_ABI = [
     inputs: [
       { internalType: "address", name: "operator", type: "address" },
       { internalType: "address[]", name: "paymentTokens", type: "address[]" },
-      { internalType: "uint256", name: "maxCapacity", type: "uint256" },
+      { internalType: "uint256", name: "capacity", type: "uint256" },
       { internalType: "uint256", name: "depositDeadline", type: "uint256" },
       { internalType: "bytes", name: "peerId", type: "bytes" },
     ],
@@ -96,7 +96,7 @@ export const PORTAL_ABI = [
         type: "tuple",
         components: [
           { internalType: "address", name: "operator", type: "address" },
-          { internalType: "uint256", name: "maxCapacity", type: "uint256" },
+          { internalType: "uint256", name: "capacity", type: "uint256" },
           { internalType: "uint256", name: "totalStaked", type: "uint256" },
           { internalType: "uint64", name: "depositDeadline", type: "uint64" },
           { internalType: "uint64", name: "activationTime", type: "uint64" },

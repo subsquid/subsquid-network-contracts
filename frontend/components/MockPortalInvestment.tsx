@@ -43,11 +43,11 @@ export function MockPortalInvestment({ portalAddress, onClose }: { portalAddress
     );
   }
 
-  const maxCapacity = Number(formatUnits(portal.maxCapacity, 18));
+  const capacity = Number(formatUnits(portal.capacity, 18));
   const totalStaked = Number(formatUnits(portal.totalStaked, 18));
   const minStake = Number(formatUnits(mockMinStakeThreshold, 18));
   const userStake = provider?.stakes[portalAddress] ? Number(formatUnits(provider.stakes[portalAddress], 18)) : 0;
-  const availableCapacity = maxCapacity - totalStaked;
+  const availableCapacity = capacity - totalStaked;
   const expectedRatePerDay = Number(formatUnits(portal.expectedRatePerDay, 6));
   const claimableUSDC = provider?.claimable[portalAddress]?.["0xA911Abb691d1F09DF1063cE28D78Ba5f9E1E66A2"]
     ? Number(formatUnits(provider.claimable[portalAddress]["0xA911Abb691d1F09DF1063cE28D78Ba5f9E1E66A2"], 6))
@@ -134,12 +134,12 @@ export function MockPortalInvestment({ portalAddress, onClose }: { portalAddress
           <div className="mt-4">
             <div className="flex justify-between text-xs text-sqd-text-secondary mb-1">
               <span>Capacity</span>
-              <span>{((totalStaked / maxCapacity) * 100).toFixed(1)}%</span>
+              <span>{((totalStaked / capacity) * 100).toFixed(1)}%</span>
             </div>
             <div className="w-full bg-gray-200 rounded-full h-2">
               <div
                 className="bg-sqd-accent h-2 rounded-full"
-                style={{ width: `${Math.min((totalStaked / maxCapacity) * 100, 100)}%` }}
+                style={{ width: `${Math.min((totalStaked / capacity) * 100, 100)}%` }}
               />
             </div>
           </div>

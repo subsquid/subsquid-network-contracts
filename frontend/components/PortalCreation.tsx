@@ -8,7 +8,7 @@ import { parseUnits, toHex, stringToHex } from "viem";
 export function PortalCreation({ onPortalCreated }: { onPortalCreated?: () => void }) {
   const { address } = useAccount();
   const [showForm, setShowForm] = useState(false);
-  const [maxCapacity, setMaxCapacity] = useState("");
+  const [capacity, setMaxCapacity] = useState("");
   const [description, setDescription] = useState("");
   const [blocksUntilDeadline, setBlocksUntilDeadline] = useState("50000"); // ~7 days at 12s/block
   const hasHandledSuccess = useRef(false);
@@ -18,7 +18,7 @@ export function PortalCreation({ onPortalCreated }: { onPortalCreated?: () => vo
   const { data: currentBlock } = useBlockNumber();
 
   const handleCreatePortal = async () => {
-    if (!maxCapacity || !blocksUntilDeadline || !address) return;
+    if (!capacity || !blocksUntilDeadline || !address) return;
 
     // Reset success handler for new transaction
     hasHandledSuccess.current = false;
@@ -41,7 +41,7 @@ export function PortalCreation({ onPortalCreated }: { onPortalCreated?: () => vo
       args: [
         address,                          // operator
         paymentTokens,                    // paymentTokens array
-        parseUnits(maxCapacity, 18),      // maxCapacity
+        parseUnits(capacity, 18),      // capacity
         depositDeadline,                  // depositDeadline (block number)
         peerIdBytes,                      // peerId as bytes
       ],
@@ -101,7 +101,7 @@ export function PortalCreation({ onPortalCreated }: { onPortalCreated?: () => vo
           </label>
           <input
             type="number"
-            value={maxCapacity}
+            value={capacity}
             onChange={(e) => setMaxCapacity(e.target.value)}
             placeholder="100000"
             className="w-full bg-white border border-sqd-divider rounded-lg px-3.5 py-2.5 text-sqd-text-primary placeholder-sqd-text-disabled focus:outline-none focus:border-sqd-secondary"
@@ -147,7 +147,7 @@ export function PortalCreation({ onPortalCreated }: { onPortalCreated?: () => vo
           <div className="space-y-2 pt-2">
             <button
               onClick={handleCreatePortal}
-              disabled={!maxCapacity || isPending || isConfirming}
+              disabled={!capacity || isPending || isConfirming}
               className="w-full bg-sqd-accent hover:bg-sqd-accent/90 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-semibold py-2.5 rounded-full transition-colors"
             >
               {isPending || isConfirming ? "Creating Portal..." : "Create Portal"}

@@ -11,7 +11,7 @@ interface IPortalPool {
 
     struct PortalInfo {
         address operator;
-        uint256 maxCapacity;
+        uint256 capacity;
         uint256 totalStaked;
         uint64 depositDeadline;
         uint64 activationTime;
@@ -33,7 +33,7 @@ interface IPortalPool {
 
     struct InitParams {
         address operator;
-        uint256 maxCapacity;
+        uint256 capacity;
         uint256 depositDeadline;
         bytes peerId;
         string tokenSuffix;
@@ -84,7 +84,24 @@ interface IPortalPool {
     function getTicketCount(address provider) external view returns (uint256);
     function getClaimableFees(address provider, address token) external view returns (uint256);
     function getClaimableRewards(address delegator) external view returns (uint256);
-    function getCurrentRewardBalance() external view returns (uint256);
+    function getCurrentRewardBalance() external view returns (int256);
+    function getRewardStatus() external view returns (int256 balance, uint256 currentDebt, int256 runwayTimestamp, bool isDry);
+    function getCredit() external view returns (uint256);
+    function getDebt() external view returns (uint256);
+    function isOutOfMoney() external view returns (bool);
+    function getUserRewards(address user) external view returns (uint256);
+    function getPoolStatusWithRewards(address user) external view returns (
+        uint256 poolCredit,
+        uint256 poolDebt,
+        int256 poolBalance,
+        int256 runway,
+        bool outOfMoney,
+        uint256 userRewards,
+        uint256 userStake
+    );
+    function getRewardDebt() external view returns (uint256);
+    function getTotalDrainRate() external view returns (uint256);
+    function getRunway() external view returns (int256);
     function getPeerId() external view returns (bytes memory);
     function getActiveStake() external view returns (uint256);
     function getComputationUnits() external view returns (uint256);

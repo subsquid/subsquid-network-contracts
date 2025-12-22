@@ -8,7 +8,7 @@ import { getPortalMetadata } from "./PortalDeployer";
 
 interface PortalInfo {
   operator: string;
-  maxCapacity: bigint;
+  capacity: bigint;
   totalStaked: bigint;
   depositDeadline: bigint;
   activationTime: bigint;
@@ -151,10 +151,10 @@ export function PortalInvestment({ portalAddress, onClose }: { portalAddress: st
   }
 
   // Parse values
-  const maxCapacity = Number(formatUnits(portalInfo.maxCapacity, 18));
+  const capacity = Number(formatUnits(portalInfo.capacity, 18));
   const totalStaked = Number(formatUnits(portalInfo.totalStaked, 18));
   const myStake = userStake ? Number(formatUnits(userStake, 18)) : 0;
-  const availableCapacity = maxCapacity - totalStaked;
+  const availableCapacity = capacity - totalStaked;
   const balance = sqdBalance ? Number(formatUnits(sqdBalance, 18)) : 0;
   const meetsThreshold = totalStaked >= MIN_THRESHOLD;
   const cus = meetsThreshold ? Math.floor(totalStaked / 10) : 0;
@@ -378,12 +378,12 @@ export function PortalInvestment({ portalAddress, onClose }: { portalAddress: st
           <div className="mt-4">
             <div className="flex justify-between text-xs text-sqd-text-secondary mb-1">
               <span>Capacity</span>
-              <span>{((totalStaked / maxCapacity) * 100).toFixed(1)}%</span>
+              <span>{((totalStaked / capacity) * 100).toFixed(1)}%</span>
             </div>
             <div className="w-full bg-gray-200 rounded-full h-2">
               <div
                 className="bg-sqd-accent h-2 rounded-full"
-                style={{ width: `${Math.min((totalStaked / maxCapacity) * 100, 100)}%` }}
+                style={{ width: `${Math.min((totalStaked / capacity) * 100, 100)}%` }}
               />
             </div>
           </div>

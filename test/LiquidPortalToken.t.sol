@@ -176,29 +176,20 @@ contract LiquidPortalTokenTest is BaseTest {
     }
 
     function test_TotalSupply_UpdatesCorrectly() public {
-        address largePortal = _createPortal(operator, MIN_STAKE_THRESHOLD * 3, "LargePortal");
-        LiquidPortalToken largeLpt = PortalPoolImplementation(largePortal).lptToken();
+        // create portal with extra capacity to allow deposits after activation
+        uint256 extraCapacity = MIN_STAKE_THRESHOLD + SMALL_STAKE * 2;
+        address activePortal = _createAndActivatePortal(operator, extraCapacity, "ActiveSupplyPortal");
+        LiquidPortalToken activeLpt = PortalPoolImplementation(activePortal).lptToken();
 
-        assertEq(largeLpt.totalSupply(), 0);
+        // after activation, user1 has extraCapacity staked (fills to capacity)
+        assertEq(activeLpt.totalSupply(), extraCapacity);
 
-        vm.startPrank(user1);
-        sqd.approve(largePortal, STAKE_AMOUNT);
-        IPortalPool(largePortal).deposit(STAKE_AMOUNT);
-        vm.stopPrank();
-
-        assertEq(largeLpt.totalSupply(), STAKE_AMOUNT);
-
-        vm.startPrank(user2);
-        sqd.approve(largePortal, STAKE_AMOUNT);
-        IPortalPool(largePortal).deposit(STAKE_AMOUNT);
-        vm.stopPrank();
-
-        assertEq(largeLpt.totalSupply(), STAKE_AMOUNT * 2);
-
+        // now user1 can requestExit (portal is ACTIVE)
         vm.prank(user1);
-        IPortalPool(largePortal).requestExit(STAKE_AMOUNT);
+        IPortalPool(activePortal).requestExit(SMALL_STAKE);
 
-        assertEq(largeLpt.totalSupply(), STAKE_AMOUNT);
+        // total supply reduced by exit amount
+        assertEq(activeLpt.totalSupply(), extraCapacity - SMALL_STAKE);
     }
 
     function test_Transfer_ZeroAmount() public {

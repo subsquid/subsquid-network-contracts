@@ -12,7 +12,7 @@ interface PortalCardProps {
 
 interface PortalInfo {
   operator: string;
-  maxCapacity: bigint;
+  capacity: bigint;
   totalStaked: bigint;
   depositDeadline: bigint;
   activationTime: bigint;
@@ -68,10 +68,10 @@ export function PortalCard({ portalAddress, filterState, onClick }: PortalCardPr
     }
   }
 
-  const maxCapacity = Number(formatUnits(portalInfo.maxCapacity, 18));
+  const capacity = Number(formatUnits(portalInfo.capacity, 18));
   const totalStaked = Number(formatUnits(portalInfo.totalStaked, 18));
   const activeStakeAmount = activeStake ? Number(formatUnits(activeStake, 18)) : totalStaked;
-  const progress = maxCapacity > 0 ? (totalStaked / maxCapacity) * 100 : 0;
+  const progress = capacity > 0 ? (totalStaked / capacity) * 100 : 0;
 
   const stateColors: Record<string, string> = {
     "Accepting Tokens": "bg-blue-100 text-blue-700 border-blue-200",
@@ -131,7 +131,7 @@ export function PortalCard({ portalAddress, filterState, onClick }: PortalCardPr
         <div className="flex justify-between items-center">
           <span className="text-xs text-sqd-text-secondary">Max Capacity</span>
           <span className="text-sm font-medium text-sqd-text-primary">
-            {maxCapacity.toLocaleString()} SQD
+            {capacity.toLocaleString()} SQD
           </span>
         </div>
 

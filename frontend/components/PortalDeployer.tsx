@@ -78,15 +78,15 @@ export function PortalDeployer({ onPortalCreated }: { onPortalCreated?: () => vo
   const minStakeThreshold = isMockMode ? mockMinStakeThreshold : minStakeThresholdReal;
   const minStake = minStakeThreshold ? Number(formatUnits(minStakeThreshold, 18)) : 100000;
   // In mock mode, use customCapacity directly; otherwise use multiplier
-  const maxCapacity = isMockMode ? customCapacity : minStake * capacityMultiplier;
+  const capacity = isMockMode ? customCapacity : minStake * capacityMultiplier;
 
   // Calculate expected APY for display
   const calculateExpectedAPY = () => {
-    if (!expectedRate || !maxCapacity) return 0;
+    if (!expectedRate || !capacity) return 0;
     const rateNum = parseFloat(expectedRate);
     const annualRate = rateType === "day" ? rateNum * 365 : rateNum * 12;
     // Assuming SQD price of $0.01 for display
-    const sqdValue = maxCapacity * 0.01;
+    const sqdValue = capacity * 0.01;
     if (sqdValue === 0) return 0;
     return ((annualRate / sqdValue) * 100).toFixed(2);
   };
@@ -111,7 +111,7 @@ export function PortalDeployer({ onPortalCreated }: { onPortalCreated?: () => vo
   };
 
   const getCUEstimate = () => {
-    return Math.floor(maxCapacity / 10); // 10 SQD = 1 CU
+    return Math.floor(capacity / 10); // 10 SQD = 1 CU
   };
 
   const { data: sqdAllowance } = useReadContract({
@@ -149,7 +149,7 @@ export function PortalDeployer({ onPortalCreated }: { onPortalCreated?: () => vo
       addMockPortal({
         operator: effectiveAddress,
         description,
-        maxCapacity: parseUnits(maxCapacity.toString(), 18),
+        capacity: parseUnits(capacity.toString(), 18),
         totalStaked: BigInt(0),
         state: 0,
         depositDeadline: BigInt(Date.now() + collectionDays * 24 * 60 * 60 * 1000),
@@ -204,7 +204,7 @@ export function PortalDeployer({ onPortalCreated }: { onPortalCreated?: () => vo
       args: [
         effectiveAddress,
         selectedTokens as `0x${string}`[],
-        parseUnits(maxCapacity.toString(), 18),
+        parseUnits(capacity.toString(), 18),
         depositDeadline,
         peerIdBytes,
       ],
@@ -318,7 +318,7 @@ export function PortalDeployer({ onPortalCreated }: { onPortalCreated?: () => vo
             <label className="text-sm font-medium text-sqd-text-secondary">Portal Capacity</label>
             <div className="text-right">
               <div className="text-lg font-semibold text-sqd-text-primary">
-                {maxCapacity.toLocaleString()} SQD
+                {capacity.toLocaleString()} SQD
               </div>
               <div className="text-xs text-sqd-text-secondary">
                 {isMockMode ? `${getCUEstimate()} CUs` : `${capacityMultiplier}x Minimum (${getCUEstimate()} CUs)`}
@@ -402,7 +402,7 @@ export function PortalDeployer({ onPortalCreated }: { onPortalCreated?: () => vo
             </div>
             <div className="flex justify-between mb-1">
               <span>Selected Capacity:</span>
-              <span className="font-medium">{maxCapacity.toLocaleString()} SQD</span>
+              <span className="font-medium">{capacity.toLocaleString()} SQD</span>
             </div>
             <div className="flex justify-between">
               <span>Estimated CUs:</span>
