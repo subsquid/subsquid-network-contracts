@@ -798,7 +798,8 @@ contract PortalPoolImplementation is
     function _totalDrainRate() internal view returns (uint256) {
         uint256 activeStake = _getActiveStake();
         uint256 minStake = _networkController.minStakeThreshold();
-        if (activeStake < minStake) return 0;
+        if (_portalInfo.totalStaked < minStake) return 0;
+        if (activeStake == 0) return 0;
         // treasuryRate + (delegatorRate * activeStake / capacity)
         uint256 capacity = _portalInfo.capacity;
         if (capacity == 0) return 0;
@@ -824,7 +825,7 @@ contract PortalPoolImplementation is
 
         uint256 activeStake = _getActiveStake();
         uint256 minStake = _networkController.minStakeThreshold();
-        if (activeStake < minStake || perStakeRateWad == 0) {
+        if (_portalInfo.totalStaked < minStake || activeStake == 0 || perStakeRateWad == 0) {
             return (newRPS, uint64(timestamp));
         }
 
@@ -851,7 +852,7 @@ contract PortalPoolImplementation is
         uint256 activeStake = _getActiveStake();
         uint256 minStake = _networkController.minStakeThreshold();
 
-        if (activeStake >= minStake && perStakeRateWad > 0) {
+        if (_portalInfo.totalStaked >= minStake && activeStake > 0 && perStakeRateWad > 0) {
             int256 runway = getRunway();
 
             if (runway >= int256(timestamp)) {
@@ -880,7 +881,7 @@ contract PortalPoolImplementation is
         uint256 activeStake = _getActiveStake();
         uint256 minStake = _networkController.minStakeThreshold();
 
-        if (activeStake >= minStake && perStakeRateWad > 0) {
+        if (_portalInfo.totalStaked >= minStake && activeStake > 0 && perStakeRateWad > 0) {
             int256 runway = getRunway();
 
             if (runway >= int256(timestamp)) {
