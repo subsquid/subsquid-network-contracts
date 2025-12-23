@@ -131,6 +131,10 @@ contract PortalPoolFactory is IPortalFactory, AccessControl, Pausable {
         return portalCount;
     }
 
+    function getMinCapacity() external view returns (uint256) {
+        return INetworkController(networkController).minStakeThreshold();
+    }
+
     function getOperatorPortals(address operator) external view returns (address[] memory) {
         uint256 count = operatorPortalCount[operator];
         address[] memory portals = new address[](count);

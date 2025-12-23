@@ -133,6 +133,7 @@ interface IPortalPool {
     function getTotalProcessed() external view returns (uint256);
     function getMetadata() external view returns (string memory);
     function getMinCapacity() external view returns (uint256);
+    function getWithdrawalWaitingTimestamp(uint256 amount) external view returns (uint256 unlockTimestamp);
 
     function pause() external;
     function unpause() external;

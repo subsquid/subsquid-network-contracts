@@ -126,4 +126,26 @@ library ExitQueueLib {
         secondsRemaining = secondsUntilUnlocked(self, ticket);
         ready = isUnlocked(self, ticket);
     }
+
+    function getSimulatedUnlockTimestamp(Queue storage self, uint256 simulatedAmount) 
+        internal 
+        view 
+        returns (uint256 unlockTimestamp) 
+    {
+        uint256 processed = totalProcessed(self);
+        uint256 simulatedEndPosition = self.totalRequested + simulatedAmount;
+        
+        if (processed >= simulatedEndPosition) {
+            return block.timestamp;
+        }
+        
+        uint256 remaining = simulatedEndPosition - processed;
+        
+        if (self.unlockRatePerSecond == 0) {
+            return type(uint256).max;
+        }
+        
+        uint256 secondsNeeded = (remaining + self.unlockRatePerSecond - 1) / self.unlockRatePerSecond;
+        return block.timestamp + secondsNeeded;
+    }
 }

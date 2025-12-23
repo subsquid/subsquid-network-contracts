@@ -721,6 +721,11 @@ contract PortalPoolImplementation is
         return _networkController.minStakeThreshold();
     }
 
+    function getWithdrawalWaitingTimestamp(uint256 amount) external view returns (uint256 unlockTimestamp) {
+        if (amount == 0) revert PortalErrors.InvalidAmount();
+        return ExitQueueLib.getSimulatedUnlockTimestamp(_exitQueue, amount);
+    }
+
     function pause() external onlyRole(DEFAULT_ADMIN_ROLE) {
         _pause();
     }

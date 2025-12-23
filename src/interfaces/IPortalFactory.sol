@@ -47,6 +47,7 @@ interface IPortalFactory {
     function exitUnlockRatePerSecond() external view returns (uint256);
     function collectionDeadlineSeconds() external view returns (uint256);
     function defaultMaxStakePerWallet() external view returns (uint256);
+    function getMinCapacity() external view returns (uint256);
 
     function setMaxPaymentTokens(uint256 value) external;
     function setExitUnlockRate(uint256 ratePerSecond) external;
