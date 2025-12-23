@@ -107,7 +107,6 @@ contract PortalPoolAdditionalTests is Test {
             address(feeRouter),
             address(networkController),
             address(sqd),
-            address(usdc),
             MAX_STAKE_PER_WALLET
         );
 
@@ -134,7 +133,8 @@ contract PortalPoolAdditionalTests is Test {
             peerId: abi.encodePacked("peer-test-", poolCount),
             tokenSuffix: string(abi.encodePacked("TEST", poolCount)),
             distributionRatePerSecond: RATE_PER_SEC,
-            metadata: ""
+            metadata: "",
+            rewardToken: address(usdc)
         });
 
         portalAddress = factory.createPortalPool(params);
@@ -277,7 +277,8 @@ contract PortalPoolAdditionalTests is Test {
             peerId: abi.encodePacked("peer-highrate-", poolCount),
             tokenSuffix: string(abi.encodePacked("HIGH", poolCount)),
             distributionRatePerSecond: type(uint128).max,
-            metadata: ""
+            metadata: "",
+            rewardToken: address(usdc)
         });
 
         address highRatePool = factory.createPortalPool(params);
@@ -604,7 +605,8 @@ contract PortalPoolAdditionalTests is Test {
             peerId: abi.encodePacked("peer-overflow-", poolCount),
             tokenSuffix: string(abi.encodePacked("OVF", poolCount)),
             distributionRatePerSecond: type(uint128).max,
-            metadata: ""
+            metadata: "",
+            rewardToken: address(usdc)
         });
 
         address overflowPool = factory.createPortalPool(params);
@@ -722,7 +724,8 @@ contract PortalPoolAdditionalTests is Test {
             peerId: abi.encodePacked("peer-realistic-", poolCount),
             tokenSuffix: string(abi.encodePacked("REAL", poolCount)),
             distributionRatePerSecond: highRate,
-            metadata: ""
+            metadata: "",
+            rewardToken: address(usdc)
         });
 
         address realPool = factory.createPortalPool(params);
@@ -879,7 +882,8 @@ contract PortalPoolAdditionalTests is Test {
             peerId: abi.encodePacked("peer-large-cu-", poolCount),
             tokenSuffix: string(abi.encodePacked("LGCU", poolCount)),
             distributionRatePerSecond: RATE_PER_SEC,
-            metadata: ""
+            metadata: "",
+            rewardToken: address(usdc)
         });
 
         address largePool = factory.createPortalPool(params);
@@ -908,7 +912,8 @@ contract PortalPoolAdditionalTests is Test {
             peerId: abi.encodePacked("peer-fuzz-cu-", poolCount),
             tokenSuffix: string(abi.encodePacked("FZCU", poolCount)),
             distributionRatePerSecond: RATE_PER_SEC,
-            metadata: ""
+            metadata: "",
+            rewardToken: address(usdc)
         });
 
         address fuzzPool = factory.createPortalPool(params);
@@ -1056,7 +1061,8 @@ contract PortalPoolAdditionalTests is Test {
             peerId: abi.encodePacked("peer-small-", poolCount),
             tokenSuffix: string(abi.encodePacked("SM", poolCount)),
             distributionRatePerSecond: rate,
-            metadata: ""
+            metadata: "",
+            rewardToken: address(usdc)
         });
 
         address smallPool = factory.createPortalPool(params);
@@ -1130,7 +1136,8 @@ contract PortalPoolAdditionalTests is Test {
             peerId: abi.encodePacked("peer-large-", poolCount),
             tokenSuffix: string(abi.encodePacked("LG", poolCount)),
             distributionRatePerSecond: rate,
-            metadata: ""
+            metadata: "",
+            rewardToken: address(usdc)
         });
 
         address largePool = factory.createPortalPool(params);
@@ -1253,7 +1260,8 @@ contract PortalPoolAdditionalTests is Test {
                 peerId: abi.encodePacked("peer-rate-", poolCount),
                 tokenSuffix: string(abi.encodePacked("RT", poolCount)),
                 distributionRatePerSecond: testRates[i],
-                metadata: ""
+                metadata: "",
+                rewardToken: address(usdc)
             });
 
             address testPool = factory.createPortalPool(params);
@@ -1293,7 +1301,8 @@ contract PortalPoolAdditionalTests is Test {
             peerId: abi.encodePacked("peer-100stakers-", poolCount),
             tokenSuffix: string(abi.encodePacked("100S", poolCount)),
             distributionRatePerSecond: rate,
-            metadata: ""
+            metadata: "",
+            rewardToken: address(usdc)
         });
 
         address testPool = factory.createPortalPool(params);

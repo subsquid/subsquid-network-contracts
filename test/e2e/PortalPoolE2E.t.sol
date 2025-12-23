@@ -122,7 +122,6 @@ contract PortalPoolE2ETest is Test {
             address(feeRouter),
             address(networkController),
             address(sqd),
-            address(usdc),
             MAX_STAKE_PER_WALLET
         );
 
@@ -201,7 +200,8 @@ contract PortalPoolE2ETest is Test {
             peerId: abi.encodePacked("peer-e2e-test"),
             tokenSuffix: "E2E",
             distributionRatePerSecond: RATE_PER_SEC,
-            metadata: "E2E Test Portal"
+            metadata: "E2E Test Portal",
+            rewardToken: address(usdc)
         });
 
         address poolAddr = factory.createPortalPool(params);
@@ -425,7 +425,8 @@ contract PortalPoolE2ETest is Test {
             peerId: abi.encodePacked("peer-prop-test"),
             tokenSuffix: "PROP",
             distributionRatePerSecond: RATE_PER_SEC,
-            metadata: ""
+            metadata: "",
+            rewardToken: address(usdc)
         });
 
         address poolAddr = factory.createPortalPool(params);
@@ -503,7 +504,8 @@ contract PortalPoolE2ETest is Test {
             peerId: abi.encodePacked("peer-two-stakers"),
             tokenSuffix: "TWO",
             distributionRatePerSecond: RATE,
-            metadata: ""
+            metadata: "",
+            rewardToken: address(usdc)
         });
 
         address poolAddr = factory.createPortalPool(params);
@@ -687,7 +689,8 @@ contract PortalPoolE2ETest is Test {
             peerId: abi.encodePacked("peer-debt-phantom-test"),
             tokenSuffix: "DEBT",
             distributionRatePerSecond: RATE,
-            metadata: "Debt & Phantom Rewards Test"
+            metadata: "Debt & Phantom Rewards Test",
+            rewardToken: address(usdc)
         });
 
         address poolAddr = factory.createPortalPool(params);
@@ -898,7 +901,8 @@ contract PortalPoolE2ETest is Test {
             peerId: abi.encodePacked("peer-convoy-belt"),
             tokenSuffix: "CONV",
             distributionRatePerSecond: RATE,
-            metadata: "Convoy Belt Test"
+            metadata: "Convoy Belt Test",
+            rewardToken: address(usdc)
         });
 
         address poolAddr = factory.createPortalPool(params);
@@ -1124,213 +1128,4 @@ contract PortalPoolE2ETest is Test {
         console.log("5. Pool remains functional after exits");
     }
 
-    /**
-     * @notice E2E Test: Fee Distribution with Multiple Token Decimals
-     *
-     * Tests fee distribution accounting with 3 different payment tokens:
-     * - Token18: 18 decimals (like DAI/ETH)
-     * - Token6: 6 decimals (like USDC)
-     * - Token12: 12 decimals (custom)
-     *
-     * Verifies:
-     * - Correct fee accumulation for each token
-     * - Proportional distribution based on stake
-     * - Precision handling across different decimals
-     * - Users receive exact expected amounts
-     */
-    function test_E2E_FeeDistribution_MultipleDecimals() public {
-
-        MockERC20 token18 = new MockERC20("Token 18 Decimals", "TKN18", 18);
-        MockERC20 token6 = new MockERC20("Token 6 Decimals", "TKN6", 6);
-        MockERC20 token12 = new MockERC20("Token 12 Decimals", "TKN12", 12);
-
-        console.log("Token18 decimals:", token18.decimals());
-        console.log("Token6 decimals:", token6.decimals());
-        console.log("Token12 decimals:", token12.decimals());
-
-        // Add payment tokens to factory
-        factory.addPaymentToken(address(token18));
-        factory.addPaymentToken(address(token6));
-        factory.addPaymentToken(address(token12));
-
-        console.log("All tokens added as payment tokens");
-
-        factory.setDefaultMaxStakePerWallet(type(uint256).max);
-        feeRouter.setFeeConfig(10000, 0, 0); // 100% to providers
-
-        address poolAddr;
-        {
-            IPortalFactory.CreatePortalPoolParams memory params = IPortalFactory.CreatePortalPoolParams({
-                operator: operator,
-                capacity: 100_000 * 1e18,
-                peerId: abi.encodePacked("peer-fee-decimals-test"),
-                tokenSuffix: "FEES",
-                distributionRatePerSecond: 1000,
-                metadata: "Fee Distribution Decimals Test"
-            });
-            poolAddr = factory.createPortalPool(params);
-            pool = PortalPoolImplementation(poolAddr);
-        }
-        console.log("Pool deployed at:", poolAddr);
-
-        // Create 5 stakers with different stake amounts
-        address[5] memory feeStakers;
-        uint256[5] memory feeStakeAmounts;
-
-        feeStakeAmounts[0] = 40_000 * 1e18; // 40% of pool
-        feeStakeAmounts[1] = 25_000 * 1e18; // 25%
-        feeStakeAmounts[2] = 20_000 * 1e18; // 20%
-        feeStakeAmounts[3] = 10_000 * 1e18; // 10%
-        feeStakeAmounts[4] = 5_000 * 1e18;  // 5%
-
-        uint256 totalStake = 100_000 * 1e18;
-        for (uint256 i = 0; i < 5; i++) {
-            feeStakers[i] = address(uint160(0x7000 + i));
-            sqd.mint(feeStakers[i], feeStakeAmounts[i]);
-
-            vm.startPrank(feeStakers[i]);
-            sqd.approve(poolAddr, feeStakeAmounts[i]);
-            pool.deposit(feeStakeAmounts[i]);
-            vm.stopPrank();
-        }
-
-        console.log("Total staked: 100000 SQD");
-        assertEq(uint256(pool.getState()), uint256(IPortalPool.PortalState.ACTIVE), "Pool should be active");
-
-        uint256 FEE_18 = 1000 * 1e18;
-        uint256 FEE_6 = 1000 * 1e6;
-        uint256 FEE_12 = 1000 * 1e12;
-
-        token18.mint(operator, FEE_18);
-        token6.mint(operator, FEE_6);
-        token12.mint(operator, FEE_12);
-
-        vm.startPrank(operator);
-        token18.approve(poolAddr, FEE_18);
-        pool.distributeFees(address(token18), FEE_18);
-        token6.approve(poolAddr, FEE_6);
-        pool.distributeFees(address(token6), FEE_6);
-        token12.approve(poolAddr, FEE_12);
-        pool.distributeFees(address(token12), FEE_12);
-        vm.stopPrank();
-
-        console.log("All fees distributed");
-
-
-        _verifyClaimableAmounts(feeStakers, feeStakeAmounts, totalStake, token18, token6, token12, FEE_18, FEE_6, FEE_12);
-
-
-        (uint256 totalClaimed18, uint256 totalClaimed6, uint256 totalClaimed12) =
-            _claimAllFees(feeStakers, token18, token6, token12);
-
-        console.log("Total claimed vs Total distributed:");
-        console.log("  Token18:", totalClaimed18 / 1e18, "/", FEE_18 / 1e18);
-        console.log("  Token6:", totalClaimed6 / 1e6, "/", FEE_6 / 1e6);
-        console.log("  Token12:", totalClaimed12 / 1e12, "/", FEE_12 / 1e12);
-
-        assertApproxEqAbs(totalClaimed18, FEE_18, 1e12, "Token18 total mismatch");
-        assertApproxEqAbs(totalClaimed6, FEE_6, 1, "Token6 total mismatch");
-        assertApproxEqAbs(totalClaimed12, FEE_12, 1e6, "Token12 total mismatch");
-
-        console.log("\nPool dust remaining:");
-        console.log("  Token18:", token18.balanceOf(poolAddr), "wei");
-        console.log("  Token6:", token6.balanceOf(poolAddr), "wei");
-        console.log("  Token12:", token12.balanceOf(poolAddr), "wei");
-
-
-        _distributeSecondRound(token18, token6, token12, poolAddr);
-
-        console.log("\n============================================================");
-        console.log("=== FEE DISTRIBUTION DECIMALS TEST COMPLETE ===");
-        console.log("============================================================");
-    }
-
-    function _verifyClaimableAmounts(
-        address[5] memory feeStakers,
-        uint256[5] memory feeStakeAmounts,
-        uint256 totalStake,
-        MockERC20 token18,
-        MockERC20 token6,
-        MockERC20 token12,
-        uint256 FEE_18,
-        uint256 FEE_6,
-        uint256 FEE_12
-    ) internal view {
-        for (uint256 i = 0; i < 5; i++) {
-            uint256 expected18 = (feeStakeAmounts[i] * FEE_18) / totalStake;
-            uint256 expected6 = (feeStakeAmounts[i] * FEE_6) / totalStake;
-            uint256 expected12 = (feeStakeAmounts[i] * FEE_12) / totalStake;
-
-            uint256 claimable18 = pool.getClaimableFees(feeStakers[i], address(token18));
-            uint256 claimable6 = pool.getClaimableFees(feeStakers[i], address(token6));
-            uint256 claimable12 = pool.getClaimableFees(feeStakers[i], address(token12));
-
-            uint256 tol18 = expected18 / 10000;
-            uint256 tol6 = expected6 / 10000;
-            uint256 tol12 = expected12 / 10000;
-
-            if (tol18 < 1e12) tol18 = 1e12;
-            if (tol6 < 1) tol6 = 1;
-            if (tol12 < 1e6) tol12 = 1e6;
-
-            assertApproxEqAbs(claimable18, expected18, tol18, "Token18 claimable mismatch");
-            assertApproxEqAbs(claimable6, expected6, tol6, "Token6 claimable mismatch");
-            assertApproxEqAbs(claimable12, expected12, tol12, "Token12 claimable mismatch");
-        }
-    }
-
-    function _claimAllFees(
-        address[5] memory feeStakers,
-        MockERC20 token18,
-        MockERC20 token6,
-        MockERC20 token12
-    ) internal returns (uint256 totalClaimed18, uint256 totalClaimed6, uint256 totalClaimed12) {
-        for (uint256 i = 0; i < 5; i++) {
-            uint256 before18 = token18.balanceOf(feeStakers[i]);
-            uint256 before6 = token6.balanceOf(feeStakers[i]);
-            uint256 before12 = token12.balanceOf(feeStakers[i]);
-
-            vm.startPrank(feeStakers[i]);
-            uint256 claimed18 = pool.claimFees(address(token18));
-            uint256 claimed6 = pool.claimFees(address(token6));
-            uint256 claimed12 = pool.claimFees(address(token12));
-            vm.stopPrank();
-
-            assertEq(token18.balanceOf(feeStakers[i]) - before18, claimed18, "Token18 balance mismatch");
-            assertEq(token6.balanceOf(feeStakers[i]) - before6, claimed6, "Token6 balance mismatch");
-            assertEq(token12.balanceOf(feeStakers[i]) - before12, claimed12, "Token12 balance mismatch");
-
-            totalClaimed18 += claimed18;
-            totalClaimed6 += claimed6;
-            totalClaimed12 += claimed12;
-
-            console.log("Staker", i, "claimed Token18:", claimed18 / 1e18);
-        }
-    }
-
-    function _distributeSecondRound(
-        MockERC20 token18,
-        MockERC20 token6,
-        MockERC20 token12,
-        address poolAddr
-    ) internal {
-        uint256 FEE2_18 = 500 * 1e18;
-        uint256 FEE2_6 = 500 * 1e6;
-        uint256 FEE2_12 = 500 * 1e12;
-
-        token18.mint(operator, FEE2_18);
-        token6.mint(operator, FEE2_6);
-        token12.mint(operator, FEE2_12);
-
-        vm.startPrank(operator);
-        token18.approve(poolAddr, FEE2_18);
-        pool.distributeFees(address(token18), FEE2_18);
-        token6.approve(poolAddr, FEE2_6);
-        pool.distributeFees(address(token6), FEE2_6);
-        token12.approve(poolAddr, FEE2_12);
-        pool.distributeFees(address(token12), FEE2_12);
-        vm.stopPrank();
-
-        console.log("Second distribution complete");
-    }
 }

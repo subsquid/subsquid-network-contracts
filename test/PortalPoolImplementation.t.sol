@@ -40,7 +40,8 @@ contract PortalPoolImplementationTest is BaseTest {
             peerId: "zero-op",
             tokenSuffix: "ZeroOp",
             distributionRatePerSecond: 1 ether,
-            metadata: ""
+            metadata: "",
+            rewardToken: address(usdc)
         });
 
         vm.expectRevert(PortalErrors.InvalidAddress.selector);
@@ -54,7 +55,8 @@ contract PortalPoolImplementationTest is BaseTest {
             peerId: "low-cap",
             tokenSuffix: "LowCap",
             distributionRatePerSecond: 1 ether,
-            metadata: ""
+            metadata: "",
+            rewardToken: address(usdc)
         });
 
         vm.expectRevert(PortalErrors.BelowMinimum.selector);
@@ -107,7 +109,8 @@ contract PortalPoolImplementationTest is BaseTest {
             peerId: "wallet-limit-test",
             tokenSuffix: "WalletLimitTest",
             distributionRatePerSecond: 1 ether,
-            metadata: ""
+            metadata: "",
+            rewardToken: address(usdc)
         });
         address testPortal = factory.createPortalPool(params);
 
@@ -325,79 +328,6 @@ contract PortalPoolImplementationTest is BaseTest {
         pool.withdrawFromFailed();
     }
 
-    function test_DistributeFees_Success() public {
-        portal = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "FeePortal");
-        pool = PortalPoolImplementation(portal);
-
-        uint256 feeAmount = 1000 * 1e6;
-
-        vm.startPrank(operator);
-        usdc.approve(portal, feeAmount);
-
-        vm.expectEmit(true, false, false, true);
-        emit IPortalPool.FeesDistributed(address(usdc), feeAmount, 500 * 1e6, 500 * 1e6, 0);
-
-        pool.distributeFees(address(usdc), feeAmount);
-        vm.stopPrank();
-
-        assertEq(pool.totalFeesDistributed(address(usdc)), 500 * 1e6);
-    }
-
-    function test_DistributeFees_RevertOnInvalidState() public {
-        vm.startPrank(operator);
-        usdc.approve(portal, 1000 * 1e6);
-
-        vm.expectRevert(PortalErrors.InvalidState.selector);
-        pool.distributeFees(address(usdc), 1000 * 1e6);
-        vm.stopPrank();
-    }
-
-    function test_DistributeFees_RevertOnTokenNotAllowed() public {
-        portal = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "FeePortal");
-        pool = PortalPoolImplementation(portal);
-
-        MockERC20 unknownToken = new MockERC20("Unknown", "UNK", 18);
-
-        vm.startPrank(operator);
-        unknownToken.mint(operator, 1000 ether);
-        unknownToken.approve(portal, 1000 ether);
-
-        vm.expectRevert(PortalErrors.TokenNotAllowed.selector);
-        pool.distributeFees(address(unknownToken), 1000 ether);
-        vm.stopPrank();
-    }
-
-    function test_ClaimFees_Success() public {
-        portal = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "FeePortal");
-        pool = PortalPoolImplementation(portal);
-
-        uint256 feeAmount = 1000 * 1e6;
-        vm.startPrank(operator);
-        usdc.approve(portal, feeAmount);
-        pool.distributeFees(address(usdc), feeAmount);
-        vm.stopPrank();
-
-        uint256 claimable = pool.getClaimableFees(user1, address(usdc));
-        assertEq(claimable, 500 * 1e6);
-
-        uint256 balanceBefore = usdc.balanceOf(user1);
-
-        vm.prank(user1);
-        uint256 claimed = pool.claimFees(address(usdc));
-
-        assertEq(claimed, 500 * 1e6);
-        assertEq(usdc.balanceOf(user1), balanceBefore + claimed);
-    }
-
-    function test_ClaimFees_RevertOnNothingToClaim() public {
-        portal = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "FeePortal");
-        pool = PortalPoolImplementation(portal);
-
-        vm.prank(user1);
-        vm.expectRevert(PortalErrors.NothingToClaim.selector);
-        pool.claimFees(address(usdc));
-    }
-
     function test_TopUpRewards_Success() public {
         portal = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "RewardPortal");
         pool = PortalPoolImplementation(portal);
@@ -450,7 +380,8 @@ contract PortalPoolImplementationTest is BaseTest {
             peerId: "reward-portal",
             tokenSuffix: "RewardPortal",
             distributionRatePerSecond: 1e6,
-            metadata: ""
+            metadata: "",
+            rewardToken: address(usdc)
         });
         portal = factory.createPortalPool(params);
         pool = PortalPoolImplementation(portal);
@@ -502,7 +433,8 @@ contract PortalPoolImplementationTest is BaseTest {
             peerId: "transfer-limit",
             tokenSuffix: "TransferLimit",
             distributionRatePerSecond: 1 ether,
-            metadata: ""
+            metadata: "",
+            rewardToken: address(usdc)
         });
         address limitPortal = factory.createPortalPool(params);
 
@@ -599,11 +531,8 @@ contract PortalPoolImplementationTest is BaseTest {
         assertEq(peerId, abi.encodePacked("peer-", "TestPortal"));
     }
 
-    function test_GetAllowedPaymentTokens() public view {
-        address[] memory tokens = pool.getAllowedPaymentTokens();
-        assertEq(tokens.length, 2);
-        assertEq(tokens[0], address(usdc));
-        assertEq(tokens[1], address(dai));
+    function test_GetRewardToken() public view {
+        assertEq(pool.getRewardToken(), address(usdc));
     }
 
     function test_GetQueueStatus() public {
@@ -899,30 +828,6 @@ contract PortalPoolImplementationTest is BaseTest {
         vm.stopPrank();
     }
 
-    function test_DistributeFees_TransfersTokens() public {
-        portal = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "FeesPortal");
-        pool = PortalPoolImplementation(portal);
-
-        uint256 feeAmount = 100_000 * 1e6;
-        uint256 operatorBalanceBefore = usdc.balanceOf(operator);
-
-        vm.startPrank(operator);
-        usdc.mint(operator, feeAmount);
-        usdc.approve(portal, feeAmount);
-        pool.distributeFees(address(usdc), feeAmount);
-        vm.stopPrank();
-
-        assertEq(usdc.balanceOf(operator), operatorBalanceBefore);
-    }
-
-    function test_DistributeFees_RevertOnZeroAmount() public {
-        portal = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "ZeroFeesPortal");
-        pool = PortalPoolImplementation(portal);
-
-        vm.prank(operator);
-        vm.expectRevert(PortalErrors.InvalidAmount.selector);
-        pool.distributeFees(address(usdc), 0);
-    }
 
     function test_WithdrawFromFailed_RevertOnNoStake() public {
         portal = _createPortal(operator, MIN_STAKE_THRESHOLD, "NoStakeFailedPortal");
@@ -958,44 +863,6 @@ contract PortalPoolImplementationTest is BaseTest {
         vm.stopPrank();
     }
 
-    function test_DistributeFees_WithBurn() public {
-        portal = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "BurnFeesPortal");
-        pool = PortalPoolImplementation(portal);
-
-        // Set fee config with burn > 0
-        feeRouter.setFeeConfig(6000, 2000, 2000); // 60% providers, 20% worker pool, 20% burn
-
-        uint256 feeAmount = 100_000 * 1e6;
-
-        vm.startPrank(operator);
-        usdc.mint(operator, feeAmount);
-        usdc.approve(portal, feeAmount);
-        pool.distributeFees(address(usdc), feeAmount);
-        vm.stopPrank();
-
-        // Verify burn happened (to dead address)
-        assertGt(usdc.balanceOf(address(0xdead)), 0);
-    }
-
-    function test_ClaimFees_RevertOnInvalidToken() public {
-        portal = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "InvalidTokenPortal");
-        pool = PortalPoolImplementation(portal);
-
-        vm.prank(user1);
-        vm.expectRevert(PortalErrors.InvalidAddress.selector);
-        pool.claimFees(address(0));
-    }
-
-    function test_ClaimFees_RevertOnDisallowedToken() public {
-        portal = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "DisallowedTokenPortal");
-        pool = PortalPoolImplementation(portal);
-
-        MockERC20 unknownToken = new MockERC20("Unknown", "UNK", 18);
-
-        vm.prank(user1);
-        vm.expectRevert(PortalErrors.TokenNotAllowed.selector);
-        pool.claimFees(address(unknownToken));
-    }
 
     function test_GetClaimableRewards_InCollectingState() public {
         // In collecting state, rewards shouldn't accrue since not active
@@ -1060,7 +927,8 @@ contract PortalPoolImplementationTest is BaseTest {
             peerId: "active-deposit-portal",
             tokenSuffix: "ActiveDepositPortal",
             distributionRatePerSecond: 1 ether,
-            metadata: ""
+            metadata: "",
+            rewardToken: address(usdc)
         });
         portal = factory.createPortalPool(params);
         pool = PortalPoolImplementation(portal);
@@ -1074,40 +942,6 @@ contract PortalPoolImplementationTest is BaseTest {
         assertEq(uint8(pool.getState()), uint8(IPortalPool.PortalState.ACTIVE));
     }
 
-    function test_DistributeFees_RevertOnInvalidToken() public {
-        portal = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "InvalidDistributePortal");
-        pool = PortalPoolImplementation(portal);
-
-        vm.prank(operator);
-        vm.expectRevert(PortalErrors.InvalidAddress.selector);
-        pool.distributeFees(address(0), 100);
-    }
-
-    function test_DistributeFees_RevertOnDisallowedToken() public {
-        portal = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "DisallowedDistributePortal");
-        pool = PortalPoolImplementation(portal);
-
-        MockERC20 unknownToken = new MockERC20("Unknown", "UNK", 18);
-
-        vm.prank(operator);
-        vm.expectRevert(PortalErrors.TokenNotAllowed.selector);
-        pool.distributeFees(address(unknownToken), 100);
-    }
-
-    function test_DistributeFees_RevertOnNonOperator() public {
-        portal = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "NonOperatorDistributePortal");
-        pool = PortalPoolImplementation(portal);
-
-        vm.prank(user1);
-        vm.expectRevert(PortalErrors.NotOperator.selector);
-        pool.distributeFees(address(usdc), 100);
-    }
-
-    function test_DistributeFees_RevertOnNotActive() public {
-        vm.prank(operator);
-        vm.expectRevert(PortalErrors.InvalidState.selector);
-        pool.distributeFees(address(usdc), 100);
-    }
 
     function test_OnLPTTransfer_RevertOnInsufficientTransferable() public {
         portal = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "InsufficientTransferPortal");
@@ -1135,7 +969,8 @@ contract PortalPoolImplementationTest is BaseTest {
             peerId: "receiver-limit",
             tokenSuffix: "ReceiverLimit",
             distributionRatePerSecond: 1 ether,
-            metadata: ""
+            metadata: "",
+            rewardToken: address(usdc)
         });
         address limitPortal = factory.createPortalPool(params);
         PortalPoolImplementation limitPool = PortalPoolImplementation(limitPortal);
@@ -1410,7 +1245,8 @@ contract PortalPoolImplementationTest is BaseTest {
             peerId: "peer-zero-rate",
             tokenSuffix: "ZeroRatePool",
             distributionRatePerSecond: 0, // Zero rate
-            metadata: ""
+            metadata: "",
+            rewardToken: address(usdc)
         });
 
         address zeroRatePortal = factory.createPortalPool(params);
@@ -1450,40 +1286,6 @@ contract PortalPoolImplementationTest is BaseTest {
         assertEq(sqd.balanceOf(user1), balanceBefore + SMALL_STAKE);
     }
 
-    function test_SettleFees_ZeroActiveStake() public {
-        portal = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "ZeroActiveFeePortal");
-        pool = PortalPoolImplementation(portal);
-
-        // Distribute fees first
-        uint256 feeAmount = 1000 * 1e6;
-        vm.startPrank(operator);
-        usdc.approve(portal, feeAmount);
-        pool.distributeFees(address(usdc), feeAmount);
-        vm.stopPrank();
-
-        // Request ex   it for all stake
-        vm.prank(user1);
-        pool.requestExit(MIN_STAKE_THRESHOLD);
-
-        uint256 claimable = pool.getClaimableFees(user1, address(usdc));
-        assertTrue(claimable >= 0);
-    }
-
-    function test_DistributeFees_ZeroActiveStake() public {
-        portal = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "ZeroActiveDistributePortal");
-        pool = PortalPoolImplementation(portal);
-
-        vm.prank(user1);
-        pool.requestExit(MIN_STAKE_THRESHOLD);
-
-        uint256 feeAmount = 1000 * 1e6;
-        vm.startPrank(operator);
-        usdc.approve(portal, feeAmount);
-        pool.distributeFees(address(usdc), feeAmount);
-        vm.stopPrank();
-
-        assertEq(pool.totalFeesDistributed(address(usdc)), 500 * 1e6);
-    }
 
     function test_OnAllocationReduced_FullExitAmount() public {
         portal = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "FullExitReducePortal");
@@ -1511,7 +1313,8 @@ contract PortalPoolImplementationTest is BaseTest {
             peerId: "exact-math-portal",
             tokenSuffix: "ExactMathPortal",
             distributionRatePerSecond: distributionRate,
-            metadata: ""
+            metadata: "",
+            rewardToken: address(usdc)
         });
         portal = factory.createPortalPool(params);
         pool = PortalPoolImplementation(portal);
@@ -1550,7 +1353,8 @@ contract PortalPoolImplementationTest is BaseTest {
             peerId: "partial-stake-portal",
             tokenSuffix: "PartialStakePortal",
             distributionRatePerSecond: distributionRate,
-            metadata: ""
+            metadata: "",
+            rewardToken: address(usdc)
         });
         portal = factory.createPortalPool(params);
         pool = PortalPoolImplementation(portal);
@@ -1601,7 +1405,8 @@ contract PortalPoolImplementationTest is BaseTest {
             peerId: "multi-period-portal",
             tokenSuffix: "MultiPeriodPortal",
             distributionRatePerSecond: distributionRate,
-            metadata: ""
+            metadata: "",
+            rewardToken: address(usdc)
         });
         portal = factory.createPortalPool(params);
         pool = PortalPoolImplementation(portal);
@@ -1648,7 +1453,8 @@ contract PortalPoolImplementationTest is BaseTest {
             peerId: "runway-limit-portal",
             tokenSuffix: "RunwayLimitPortal",
             distributionRatePerSecond: distributionRate,
-            metadata: ""
+            metadata: "",
+            rewardToken: address(usdc)
         });
         portal = factory.createPortalPool(params);
         pool = PortalPoolImplementation(portal);
@@ -1688,7 +1494,8 @@ contract PortalPoolImplementationTest is BaseTest {
             peerId: "exhausted-portal",
             tokenSuffix: "ExhaustedPortal",
             distributionRatePerSecond: distributionRate,
-            metadata: ""
+            metadata: "",
+            rewardToken: address(usdc)
         });
         portal = factory.createPortalPool(params);
         pool = PortalPoolImplementation(portal);
@@ -1727,7 +1534,8 @@ contract PortalPoolImplementationTest is BaseTest {
             peerId: "view-math-portal",
             tokenSuffix: "ViewMathPortal",
             distributionRatePerSecond: distributionRate,
-            metadata: ""
+            metadata: "",
+            rewardToken: address(usdc)
         });
         portal = factory.createPortalPool(params);
         pool = PortalPoolImplementation(portal);

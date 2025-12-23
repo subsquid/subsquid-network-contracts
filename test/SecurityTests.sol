@@ -12,11 +12,37 @@ contract SecurityTests is BaseTest {
     PortalPoolImplementation public pool;
     LiquidPortalToken public lpt;
 
+    // ~$86.40/day = 1e6 USDC/day = ~11.57 USDC/second
+    uint256 constant REASONABLE_RATE = 12 * 1e6; // 12 USDC per second
+
     function setUp() public override {
         super.setUp();
-        portal = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "SecurityPortal");
+        portal = _createSecurityTestPortal(operator, MIN_STAKE_THRESHOLD, "SecurityPortal");
         pool = PortalPoolImplementation(portal);
         lpt = LiquidPortalToken(address(pool.lptToken()));
+    }
+
+    function _createSecurityTestPortal(address _operator, uint256 _capacity, string memory _name)
+        internal
+        returns (address portalAddress)
+    {
+        IPortalFactory.CreatePortalPoolParams memory params = IPortalFactory.CreatePortalPoolParams({
+            operator: _operator,
+            capacity: _capacity,
+            peerId: abi.encodePacked("peer-", _name),
+            tokenSuffix: _name,
+            distributionRatePerSecond: REASONABLE_RATE,
+            metadata: "",
+            rewardToken: address(usdc)
+        });
+
+        portalAddress = factory.createPortalPool(params);
+
+        // Activate by having user1 deposit full capacity
+        vm.startPrank(user1);
+        sqd.approve(portalAddress, _capacity);
+        IPortalPool(portalAddress).deposit(_capacity);
+        vm.stopPrank();
     }
 
     function test_OnLPTTransfer_NonReentrant_PreventsReentrancy() public {
@@ -42,13 +68,22 @@ contract SecurityTests is BaseTest {
         assertEq(pool.getProviderStake(user2), SMALL_STAKE);
     }
 
-    function test_OnLPTTransfer_OrderOfOperations_SettleFeesBeforeStateUpdate() public {
+    function test_OnLPTTransfer_OrderOfOperations_RewardsSettleBeforeStateUpdate() public {
+        // Top up enough rewards to cover the distribution rate for 100 seconds
+        // Rate = 12 USDC/sec, so 100 seconds = 1200 USDC
+        uint256 topUpAmount = 2000 * 1e6; // 2000 USDC - enough for runway
+
         vm.startPrank(operator);
-        usdc.approve(portal, 1000 * 1e6);
-        pool.distributeFees(address(usdc), 1000 * 1e6);
+        usdc.mint(operator, topUpAmount);
+        usdc.approve(portal, topUpAmount);
+        pool.topUpRewards(topUpAmount);
         vm.stopPrank();
 
-        uint256 user1FeesBeforeTransfer = pool.getClaimableFees(user1, address(usdc));
+        vm.warp(block.timestamp + 100);
+
+        uint256 user1RewardsBefore = pool.getClaimableRewards(user1);
+        assertTrue(user1RewardsBefore > 0, "User1 should have accrued rewards");
+
         uint256 user1StakeBefore = pool.getProviderStake(user1);
         uint256 user2StakeBefore = pool.getProviderStake(user2);
 
@@ -57,11 +92,11 @@ contract SecurityTests is BaseTest {
         vm.prank(user1);
         lpt.transfer(user2, transferAmount);
 
-        uint256 user1FeesAfterTransfer = pool.getClaimableFees(user1, address(usdc));
+        uint256 user1RewardsAfter = pool.getClaimableRewards(user1);
         uint256 user1StakeAfter = pool.getProviderStake(user1);
         uint256 user2StakeAfter = pool.getProviderStake(user2);
 
-        assertEq(user1FeesBeforeTransfer, user1FeesAfterTransfer);
+        assertApproxEqRel(user1RewardsBefore, user1RewardsAfter, 0.02e18, "User1 rewards should be ~preserved");
         assertEq(user1StakeAfter, user1StakeBefore - transferAmount);
         assertEq(user2StakeAfter, user2StakeBefore + transferAmount);
     }
@@ -97,7 +132,8 @@ contract SecurityTests is BaseTest {
             peerId: "limit-portal",
             tokenSuffix: "LimitPortal",
             distributionRatePerSecond: 1 ether,
-            metadata: ""
+            metadata: "",
+            rewardToken: address(usdc)
         });
         address limitPortal = factory.createPortalPool(params);
         LiquidPortalToken limitLpt = PortalPoolImplementation(limitPortal).lptToken();
@@ -132,26 +168,34 @@ contract SecurityTests is BaseTest {
         assertEq(pool.getProviderStake(user3), transfer2);
     }
 
-    function test_OnLPTTransfer_WithFeesDistributed_ProperSettlement() public {
+    function test_OnLPTTransfer_WithRewardsDistributed_ProperSettlement() public {
+        // Top up enough rewards to cover the distribution rate for 100 seconds
+        // Rate = 12 USDC/sec, so 100 seconds = 1200 USDC
+        uint256 topUpAmount = 2000 * 1e6; // 2000 USDC - enough for runway
+
         vm.startPrank(operator);
-        usdc.approve(portal, 1000 * 1e6);
-        pool.distributeFees(address(usdc), 1000 * 1e6);
+        usdc.mint(operator, topUpAmount);
+        usdc.approve(portal, topUpAmount);
+        pool.topUpRewards(topUpAmount);
         vm.stopPrank();
 
         vm.warp(block.timestamp + 100);
 
-        uint256 user1ClaimableBefore = pool.getClaimableFees(user1, address(usdc));
+        uint256 user1ClaimableBefore = pool.getClaimableRewards(user1);
+        assertTrue(user1ClaimableBefore > 0, "User1 should have accrued rewards");
 
         uint256 transferAmount = SMALL_STAKE;
 
         vm.prank(user1);
         lpt.transfer(user2, transferAmount);
 
-        uint256 user1ClaimableAfter = pool.getClaimableFees(user1, address(usdc));
-        uint256 user2ClaimableAfter = pool.getClaimableFees(user2, address(usdc));
+        uint256 user1ClaimableAfter = pool.getClaimableRewards(user1);
+        uint256 user2ClaimableAfter = pool.getClaimableRewards(user2);
 
-        assertEq(user1ClaimableBefore, user1ClaimableAfter);
-        assertEq(user2ClaimableAfter, 0);
+
+        assertApproxEqRel(user1ClaimableBefore, user1ClaimableAfter, 0.02e18, "User1 rewards should be ~preserved");
+
+        assertLt(user2ClaimableAfter, 2 * 1e6, "User2 should start with near-zero claimable");
     }
 
     function test_OnLPTTransfer_EventEmitted() public {

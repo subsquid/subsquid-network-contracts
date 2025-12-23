@@ -12,7 +12,6 @@ interface IPortalFactory {
     );
     event BeaconUpgraded(address indexed newImplementation);
     event DefaultMaxStakePerWalletUpdated(uint256 oldValue, uint256 newValue);
-    event UsdcUpdated(address indexed oldUsdc, address indexed newUsdc);
     event PaymentTokenAdded(address indexed token);
     event PaymentTokenRemoved(address indexed token);
     event MaxPaymentTokensUpdated(uint256 oldValue, uint256 newValue);
@@ -28,6 +27,7 @@ interface IPortalFactory {
         string tokenSuffix;
         uint256 distributionRatePerSecond;
         string metadata;
+        address rewardToken;
     }
 
     function createPortalPool(CreatePortalPoolParams calldata params) external returns (address portal);
