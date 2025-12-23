@@ -25,7 +25,15 @@ contract FeeRouterModule is AccessControl, IFeeRouter {
     {
         toProviders = FullMath.mulDiv(amount, feeConfig.toProvidersBPS, BASIS_POINTS);
         toWorkerPool = FullMath.mulDiv(amount, feeConfig.toWorkerPoolBPS, BASIS_POINTS);
-        toBurn = amount - toProviders - toWorkerPool;
+        toBurn = FullMath.mulDiv(amount, feeConfig.toBurnBPS, BASIS_POINTS);
+
+        uint256 used = toProviders + toWorkerPool + toBurn;
+        if (used > amount) {
+            revert PortalErrors.InvalidFeeConfig();
+        }
+        
+        uint256 dust = amount - used;
+        toProviders += dust;
     }
 
     function setFeeConfig(uint16 toProvidersBPS, uint16 toWorkerPoolBPS, uint16 toBurnBPS)

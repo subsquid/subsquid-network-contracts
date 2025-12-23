@@ -37,8 +37,27 @@ library ExitQueueLib {
     /// @param self the queue state
     /// @return the current processed amount, capped at totalRequested
     function _currentProcessed(Queue storage self) internal view returns (uint256) {
+        if (self.totalRequested == self.processedAmount) {
+            return self.totalRequested;
+        }
+        // Guard: zero rate means no processing
+        if (self.unlockRatePerSecond == 0) {
+            return self.processedAmount;
+        }
+
         uint256 dt = block.timestamp - self.lastUpdate;
-        uint256 newlyProcessed = dt * self.unlockRatePerSecond;
+        uint256 newlyProcessed;
+
+        // Overflow protection: cap dt * unlockRatePerSecond
+        unchecked {
+            uint256 maxDt = type(uint256).max / self.unlockRatePerSecond;
+            if (dt > maxDt) {
+                newlyProcessed = type(uint256).max;
+            } else {
+                newlyProcessed = dt * self.unlockRatePerSecond;
+            }
+        }
+
         uint256 theoretical = self.processedAmount + newlyProcessed;
 
         // cap at totalRequested - the belt cannot move past the last request

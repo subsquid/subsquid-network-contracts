@@ -37,6 +37,7 @@ contract PortalPoolFactory is IPortalFactory, AccessControl, Pausable {
     uint256 public exitUnlockRatePerSecond;
     uint256 public collectionDeadlineSeconds;
     address public workerPoolAddress;
+    uint256 public maxDistributionRatePerSecond;
 
     constructor(
         address _implementation,
@@ -68,6 +69,7 @@ contract PortalPoolFactory is IPortalFactory, AccessControl, Pausable {
         maxPaymentTokens = Constants.MAX_PAYMENT_TOKENS;
         exitUnlockRatePerSecond = Constants.EXIT_UNLOCK_RATE_PER_SECOND;
         collectionDeadlineSeconds = Constants.COLLECTION_DEADLINE_SECONDS;
+        maxDistributionRatePerSecond = Constants.MAX_DISTRIBUTION_RATE_PER_SECOND;
     }
 
     function createPortalPool(CreatePortalPoolParams calldata params) external whenNotPaused returns (address portal) {
@@ -76,6 +78,10 @@ contract PortalPoolFactory is IPortalFactory, AccessControl, Pausable {
         uint256 minCapacity = INetworkController(networkController).minStakeThreshold();
         if (params.capacity < minCapacity) revert PortalErrors.BelowMinimum();
         if (params.peerId.length == 0) revert PortalErrors.EmptyPeerId();
+        // Validate distribution rate scale (protects against misconfigured decimals)
+        if (params.distributionRatePerSecond > maxDistributionRatePerSecond) {
+            revert PortalErrors.RateExceedsMaximum();
+        }
 
         IPortalPool.InitParams memory initParams = IPortalPool.InitParams({
             operator: params.operator,
@@ -200,6 +206,12 @@ contract PortalPoolFactory is IPortalFactory, AccessControl, Pausable {
         address oldValue = workerPoolAddress;
         workerPoolAddress = _workerPoolAddress;
         emit WorkerPoolAddressUpdated(oldValue, _workerPoolAddress);
+    }
+
+    function setMaxDistributionRate(uint256 ratePerSecond) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        uint256 oldValue = maxDistributionRatePerSecond;
+        maxDistributionRatePerSecond = ratePerSecond;
+        emit MaxDistributionRateUpdated(oldValue, ratePerSecond);
     }
 
     function addPaymentToken(address token) external onlyRole(DEFAULT_ADMIN_ROLE) {

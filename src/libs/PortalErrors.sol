@@ -56,6 +56,7 @@ library PortalErrors {
     // Distribution errors
     error DistributionTurnedOff();
     error PoolHasDebt();
+    error RateExceedsMaximum();
 
     // Factory errors
     error InvalidPortal();

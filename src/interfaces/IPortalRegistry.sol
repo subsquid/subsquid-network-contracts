@@ -62,6 +62,8 @@ interface IPortalRegistry {
 
     function stakePoolFunds(uint256 amount) external;
 
+    function unstakeFromPool(address provider, uint256 amount) external;
+
     function getComputationUnits(address portalAddress) external view returns (uint256);
     function getPortal(address portalAddress) external view returns (Portal memory);
     function isDirectPortal(address portalAddress) external view returns (bool);

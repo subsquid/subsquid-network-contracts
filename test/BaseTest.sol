@@ -72,6 +72,8 @@ abstract contract BaseTest is Test {
         // Set global worker pool address in factory
         factory.setWorkerPoolAddress(workerRewardPool);
 
+        factory.setMaxDistributionRate(type(uint256).max);
+
         _mintTokensToUsers();
 
         vm.label(address(factory), "Factory");

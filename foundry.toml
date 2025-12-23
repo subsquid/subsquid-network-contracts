@@ -12,6 +12,8 @@ runs = 256
 
 # Tenderly verification configuration
 [etherscan]
+arbitrum = { key = "338GM13A6DDG5S86A5CJBT2ZV7SRUGUPZ2", chain = 42161, url = "https://api.arbiscan.io/api" }
+arbitrum_sepolia = { key = "338GM13A6DDG5S86A5CJBT2ZV7SRUGUPZ2", chain = 421614, url = "https://api-sepolia.arbiscan.io/api" }
 unknown_chain = { key = "ZcvkdUX2yO0MWRQ6nA3R0E7gPnscsySk", chain = 42161, url = "https://virtual.arbitrum.eu.rpc.tenderly.co/1975f1f7-1857-4714-b409-e3620497dad8/verify/etherscan" }
 
 # See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options

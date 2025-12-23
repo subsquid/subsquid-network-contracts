@@ -34,49 +34,31 @@ contract PortalPoolImplementationTest is BaseTest {
     }
 
     function test_Initialize_RevertOnZeroOperator() public {
-        PortalPoolImplementation impl = new PortalPoolImplementation();
-
-        IPortalPool.InitParams memory params = IPortalPool.InitParams({
+        IPortalFactory.CreatePortalPoolParams memory params = IPortalFactory.CreatePortalPoolParams({
             operator: address(0),
             capacity: MIN_STAKE_THRESHOLD,
-            depositDeadline: block.timestamp + 1 days,
             peerId: "zero-op",
             tokenSuffix: "ZeroOp",
-            sqd: address(sqd),
-            usdc: address(usdc),
-            portalRegistry: address(registry),
-            feeRouter: address(feeRouter),
-            networkController: address(networkController),
             distributionRatePerSecond: 1 ether,
             metadata: ""
         });
 
-        vm.prank(address(factory));
         vm.expectRevert(PortalErrors.InvalidAddress.selector);
-        impl.initialize(params);
+        factory.createPortalPool(params);
     }
 
     function test_Initialize_RevertOnBelowMinimumCapacity() public {
-        PortalPoolImplementation impl = new PortalPoolImplementation();
-
-        IPortalPool.InitParams memory params = IPortalPool.InitParams({
+        IPortalFactory.CreatePortalPoolParams memory params = IPortalFactory.CreatePortalPoolParams({
             operator: operator,
             capacity: MIN_STAKE_THRESHOLD - 1,
-            depositDeadline: block.timestamp + 1 days,
             peerId: "low-cap",
             tokenSuffix: "LowCap",
-            sqd: address(sqd),
-            usdc: address(usdc),
-            portalRegistry: address(registry),
-            feeRouter: address(feeRouter),
-            networkController: address(networkController),
             distributionRatePerSecond: 1 ether,
             metadata: ""
         });
 
-        vm.prank(address(factory));
         vm.expectRevert(PortalErrors.BelowMinimum.selector);
-        impl.initialize(params);
+        factory.createPortalPool(params);
     }
 
     function test_Deposit_InCollectingState() public {

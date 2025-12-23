@@ -297,6 +297,34 @@ contract PortalRegistry is IPortalRegistry, AccessControl, Pausable {
     }
 
     /// @inheritdoc IPortalRegistry
+    function unstakeFromPool(address provider, uint256 amount) external whenNotPaused {
+        address portalAddress = msg.sender;
+        Portal storage portal = portals[portalAddress];
+
+        if (portal.portalAddress == address(0)) {
+            revert PortalRegistryErrors.PortalNotRegistered();
+        }
+        if (portal.portalType != PortalType.POOL) {
+            revert PortalRegistryErrors.OnlyPoolPortal();
+        }
+        if (portal.totalStaked < amount) {
+            revert PortalRegistryErrors.InsufficientAllocation();
+        }
+
+        portal.totalStaked -= amount;
+
+        uint256 minStakeThreshold = networkController.minStakeThreshold();
+        if (portal.active && portal.totalStaked < minStakeThreshold) {
+            portal.active = false;
+            emit PortalDeactivated(portalAddress);
+        }
+
+        SQD.safeTransfer(provider, amount);
+
+        emit Unstaked(portalAddress, provider, amount);
+    }
+
+    /// @inheritdoc IPortalRegistry
     function getComputationUnits(address portalAddress) external view returns (uint256) {
         Portal storage portal = portals[portalAddress];
 

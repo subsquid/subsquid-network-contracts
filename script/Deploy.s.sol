@@ -9,9 +9,9 @@ import {FeeRouterModule} from "../src/FeeRouterModule.sol";
 import {MockNetworkController} from "../test/mocks/MockNetworkController.sol";
 
 contract DeployPortalSystem is Script {
-    // Arbitrum mainnet token addresses
-    address public constant SQD = 0x1337420dED5ADb9980CFc35f8f2B054ea86f8aB1;
-    address public constant USDC = 0xaf88d065e77c8cC2239327C5EDb3A432268e5831;
+    // Arbitrum Sepolia token addresses
+    address public constant SQD = 0x24f9C46d86c064a6FA2a568F918fe62fC6917B3c;
+    address public constant USDC = 0x8baf8707861a84e3d978aC067447de9AAd862FAc;
 
     // Configuration values
     uint256 public constant WORKER_EPOCH_LENGTH = 7200;

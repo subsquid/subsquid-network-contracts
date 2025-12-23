@@ -62,13 +62,6 @@ abstract contract PortalPoolStorage {
     /// @notice Per-user unclaimed rewards
     mapping(address => uint256) internal _unclaimedRewards;
 
-    // legacy fields (kept for storage layout compatibility)
-    uint256 internal _legacy_distributionRateScaled;
-    uint256 internal _legacy_lastRewardBalanceScaled;
-    uint256 internal _legacy_lastRewardTimestamp;
-    uint256 internal _legacy_lastEffectiveRewardTimestamp;
-    mapping(address => IPortalPool.DelegatorCheckpoint) internal _legacy_delegatorCheckpoints;
-
     ExitQueueLib.Queue internal _exitQueue;
 
     mapping(address => mapping(uint256 => ExitQueueLib.Ticket)) internal _exitTickets;

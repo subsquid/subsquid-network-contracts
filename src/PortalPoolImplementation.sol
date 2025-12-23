@@ -32,8 +32,7 @@ contract PortalPoolImplementation is
     bytes32 public constant OPERATOR_ROLE = keccak256("OPERATOR_ROLE");
     bytes32 public constant FACTORY_ROLE = keccak256("FACTORY_ROLE");
 
-    /// @notice Precision for reward calculations (1e18)
-    uint256 public constant ACC = 1e18;
+    uint256 public constant ACC = 1e27;
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
@@ -157,13 +156,15 @@ contract PortalPoolImplementation is
         // Route funds based on state
         if (shouldActivate) {
             // activation: Push ALL accumulated funds to Registry
-            _sqd.approve(address(_portalRegistry), _portalInfo.totalStaked);
+            // Use forceApprove for USDT-style token compatibility (reset to 0 first)
+            _sqd.forceApprove(address(_portalRegistry), _portalInfo.totalStaked);
             _portalRegistry.stakePoolFunds(_portalInfo.totalStaked);
             _portalRegistry.activatePortalPool();
 
             emit StateChanged(PortalState.COLLECTING, PortalState.ACTIVE);
         } else if (currentState != PortalState.COLLECTING) {
-            _sqd.approve(address(_portalRegistry), amount);
+            // Use forceApprove for USDT-style token compatibility
+            _sqd.forceApprove(address(_portalRegistry), amount);
             _portalRegistry.stake(address(this), msg.sender, amount);
 
             if (isRecoveringFromIdle) {
@@ -233,7 +234,7 @@ contract PortalPoolImplementation is
         _exitAmounts[msg.sender] -= amount;
         _totalExitAmounts -= amount;
 
-        _portalRegistry.immediateUnlock(msg.sender, amount);
+        _portalRegistry.unstakeFromPool(msg.sender, amount);
 
         emit ExitClaimed(msg.sender, amount);
     }
@@ -344,19 +345,17 @@ contract PortalPoolImplementation is
 
         if (getState() != PortalState.ACTIVE) revert PortalErrors.InvalidState();
 
-        (uint256 toProviders, uint256 toWorkerPool,) = _feeRouter.calculateSplit(amount);
+        // measure actual received for fee-on-transfer token safety
+        uint256 balanceBefore = _usdc.balanceOf(address(this));
+        _usdc.safeTransferFrom(msg.sender, address(this), amount);
+        uint256 received = _usdc.balanceOf(address(this)) - balanceBefore;
 
-        // Get worker pool address from factory (global setting)
+        // split based on actual received amount
+        (uint256 toProviders, uint256 toWorkerPool,) = _feeRouter.calculateSplit(received);
+
         address workerPool = _factory.workerPoolAddress();
-
-        // If FeeRouter has workerPool split > 0%, validate and send
         if (toWorkerPool > 0) {
             if (workerPool == address(0)) revert PortalErrors.InvalidAddress();
-        }
-
-        _usdc.safeTransferFrom(msg.sender, address(this), amount);
-
-        if (toWorkerPool > 0) {
             _usdc.safeTransfer(workerPool, toWorkerPool);
         }
 
@@ -438,7 +437,6 @@ contract PortalPoolImplementation is
         burnAddress = newBurnAddress;
         emit BurnAddressUpdated(newBurnAddress);
     }
-
     function distributeFees(address token, uint256 amount) external onlyOperator whenNotPaused {
         PortalState currentState = getState();
         if (currentState != PortalState.ACTIVE) revert PortalErrors.InvalidState();
@@ -449,18 +447,22 @@ contract PortalPoolImplementation is
 
         IERC20 paymentToken = IERC20(token);
 
-        (uint256 toProviders, uint256 toWorkerPool, uint256 toBurn) = _feeRouter.calculateSplit(amount);
+        // Measure actual received for fee-on-transfer token safety
+        uint256 balanceBefore = paymentToken.balanceOf(address(this));
+        paymentToken.safeTransferFrom(msg.sender, address(this), amount);
+        uint256 received = paymentToken.balanceOf(address(this)) - balanceBefore;
+
+        // split based on actual received amount
+        (uint256 toProviders, uint256 toWorkerPool, uint256 toBurn) = _feeRouter.calculateSplit(received);
 
         uint256 activeStake =
             _portalInfo.totalStaked > _totalExitAmounts ? _portalInfo.totalStaked - _totalExitAmounts : 0;
         if (activeStake > 0) {
-            _cumulativeFeesPerShare[token] += FullMath.mulDiv(toProviders, 1e18, activeStake);
+            _cumulativeFeesPerShare[token] += FullMath.mulDiv(toProviders, ACC, activeStake);
         }
 
         totalFeesDistributed[token] += toProviders;
         lastDistributionTime[token] = block.timestamp;
-
-        paymentToken.safeTransferFrom(msg.sender, address(this), amount);
 
         // If FeeRouter has workerPool split > 0%, validate and send
         if (toWorkerPool > 0) {
@@ -473,7 +475,7 @@ contract PortalPoolImplementation is
             paymentToken.safeTransfer(burnAddress, toBurn);
         }
 
-        emit FeesDistributed(token, amount, toProviders, toWorkerPool, toBurn);
+        emit FeesDistributed(token, received, toProviders, toWorkerPool, toBurn);
     }
 
     function claimFees(address token) external whenNotPaused returns (uint256 claimed) {
@@ -739,7 +741,7 @@ contract PortalPoolImplementation is
         uint256 cumulative = _cumulativeFeesPerShare[token];
         uint256 debt = _feeDebt[token][provider];
 
-        uint256 accumulated = FullMath.mulDiv(activeStake, cumulative, 1e18);
+        uint256 accumulated = FullMath.mulDiv(activeStake, cumulative, ACC);
         uint256 pending = accumulated > debt ? accumulated - debt : 0;
 
         return unclaimed + pending;
@@ -921,7 +923,7 @@ contract PortalPoolImplementation is
             uint256 debt = _feeDebt[token][user];
 
             if (activeStake > 0 && cumulative > 0) {
-                uint256 accumulated = FullMath.mulDiv(activeStake, cumulative, 1e18);
+                uint256 accumulated = FullMath.mulDiv(activeStake, cumulative, ACC);
                 if (accumulated > debt) {
                     _unclaimedFees[token][user] += accumulated - debt;
                 }
@@ -947,7 +949,7 @@ contract PortalPoolImplementation is
         for (uint256 i = 0; i < tokenCount;) {
             address token = tokens[i];
             uint256 cumulative = _cumulativeFeesPerShare[token];
-            _feeDebt[token][user] = FullMath.mulDiv(activeStake, cumulative, 1e18);
+            _feeDebt[token][user] = FullMath.mulDiv(activeStake, cumulative, ACC);
             unchecked {
                 ++i;
             }
