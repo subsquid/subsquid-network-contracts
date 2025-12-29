@@ -20,7 +20,6 @@ contract PortalPoolFactory is IPortalFactory, AccessControl, Pausable {
     address public feeRouter;
     address public networkController;
     address public sqd;
-    address public usdc;
 
     mapping(uint256 => address) public allPortals;
     uint256 public portalCount;
@@ -45,7 +44,6 @@ contract PortalPoolFactory is IPortalFactory, AccessControl, Pausable {
         address _feeRouter,
         address _networkController,
         address _sqd,
-        address _usdc,
         uint256 _defaultMaxStakePerWallet
     ) {
         if (_implementation == address(0)) revert PortalErrors.InvalidAddress();
@@ -53,7 +51,6 @@ contract PortalPoolFactory is IPortalFactory, AccessControl, Pausable {
         if (_feeRouter == address(0)) revert PortalErrors.InvalidAddress();
         if (_networkController == address(0)) revert PortalErrors.InvalidAddress();
         if (_sqd == address(0)) revert PortalErrors.InvalidAddress();
-        if (_usdc == address(0)) revert PortalErrors.InvalidAddress();
 
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
         _grantRole(PAUSER_ROLE, msg.sender);
@@ -63,7 +60,6 @@ contract PortalPoolFactory is IPortalFactory, AccessControl, Pausable {
         feeRouter = _feeRouter;
         networkController = _networkController;
         sqd = _sqd;
-        usdc = _usdc;
         defaultMaxStakePerWallet = _defaultMaxStakePerWallet;
 
         maxPaymentTokens = Constants.MAX_PAYMENT_TOKENS;
@@ -74,7 +70,8 @@ contract PortalPoolFactory is IPortalFactory, AccessControl, Pausable {
 
     function createPortalPool(CreatePortalPoolParams calldata params) external whenNotPaused returns (address portal) {
         if (params.operator == address(0)) revert PortalErrors.InvalidAddress();
-        if (paymentTokensList.length == 0) revert PortalErrors.NoPaymentTokens();
+        if (params.rewardToken == address(0)) revert PortalErrors.InvalidAddress();
+        if (!isAllowedPaymentToken[params.rewardToken]) revert PortalErrors.TokenNotAllowed();
         uint256 minCapacity = INetworkController(networkController).minStakeThreshold();
         if (params.capacity < minCapacity) revert PortalErrors.BelowMinimum();
         if (params.peerId.length == 0) revert PortalErrors.EmptyPeerId();
@@ -90,7 +87,7 @@ contract PortalPoolFactory is IPortalFactory, AccessControl, Pausable {
             peerId: params.peerId,
             tokenSuffix: params.tokenSuffix,
             sqd: sqd,
-            usdc: usdc,
+            rewardToken: params.rewardToken,
             portalRegistry: portalRegistry,
             feeRouter: feeRouter,
             networkController: networkController,
@@ -179,13 +176,6 @@ contract PortalPoolFactory is IPortalFactory, AccessControl, Pausable {
         uint256 oldValue = defaultMaxStakePerWallet;
         defaultMaxStakePerWallet = _maxStake;
         emit DefaultMaxStakePerWalletUpdated(oldValue, _maxStake);
-    }
-
-    function setUsdc(address _usdc) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        if (_usdc == address(0)) revert PortalErrors.InvalidAddress();
-        address oldUsdc = usdc;
-        usdc = _usdc;
-        emit UsdcUpdated(oldUsdc, _usdc);
     }
 
     function setMaxPaymentTokens(uint256 value) external onlyRole(DEFAULT_ADMIN_ROLE) {

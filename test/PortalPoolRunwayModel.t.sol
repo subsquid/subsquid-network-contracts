@@ -104,7 +104,6 @@ contract PortalPoolRunwayModelTest is Test {
             address(feeRouter),
             address(networkController),
             address(sqd),
-            address(usdc),
             MAX_STAKE_PER_WALLET
         );
 
@@ -133,7 +132,8 @@ contract PortalPoolRunwayModelTest is Test {
             peerId: abi.encodePacked("peer-test"),
             tokenSuffix: "TEST",
             distributionRatePerSecond: RATE_PER_SEC,
-            metadata: ""
+            metadata: "",
+            rewardToken: address(usdc)
         });
 
         portalAddress = factory.createPortalPool(params);

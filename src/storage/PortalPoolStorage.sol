@@ -22,18 +22,13 @@ abstract contract PortalPoolStorage {
     mapping(address => uint256) internal _exitAmounts;
     uint256 internal _totalExitAmounts;
 
-    mapping(address => uint256) internal _cumulativeFeesPerShare;
-    mapping(address => uint256) public totalFeesDistributed;
-    mapping(address => uint256) public lastDistributionTime;
-    mapping(address => mapping(address => uint256)) internal _providerTotalClaimed;
-
     IERC20 internal _sqd;
     IPortalRegistry internal _portalRegistry;
     IFeeRouter internal _feeRouter;
     INetworkController internal _networkController;
     IPortalFactory internal _factory;
 
-    IERC20 internal _usdc;
+    IERC20 internal _rewardToken;
 
     /// @notice provider's available credit (funds available for distribution)
     uint256 public credit;
@@ -68,9 +63,6 @@ abstract contract PortalPoolStorage {
     mapping(address => uint256) internal _nextTicketId;
 
     LiquidPortalToken public lptToken;
-
-    mapping(address => mapping(address => uint256)) internal _feeDebt;
-    mapping(address => mapping(address => uint256)) internal _unclaimedFees;
 
     address public workerPoolAddress;
     address public burnAddress;

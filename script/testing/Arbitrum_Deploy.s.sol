@@ -72,7 +72,7 @@ contract DeployArbitrumMocks is Script {
         console.log("PortalPoolImplementation:", d.implementation);
 
         PortalPoolFactory factory =
-            new PortalPoolFactory(d.implementation, d.portalRegistry, d.feeRouter, d.networkController, sqd, usdc, MAX_STAKE_PER_WALLET);
+            new PortalPoolFactory(d.implementation, d.portalRegistry, d.feeRouter, d.networkController, sqd, MAX_STAKE_PER_WALLET);
         d.factory = address(factory);
         d.beacon = address(factory.beacon());
         console.log("PortalPoolFactory:", d.factory);

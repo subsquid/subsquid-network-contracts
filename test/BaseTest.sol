@@ -60,7 +60,6 @@ abstract contract BaseTest is Test {
             address(feeRouter),
             address(networkController),
             address(sqd),
-            address(usdc),
             DEFAULT_MAX_STAKE_PER_WALLET
         );
 
@@ -111,7 +110,8 @@ abstract contract BaseTest is Test {
             peerId: abi.encodePacked("peer-", _name),
             tokenSuffix: _name,
             distributionRatePerSecond: 1 ether,
-            metadata: ""
+            metadata: "",
+            rewardToken: address(usdc)
         });
 
         portalAddress = factory.createPortalPool(params);

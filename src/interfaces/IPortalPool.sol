@@ -38,7 +38,7 @@ interface IPortalPool {
         bytes peerId;
         string tokenSuffix;
         address sqd;
-        address usdc;
+        address rewardToken;
         address portalRegistry;
         address feeRouter;
         address networkController;
@@ -50,11 +50,7 @@ interface IPortalPool {
     event ExitRequested(address indexed provider, uint256 amount, uint256 endPosition);
     event ExitClaimed(address indexed provider, uint256 amount);
     event Withdrawn(address indexed provider, uint256 amount);
-    event FeesDistributed(
-        address indexed token, uint256 totalAmount, uint256 toProviders, uint256 toWorkers, uint256 toBurn
-    );
     event BurnAddressUpdated(address burnAddress);
-    event FeesClaimed(address indexed provider, address indexed token, uint256 amount);
     event StateChanged(PortalState oldState, PortalState newState);
     event AllocationReduced(address indexed provider, uint256 amount);
     event StakeTransferred(address indexed from, address indexed to, uint256 amount);
@@ -70,8 +66,6 @@ interface IPortalPool {
     function withdrawExit(uint256 ticketId) external;
     function onAllocationReduced(address provider, uint256 amount) external;
     function onLPTTransfer(address from, address to, uint256 amount) external;
-    function distributeFees(address token, uint256 amount) external;
-    function claimFees(address token) external returns (uint256);
     function withdrawFromFailed() external;
 
     function topUpRewards(uint256 amount) external;
@@ -84,8 +78,8 @@ interface IPortalPool {
     function getProviderStake(address provider) external view returns (uint256);
     function getExitTicket(address provider, uint256 ticketId) external view returns (ExitTicket memory);
     function getTicketCount(address provider) external view returns (uint256);
-    function getClaimableFees(address provider, address token) external view returns (uint256);
     function getClaimableRewards(address delegator) external view returns (uint256);
+    function getRewardToken() external view returns (address);
     function getCurrentRewardBalance() external view returns (int256);
     function getRewardStatus()
         external
@@ -113,7 +107,6 @@ interface IPortalPool {
     function getPeerId() external view returns (bytes memory);
     function getActiveStake() external view returns (uint256);
     function getComputationUnits() external view returns (uint256);
-    function getAllowedPaymentTokens() external view returns (address[] memory);
     function getState() external view returns (PortalState);
     function getQueueStatus(address user, uint256 ticketId)
         external

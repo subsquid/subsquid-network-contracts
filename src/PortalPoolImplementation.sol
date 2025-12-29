@@ -47,7 +47,7 @@ contract PortalPoolImplementation is
     function initialize(InitParams calldata params) external initializer {
         if (params.operator == address(0)) revert PortalErrors.InvalidAddress();
         if (params.sqd == address(0)) revert PortalErrors.InvalidAddress();
-        if (params.usdc == address(0)) revert PortalErrors.InvalidAddress();
+        if (params.rewardToken == address(0)) revert PortalErrors.InvalidAddress();
         if (params.portalRegistry == address(0)) revert PortalErrors.InvalidAddress();
         if (params.feeRouter == address(0)) revert PortalErrors.InvalidAddress();
         if (params.networkController == address(0)) revert PortalErrors.InvalidAddress();
@@ -57,7 +57,7 @@ contract PortalPoolImplementation is
 
         _peerId = params.peerId;
         _sqd = IERC20(params.sqd);
-        _usdc = IERC20(params.usdc);
+        _rewardToken = IERC20(params.rewardToken);
         _portalRegistry = IPortalRegistry(params.portalRegistry);
         _feeRouter = IFeeRouter(params.feeRouter);
         _networkController = INetworkController(params.networkController);
@@ -127,8 +127,6 @@ contract PortalPoolImplementation is
 
         _sqd.safeTransferFrom(msg.sender, address(this), amount);
 
-        _settleFees(msg.sender);
-
         // Accrue global state and update user BEFORE changing stake
         _accrueGlobal(block.timestamp);
         _updateUser(msg.sender);
@@ -139,8 +137,6 @@ contract PortalPoolImplementation is
         // Update user's reward debt for new activeStake
         uint256 activeStake = _getUserActiveStake(msg.sender);
         _rewardDebt[msg.sender] = FullMath.mulDiv(activeStake, rewardPerStakeStored, ACC);
-
-        _updateFeeDebt(msg.sender);
 
         bool shouldActivate = !_portalInfo.firstActivated && _portalInfo.totalStaked >= _portalInfo.capacity;
 
@@ -191,8 +187,6 @@ contract PortalPoolImplementation is
             revert PortalErrors.WaitForActivationOrDeadline();
         }
 
-        _settleFees(msg.sender);
-
         // Accrue global state and update user BEFORE changing exit amounts
         _accrueGlobal(block.timestamp);
         _updateUser(msg.sender);
@@ -210,8 +204,6 @@ contract PortalPoolImplementation is
         // Update user's reward debt for new activeStake
         uint256 activeStake = _getUserActiveStake(msg.sender);
         _rewardDebt[msg.sender] = FullMath.mulDiv(activeStake, rewardPerStakeStored, ACC);
-
-        _updateFeeDebt(msg.sender);
 
         lptToken.burn(msg.sender, amount);
 
@@ -245,7 +237,6 @@ contract PortalPoolImplementation is
         // Accrue global state and update user BEFORE changing stake
         _accrueGlobal(block.timestamp);
         _updateUser(provider);
-        _settleFees(provider);
 
         // Calculate LPT to burn (amount minus any already burned via exit requests)
         uint256 exitAmount = _exitAmounts[provider];
@@ -260,8 +251,6 @@ contract PortalPoolImplementation is
             _totalExitAmounts -= reduction;
             // note: tickets remain in mapping but their amounts are tracked via _exitAmounts
         }
-
-        _updateFeeDebt(provider);
 
         // burn LPT tokens for the portion not already in exit queue
         if (lptToBurn > 0) {
@@ -283,9 +272,6 @@ contract PortalPoolImplementation is
         uint256 receiverNewStake = _stakes[to] + amount;
         if (receiverNewStake > _factory.defaultMaxStakePerWallet()) revert PortalErrors.ExceedsWalletLimit();
 
-        _settleFees(from);
-        _settleFees(to);
-
         // Accrue global state and update both users BEFORE changing stakes
         _accrueGlobal(block.timestamp);
         _updateUser(from);
@@ -299,9 +285,6 @@ contract PortalPoolImplementation is
         uint256 toActiveStake = _getUserActiveStake(to);
         _rewardDebt[from] = FullMath.mulDiv(fromActiveStake, rewardPerStakeStored, ACC);
         _rewardDebt[to] = FullMath.mulDiv(toActiveStake, rewardPerStakeStored, ACC);
-
-        _updateFeeDebt(from);
-        _updateFeeDebt(to);
 
         emit StakeTransferred(from, to, amount);
     }
@@ -346,9 +329,9 @@ contract PortalPoolImplementation is
         if (getState() != PortalState.ACTIVE) revert PortalErrors.InvalidState();
 
         // measure actual received for fee-on-transfer token safety
-        uint256 balanceBefore = _usdc.balanceOf(address(this));
-        _usdc.safeTransferFrom(msg.sender, address(this), amount);
-        uint256 received = _usdc.balanceOf(address(this)) - balanceBefore;
+        uint256 balanceBefore = _rewardToken.balanceOf(address(this));
+        _rewardToken.safeTransferFrom(msg.sender, address(this), amount);
+        uint256 received = _rewardToken.balanceOf(address(this)) - balanceBefore;
 
         // split based on actual received amount
         (uint256 toProviders, uint256 toWorkerPool,) = _feeRouter.calculateSplit(received);
@@ -356,7 +339,7 @@ contract PortalPoolImplementation is
         address workerPool = _factory.workerPoolAddress();
         if (toWorkerPool > 0) {
             if (workerPool == address(0)) revert PortalErrors.InvalidAddress();
-            _usdc.safeTransfer(workerPool, toWorkerPool);
+            _rewardToken.safeTransfer(workerPool, toWorkerPool);
         }
 
         // Update credit/debt: checkpoint current state then add toProviders
@@ -391,7 +374,7 @@ contract PortalPoolImplementation is
         _unclaimedRewards[msg.sender] = 0;
 
         if (amount > 0) {
-            _usdc.safeTransfer(msg.sender, amount);
+            _rewardToken.safeTransfer(msg.sender, amount);
         }
 
         emit RewardsClaimed(msg.sender, amount);
@@ -437,64 +420,6 @@ contract PortalPoolImplementation is
         burnAddress = newBurnAddress;
         emit BurnAddressUpdated(newBurnAddress);
     }
-    function distributeFees(address token, uint256 amount) external onlyOperator whenNotPaused {
-        PortalState currentState = getState();
-        if (currentState != PortalState.ACTIVE) revert PortalErrors.InvalidState();
-
-        if (amount == 0) revert PortalErrors.InvalidAmount();
-        if (token == address(0)) revert PortalErrors.InvalidAddress();
-        if (!_factory.isAllowedPaymentToken(token)) revert PortalErrors.TokenNotAllowed();
-
-        IERC20 paymentToken = IERC20(token);
-
-        // Measure actual received for fee-on-transfer token safety
-        uint256 balanceBefore = paymentToken.balanceOf(address(this));
-        paymentToken.safeTransferFrom(msg.sender, address(this), amount);
-        uint256 received = paymentToken.balanceOf(address(this)) - balanceBefore;
-
-        // split based on actual received amount
-        (uint256 toProviders, uint256 toWorkerPool, uint256 toBurn) = _feeRouter.calculateSplit(received);
-
-        uint256 activeStake =
-            _portalInfo.totalStaked > _totalExitAmounts ? _portalInfo.totalStaked - _totalExitAmounts : 0;
-        if (activeStake > 0) {
-            _cumulativeFeesPerShare[token] += FullMath.mulDiv(toProviders, ACC, activeStake);
-        }
-
-        totalFeesDistributed[token] += toProviders;
-        lastDistributionTime[token] = block.timestamp;
-
-        // If FeeRouter has workerPool split > 0%, validate and send
-        if (toWorkerPool > 0) {
-            address workerPool = _factory.workerPoolAddress();
-            if (workerPool == address(0)) revert PortalErrors.InvalidAddress();
-            paymentToken.safeTransfer(workerPool, toWorkerPool);
-        }
-
-        if (toBurn > 0) {
-            paymentToken.safeTransfer(burnAddress, toBurn);
-        }
-
-        emit FeesDistributed(token, received, toProviders, toWorkerPool, toBurn);
-    }
-
-    function claimFees(address token) external whenNotPaused returns (uint256 claimed) {
-        if (token == address(0)) revert PortalErrors.InvalidAddress();
-        if (!_factory.isAllowedPaymentToken(token)) revert PortalErrors.TokenNotAllowed();
-
-        _settleFees(msg.sender);
-
-        claimed = _unclaimedFees[token][msg.sender];
-        if (claimed == 0) revert PortalErrors.NothingToClaim();
-
-        _unclaimedFees[token][msg.sender] = 0;
-
-        _providerTotalClaimed[token][msg.sender] += claimed;
-
-        IERC20(token).safeTransfer(msg.sender, claimed);
-
-        emit FeesClaimed(msg.sender, token, claimed);
-    }
 
     function getState() public view returns (PortalState) {
         PortalInfo memory info = _portalInfo;
@@ -538,10 +463,6 @@ contract PortalPoolImplementation is
 
     function getTicketCount(address provider) external view returns (uint256) {
         return _nextTicketId[provider];
-    }
-
-    function getClaimableFees(address provider, address token) external view returns (uint256) {
-        return _calculateClaimableFees(provider, token);
     }
 
     /**
@@ -680,8 +601,8 @@ contract PortalPoolImplementation is
         return _portalRegistry.getComputationUnits(address(this));
     }
 
-    function getAllowedPaymentTokens() external view returns (address[] memory) {
-        return _factory.getAllowedPaymentTokens();
+    function getRewardToken() external view returns (address) {
+        return address(_rewardToken);
     }
 
     function getQueueStatus(address user, uint256 ticketId)
@@ -732,24 +653,6 @@ contract PortalPoolImplementation is
 
     function unpause() external onlyRole(DEFAULT_ADMIN_ROLE) {
         _unpause();
-    }
-
-    function _calculateClaimableFees(address provider, address token) internal view returns (uint256) {
-        uint256 unclaimed = _unclaimedFees[token][provider];
-
-        uint256 providerStake = _stakes[provider];
-        uint256 exitAmount = _exitAmounts[provider];
-        uint256 activeStake = providerStake > exitAmount ? providerStake - exitAmount : 0;
-
-        if (activeStake == 0) return unclaimed;
-
-        uint256 cumulative = _cumulativeFeesPerShare[token];
-        uint256 debt = _feeDebt[token][provider];
-
-        uint256 accumulated = FullMath.mulDiv(activeStake, cumulative, ACC);
-        uint256 pending = accumulated > debt ? accumulated - debt : 0;
-
-        return unclaimed + pending;
     }
 
     function currentBalance(uint256 timestamp) public view returns (int256) {
@@ -912,53 +815,6 @@ contract PortalPoolImplementation is
             _rewardDebt[user] = accumulated;
         } else if (_stakes[user] > 0) {
             _rewardDebt[user] = 0;
-        }
-    }
-
-    function _settleFees(address user) internal {
-        uint256 userStake = _stakes[user];
-        uint256 exitAmount = _exitAmounts[user];
-        uint256 activeStake = userStake > exitAmount ? userStake - exitAmount : 0;
-
-        address[] memory tokens = _factory.getAllowedPaymentTokens();
-        uint256 tokenCount = tokens.length;
-
-        for (uint256 i = 0; i < tokenCount;) {
-            address token = tokens[i];
-            uint256 cumulative = _cumulativeFeesPerShare[token];
-            uint256 debt = _feeDebt[token][user];
-
-            if (activeStake > 0 && cumulative > 0) {
-                uint256 accumulated = FullMath.mulDiv(activeStake, cumulative, ACC);
-                if (accumulated > debt) {
-                    _unclaimedFees[token][user] += accumulated - debt;
-                }
-                _feeDebt[token][user] = accumulated;
-            } else {
-                // If stake is 0, reset debt to 0 to keep state clean
-                _feeDebt[token][user] = 0;
-            }
-            unchecked {
-                ++i;
-            }
-        }
-    }
-
-    function _updateFeeDebt(address user) internal {
-        uint256 userStake = _stakes[user];
-        uint256 exitAmount = _exitAmounts[user];
-        uint256 activeStake = userStake > exitAmount ? userStake - exitAmount : 0;
-
-        address[] memory tokens = _factory.getAllowedPaymentTokens();
-        uint256 tokenCount = tokens.length;
-
-        for (uint256 i = 0; i < tokenCount;) {
-            address token = tokens[i];
-            uint256 cumulative = _cumulativeFeesPerShare[token];
-            _feeDebt[token][user] = FullMath.mulDiv(activeStake, cumulative, ACC);
-            unchecked {
-                ++i;
-            }
         }
     }
 

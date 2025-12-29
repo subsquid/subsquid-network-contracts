@@ -92,7 +92,7 @@ contract DeployPortalSystem is Script {
 
         console.log("\n--- Deploying PortalPoolFactory ---");
         PortalPoolFactory factory = new PortalPoolFactory(
-            d.implementation, d.portalRegistry, d.feeRouter, d.networkController, SQD, USDC, MAX_STAKE_PER_WALLET
+            d.implementation, d.portalRegistry, d.feeRouter, d.networkController, SQD, MAX_STAKE_PER_WALLET
         );
         d.factory = address(factory);
         d.beacon = address(factory.beacon());
@@ -114,7 +114,6 @@ contract DeployPortalSystem is Script {
 
         console.log("\n--- Verifying Configuration ---");
         require(factory.sqd() == SQD, "SQD address mismatch");
-        require(factory.usdc() == USDC, "USDC address mismatch");
         require(factory.isAllowedPaymentToken(USDC), "USDC not added as payment token");
         require(portalRegistry.factory() == d.factory, "Factory not set in registry");
         require(factory.workerPoolAddress() == workerRewardPool, "Worker pool address not set");
@@ -185,7 +184,6 @@ contract DeployWithExistingController is Script {
             address(feeRouter),
             networkController,
             SQD,
-            USDC,
             MAX_STAKE_PER_WALLET
         );
         console.log("PortalPoolFactory deployed at:", address(factory));

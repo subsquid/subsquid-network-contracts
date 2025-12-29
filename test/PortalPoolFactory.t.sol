@@ -16,7 +16,6 @@ contract PortalPoolFactoryTest is BaseTest {
         assertEq(factory.feeRouter(), address(feeRouter));
         assertEq(factory.networkController(), address(networkController));
         assertEq(factory.sqd(), address(sqd));
-        assertEq(factory.usdc(), address(usdc));
         assertEq(factory.defaultMaxStakePerWallet(), DEFAULT_MAX_STAKE_PER_WALLET);
     }
 
@@ -28,7 +27,6 @@ contract PortalPoolFactoryTest is BaseTest {
             address(feeRouter),
             address(networkController),
             address(sqd),
-            address(usdc),
             DEFAULT_MAX_STAKE_PER_WALLET
         );
     }
@@ -49,7 +47,8 @@ contract PortalPoolFactoryTest is BaseTest {
             peerId: "test-peer-id",
             tokenSuffix: "TestPortal",
             distributionRatePerSecond: 1 ether,
-            metadata: ""
+            metadata: "",
+            rewardToken: address(usdc)
         });
 
         vm.expectEmit(false, true, false, false);
@@ -65,7 +64,8 @@ contract PortalPoolFactoryTest is BaseTest {
             peerId: "test-peer-id",
             tokenSuffix: "TestPortal",
             distributionRatePerSecond: 1 ether,
-            metadata: ""
+            metadata: "",
+            rewardToken: address(usdc)
         });
 
         vm.expectRevert(PortalErrors.InvalidAddress.selector);
@@ -79,7 +79,8 @@ contract PortalPoolFactoryTest is BaseTest {
             peerId: "test-peer-id",
             tokenSuffix: "TestPortal",
             distributionRatePerSecond: 1 ether,
-            metadata: ""
+            metadata: "",
+            rewardToken: address(usdc)
         });
 
         vm.expectRevert(PortalErrors.BelowMinimum.selector);
@@ -93,7 +94,8 @@ contract PortalPoolFactoryTest is BaseTest {
             peerId: "",
             tokenSuffix: "TestPortal",
             distributionRatePerSecond: 1 ether,
-            metadata: ""
+            metadata: "",
+            rewardToken: address(usdc)
         });
 
         vm.expectRevert(PortalErrors.EmptyPeerId.selector);
@@ -193,7 +195,8 @@ contract PortalPoolFactoryTest is BaseTest {
             peerId: "test-peer-id",
             tokenSuffix: "TestPortal",
             distributionRatePerSecond: 1 ether,
-            metadata: ""
+            metadata: "",
+            rewardToken: address(usdc)
         });
 
         address portal = factory.createPortalPool(params);
@@ -210,7 +213,8 @@ contract PortalPoolFactoryTest is BaseTest {
             peerId: "test-peer-id",
             tokenSuffix: "TestPortal",
             distributionRatePerSecond: 1 ether,
-            metadata: ""
+            metadata: "",
+            rewardToken: address(usdc)
         });
 
         vm.expectRevert();
@@ -292,21 +296,6 @@ contract PortalPoolFactoryTest is BaseTest {
         assertEq(factory.defaultMaxStakePerWallet(), newMaxStake);
     }
 
-    function test_SetUsdc() public {
-        address newUsdc = address(new MockERC20("New USDC", "USDC2", 6));
-
-        vm.expectEmit(true, true, false, false);
-        emit IPortalFactory.UsdcUpdated(address(usdc), newUsdc);
-
-        factory.setUsdc(newUsdc);
-
-        assertEq(factory.usdc(), newUsdc);
-    }
-
-    function test_SetUsdc_RevertOnZeroAddress() public {
-        vm.expectRevert(PortalErrors.InvalidAddress.selector);
-        factory.setUsdc(address(0));
-    }
 
     function test_Pause_Success() public {
         factory.pause();
@@ -426,9 +415,8 @@ contract PortalPoolFactoryTest is BaseTest {
         factory.setCollectionDeadline(14 days);
     }
 
-    function test_CreatePortal_RevertOnNoPaymentTokens() public {
-        factory.removePaymentToken(address(usdc));
-        factory.removePaymentToken(address(dai));
+    function test_CreatePortal_RevertOnDisallowedRewardToken() public {
+        MockERC20 unknownToken = new MockERC20("Unknown", "UNK", 18);
 
         IPortalFactory.CreatePortalPoolParams memory params = IPortalFactory.CreatePortalPoolParams({
             operator: operator,
@@ -436,10 +424,26 @@ contract PortalPoolFactoryTest is BaseTest {
             peerId: "test-peer-id",
             tokenSuffix: "TestPortal",
             distributionRatePerSecond: 1 ether,
-            metadata: ""
+            metadata: "",
+            rewardToken: address(unknownToken)
         });
 
-        vm.expectRevert(PortalErrors.NoPaymentTokens.selector);
+        vm.expectRevert(PortalErrors.TokenNotAllowed.selector);
+        factory.createPortalPool(params);
+    }
+
+    function test_CreatePortal_RevertOnZeroRewardToken() public {
+        IPortalFactory.CreatePortalPoolParams memory params = IPortalFactory.CreatePortalPoolParams({
+            operator: operator,
+            capacity: MIN_STAKE_THRESHOLD,
+            peerId: "test-peer-id",
+            tokenSuffix: "TestPortal",
+            distributionRatePerSecond: 1 ether,
+            metadata: "",
+            rewardToken: address(0)
+        });
+
+        vm.expectRevert(PortalErrors.InvalidAddress.selector);
         factory.createPortalPool(params);
     }
 
@@ -456,9 +460,4 @@ contract PortalPoolFactoryTest is BaseTest {
         factory.setDefaultMaxStakePerWallet(2_000_000 ether);
     }
 
-    function test_SetUsdc_RevertOnNonAdmin() public {
-        vm.prank(user1);
-        vm.expectRevert();
-        factory.setUsdc(address(0x123));
-    }
 }
