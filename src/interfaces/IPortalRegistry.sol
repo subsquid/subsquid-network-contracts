@@ -6,10 +6,6 @@ pragma solidity 0.8.28;
  * @notice core registry for all portals - supports both direct portals (BYO stake) and pool-based portals (crowdfunded)
  */
 interface IPortalRegistry {
-    enum ClusterType {
-        POOL,
-        DIRECT
-    }
 
     struct Portal {
         bytes peerId;
@@ -37,24 +33,21 @@ interface IPortalRegistry {
     event PortalRemoved(bytes32 indexed clusterId, bytes peerId);
     event PortalMetadataUpdated(bytes32 indexed clusterId, uint256 portalIndex, string metadata);
 
-    event Staked(bytes32 indexed clusterId, address indexed provider, uint256 amount);
-    event Unstaked(bytes32 indexed clusterId, address indexed provider, uint256 amount);
-    event Withdrawn(address indexed provider, uint256 amount);
+    event Staked(bytes32 indexed clusterId, uint256 amount);
+    event Unstaked(bytes32 indexed clusterId, uint256 amount);
+
+   // no withdraw as we rely on unstaking - above activation unstaking is unlimited with no restrictions
 
     event MinStakeUpdated(uint256 oldValue, uint256 newValue);
     event ManaUpdated(uint256 oldValue, uint256 newValue);
     event FactoryUpdated(address indexed oldFactory, address indexed newFactory);
 
-    function registerPoolCluster(
+    function registerCluster(
         address clusterAddress,
         address operator,
         string calldata metadata
     ) external returns (bytes32 clusterId);
 
-    function registerDirectCluster(
-        string calldata metadata,
-        uint256 initialStake
-    ) external returns (bytes32 clusterId);
 
     function addPortal(
         bytes32 clusterId,
@@ -91,20 +84,10 @@ interface IPortalRegistry {
     function isCluster(address clusterAddress) external view returns (bool);
 
     function stakePoolFunds(uint256 amount) external;
-
-    function unstakeFromPool(address provider, uint256 amount) external;
-
-    function activateCluster() external;
-
-    function withdrawFailedPortal(address provider, uint256 amount) external;
-
-    function immediateUnlock(address provider, uint256 amount) external;
+    // unification     function unstakeFromDirectCluster(uint256 amount) external; based on msg.sender
+    function unstake(uint256 amount) external; 
 
     function stakeToDirectCluster(uint256 amount) external;
-
-    function unstakeFromDirectCluster(uint256 amount) external;
-
-    function closeDirectCluster() external;
 
     function pause() external;
 
