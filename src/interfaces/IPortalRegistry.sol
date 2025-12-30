@@ -6,77 +6,113 @@ pragma solidity 0.8.28;
  * @notice core registry for all portals - supports both direct portals (BYO stake) and pool-based portals (crowdfunded)
  */
 interface IPortalRegistry {
-    enum PortalType {
-        POOL,
-        DIRECT
-    }
 
     struct Portal {
         bytes peerId;
-        address portalAddress;
+        string metadata;
+        uint64 addedAt;
+    }
+
+    struct Cluster {
+        address clusterAddress;
         address operator;
         uint256 totalStaked;
         uint256 registeredAt;
         bool active;
-        PortalType portalType;
+        ClusterType clusterType;
         string metadata;
+        Portal[] portals;
     }
 
-    // Events
-    event PortalRegistered(address indexed portal, bytes peerId, address operator, PortalType portalType);
-    event PortalActivated(address indexed portal);
-    event PortalDeactivated(address indexed portal);
-    event Staked(address indexed portal, address indexed provider, uint256 amount);
-    event Unstaked(address indexed portal, address indexed provider, uint256 amount);
-    event Withdrawn(address indexed provider, uint256 amount);
+    event ClusterCreated(bytes32 indexed clusterId, address indexed clusterAddress, address indexed operator, ClusterType clusterType);
+    event ClusterActivated(bytes32 indexed clusterId);
+    event ClusterDeactivated(bytes32 indexed clusterId);
+    event ClusterMetadataUpdated(bytes32 indexed clusterId, string metadata);
+
+    event PortalAdded(bytes32 indexed clusterId, bytes peerId, string metadata);
+    event PortalRemoved(bytes32 indexed clusterId, bytes peerId);
+    event PortalMetadataUpdated(bytes32 indexed clusterId, uint256 portalIndex, string metadata);
+
+    event Staked(bytes32 indexed clusterId, uint256 amount);
+    event Unstaked(bytes32 indexed clusterId, uint256 amount);
+
+   // no withdraw as we rely on unstaking - above activation unstaking is unlimited with no restrictions
+
     event MinStakeUpdated(uint256 oldValue, uint256 newValue);
     event ManaUpdated(uint256 oldValue, uint256 newValue);
-    event PortalStatusChanged(address indexed portal, bool status);
-    event MetadataChanged(address indexed portal, string metadata);
     event FactoryUpdated(address indexed oldFactory, address indexed newFactory);
 
-    function registerDirectPortal(bytes calldata peerId, string calldata metadata)
-        external
-        returns (address portalId);
-
-    function stakeToDirectPortal(uint256 amount) external;
-
-    function unstakeFromDirectPortal(uint256 amount) external;
-
-    function getDirectPortalId(address operator) external view returns (address);
-
-    function registerPortalPool(
-        bytes calldata peerId,
-        address portalAddress,
+    function registerCluster(
+        address clusterAddress,
         address operator,
+        string calldata metadata
+    ) external returns (bytes32 clusterId);
+
+
+    function addPortal(
+        bytes32 clusterId,
+        bytes calldata peerId,
         string calldata metadata
     ) external;
 
-    function stake(address portalAddress, address provider, uint256 amount) external;
+    function removePortal(bytes32 clusterId, uint256 portalIndex) external;
 
-    function withdrawFailedPortal(address provider, uint256 amount) external;
+    function setPortalMetadata(
+        bytes32 clusterId,
+        uint256 portalIndex,
+        string calldata metadata
+    ) external;
 
-    function immediateUnlock(address provider, uint256 amount) external;
+    function setClusterMetadata(bytes32 clusterId, string calldata metadata) external;
 
-    function activatePortalPool() external;
+    function getCluster(bytes32 clusterId) external view returns (Cluster memory);
+
+    function getClusterByAddress(address clusterAddress) external view returns (Cluster memory);
+
+    function getClusterIdByAddress(address clusterAddress) external view returns (bytes32);
+
+    function getClusterPortals(bytes32 clusterId) external view returns (Portal[] memory);
+
+    function getPortalCount(bytes32 clusterId) external view returns (uint256);
+
+    function getClusterIdByPeerId(bytes calldata peerId) external view returns (bytes32);
+
+    function getOperatorClusters(address operator) external view returns (bytes32[] memory);
+
+    function getComputationUnits(bytes32 clusterId) external view returns (uint256);
+
+    function isCluster(address clusterAddress) external view returns (bool);
 
     function stakePoolFunds(uint256 amount) external;
+    // unification     function unstakeFromDirectCluster(uint256 amount) external; based on msg.sender
+    function unstake(uint256 amount) external; 
 
-    function unstakeFromPool(address provider, uint256 amount) external;
-
-    function getComputationUnits(address portalAddress) external view returns (uint256);
-    function getPortal(address portalAddress) external view returns (Portal memory);
-    function isDirectPortal(address portalAddress) external view returns (bool);
-    function isPortal(address portalAddress) external view returns (bool);
-
-    function setMetadata(address portalAddress, string calldata metadata) external;
-    function getMetadata(address portalAddress) external view returns (string memory);
+    function stakeToDirectCluster(uint256 amount) external;
 
     function pause() external;
+
     function unpause() external;
+
     function setMinStake(uint256 minStake) external;
+
     function setMana(uint256 mana) external;
-    function setPortalStatus(address portal, bool status) external;
+
     function setFactory(address factory) external;
+
     function factory() external view returns (address);
+
+    function minStake() external view returns (uint256);
+
+    function mana() external view returns (uint256);
+
+    function ownerClusters(address operator) external view returns (bytes32[] memory);
+
+    function addressToClusterId(address clusterAddress) external view returns (bytes32);
+
+    function peerIdToCluster(bytes32 peerIdHash) external view returns (bytes32);
+
+    function providerAllocations(bytes32 clusterId, address provider) external view returns (uint256);
+
+    function operatorToDirectCluster(address operator) external view returns (bytes32);
 }
+
