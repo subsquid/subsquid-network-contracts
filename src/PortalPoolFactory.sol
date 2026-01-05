@@ -37,6 +37,7 @@ contract PortalPoolFactory is IPortalFactory, AccessControl, Pausable {
     uint256 public collectionDeadlineSeconds;
     address public workerPoolAddress;
     uint256 public maxDistributionRatePerSecond;
+    uint256 public minDistributionRatePerSecond;
 
     constructor(
         address _implementation,
@@ -66,6 +67,7 @@ contract PortalPoolFactory is IPortalFactory, AccessControl, Pausable {
         exitUnlockRatePerSecond = Constants.EXIT_UNLOCK_RATE_PER_SECOND;
         collectionDeadlineSeconds = Constants.COLLECTION_DEADLINE_SECONDS;
         maxDistributionRatePerSecond = Constants.MAX_DISTRIBUTION_RATE_PER_SECOND;
+        minDistributionRatePerSecond = Constants.MIN_DISTRIBUTION_RATE_PER_SECOND;
     }
 
     function createPortalPool(CreatePortalPoolParams calldata params) external whenNotPaused returns (address portal) {
@@ -76,8 +78,12 @@ contract PortalPoolFactory is IPortalFactory, AccessControl, Pausable {
         if (params.capacity < minCapacity) revert PortalErrors.BelowMinimum();
         if (params.peerId.length == 0) revert PortalErrors.EmptyPeerId();
         // Validate distribution rate scale (protects against misconfigured decimals)
+        // Rate must be 0 (disabled) or >= minimum (for precision)
         if (params.distributionRatePerSecond > maxDistributionRatePerSecond) {
             revert PortalErrors.RateExceedsMaximum();
+        }
+        if (params.distributionRatePerSecond != 0 && params.distributionRatePerSecond < minDistributionRatePerSecond) {
+            revert PortalErrors.RateBelowMinimum();
         }
 
         IPortalPool.InitParams memory initParams = IPortalPool.InitParams({
@@ -206,6 +212,12 @@ contract PortalPoolFactory is IPortalFactory, AccessControl, Pausable {
         uint256 oldValue = maxDistributionRatePerSecond;
         maxDistributionRatePerSecond = ratePerSecond;
         emit MaxDistributionRateUpdated(oldValue, ratePerSecond);
+    }
+
+    function setMinDistributionRate(uint256 ratePerSecond) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        uint256 oldValue = minDistributionRatePerSecond;
+        minDistributionRatePerSecond = ratePerSecond;
+        emit MinDistributionRateUpdated(oldValue, ratePerSecond);
     }
 
     function addPaymentToken(address token) external onlyRole(DEFAULT_ADMIN_ROLE) {

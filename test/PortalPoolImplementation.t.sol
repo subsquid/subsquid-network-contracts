@@ -39,7 +39,7 @@ contract PortalPoolImplementationTest is BaseTest {
             capacity: MIN_STAKE_THRESHOLD,
             peerId: "zero-op",
             tokenSuffix: "ZeroOp",
-            distributionRatePerSecond: 1 ether,
+            distributionRatePerSecond: 1 ether * 1000,
             metadata: "",
             rewardToken: address(usdc)
         });
@@ -54,7 +54,7 @@ contract PortalPoolImplementationTest is BaseTest {
             capacity: MIN_STAKE_THRESHOLD - 1,
             peerId: "low-cap",
             tokenSuffix: "LowCap",
-            distributionRatePerSecond: 1 ether,
+            distributionRatePerSecond: 1 ether * 1000,
             metadata: "",
             rewardToken: address(usdc)
         });
@@ -108,7 +108,7 @@ contract PortalPoolImplementationTest is BaseTest {
             capacity: DEFAULT_MAX_STAKE_PER_WALLET * 2,
             peerId: "wallet-limit-test",
             tokenSuffix: "WalletLimitTest",
-            distributionRatePerSecond: 1 ether,
+            distributionRatePerSecond: 1 ether * 1000,
             metadata: "",
             rewardToken: address(usdc)
         });
@@ -379,7 +379,7 @@ contract PortalPoolImplementationTest is BaseTest {
             capacity: MIN_STAKE_THRESHOLD,
             peerId: "reward-portal",
             tokenSuffix: "RewardPortal",
-            distributionRatePerSecond: 1e6,
+            distributionRatePerSecond: 1e6 * 1000,
             metadata: "",
             rewardToken: address(usdc)
         });
@@ -432,7 +432,7 @@ contract PortalPoolImplementationTest is BaseTest {
             capacity: DEFAULT_MAX_STAKE_PER_WALLET * 2,
             peerId: "transfer-limit",
             tokenSuffix: "TransferLimit",
-            distributionRatePerSecond: 1 ether,
+            distributionRatePerSecond: 1 ether * 1000,
             metadata: "",
             rewardToken: address(usdc)
         });
@@ -926,7 +926,7 @@ contract PortalPoolImplementationTest is BaseTest {
             capacity: MIN_STAKE_THRESHOLD * 2,
             peerId: "active-deposit-portal",
             tokenSuffix: "ActiveDepositPortal",
-            distributionRatePerSecond: 1 ether,
+            distributionRatePerSecond: 1 ether * 1000,
             metadata: "",
             rewardToken: address(usdc)
         });
@@ -968,7 +968,7 @@ contract PortalPoolImplementationTest is BaseTest {
             capacity: DEFAULT_MAX_STAKE_PER_WALLET * 2,
             peerId: "receiver-limit",
             tokenSuffix: "ReceiverLimit",
-            distributionRatePerSecond: 1 ether,
+            distributionRatePerSecond: 1 ether * 1000,
             metadata: "",
             rewardToken: address(usdc)
         });
@@ -1303,8 +1303,9 @@ contract PortalPoolImplementationTest is BaseTest {
         assertEq(pool.getProviderStake(user1), stakeBefore - reduction);
     }
 
-    function test_ClaimRewards_ExactMath_FullCapacityStake() public {
-        uint256 distributionRate = 1e6;
+    function test_ClaimRewards_ExactMath_FullCapacityStake() public {   
+        uint256 actualRate = 1e6;
+        uint256 scaledRate = actualRate * 1000;
         uint256 timeElapsed = 100;
 
         IPortalFactory.CreatePortalPoolParams memory params = IPortalFactory.CreatePortalPoolParams({
@@ -1312,7 +1313,7 @@ contract PortalPoolImplementationTest is BaseTest {
             capacity: MIN_STAKE_THRESHOLD,
             peerId: "exact-math-portal",
             tokenSuffix: "ExactMathPortal",
-            distributionRatePerSecond: distributionRate,
+            distributionRatePerSecond: scaledRate,
             metadata: "",
             rewardToken: address(usdc)
         });
@@ -1333,7 +1334,7 @@ contract PortalPoolImplementationTest is BaseTest {
 
         vm.warp(block.timestamp + timeElapsed);
 
-        uint256 expectedReward = timeElapsed * distributionRate;
+        uint256 expectedReward = timeElapsed * actualRate;
 
         vm.prank(user1);
         uint256 claimed = pool.claimRewards();
@@ -1342,7 +1343,9 @@ contract PortalPoolImplementationTest is BaseTest {
     }
 
     function test_ClaimRewards_ExactMath_PartialCapacityStake() public {
-        uint256 distributionRate = 2e6;
+        // Rate is scaled by RATE_PRECISION (1000). Actual rate = 2e6 tokens/sec
+        uint256 actualRate = 2e6;
+        uint256 scaledRate = actualRate * 1000;
         uint256 capacity = MIN_STAKE_THRESHOLD;
         uint256 stake = capacity / 2;
         uint256 timeElapsed = 200;
@@ -1352,7 +1355,7 @@ contract PortalPoolImplementationTest is BaseTest {
             capacity: capacity,
             peerId: "partial-stake-portal",
             tokenSuffix: "PartialStakePortal",
-            distributionRatePerSecond: distributionRate,
+            distributionRatePerSecond: scaledRate,
             metadata: "",
             rewardToken: address(usdc)
         });
@@ -1380,23 +1383,25 @@ contract PortalPoolImplementationTest is BaseTest {
 
         vm.warp(block.timestamp + timeElapsed);
 
-        uint256 expectedUser1Reward = (timeElapsed * distributionRate * stake) / capacity;
+        uint256 expectedUser1Reward = (timeElapsed * actualRate * stake) / capacity;
         vm.prank(user1);
         uint256 claimedUser1 = pool.claimRewards();
 
         assertEq(claimedUser1, expectedUser1Reward, "Reward should match exact formula for partial stake");
 
-        uint256 expectedUser2Reward = (timeElapsed * distributionRate * stake) / capacity;
+        uint256 expectedUser2Reward = (timeElapsed * actualRate * stake) / capacity;
         vm.prank(user2);
         uint256 claimedUser2 = pool.claimRewards();
 
         assertEq(claimedUser2, expectedUser2Reward, "User2 reward should match exact formula");
 
-        assertEq(claimedUser1 + claimedUser2, timeElapsed * distributionRate, "Total rewards should equal time * rate");
+        assertEq(claimedUser1 + claimedUser2, timeElapsed * actualRate, "Total rewards should equal time * rate");
     }
 
     function test_ClaimRewards_ExactMath_MultipleTimePeriods() public {
-        uint256 distributionRate = 1e6;
+        // Rate is scaled by RATE_PRECISION (1000). Actual rate = 1e6 tokens/sec
+        uint256 actualRate = 1e6;
+        uint256 scaledRate = actualRate * 1000;
         uint256 capacity = MIN_STAKE_THRESHOLD;
 
         IPortalFactory.CreatePortalPoolParams memory params = IPortalFactory.CreatePortalPoolParams({
@@ -1404,7 +1409,7 @@ contract PortalPoolImplementationTest is BaseTest {
             capacity: capacity,
             peerId: "multi-period-portal",
             tokenSuffix: "MultiPeriodPortal",
-            distributionRatePerSecond: distributionRate,
+            distributionRatePerSecond: scaledRate,
             metadata: "",
             rewardToken: address(usdc)
         });
@@ -1430,21 +1435,23 @@ contract PortalPoolImplementationTest is BaseTest {
 
         vm.prank(user1);
         uint256 claimed1 = pool.claimRewards();
-        assertEq(claimed1, period1 * distributionRate, "First period reward incorrect");
+        assertEq(claimed1, period1 * actualRate, "First period reward incorrect");
 
         uint256 period2 = 100;
         vm.warp(block.timestamp + period2);
 
         vm.prank(user1);
         uint256 claimed2 = pool.claimRewards();
-        assertEq(claimed2, period2 * distributionRate, "Second period reward incorrect");
+        assertEq(claimed2, period2 * actualRate, "Second period reward incorrect");
 
         uint256 totalClaimed = claimed1 + claimed2;
-        assertEq(totalClaimed, (period1 + period2) * distributionRate, "Total claimed incorrect");
+        assertEq(totalClaimed, (period1 + period2) * actualRate, "Total claimed incorrect");
     }
 
     function test_ClaimRewards_ExactMath_RunwayLimit() public {
-        uint256 distributionRate = 1e6;
+        // Rate is scaled by RATE_PRECISION (1000). Actual rate = 1e6 tokens/sec
+        uint256 actualRate = 1e6;
+        uint256 scaledRate = actualRate * 1000;
         uint256 rewardAmount = 100 * 1e6;
 
         IPortalFactory.CreatePortalPoolParams memory params = IPortalFactory.CreatePortalPoolParams({
@@ -1452,7 +1459,7 @@ contract PortalPoolImplementationTest is BaseTest {
             capacity: MIN_STAKE_THRESHOLD,
             peerId: "runway-limit-portal",
             tokenSuffix: "RunwayLimitPortal",
-            distributionRatePerSecond: distributionRate,
+            distributionRatePerSecond: scaledRate,
             metadata: "",
             rewardToken: address(usdc)
         });
@@ -1480,12 +1487,14 @@ contract PortalPoolImplementationTest is BaseTest {
         vm.prank(user1);
         uint256 claimed = pool.claimRewards();
 
-        uint256 expectedReward = 49 * distributionRate;
+        uint256 expectedReward = 49 * actualRate;
         assertEq(claimed, expectedReward, "User gets their share of runway worth of rewards");
     }
 
     function test_ClaimRewards_ExactMath_AfterRunwayExhausted() public {
-        uint256 distributionRate = 1e6;
+        // Rate is scaled by RATE_PRECISION (1000). Actual rate = 1e6 tokens/sec
+        uint256 actualRate = 1e6;
+        uint256 scaledRate = actualRate * 1000;
         uint256 rewardAmount = 100 * 1e6;
 
         IPortalFactory.CreatePortalPoolParams memory params = IPortalFactory.CreatePortalPoolParams({
@@ -1493,7 +1502,7 @@ contract PortalPoolImplementationTest is BaseTest {
             capacity: MIN_STAKE_THRESHOLD,
             peerId: "exhausted-portal",
             tokenSuffix: "ExhaustedPortal",
-            distributionRatePerSecond: distributionRate,
+            distributionRatePerSecond: scaledRate,
             metadata: "",
             rewardToken: address(usdc)
         });
@@ -1525,7 +1534,9 @@ contract PortalPoolImplementationTest is BaseTest {
     }
 
     function test_GetClaimableRewards_ExactMath_ViewFunction() public {
-        uint256 distributionRate = 5e6;
+        // Rate is scaled by RATE_PRECISION (1000). Actual rate = 5e6 tokens/sec
+        uint256 actualRate = 5e6;
+        uint256 scaledRate = actualRate * 1000;
         uint256 timeElapsed = 60;
 
         IPortalFactory.CreatePortalPoolParams memory params = IPortalFactory.CreatePortalPoolParams({
@@ -1533,7 +1544,7 @@ contract PortalPoolImplementationTest is BaseTest {
             capacity: MIN_STAKE_THRESHOLD,
             peerId: "view-math-portal",
             tokenSuffix: "ViewMathPortal",
-            distributionRatePerSecond: distributionRate,
+            distributionRatePerSecond: scaledRate,
             metadata: "",
             rewardToken: address(usdc)
         });
@@ -1556,7 +1567,7 @@ contract PortalPoolImplementationTest is BaseTest {
 
         vm.warp(block.timestamp + timeElapsed);
 
-        uint256 expectedReward = timeElapsed * distributionRate;
+        uint256 expectedReward = timeElapsed * actualRate;
 
         uint256 claimable = pool.getClaimableRewards(user1);
         assertEq(claimable, expectedReward, "getClaimableRewards should match exact calculation");
@@ -1565,5 +1576,123 @@ contract PortalPoolImplementationTest is BaseTest {
         vm.prank(user1);
         uint256 claimed = pool.claimRewards();
         assertEq(claimed, expectedReward, "claimRewards should match getClaimableRewards");
+    }
+
+    // =============================================================
+    //                    CAPACITY WITH PENDING EXITS
+    // =============================================================
+
+    /// @notice Test that new deposits are allowed when there are pending exits
+    /// @dev This tests the fix for the activeStake vs totalStaked capacity check
+    function test_Deposit_AllowedWhenPendingExitsExist() public {
+        // Create a larger pool to have room for this test
+        address largePortal = _createPortal(operator, MIN_STAKE_THRESHOLD * 2, "LargePortal");
+        PortalPoolImplementation largePool = PortalPoolImplementation(largePortal);
+
+        // User1 fills the pool to capacity
+        vm.startPrank(user1);
+        sqd.approve(largePortal, MIN_STAKE_THRESHOLD * 2);
+        largePool.deposit(MIN_STAKE_THRESHOLD * 2);
+        vm.stopPrank();
+
+        // Pool is now ACTIVE and at full capacity
+        assertEq(uint8(largePool.getPortalInfo().state), uint8(IPortalPool.PortalState.ACTIVE));
+        assertEq(largePool.getPortalInfo().totalStaked, MIN_STAKE_THRESHOLD * 2);
+
+        // Top up rewards so pool is active
+        vm.startPrank(operator);
+        usdc.approve(largePortal, 1_000_000);
+        largePool.topUpRewards(1_000_000);
+        vm.stopPrank();
+
+        // User1 requests exit for half their stake
+        uint256 exitAmount = MIN_STAKE_THRESHOLD;
+        vm.prank(user1);
+        largePool.requestExit(exitAmount);
+
+        // Verify state: totalStaked unchanged, but activeStake reduced
+        assertEq(largePool.getPortalInfo().totalStaked, MIN_STAKE_THRESHOLD * 2, "totalStaked should be unchanged");
+        assertEq(largePool.getActiveStake(), MIN_STAKE_THRESHOLD, "activeStake should be reduced by exit amount");
+
+        // User2 should be able to deposit up to the freed capacity
+        vm.startPrank(user2);
+        sqd.approve(largePortal, exitAmount);
+
+        // This should succeed because activeStake (MIN_STAKE_THRESHOLD) + deposit (MIN_STAKE_THRESHOLD) <= capacity (MIN_STAKE_THRESHOLD * 2)
+        largePool.deposit(exitAmount);
+        vm.stopPrank();
+
+        // Verify final state
+        assertEq(largePool.getProviderStake(user2), exitAmount, "user2 should have deposited");
+        // totalStaked is now capacity + exitAmount (temporarily over capacity, but activeStake is at capacity)
+        assertEq(largePool.getPortalInfo().totalStaked, MIN_STAKE_THRESHOLD * 3, "totalStaked includes pending exits + new deposit");
+        assertEq(largePool.getActiveStake(), MIN_STAKE_THRESHOLD * 2, "activeStake should equal capacity");
+    }
+
+    /// @notice Test that deposits are still rejected when activeStake would exceed capacity
+    function test_Deposit_RejectedWhenActiveStakeExceedsCapacity() public {
+        // Create a larger pool
+        address largePortal = _createPortal(operator, MIN_STAKE_THRESHOLD * 2, "LargePortal2");
+        PortalPoolImplementation largePool = PortalPoolImplementation(largePortal);
+
+        // User1 fills the pool to capacity
+        vm.startPrank(user1);
+        sqd.approve(largePortal, MIN_STAKE_THRESHOLD * 2);
+        largePool.deposit(MIN_STAKE_THRESHOLD * 2);
+        vm.stopPrank();
+
+        // User1 requests exit for a small amount
+        uint256 exitAmount = SMALL_STAKE;
+        vm.prank(user1);
+        largePool.requestExit(exitAmount);
+
+        // User2 tries to deposit more than the freed capacity - should fail
+        uint256 depositAmount = exitAmount + 1;
+        vm.startPrank(user2);
+        sqd.approve(largePortal, depositAmount);
+
+        vm.expectRevert(PortalErrors.CapacityExceeded.selector);
+        largePool.deposit(depositAmount);
+        vm.stopPrank();
+    }
+
+    /// @notice Test deposit at exact capacity boundary with pending exits
+    function test_Deposit_ExactCapacityWithPendingExits() public {
+        // Create a larger pool
+        address largePortal = _createPortal(operator, MIN_STAKE_THRESHOLD * 2, "LargePortal3");
+        PortalPoolImplementation largePool = PortalPoolImplementation(largePortal);
+
+        // User1 fills the pool to capacity
+        vm.startPrank(user1);
+        sqd.approve(largePortal, MIN_STAKE_THRESHOLD * 2);
+        largePool.deposit(MIN_STAKE_THRESHOLD * 2);
+        vm.stopPrank();
+
+        // Top up rewards so pool is active
+        vm.startPrank(operator);
+        usdc.approve(largePortal, 1_000_000);
+        largePool.topUpRewards(1_000_000);
+        vm.stopPrank();
+
+        // User1 requests exit for exactly SMALL_STAKE
+        vm.prank(user1);
+        largePool.requestExit(SMALL_STAKE);
+
+        // User2 deposits exactly SMALL_STAKE - should succeed (at exact capacity)
+        vm.startPrank(user2);
+        sqd.approve(largePortal, SMALL_STAKE);
+        largePool.deposit(SMALL_STAKE);
+        vm.stopPrank();
+
+        // Verify activeStake equals capacity
+        assertEq(largePool.getActiveStake(), MIN_STAKE_THRESHOLD * 2, "activeStake should equal capacity");
+
+        // User3 tries to deposit 1 wei more - should fail
+        vm.startPrank(user3);
+        sqd.approve(largePortal, 1);
+
+        vm.expectRevert(PortalErrors.CapacityExceeded.selector);
+        largePool.deposit(1);
+        vm.stopPrank();
     }
 }

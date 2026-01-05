@@ -79,7 +79,7 @@ contract PortalPoolRunwayModelTest is Test {
 
     uint256 constant MIN_STAKE = 1_000_000;
     uint256 constant CAPACITY = 2_000_000;
-    uint256 constant RATE_PER_SEC = 100;
+    uint256 constant RATE_PER_SEC = 100_000;
     uint256 constant MANA = 1000;
     uint256 constant MAX_STAKE_PER_WALLET = 10_000_000;
 
@@ -169,12 +169,13 @@ contract PortalPoolRunwayModelTest is Test {
         vm.stopPrank();
 
         // Delegators get 100% of distribution rate
-        uint256 expectedRate = RATE_PER_SEC;
+        // RATE_PER_SEC is scaled by RATE_PRECISION (1000), so divide to get actual rate
+        uint256 actualRate = RATE_PER_SEC / 1000;
 
         vm.warp(block.timestamp + 1000);
 
         uint256 claimable = pool.getClaimableRewards(alice);
-        uint256 expectedRewards = expectedRate * 1000;
+        uint256 expectedRewards = actualRate * 1000;
 
         assertApproxEqRel(claimable, expectedRewards, 0.01e18, "Claimable should match expected");
     }
@@ -209,7 +210,8 @@ contract PortalPoolRunwayModelTest is Test {
         vm.stopPrank();
 
         uint256 drainRate = pool.getTotalDrainRate();
-        uint256 runwayDuration = topUpAmount / drainRate;
+        // drainRate is scaled by RATE_PRECISION (1000), so multiply topUpAmount to get correct duration
+        uint256 runwayDuration = (topUpAmount * 1000) / drainRate;
 
         vm.warp(block.timestamp + runwayDuration + 1000);
 
@@ -242,7 +244,7 @@ contract PortalPoolRunwayModelTest is Test {
         uint256 START_TIME = block.timestamp;
 
         uint256 drainRate = pool.getTotalDrainRate();
-        uint256 initialTopUp = drainRate * 1000;
+        uint256 initialTopUp = drainRate;
 
         vm.startPrank(operator);
         usdc.approve(address(pool), initialTopUp);
@@ -256,7 +258,7 @@ contract PortalPoolRunwayModelTest is Test {
         uint256 debtBefore = pool.getRewardDebt();
         assertTrue(debtBefore > 0, "Should have debt");
 
-        uint256 largeTopUp = debtBefore + drainRate * 2000;
+        uint256 largeTopUp = debtBefore + drainRate * 2;
         vm.startPrank(operator);
         usdc.approve(address(pool), largeTopUp);
         pool.topUpRewards(largeTopUp);
@@ -276,7 +278,7 @@ contract PortalPoolRunwayModelTest is Test {
         vm.stopPrank();
 
         uint256 drainRate = pool.getTotalDrainRate();
-        uint256 runwaySeconds = 75000 / drainRate;
+        uint256 runwaySeconds = (75000 * 1000) / drainRate;
 
         vm.warp(block.timestamp + runwaySeconds + 500);
 
@@ -460,7 +462,8 @@ contract PortalPoolRunwayModelTest is Test {
         assertTrue(runway > int256(block.timestamp), "Runway should be in future");
 
         uint256 drainRate = pool.getTotalDrainRate();
-        uint256 runwaySeconds = 1000 / drainRate;
+        // drainRate is scaled by RATE_PRECISION (1000), so multiply credit to get correct duration
+        uint256 runwaySeconds = (1000 * 1000) / drainRate;
         vm.warp(block.timestamp + runwaySeconds + 1000);
 
         int256 runwayAfter = pool.getRunway();

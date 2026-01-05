@@ -122,8 +122,10 @@ contract PortalPoolImplementation is
         uint256 newUserStake = _stakes[msg.sender] + amount;
         if (newUserStake > _factory.defaultMaxStakePerWallet()) revert PortalErrors.ExceedsWalletLimit();
 
+        uint256 newActiveStake = _getActiveStake() + amount;
+        if (newActiveStake > _portalInfo.capacity) revert PortalErrors.CapacityExceeded();
+
         uint256 newTotal = _portalInfo.totalStaked + amount;
-        if (newTotal > _portalInfo.capacity) revert PortalErrors.CapacityExceeded();
 
         _sqd.safeTransferFrom(msg.sender, address(this), amount);
 
@@ -382,6 +384,13 @@ contract PortalPoolImplementation is
     }
 
     function setDistributionRate(uint256 newRatePerSecond) external onlyOperator {
+        if (newRatePerSecond > _factory.maxDistributionRatePerSecond()) {
+            revert PortalErrors.RateExceedsMaximum();
+        }
+        if (newRatePerSecond != 0 && newRatePerSecond < _factory.minDistributionRatePerSecond()) {
+            revert PortalErrors.RateBelowMinimum();
+        }
+
         _accrueGlobal(block.timestamp);
 
         // Cannot change rate while pool has debt
@@ -409,8 +418,9 @@ contract PortalPoolImplementation is
         _portalInfo.capacity = newCapacity;
 
         // Recalculate per-stake rate
+        // Note: delegatorRatePerSec is scaled by RATE_PRECISION, divide to get actual rate
         if (newCapacity > 0) {
-            perStakeRateWad = FullMath.mulDiv(delegatorRatePerSec, ACC, newCapacity);
+            perStakeRateWad = FullMath.mulDiv(delegatorRatePerSec, ACC, newCapacity * RATE_PRECISION);
         }
 
         emit CapacityUpdated(oldCapacity, newCapacity);
@@ -572,6 +582,7 @@ contract PortalPoolImplementation is
     }
 
     function getTotalDrainRate() external view returns (uint256) {
+        // Returns the scaled drain rate (multiplied by RATE_PRECISION)
         return _totalDrainRate();
     }
 
@@ -580,13 +591,14 @@ contract PortalPoolImplementation is
         if (drainRate == 0) return type(int256).max;
 
         // if already in debt, runway is in the past
+        // drainRate is scaled by RATE_PRECISION, so multiply credit/debt by RATE_PRECISION before dividing
         if (debt > 0) {
-            // time when credit ran out: balanceTs - (debt / drainRate)
-            return int256(uint256(balanceTs)) - int256(debt / drainRate);
+            // time when credit ran out: balanceTs - (debt * RATE_PRECISION / drainRate)
+            return int256(uint256(balanceTs)) - int256(FullMath.mulDiv(debt, RATE_PRECISION, drainRate));
         }
 
-        // runway = balanceTs + credit / drainRate
-        return int256(uint256(balanceTs)) + int256(credit / drainRate);
+        // runway = balanceTs + credit * RATE_PRECISION / drainRate
+        return int256(uint256(balanceTs)) + int256(FullMath.mulDiv(credit, RATE_PRECISION, drainRate));
     }
 
     function getPeerId() external view returns (bytes memory) {
@@ -675,7 +687,8 @@ contract PortalPoolImplementation is
         }
 
         uint256 elapsed = timestamp - uint256(balanceTs);
-        uint256 drained = FullMath.mulDiv(elapsed, drainRate, 1);
+        // drainRate is scaled by RATE_PRECISION, so divide to get actual drained amount
+        uint256 drained = FullMath.mulDiv(elapsed, drainRate, RATE_PRECISION);
 
         // apply drain: first reduce credit, then increase debt
         if (drained <= credit) {
@@ -704,8 +717,10 @@ contract PortalPoolImplementation is
         if (_portalInfo.totalStaked < minStake) return 0;
         if (activeStake == 0) return 0;
         // treasuryRate + (delegatorRate * activeStake / capacity)
+        // Note: rates are scaled by RATE_PRECISION, returned value is also scaled
         uint256 capacity = _portalInfo.capacity;
         if (capacity == 0) return 0;
+        // Return scaled drain rate (still multiplied by RATE_PRECISION)
         uint256 delegatorDrain = FullMath.mulDiv(delegatorRatePerSec, activeStake, capacity);
         return treasuryRatePerSec + delegatorDrain;
     }
@@ -716,9 +731,10 @@ contract PortalPoolImplementation is
         delegatorRatePerSec = newRatePerSec;
         treasuryRatePerSec = 0;
         // Update per-stake rate
+        // Note: delegatorRatePerSec is scaled by RATE_PRECISION, divide to get actual rate
         uint256 capacity = _portalInfo.capacity;
         if (capacity > 0) {
-            perStakeRateWad = FullMath.mulDiv(delegatorRatePerSec, ACC, capacity);
+            perStakeRateWad = FullMath.mulDiv(delegatorRatePerSec, ACC, capacity * RATE_PRECISION);
         }
     }
 

@@ -76,7 +76,8 @@ contract PortalPoolE2ETest is Test {
     uint256 constant MANA = 1000;
     uint256 constant MAX_STAKE_PER_WALLET = 100_000 * 1e18;
 
-    uint256 constant RATE_PER_SEC = 1e5;
+    uint256 constant RATE_PER_SEC = 1e5 * 1000;
+    uint256 constant ACTUAL_RATE = 1e5; // actual micro-USDC per second
     uint256 constant POOL_CAPACITY = 10_000 * 1e18;
 
     uint256 constant FIRST_TOPUP = 50_000 * USDC_UNIT;
@@ -209,8 +210,8 @@ contract PortalPoolE2ETest is Test {
 
         console.log("Pool deployed at:", poolAddr);
         console.log("Capacity:", POOL_CAPACITY / 1e18, "SQD");
-        console.log("Rate per second:", RATE_PER_SEC, "micro-USDC");
-        console.log("Expected daily drain:", RATE_PER_SEC * 86400 / USDC_UNIT, "USDC");
+        console.log("Rate per second:", ACTUAL_RATE, "micro-USDC");
+        console.log("Expected daily drain:", ACTUAL_RATE * 86400 / USDC_UNIT, "USDC");
 
         uint256 actualTotalStaked = 0;
         for (uint256 i = 0; i < 15; i++) {
@@ -254,7 +255,7 @@ contract PortalPoolE2ETest is Test {
         assertEq(uint256(poolBalance), expectedToProviders, "Balance should equal provider portion");
 
         int256 runway = pool.getRunway();
-        uint256 expectedRunwayDays = expectedToProviders / (RATE_PER_SEC * 86400);
+        uint256 expectedRunwayDays = expectedToProviders / (ACTUAL_RATE * 86400);
         console.log("Runway timestamp:", runway);
         console.log("Expected runway:", expectedRunwayDays, "days");
 
@@ -280,7 +281,7 @@ contract PortalPoolE2ETest is Test {
         uint256 totalMidPeriodClaims = midPeriodClaims[0] + midPeriodClaims[1] + midPeriodClaims[2];
         console.log("Total mid-period claims:", totalMidPeriodClaims / USDC_UNIT, "USDC");
 
-        uint256 totalDelegatorRewards2Days = (RATE_PER_SEC / 2) * 2 days;
+        uint256 totalDelegatorRewards2Days = (ACTUAL_RATE / 2) * 2 days;
         console.log("Expected delegator rewards (2 days):", totalDelegatorRewards2Days / USDC_UNIT, "USDC");
 
         console.log("\n=== PHASE 4: END OF PERIOD CLAIMS (Day 4) ===\n");
@@ -493,7 +494,8 @@ contract PortalPoolE2ETest is Test {
 
         // Setup: $200/day = 200 * 1e6 / 86400 = ~2314 wei/sec
         uint256 DAILY_RATE = 200 * USDC_UNIT;
-        uint256 RATE = DAILY_RATE / 1 days;
+        uint256 ACTUAL_RATE_LOCAL = DAILY_RATE / 1 days;
+        uint256 RATE = ACTUAL_RATE_LOCAL * 1000; // Scale by RATE_PRECISION
 
         // Create pool with 2000 SQD capacity (2 stakers, 1000 each)
         uint256 POOL_CAP = 2000 * 1e18;
@@ -613,9 +615,10 @@ contract PortalPoolE2ETest is Test {
     function test_E2E_DebtScenario_PhantomRewards() public {
         // Rate: $1000/month = 1,000,000,000 / (30 * 86400) ≈ 386 USDC/sec
         uint256 MONTHLY_RATE_USD = 1000;
-        uint256 RATE = (MONTHLY_RATE_USD * USDC_UNIT) / 30 days;
-        console.log("Rate per second:", RATE, "micro-USDC");
-        console.log("Expected monthly distribution:", RATE * 30 days / USDC_UNIT, "USDC");
+        uint256 ACTUAL_RATE_LOCAL = (MONTHLY_RATE_USD * USDC_UNIT) / 30 days;
+        uint256 RATE = ACTUAL_RATE_LOCAL * 1000; // Scale by RATE_PRECISION
+        console.log("Rate per second:", ACTUAL_RATE_LOCAL, "micro-USDC");
+        console.log("Expected monthly distribution:", ACTUAL_RATE_LOCAL * 30 days / USDC_UNIT, "USDC");
 
         // Pool capacity: 1M SQD
         uint256 POOL_CAP = 1_000_000 * 1e18;
@@ -886,7 +889,8 @@ contract PortalPoolE2ETest is Test {
      * - Verify correct unlock timing
      */
     function test_E2E_ConvoyBelt_CriticalEdgeCases() public {
-        uint256 RATE = 1000; // 1000 micro-USDC/sec
+        // Rate is scaled by RATE_PRECISION (1000). 1000 * 1000 = 1e6 represents 1000 actual micro-USDC/sec
+        uint256 RATE = 1000 * 1000;
         uint256 POOL_CAP = 100_000 * 1e18; // 100k SQD
 
         // 5 stakers with 20k SQD each

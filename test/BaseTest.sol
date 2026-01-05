@@ -109,7 +109,8 @@ abstract contract BaseTest is Test {
             capacity: _capacity,
             peerId: abi.encodePacked("peer-", _name),
             tokenSuffix: _name,
-            distributionRatePerSecond: 1 ether,
+            // Rate is scaled by RATE_PRECISION (1000). 1 ether * 1000 = 1e18 tokens/sec actual rate
+            distributionRatePerSecond: 1 ether * 1000,
             metadata: "",
             rewardToken: address(usdc)
         });

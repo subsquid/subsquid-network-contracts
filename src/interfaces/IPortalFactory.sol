@@ -19,12 +19,14 @@ interface IPortalFactory {
     event CollectionDeadlineUpdated(uint256 oldValue, uint256 newValue);
     event WorkerPoolAddressUpdated(address indexed oldValue, address indexed newValue);
     event MaxDistributionRateUpdated(uint256 oldValue, uint256 newValue);
+    event MinDistributionRateUpdated(uint256 oldValue, uint256 newValue);
 
     struct CreatePortalPoolParams {
         address operator;
         uint256 capacity;
         bytes peerId;
         string tokenSuffix;
+        /// @dev scaled by RATE_PRECISION (1000). To set 1 token/sec, pass 1000.
         uint256 distributionRatePerSecond;
         string metadata;
         address rewardToken;
@@ -54,8 +56,10 @@ interface IPortalFactory {
     function setCollectionDeadline(uint256 seconds_) external;
     function setWorkerPoolAddress(address _workerPoolAddress) external;
     function setMaxDistributionRate(uint256 ratePerSecond) external;
+    function setMinDistributionRate(uint256 ratePerSecond) external;
     function workerPoolAddress() external view returns (address);
     function maxDistributionRatePerSecond() external view returns (uint256);
+    function minDistributionRatePerSecond() external view returns (uint256);
 
     function pause() external;
     function unpause() external;

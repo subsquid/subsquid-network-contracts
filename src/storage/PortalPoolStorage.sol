@@ -13,6 +13,7 @@ import {Constants} from "../libs/Constants.sol";
 
 abstract contract PortalPoolStorage {
     uint256 public constant PRECISION = Constants.PRECISION;
+    uint256 public constant RATE_PRECISION = Constants.RATE_PRECISION;
 
     IPortalPool.PortalInfo internal _portalInfo;
     bytes internal _peerId;
@@ -42,10 +43,13 @@ abstract contract PortalPoolStorage {
     uint64 public lastEffectiveRewardTs;
 
     /// @notice total distribution rate per second (delegators + treasury)
+    /// @dev scaled by RATE_PRECISION (1000). A value of 1000 = 1 token/sec
     uint256 public totalDistributionRatePerSec;
-    /// @notice delegator portion of rate (50% of total)
+    /// @notice delegator portion of rate
+    /// @dev scaled by RATE_PRECISION (1000). A value of 1000 = 1 token/sec
     uint256 public delegatorRatePerSec;
-    /// @notice treasury portion of rate (50% of total)
+    /// @notice treasury portion of rate
+    /// @dev scaled by RATE_PRECISION (1000). A value of 1000 = 1 token/sec
     uint256 public treasuryRatePerSec;
     /// @notice per-stake rate = delegatorRate * ACC / capacity
     uint256 public perStakeRateWad;

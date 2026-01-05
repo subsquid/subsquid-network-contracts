@@ -83,7 +83,8 @@ contract PortalPoolAdditionalTests is Test {
 
     uint256 constant MIN_STAKE = 1_000_000;
     uint256 constant CAPACITY = 2_000_000;
-    uint256 constant RATE_PER_SEC = 100;
+    uint256 constant RATE_PER_SEC = 100_000;
+    uint256 constant ACTUAL_RATE = 100; // actual tokens per second
     uint256 constant MANA = 1000;
     uint256 constant MAX_STAKE_PER_WALLET = 10_000_000;
 
@@ -152,7 +153,8 @@ contract PortalPoolAdditionalTests is Test {
         vm.stopPrank();
 
         uint256 drainRate = pool.getTotalDrainRate();
-        uint256 runwaySeconds = 100 / drainRate;
+        // drainRate is scaled by 1000, multiply by 1000 to get correct duration
+        uint256 runwaySeconds = (100 * 1000) / drainRate;
 
         vm.warp(block.timestamp + runwaySeconds + 1);
 
@@ -329,8 +331,10 @@ contract PortalPoolAdditionalTests is Test {
         uint256 delegatorRate = pool.delegatorRatePerSec();
         uint256 capacity = CAPACITY;
         uint256 ACC = 1e27;
+        uint256 RATE_PRECISION = 1000;
 
-        uint256 expectedPSRW = (delegatorRate * ACC) / capacity;
+        // perStakeRateWad = delegatorRate * ACC / (capacity * RATE_PRECISION)
+        uint256 expectedPSRW = (delegatorRate * ACC) / (capacity * RATE_PRECISION);
         console.log("expected perstakeratewad:", expectedPSRW);
         assertEq(perStakeRateWad, expectedPSRW, "perStakeRateWad calculation mismatch");
     }
@@ -339,8 +343,10 @@ contract PortalPoolAdditionalTests is Test {
         uint256 delegatorRate = pool.delegatorRatePerSec();
         uint256 capacity = CAPACITY;
         uint256 ACC = 1e27;
+        uint256 RATE_PRECISION = 1000;
 
-        uint256 expectedPSRW = (delegatorRate * ACC) / capacity;
+        // perStakeRateWad = delegatorRate * ACC / (capacity * RATE_PRECISION)
+        uint256 expectedPSRW = (delegatorRate * ACC) / (capacity * RATE_PRECISION);
         uint256 actualPSRW = pool.perStakeRateWad();
 
         console.log("delegator rate:", delegatorRate);
@@ -357,19 +363,18 @@ contract PortalPoolAdditionalTests is Test {
         vm.startPrank(operator);
         usdc.approve(address(pool), 10_000_000);
         pool.topUpRewards(10_000_000);
-        pool.setDistributionRate(1);
+        pool.setDistributionRate(1000); // Minimum allowed rate
         vm.stopPrank();
 
         uint256 psrw = pool.perStakeRateWad();
-        console.log("perstakeratewad with rate=1:", psrw);
+        console.log("perstakeratewad with rate=1000:", psrw);
 
-        if (psrw == 0) {
-            console.log("warning: very small rate causes zero perstakeratewad");
-        }
+        assertTrue(psrw > 0, "perStakeRateWad should NOT be zero with rate=1000");
 
         vm.warp(block.timestamp + 1 days);
         uint256 claimable = pool.getClaimableRewards(alice);
-        console.log("claimable after 1 day with rate=1:", claimable);
+        console.log("claimable after 1 day with rate=1000:", claimable);
+        assertTrue(claimable > 0, "Should have claimable rewards after 1 day");
     }
 
     function test_EdgeCase_ExactZeroBalance() public {
@@ -481,7 +486,7 @@ contract PortalPoolAdditionalTests is Test {
 
         console.log("total claimed:", totalClaimed);
 
-        uint256 expectedPerPeriod = (RATE_PER_SEC / 2) * 100;
+        uint256 expectedPerPeriod = (ACTUAL_RATE / 2) * 100;
         console.log("expected per 100s period:", expectedPerPeriod);
         console.log("total expected for 500s:", expectedPerPeriod * 5);
 
@@ -538,8 +543,8 @@ contract PortalPoolAdditionalTests is Test {
 
         uint256 aliceRewardsAfter = pool.getClaimableRewards(alice);
 
-        uint256 expectedFullRate = RATE_PER_SEC * 100;
-        uint256 expectedHalfRate = RATE_PER_SEC * 100 / 2;
+        uint256 expectedFullRate = ACTUAL_RATE * 100;
+        uint256 expectedHalfRate = ACTUAL_RATE * 100 / 2;
 
         console.log("alice rewards first period:", aliceRewardsBefore);
         console.log("alice rewards second period:", aliceRewardsAfter);
@@ -984,8 +989,8 @@ contract PortalPoolAdditionalTests is Test {
     // ============ EDGE CASE TESTS: EXTREME LOW VALUES ============
 
     function test_EdgeCase_MinimumRate_1PerSec() public {
-        // Rate of 1 base unit per second = ~0.0864 USDC/day
-        uint256 minRate = 1;
+        // Rate of 1000 scaled = 1 token per second (minimum allowed)
+        uint256 minRate = 1000;
 
         vm.startPrank(operator);
         usdc.approve(address(pool), 1_000_000); // 1 USDC
@@ -994,19 +999,20 @@ contract PortalPoolAdditionalTests is Test {
         vm.stopPrank();
 
         uint256 psrw = pool.perStakeRateWad();
-        console.log("Rate=1: perStakeRateWad =", psrw);
-        assertTrue(psrw > 0, "perStakeRateWad should NOT be zero with rate=1");
+        console.log("Rate=1000: perStakeRateWad =", psrw);
+        assertTrue(psrw > 0, "perStakeRateWad should NOT be zero with rate=1000");
 
         // After 1 day, check rewards accrue
         vm.warp(block.timestamp + 1 days);
         uint256 claimable = pool.getClaimableRewards(alice);
-        console.log("Rate=1: claimable after 1 day =", claimable);
+        console.log("Rate=1000: claimable after 1 day =", claimable);
         assertTrue(claimable > 0, "Should have claimable rewards after 1 day");
     }
 
     function test_EdgeCase_OneDollarPerDay() public {
         // $1/day = 1_000_000 / 86400 ≈ 11.57 ≈ 11 per sec
-        uint256 oneDollarPerDayRate = 11;
+        // Rate is scaled by RATE_PRECISION (1000), so multiply by 1000
+        uint256 oneDollarPerDayRate = 11 * 1000;
 
         vm.startPrank(operator);
         usdc.approve(address(pool), 100_000_000); // 100 USDC
@@ -1029,7 +1035,8 @@ contract PortalPoolAdditionalTests is Test {
 
     function test_EdgeCase_TenCentsPerDay() public {
         // $0.10/day = 100_000 / 86400 ≈ 1.15 ≈ 1 per sec
-        uint256 tenCentsPerDayRate = 1;
+        // Rate is scaled by RATE_PRECISION (1000), so multiply by 1000
+        uint256 tenCentsPerDayRate = 1 * 1000;
 
         vm.startPrank(operator);
         usdc.approve(address(pool), 10_000_000); // 10 USDC
@@ -1053,7 +1060,7 @@ contract PortalPoolAdditionalTests is Test {
         // Create pool with small capacity (use minStakeThreshold to avoid BelowMinimum)
         poolCount++;
         uint256 smallCapacity = networkController.minStakeThreshold(); // Use min threshold
-        uint256 rate = 115; // ~$10/day
+        uint256 rate = 1150; // ~$100/day (minimum is 1000)
 
         IPortalFactory.CreatePortalPoolParams memory params = IPortalFactory.CreatePortalPoolParams({
             operator: operator,
@@ -1093,7 +1100,8 @@ contract PortalPoolAdditionalTests is Test {
 
     function test_EdgeCase_MaxReasonableRate() public {
         // $1M/day = 1e12 / 86400 ≈ 11574074 per sec
-        uint256 millionPerDayRate = 11574074;
+        // Rate is scaled by RATE_PRECISION (1000), so multiply by 1000
+        uint256 millionPerDayRate = 11574074 * 1000;
 
         // Mint more USDC to operator
         usdc.mint(operator, 1e15);
@@ -1239,13 +1247,12 @@ contract PortalPoolAdditionalTests is Test {
     }
 
     function test_EdgeCase_VerifyNoTruncation_AllRates() public {
-        uint256[] memory testRates = new uint256[](6);
-        testRates[0] = 1;           // minimum
-        testRates[1] = 11;          // ~$1/day
-        testRates[2] = 115;         // ~$10/day
-        testRates[3] = 1157;        // ~$100/day
-        testRates[4] = 11574;       // ~$1000/day
-        testRates[5] = 115740;      // ~$10000/day
+        uint256[] memory testRates = new uint256[](5);
+        testRates[0] = 1000;        // 1 token/sec (minimum allowed)
+        testRates[1] = 1157;        // ~$100/day
+        testRates[2] = 11574;       // ~$1000/day
+        testRates[3] = 115740;      // ~$10000/day
+        testRates[4] = 1157400;     // ~$100000/day
 
         // Mint enough USDC and SQD for all pools
         usdc.mint(operator, 1e18);
@@ -1285,13 +1292,11 @@ contract PortalPoolAdditionalTests is Test {
     }
 
     function test_EdgeCase_100Stakers_2PerSecRate() public {
-        // Setup: 1M SQD pool, 100 stakers, rate=2/sec
         poolCount++;
-        uint256 poolCapacity = 1_000_000 * 1e18; // 1M SQD
-        uint256 stakePerUser = 10_000 * 1e18;    // 10k SQD each (100 users = 1M total)
-        uint256 rate = 2;                         // 2 USDC base units per second
+        uint256 poolCapacity = 1_000_000 * 1e18;
+        uint256 stakePerUser = 10_000 * 1e18;
+        uint256 rate = 2 * 1000;
 
-        // Remove wallet limit
         vm.prank(admin);
         factory.setDefaultMaxStakePerWallet(type(uint256).max);
 
@@ -1347,9 +1352,8 @@ contract PortalPoolAdditionalTests is Test {
             totalClaimable += claimable;
         }
 
-        // Expected: rate=2 * 86400 seconds = 172800 USDC base units total per day
-        // Each of 100 stakers should get 1/100 = 1728 base units
-        uint256 expectedPerStaker = (rate * 1 days) / 100;
+        uint256 actualRate = rate / 1000;
+        uint256 expectedPerStaker = (actualRate * 1 days) / 100;
         console.log("Expected per staker:", expectedPerStaker);
         console.log("Actual staker 0:", tp.getClaimableRewards(stakers[0]));
 
@@ -1364,8 +1368,7 @@ contract PortalPoolAdditionalTests is Test {
         assertTrue(staker0Rewards >= minExpected, "Rewards too low");
         assertTrue(staker0Rewards <= maxExpected, "Rewards too high");
 
-        // Verify total rewards match expected
-        uint256 totalExpected = rate * 1 days;
+        uint256 totalExpected = actualRate * 1 days;
         console.log("Total expected for all stakers:", totalExpected);
         
         // Sum all 100 stakers
