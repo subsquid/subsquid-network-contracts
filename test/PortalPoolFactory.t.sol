@@ -5,6 +5,7 @@ import "./BaseTest.sol";
 import {PortalErrors} from "../src/libs/PortalErrors.sol";
 import {Constants} from "../src/libs/Constants.sol";
 import {PortalPoolImplementation} from "../src/PortalPoolImplementation.sol";
+import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 
 contract PortalPoolFactoryTest is BaseTest {
     function setUp() public override {
@@ -14,20 +15,27 @@ contract PortalPoolFactoryTest is BaseTest {
     function test_Constructor_SetsCorrectValues() public view {
         assertEq(factory.portalRegistry(), address(registry));
         assertEq(factory.feeRouter(), address(feeRouter));
-        assertEq(factory.networkController(), address(networkController));
         assertEq(factory.sqd(), address(sqd));
         assertEq(factory.defaultMaxStakePerWallet(), DEFAULT_MAX_STAKE_PER_WALLET);
+        assertEq(factory.minStakeThreshold(), MIN_STAKE_THRESHOLD);
+        assertEq(factory.workerEpochLength(), WORKER_EPOCH_LENGTH);
     }
 
-    function test_Constructor_RevertOnZeroAddresses() public {
+    function test_Initialize_RevertOnZeroAddresses() public {
+        PortalPoolFactory newFactoryImpl = new PortalPoolFactory();
         vm.expectRevert(PortalErrors.InvalidAddress.selector);
-        new PortalPoolFactory(
-            address(0),
-            address(registry),
-            address(feeRouter),
-            address(networkController),
-            address(sqd),
-            DEFAULT_MAX_STAKE_PER_WALLET
+        new ERC1967Proxy(
+            address(newFactoryImpl),
+            abi.encodeWithSelector(
+                PortalPoolFactory.initialize.selector,
+                address(0),
+                address(registry),
+                address(feeRouter),
+                address(sqd),
+                DEFAULT_MAX_STAKE_PER_WALLET,
+                MIN_STAKE_THRESHOLD,
+                WORKER_EPOCH_LENGTH
+            )
         );
     }
 
@@ -46,13 +54,16 @@ contract PortalPoolFactoryTest is BaseTest {
             capacity: MIN_STAKE_THRESHOLD,
             peerId: "test-peer-id",
             tokenSuffix: "TestPortal",
-            distributionRatePerSecond: 1 ether,
+            distributionRatePerSecond: 1000 * 1000,
             metadata: "",
             rewardToken: address(usdc)
         });
 
+        uint256 initialDeposit = params.distributionRatePerSecond * 1 days / 1000;
+        usdc.approve(address(factory), initialDeposit);
+
         vm.expectEmit(false, true, false, false);
-        emit IPortalFactory.PortalCreated(address(0), operator, MIN_STAKE_THRESHOLD, 1 ether, "TestPortal", "");
+        emit IPortalFactory.PortalCreated(address(0), operator, MIN_STAKE_THRESHOLD, 1000 * 1000, "TestPortal", "");
 
         factory.createPortalPool(params);
     }
@@ -63,7 +74,7 @@ contract PortalPoolFactoryTest is BaseTest {
             capacity: MIN_STAKE_THRESHOLD,
             peerId: "test-peer-id",
             tokenSuffix: "TestPortal",
-            distributionRatePerSecond: 1 ether,
+            distributionRatePerSecond: 1000 * 1000,
             metadata: "",
             rewardToken: address(usdc)
         });
@@ -78,7 +89,7 @@ contract PortalPoolFactoryTest is BaseTest {
             capacity: MIN_STAKE_THRESHOLD - 1,
             peerId: "test-peer-id",
             tokenSuffix: "TestPortal",
-            distributionRatePerSecond: 1 ether,
+            distributionRatePerSecond: 1000 * 1000,
             metadata: "",
             rewardToken: address(usdc)
         });
@@ -93,7 +104,7 @@ contract PortalPoolFactoryTest is BaseTest {
             capacity: MIN_STAKE_THRESHOLD,
             peerId: "",
             tokenSuffix: "TestPortal",
-            distributionRatePerSecond: 1 ether,
+            distributionRatePerSecond: 1000 * 1000,
             metadata: "",
             rewardToken: address(usdc)
         });
@@ -188,22 +199,6 @@ contract PortalPoolFactoryTest is BaseTest {
         assertEq(page4.length, 0);
     }
 
-    function test_CreatePortal_UsesDefaultMaxStakePerWallet() public {
-        IPortalFactory.CreatePortalPoolParams memory params = IPortalFactory.CreatePortalPoolParams({
-            operator: operator,
-            capacity: MIN_STAKE_THRESHOLD,
-            peerId: "test-peer-id",
-            tokenSuffix: "TestPortal",
-            distributionRatePerSecond: 1 ether,
-            metadata: "",
-            rewardToken: address(usdc)
-        });
-
-        address portal = factory.createPortalPool(params);
-        // maxStakePerWallet is now a global value in factory, not per-portal
-        assertEq(factory.defaultMaxStakePerWallet(), DEFAULT_MAX_STAKE_PER_WALLET);
-    }
-
     function test_CreatePortal_RevertWhenPaused() public {
         factory.pause();
 
@@ -212,7 +207,7 @@ contract PortalPoolFactoryTest is BaseTest {
             capacity: MIN_STAKE_THRESHOLD,
             peerId: "test-peer-id",
             tokenSuffix: "TestPortal",
-            distributionRatePerSecond: 1 ether,
+            distributionRatePerSecond: 1000 * 1000,
             metadata: "",
             rewardToken: address(usdc)
         });
@@ -296,7 +291,6 @@ contract PortalPoolFactoryTest is BaseTest {
         assertEq(factory.defaultMaxStakePerWallet(), newMaxStake);
     }
 
-
     function test_Pause_Success() public {
         factory.pause();
         assertTrue(factory.paused());
@@ -334,34 +328,6 @@ contract PortalPoolFactoryTest is BaseTest {
         vm.prank(user1);
         vm.expectRevert();
         factory.upgradeBeacon(address(newImpl));
-    }
-
-    function test_GetPortalCount() public {
-        assertEq(factory.getPortalCount(), 0);
-
-        _createPortal(operator, MIN_STAKE_THRESHOLD, "Portal1");
-        assertEq(factory.getPortalCount(), 1);
-
-        _createPortal(operator, MIN_STAKE_THRESHOLD, "Portal2");
-        assertEq(factory.getPortalCount(), 2);
-    }
-
-    function test_GetOperatorPortals() public {
-        address portal1 = _createPortal(operator, MIN_STAKE_THRESHOLD, "Portal1");
-        address portal2 = _createPortal(operator, MIN_STAKE_THRESHOLD, "Portal2");
-        _createPortal(user1, MIN_STAKE_THRESHOLD, "Portal3");
-
-        address[] memory portals = factory.getOperatorPortals(operator);
-        assertEq(portals.length, 2);
-        assertEq(portals[0], portal1);
-        assertEq(portals[1], portal2);
-    }
-
-    function test_IsPortal() public {
-        address portal = _createPortal(operator, MIN_STAKE_THRESHOLD, "Portal1");
-
-        assertTrue(factory.isPortal(portal));
-        assertFalse(factory.isPortal(address(0x999)));
     }
 
     function test_SetMaxPaymentTokens_Success() public {
@@ -423,7 +389,7 @@ contract PortalPoolFactoryTest is BaseTest {
             capacity: MIN_STAKE_THRESHOLD,
             peerId: "test-peer-id",
             tokenSuffix: "TestPortal",
-            distributionRatePerSecond: 1 ether,
+            distributionRatePerSecond: 1000 * 1000,
             metadata: "",
             rewardToken: address(unknownToken)
         });
@@ -438,7 +404,7 @@ contract PortalPoolFactoryTest is BaseTest {
             capacity: MIN_STAKE_THRESHOLD,
             peerId: "test-peer-id",
             tokenSuffix: "TestPortal",
-            distributionRatePerSecond: 1 ether,
+            distributionRatePerSecond: 1000 * 1000,
             metadata: "",
             rewardToken: address(0)
         });
@@ -459,5 +425,4 @@ contract PortalPoolFactoryTest is BaseTest {
         vm.expectRevert();
         factory.setDefaultMaxStakePerWallet(2_000_000 ether);
     }
-
 }

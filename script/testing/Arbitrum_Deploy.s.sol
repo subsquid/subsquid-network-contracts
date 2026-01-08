@@ -6,8 +6,8 @@ import {PortalPoolImplementation} from "../../src/PortalPoolImplementation.sol";
 import {PortalPoolFactory} from "../../src/PortalPoolFactory.sol";
 import {PortalRegistry} from "../../src/PortalRegistry.sol";
 import {FeeRouterModule} from "../../src/FeeRouterModule.sol";
-import {MockNetworkController} from "../../test/mocks/MockNetworkController.sol";
 import {MockERC20} from "../../test/mocks/MockERC20.sol";
+import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 
 contract DeployArbitrumMocks is Script {
     uint256 public constant WORKER_EPOCH_LENGTH = 7200;
@@ -19,7 +19,6 @@ contract DeployArbitrumMocks is Script {
     struct Deployed {
         address mockSqd;
         address mockUsdc;
-        address networkController;
         address portalRegistry;
         address feeRouter;
         address implementation;
@@ -54,14 +53,15 @@ contract DeployArbitrumMocks is Script {
         d.mockSqd = sqd;
         d.mockUsdc = usdc;
 
-        MockNetworkController controller =
-            new MockNetworkController(WORKER_EPOCH_LENGTH, MIN_STAKE_THRESHOLD, WORKER_POOL);
-        d.networkController = address(controller);
-        console.log("NetworkController:", d.networkController);
-
-        PortalRegistry registry = new PortalRegistry(sqd, d.networkController, MIN_STAKE_THRESHOLD, MANA);
+        PortalRegistry registryImpl = new PortalRegistry();
+        ERC1967Proxy registryProxy = new ERC1967Proxy(
+            address(registryImpl),
+            abi.encodeWithSelector(PortalRegistry.initialize.selector, sqd, MIN_STAKE_THRESHOLD, MANA)
+        );
+        PortalRegistry registry = PortalRegistry(address(registryProxy));
         d.portalRegistry = address(registry);
-        console.log("PortalRegistry:", d.portalRegistry);
+        console.log("PortalRegistry impl:", address(registryImpl));
+        console.log("PortalRegistry proxy:", d.portalRegistry);
 
         FeeRouterModule feeRouter = new FeeRouterModule();
         d.feeRouter = address(feeRouter);
@@ -71,8 +71,21 @@ contract DeployArbitrumMocks is Script {
         d.implementation = address(impl);
         console.log("PortalPoolImplementation:", d.implementation);
 
-        PortalPoolFactory factory =
-            new PortalPoolFactory(d.implementation, d.portalRegistry, d.feeRouter, d.networkController, sqd, MAX_STAKE_PER_WALLET);
+        PortalPoolFactory factoryImpl = new PortalPoolFactory();
+        ERC1967Proxy factoryProxy = new ERC1967Proxy(
+            address(factoryImpl),
+            abi.encodeWithSelector(
+                PortalPoolFactory.initialize.selector,
+                d.implementation,
+                d.portalRegistry,
+                d.feeRouter,
+                sqd,
+                MAX_STAKE_PER_WALLET,
+                MIN_STAKE_THRESHOLD,
+                WORKER_EPOCH_LENGTH
+            )
+        );
+        PortalPoolFactory factory = PortalPoolFactory(address(factoryProxy));
         d.factory = address(factory);
         d.beacon = address(factory.beacon());
         console.log("PortalPoolFactory:", d.factory);
@@ -85,4 +98,3 @@ contract DeployArbitrumMocks is Script {
         return d;
     }
 }
-

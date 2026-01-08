@@ -1,21 +1,18 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.28;
 
+/// @title Portal Registry Errors Library
+/// @notice Custom error definitions for the portal registry contract
 library PortalRegistryErrors {
     error InvalidAddress();
     error InvalidPeerId();
-    error PortalAlreadyRegistered();
-    error PortalNotRegistered();
+    error InvalidPortalIndex();
+    error ClusterAlreadyRegistered();
+    error ClusterNotRegistered();
+    error MaxClustersReached();
+    error MaxPortalsReached();
     error PeerIdInUse();
-    error OnlyPortal();
     error OnlyFactory();
-    error OnlyOperator();
-    error NotOperator();
+    error NotClusterOperator();
     error InsufficientAllocation();
-    error AlreadyHasDirectPortal();
-    error NoDirectPortal();
-    error NotDirectPortal();
-    error NotPoolPortal();
-    error OnlyPoolPortal();
-    error InvalidAmount();
 }

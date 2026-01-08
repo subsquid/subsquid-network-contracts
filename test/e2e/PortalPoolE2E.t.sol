@@ -9,6 +9,7 @@ import {FeeRouterModule} from "../../src/FeeRouterModule.sol";
 import {IPortalPool} from "../../src/interfaces/IPortalPool.sol";
 import {IPortalFactory} from "../../src/interfaces/IPortalFactory.sol";
 import {LiquidPortalToken} from "../../src/LiquidPortalToken.sol";
+import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 
 contract MockERC20 {
     string public name;
@@ -53,18 +54,6 @@ contract MockERC20 {
     }
 }
 
-contract MockNetworkController {
-    uint256 public workerEpochLength;
-    uint256 public minStakeThreshold;
-    address public workerRewardPool;
-
-    constructor(uint256 _epochLength, uint256 _minStake, address _workerPool) {
-        workerEpochLength = _epochLength;
-        minStakeThreshold = _minStake;
-        workerRewardPool = _workerPool;
-    }
-}
-
 contract PortalPoolE2ETest is Test {
     uint256 constant SQD_DECIMALS = 18;
     uint256 constant SQD_PRICE_CENTS = 5;
@@ -86,11 +75,12 @@ contract PortalPoolE2ETest is Test {
     uint256 constant DAY = 1 days;
     uint256 constant MONTH = 30 days;
 
+    uint256 constant WORKER_EPOCH_LENGTH = 7200;
+
     PortalPoolFactory public factory;
     PortalPoolImplementation public implementation;
     PortalRegistry public registry;
     FeeRouterModule public feeRouter;
-    MockNetworkController public networkController;
 
     MockERC20 public sqd;
     MockERC20 public usdc;
@@ -109,29 +99,42 @@ contract PortalPoolE2ETest is Test {
         sqd = new MockERC20("Subsquid", "SQD", 18);
         usdc = new MockERC20("USD Coin", "USDC", 6);
 
-        networkController = new MockNetworkController(7200, MIN_STAKE, workerRewardPool);
-        registry = new PortalRegistry(address(sqd), address(networkController), MIN_STAKE, MANA);
+        PortalRegistry registryImpl = new PortalRegistry();
+        ERC1967Proxy registryProxy = new ERC1967Proxy(
+            address(registryImpl),
+            abi.encodeWithSelector(PortalRegistry.initialize.selector, address(sqd), MIN_STAKE, MANA)
+        );
+        registry = PortalRegistry(address(registryProxy));
         feeRouter = new FeeRouterModule();
 
         feeRouter.setFeeConfig(5000, 5000, 0);
 
         implementation = new PortalPoolImplementation();
 
-        factory = new PortalPoolFactory(
-            address(implementation),
-            address(registry),
-            address(feeRouter),
-            address(networkController),
-            address(sqd),
-            MAX_STAKE_PER_WALLET
+        PortalPoolFactory factoryImpl = new PortalPoolFactory();
+        ERC1967Proxy factoryProxy = new ERC1967Proxy(
+            address(factoryImpl),
+            abi.encodeWithSelector(
+                PortalPoolFactory.initialize.selector,
+                address(implementation),
+                address(registry),
+                address(feeRouter),
+                address(sqd),
+                MAX_STAKE_PER_WALLET,
+                MIN_STAKE,
+                WORKER_EPOCH_LENGTH
+            )
         );
+        factory = PortalPoolFactory(address(factoryProxy));
 
         registry.setFactory(address(factory));
         factory.addPaymentToken(address(usdc));
         factory.setWorkerPoolAddress(workerRewardPool);
+        factory.setDefaultWhitelistEnabled(false);
 
         _setupStakers();
 
+        usdc.mint(admin, 500_000 * USDC_UNIT);
         usdc.mint(operator, 500_000 * USDC_UNIT);
     }
 
@@ -205,6 +208,8 @@ contract PortalPoolE2ETest is Test {
             rewardToken: address(usdc)
         });
 
+        uint256 initialDeposit = RATE_PER_SEC * 1 days / 1000;
+        usdc.approve(address(factory), initialDeposit);
         address poolAddr = factory.createPortalPool(params);
         pool = PortalPoolImplementation(poolAddr);
 
@@ -226,7 +231,7 @@ contract PortalPoolE2ETest is Test {
         console.log("Total staked:", actualTotalStaked / 1e18, "SQD");
         console.log("Pool state:", uint256(pool.getState()));
 
-        assertEq(uint256(pool.getState()), uint256(IPortalPool.PortalState.ACTIVE), "Pool should be active");
+        assertEq(uint256(pool.getState()), uint256(IPortalPool.PoolState.ACTIVE), "Pool should be active");
 
         console.log("\n=== PHASE 2: OPERATOR TOP-UP ($3000) ===\n");
 
@@ -252,7 +257,13 @@ contract PortalPoolE2ETest is Test {
 
         int256 poolBalance = pool.getCurrentRewardBalance();
         console.log("Pool balance (USDC):", uint256(poolBalance) / USDC_UNIT);
-        assertEq(uint256(poolBalance), expectedToProviders, "Balance should equal provider portion");
+        // Pool balance = initial credit (50% of initialDeposit) + 50% of top-up
+        uint256 initialCreditToProviders = initialDeposit / 2;
+        assertEq(
+            uint256(poolBalance),
+            initialCreditToProviders + expectedToProviders,
+            "Balance should equal initial credit + provider portion"
+        );
 
         int256 runway = pool.getRunway();
         uint256 expectedRunwayDays = expectedToProviders / (ACTUAL_RATE * 86400);
@@ -404,8 +415,13 @@ contract PortalPoolE2ETest is Test {
         console.log("Treasury accumulated:", treasuryAccumulated / USDC_UNIT, "USDC");
         _logBalance("Pool current balance", pool.getCurrentRewardBalance());
 
-        uint256 expectedTotalToWorkerPool = ((FIRST_TOPUP + SECOND_TOPUP) * 5000) / 10000;
-        assertEq(totalWorkerPoolReceived, expectedTotalToWorkerPool, "Total worker pool should be 50% of all top-ups");
+        // Total worker pool = 50% of initial deposit + 50% of all top-ups
+        uint256 expectedTotalToWorkerPool = (initialDeposit / 2) + ((FIRST_TOPUP + SECOND_TOPUP) * 5000) / 10000;
+        assertEq(
+            totalWorkerPoolReceived,
+            expectedTotalToWorkerPool,
+            "Total worker pool should be 50% of initial + all top-ups"
+        );
 
         console.log("\n=== E2E TEST COMPLETE ===");
         console.log("All assertions passed!");
@@ -430,6 +446,8 @@ contract PortalPoolE2ETest is Test {
             rewardToken: address(usdc)
         });
 
+        uint256 initialDeposit = RATE_PER_SEC * 1 days / 1000;
+        usdc.approve(address(factory), initialDeposit);
         address poolAddr = factory.createPortalPool(params);
         pool = PortalPoolImplementation(poolAddr);
 
@@ -510,6 +528,8 @@ contract PortalPoolE2ETest is Test {
             rewardToken: address(usdc)
         });
 
+        uint256 initialDeposit = RATE * 1 days / 1000;
+        usdc.approve(address(factory), initialDeposit);
         address poolAddr = factory.createPortalPool(params);
         pool = PortalPoolImplementation(poolAddr);
 
@@ -533,7 +553,7 @@ contract PortalPoolE2ETest is Test {
         pool.deposit(stakeEach);
         vm.stopPrank();
 
-        console.log("Pool activated:", pool.getState() == IPortalPool.PortalState.ACTIVE);
+        console.log("Pool activated:", pool.getState() == IPortalPool.PoolState.ACTIVE);
 
         // Operator tops up $2000
         uint256 TOP_UP = 2000 * USDC_UNIT;
@@ -546,13 +566,26 @@ contract PortalPoolE2ETest is Test {
         pool.topUpRewards(TOP_UP);
         vm.stopPrank();
 
-        // After FeeRouter 50/50 split: $1000 to providers
+        // After FeeRouter 50/50 split: $1000 to providers from top-up
+        uint256 initialDeposit_toProviders = initialDeposit / 2; // FeeRouter splits 50/50
+        uint256 initialDeposit_toWorkerPool = initialDeposit / 2;
+
         int256 providerBalance = pool.getCurrentRewardBalance();
         console.log("Provider balance after split:", uint256(providerBalance) / USDC_UNIT, "USDC");
         console.log("Worker pool received:", usdc.balanceOf(workerRewardPool) / USDC_UNIT, "USDC");
 
-        assertEq(uint256(providerBalance), TOP_UP / 2, "Provider balance should be 50% of top-up");
-        assertEq(usdc.balanceOf(workerRewardPool), TOP_UP / 2, "Worker pool should get 50%");
+        // Provider balance = initial credit to providers + 50% of top-up
+        assertEq(
+            uint256(providerBalance),
+            initialDeposit_toProviders + TOP_UP / 2,
+            "Provider balance should be initial credit + 50% of top-up"
+        );
+        // Worker pool = initial credit to worker pool + 50% of top-up
+        assertEq(
+            usdc.balanceOf(workerRewardPool),
+            initialDeposit_toWorkerPool + TOP_UP / 2,
+            "Worker pool should get initial + 50% of top-up"
+        );
 
         // Warp 1 day
         console.log("\n=== AFTER 1 DAY ===");
@@ -625,22 +658,22 @@ contract PortalPoolE2ETest is Test {
 
         // Define varied stake amounts for 15 stakers (totaling 1M SQD)
         uint256[15] memory variedStakes;
-        variedStakes[0] = 150_000 * 1e18;   // 15%
-        variedStakes[1] = 120_000 * 1e18;   // 12%
-        variedStakes[2] = 100_000 * 1e18;   // 10%
-        variedStakes[3] = 90_000 * 1e18;    // 9%
-        variedStakes[4] = 80_000 * 1e18;    // 8%
-        variedStakes[5] = 70_000 * 1e18;    // 7%
-        variedStakes[6] = 65_000 * 1e18;    // 6.5%
-        variedStakes[7] = 60_000 * 1e18;    // 6%
-        variedStakes[8] = 55_000 * 1e18;    // 5.5%
-        variedStakes[9] = 50_000 * 1e18;    // 5%
+        variedStakes[0] = 150_000 * 1e18; // 15%
+        variedStakes[1] = 120_000 * 1e18; // 12%
+        variedStakes[2] = 100_000 * 1e18; // 10%
+        variedStakes[3] = 90_000 * 1e18; // 9%
+        variedStakes[4] = 80_000 * 1e18; // 8%
+        variedStakes[5] = 70_000 * 1e18; // 7%
+        variedStakes[6] = 65_000 * 1e18; // 6.5%
+        variedStakes[7] = 60_000 * 1e18; // 6%
+        variedStakes[8] = 55_000 * 1e18; // 5.5%
+        variedStakes[9] = 50_000 * 1e18; // 5%
         // Users 10-14 will NEVER claim
-        variedStakes[10] = 45_000 * 1e18;   // 4.5%
-        variedStakes[11] = 40_000 * 1e18;   // 4%
-        variedStakes[12] = 35_000 * 1e18;   // 3.5%
-        variedStakes[13] = 25_000 * 1e18;   // 2.5%
-        variedStakes[14] = 15_000 * 1e18;   // 1.5%
+        variedStakes[10] = 45_000 * 1e18; // 4.5%
+        variedStakes[11] = 40_000 * 1e18; // 4%
+        variedStakes[12] = 35_000 * 1e18; // 3.5%
+        variedStakes[13] = 25_000 * 1e18; // 2.5%
+        variedStakes[14] = 15_000 * 1e18; // 1.5%
 
         uint256 totalStake = 0;
         for (uint256 i = 0; i < 15; i++) {
@@ -696,10 +729,11 @@ contract PortalPoolE2ETest is Test {
             rewardToken: address(usdc)
         });
 
+        uint256 initialDeposit = RATE * 1 days / 1000;
+        usdc.approve(address(factory), initialDeposit);
         address poolAddr = factory.createPortalPool(params);
         pool = PortalPoolImplementation(poolAddr);
         console.log("Pool deployed at:", poolAddr);
-
 
         for (uint256 i = 0; i < 15; i++) {
             vm.startPrank(stakers[i]);
@@ -709,7 +743,7 @@ contract PortalPoolE2ETest is Test {
         }
         console.log("All 15 stakers deposited successfully");
 
-        assertEq(uint256(pool.getState()), uint256(IPortalPool.PortalState.ACTIVE), "Pool should be active");
+        assertEq(uint256(pool.getState()), uint256(IPortalPool.PoolState.ACTIVE), "Pool should be active");
         console.log("Pool state: ACTIVE");
 
         usdc.mint(operator, FIRST_TOP + SECOND_TOP);
@@ -730,8 +764,15 @@ contract PortalPoolE2ETest is Test {
         int256 creditAfterFirstTop = pool.getCurrentRewardBalance();
         console.log("Provider credit:", uint256(creditAfterFirstTop) / USDC_UNIT, "USDC");
 
-        assertEq(workerPoolReceived, FIRST_TOP / 2, "Worker pool should get 50%");
-        assertEq(uint256(creditAfterFirstTop), FIRST_TOP / 2, "Provider credit should be 50%");
+        // Worker pool receives 50% of top-up
+        assertEq(workerPoolReceived, FIRST_TOP / 2, "Worker pool should get 50% of top-up");
+        // Provider credit = initial credit (50% of initialDeposit) + 50% of top-up
+        uint256 initialDeposit_toProviders = initialDeposit / 2;
+        assertEq(
+            uint256(creditAfterFirstTop),
+            initialDeposit_toProviders + FIRST_TOP / 2,
+            "Provider credit should be initial + 50% of top-up"
+        );
 
         vm.warp(block.timestamp + 30 days);
         console.log("Time warped: +30 days");
@@ -866,11 +907,11 @@ contract PortalPoolE2ETest is Test {
         console.log("  Users received:", totalUserUsdc / USDC_UNIT, "USDC");
         console.log("  Pool balance remaining:", usdc.balanceOf(poolAddr) / USDC_UNIT, "USDC");
 
-        // Worker pool should have received exactly 50% of all top-ups
+        // Worker pool should have received 50% of initial deposit + 50% of all top-ups
         assertEq(
             totalWorkerPoolUsdc,
-            (FIRST_TOP + SECOND_TOP) / 2,
-            "Worker pool should receive 50% of all top-ups"
+            (initialDeposit / 2) + (FIRST_TOP + SECOND_TOP) / 2,
+            "Worker pool should receive 50% of initial deposit + all top-ups"
         );
     }
 
@@ -909,6 +950,8 @@ contract PortalPoolE2ETest is Test {
             rewardToken: address(usdc)
         });
 
+        uint256 initialDeposit = RATE * 1 days / 1000;
+        usdc.approve(address(factory), initialDeposit);
         address poolAddr = factory.createPortalPool(params);
         pool = PortalPoolImplementation(poolAddr);
 
@@ -929,7 +972,7 @@ contract PortalPoolE2ETest is Test {
         }
 
         console.log("5 stakers deposited 20k SQD each");
-        assertEq(uint256(pool.getState()), uint256(IPortalPool.PortalState.ACTIVE), "Pool should be active");
+        assertEq(uint256(pool.getState()), uint256(IPortalPool.PoolState.ACTIVE), "Pool should be active");
 
         // Operator tops up rewards
         uint256 TOP_UP = 50_000 * USDC_UNIT;
@@ -1023,7 +1066,7 @@ contract PortalPoolE2ETest is Test {
         sqd.approve(poolAddr, STAKE_EACH);
         try pool.deposit(STAKE_EACH) {
             console.log("  New staker deposited successfully!");
-            IPortalPool.PortalInfo memory info = pool.getPortalInfo();
+            IPortalPool.PoolInfo memory info = pool.getPoolInfo();
             console.log("  Pool total staked:", info.totalStaked / 1e18, "SQD");
         } catch Error(string memory reason) {
             console.log("  Deposit blocked:", reason);
@@ -1031,7 +1074,6 @@ contract PortalPoolE2ETest is Test {
             console.log("  Deposit blocked (unknown reason)");
         }
         vm.stopPrank();
-
 
         // This is critical: can a user claim rewards while their SQD is locked in exit queue?
         uint256 staker1RewardsInQueue = pool.getClaimableRewards(exitStakers[1]);
@@ -1048,12 +1090,10 @@ contract PortalPoolE2ETest is Test {
             }
         }
 
-
         // 60k SQD in queue at 1 SQD/sec = 60000 seconds = ~16.7 hours
         // Let's warp 1 day to be safe
         vm.warp(block.timestamp + 1 days);
         console.log("Warped 1 day forward");
-
 
         uint256 staker0SqdBefore = sqd.balanceOf(exitStakers[0]);
         uint256 staker1SqdBefore = sqd.balanceOf(exitStakers[1]);
@@ -1098,14 +1138,12 @@ contract PortalPoolE2ETest is Test {
         console.log("  Staker 1:", staker1Remaining / USDC_UNIT, "USDC");
         console.log("  Staker 2:", staker2Remaining / USDC_UNIT, "USDC");
 
-
         vm.prank(exitStakers[0]);
         try pool.withdrawExit(ticket0) {
             revert("CRITICAL BUG: Double withdrawal succeeded!");
         } catch {
             console.log("Staker 0 correctly blocked from double withdrawal");
         }
-
 
         // Stakers 3 and 4 are still in pool
         uint256 staker3Rewards = pool.getClaimableRewards(exitStakers[3]);
@@ -1131,5 +1169,4 @@ contract PortalPoolE2ETest is Test {
         console.log("4. Double withdrawal correctly blocked");
         console.log("5. Pool remains functional after exits");
     }
-
 }

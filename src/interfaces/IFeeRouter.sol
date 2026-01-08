@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.28;
 
+/// @title IFeeRouter Interface
+/// @notice Interface for fee distribution between providers, worker pool, and burn
 interface IFeeRouter {
     struct FeeConfig {
         uint16 toProvidersBPS;

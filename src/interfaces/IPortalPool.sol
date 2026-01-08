@@ -1,21 +1,24 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.28;
 
+/// @title IPortalPool Interface
+/// @notice Interface for the portal pool implementation contract
 interface IPortalPool {
-    enum PortalState {
+    enum PoolState {
         COLLECTING,
         ACTIVE,
         IDLE,
-        FAILED
+        FAILED,
+        CLOSED
     }
 
-    struct PortalInfo {
+    struct PoolInfo {
         address operator;
         uint256 capacity;
         uint256 totalStaked;
         uint64 depositDeadline;
         uint64 activationTime;
-        PortalState state;
+        PoolState state;
         bool paused;
         bool firstActivated;
     }
@@ -41,7 +44,7 @@ interface IPortalPool {
         address rewardToken;
         address portalRegistry;
         address feeRouter;
-        address networkController;
+        uint256 minStakeThreshold;
         uint256 distributionRatePerSecond;
         string metadata;
     }
@@ -51,13 +54,16 @@ interface IPortalPool {
     event ExitClaimed(address indexed provider, uint256 amount);
     event Withdrawn(address indexed provider, uint256 amount);
     event BurnAddressUpdated(address burnAddress);
-    event StateChanged(PortalState oldState, PortalState newState);
+    event StateChanged(PoolState oldState, PoolState newState);
     event AllocationReduced(address indexed provider, uint256 amount);
     event StakeTransferred(address indexed from, address indexed to, uint256 amount);
     event RewardsToppedUp(address indexed operator, uint256 amount, uint256 newBalanceScaled);
     event RewardsClaimed(address indexed delegator, uint256 amount);
     event DistributionRateChanged(uint256 oldRate, uint256 newRate);
     event CapacityUpdated(uint256 oldCapacity, uint256 newCapacity);
+    event WhitelistEnabledChanged(bool enabled);
+    event WhitelistUpdated(address indexed user, bool added);
+    event PoolClosed(address indexed closedBy, uint256 timestamp);
 
     function initialize(InitParams calldata params) external;
 
@@ -69,12 +75,13 @@ interface IPortalPool {
     function withdrawFromFailed() external;
 
     function topUpRewards(uint256 amount) external;
+    function initializeCredit(uint256 amount) external;
     function claimRewards() external returns (uint256);
     function setDistributionRate(uint256 newRatePerSecond) external;
     function setCapacity(uint256 newCapacity) external;
     function setBurnAddress(address newBurnAddress) external;
 
-    function getPortalInfo() external view returns (PortalInfo memory);
+    function getPoolInfo() external view returns (PoolInfo memory);
     function getProviderStake(address provider) external view returns (uint256);
     function getExitTicket(address provider, uint256 ticketId) external view returns (ExitTicket memory);
     function getTicketCount(address provider) external view returns (uint256);
@@ -88,7 +95,6 @@ interface IPortalPool {
     function getCredit() external view returns (uint256);
     function getDebt() external view returns (uint256);
     function isOutOfMoney() external view returns (bool);
-    function getUserRewards(address user) external view returns (uint256);
     function getPoolStatusWithRewards(address user)
         external
         view
@@ -101,13 +107,12 @@ interface IPortalPool {
             uint256 userRewards,
             uint256 userStake
         );
-    function getRewardDebt() external view returns (uint256);
     function getTotalDrainRate() external view returns (uint256);
     function getRunway() external view returns (int256);
     function getPeerId() external view returns (bytes memory);
     function getActiveStake() external view returns (uint256);
     function getComputationUnits() external view returns (uint256);
-    function getState() external view returns (PortalState);
+    function getState() external view returns (PoolState);
     function getQueueStatus(address user, uint256 ticketId)
         external
         view
@@ -116,13 +121,7 @@ interface IPortalPool {
     function getQueueStatusWithTimestamp(address user, uint256 ticketId)
         external
         view
-        returns (
-            uint256 processed,
-            uint256 userEndPos,
-            uint256 secondsRemaining,
-            bool ready,
-            uint256 unlockTimestamp
-        );
+        returns (uint256 processed, uint256 userEndPos, uint256 secondsRemaining, bool ready, uint256 unlockTimestamp);
     function getTotalProcessed() external view returns (uint256);
     function getMetadata() external view returns (string memory);
     function getMinCapacity() external view returns (uint256);
@@ -130,4 +129,12 @@ interface IPortalPool {
 
     function pause() external;
     function unpause() external;
+
+    function closePool() external;
+    function emergencyWithdraw() external;
+
+    function setWhitelistEnabled(bool enabled) external;
+    function addToWhitelist(address[] calldata users) external;
+    function removeFromWhitelist(address[] calldata users) external;
+    function isWhitelisted(address user) external view returns (bool);
 }

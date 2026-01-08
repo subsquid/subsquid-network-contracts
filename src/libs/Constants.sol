@@ -22,10 +22,11 @@ library Constants {
     /// @dev pools must reach capacity within this time or fail
     uint256 internal constant COLLECTION_DEADLINE_SECONDS = 30 days;
 
-    /// @notice maximum distribution rate per second (1000 USDC/sec = $86.4M/day)
-    /// @dev protects against misconfigured rate scale (e.g., 18 decimals instead of 6)
+    /// @notice maximum distribution rate per second
+    /// @dev Supports 18-decimal tokens (ETH, DAI, SQD) up to ~2.6 trillion tokens/month
+    /// @dev For 6-decimal tokens (USDC), allows up to ~$2.6 quadrillion/month
     /// @dev this value is already scaled by RATE_PRECISION
-    uint256 internal constant MAX_DISTRIBUTION_RATE_PER_SECOND = 1e12;
+    uint256 internal constant MAX_DISTRIBUTION_RATE_PER_SECOND = 1e27;
 
     /// @notice minimum distribution rate per second (scaled)
     /// @dev ensures meaningful precision for calculations (e.g., $50/month scenarios)

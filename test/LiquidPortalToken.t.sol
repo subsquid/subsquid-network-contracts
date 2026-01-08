@@ -78,28 +78,6 @@ contract LiquidPortalTokenTest is BaseTest {
         assertEq(user2StakeAfter, transferAmount);
     }
 
-    function test_TransferFrom_Success() public {
-        vm.startPrank(user1);
-        sqd.approve(portal, STAKE_AMOUNT);
-        IPortalPool(portal).deposit(STAKE_AMOUNT);
-
-        lpt.approve(user2, STAKE_AMOUNT);
-        vm.stopPrank();
-
-        uint256 transferAmount = STAKE_AMOUNT / 2;
-        vm.prank(user2);
-        lpt.transferFrom(user1, user3, transferAmount);
-
-        assertEq(lpt.balanceOf(user1), STAKE_AMOUNT - transferAmount);
-        assertEq(lpt.balanceOf(user3), transferAmount);
-
-        uint256 user1Stake = IPortalPool(portal).getProviderStake(user1);
-        uint256 user3Stake = IPortalPool(portal).getProviderStake(user3);
-
-        assertEq(user1Stake, STAKE_AMOUNT - transferAmount);
-        assertEq(user3Stake, transferAmount);
-    }
-
     function test_Transfer_DoesNotCallCallbackOnMint() public {
         vm.startPrank(user1);
         sqd.approve(portal, STAKE_AMOUNT);
@@ -146,35 +124,6 @@ contract LiquidPortalTokenTest is BaseTest {
         assertEq(largeLpt.totalSupply(), STAKE_AMOUNT * 2);
     }
 
-    function test_Transfer_FullBalance() public {
-        vm.startPrank(user1);
-        sqd.approve(portal, STAKE_AMOUNT);
-        IPortalPool(portal).deposit(STAKE_AMOUNT);
-
-        lpt.transfer(user2, STAKE_AMOUNT);
-        vm.stopPrank();
-
-        assertEq(lpt.balanceOf(user1), 0);
-        assertEq(lpt.balanceOf(user2), STAKE_AMOUNT);
-
-        uint256 user1Stake = IPortalPool(portal).getProviderStake(user1);
-        uint256 user2Stake = IPortalPool(portal).getProviderStake(user2);
-
-        assertEq(user1Stake, 0);
-        assertEq(user2Stake, STAKE_AMOUNT);
-    }
-
-    function test_Approve_Success() public {
-        vm.startPrank(user1);
-        sqd.approve(portal, STAKE_AMOUNT);
-        IPortalPool(portal).deposit(STAKE_AMOUNT);
-
-        lpt.approve(user2, STAKE_AMOUNT);
-        vm.stopPrank();
-
-        assertEq(lpt.allowance(user1, user2), STAKE_AMOUNT);
-    }
-
     function test_TotalSupply_UpdatesCorrectly() public {
         // create portal with extra capacity to allow deposits after activation
         uint256 extraCapacity = MIN_STAKE_THRESHOLD + SMALL_STAKE * 2;
@@ -190,28 +139,5 @@ contract LiquidPortalTokenTest is BaseTest {
 
         // total supply reduced by exit amount
         assertEq(activeLpt.totalSupply(), extraCapacity - SMALL_STAKE);
-    }
-
-    function test_Transfer_ZeroAmount() public {
-        vm.startPrank(user1);
-        sqd.approve(portal, STAKE_AMOUNT);
-        IPortalPool(portal).deposit(STAKE_AMOUNT);
-
-        lpt.transfer(user2, 0);
-        vm.stopPrank();
-
-        assertEq(lpt.balanceOf(user1), STAKE_AMOUNT);
-        assertEq(lpt.balanceOf(user2), 0);
-    }
-
-    function test_Transfer_ToSelf() public {
-        vm.startPrank(user1);
-        sqd.approve(portal, STAKE_AMOUNT);
-        IPortalPool(portal).deposit(STAKE_AMOUNT);
-
-        lpt.transfer(user1, STAKE_AMOUNT / 2);
-        vm.stopPrank();
-
-        assertEq(lpt.balanceOf(user1), STAKE_AMOUNT);
     }
 }

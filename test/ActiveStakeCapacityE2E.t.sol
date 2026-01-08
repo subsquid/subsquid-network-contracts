@@ -10,6 +10,7 @@ import {LiquidPortalToken} from "../src/LiquidPortalToken.sol";
 import {IPortalPool} from "../src/interfaces/IPortalPool.sol";
 import {IPortalFactory} from "../src/interfaces/IPortalFactory.sol";
 import {PortalErrors} from "../src/libs/PortalErrors.sol";
+import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 
 contract MockERC20 {
     string public name;
@@ -49,24 +50,11 @@ contract MockERC20 {
     }
 }
 
-contract MockNetworkController {
-    uint256 public workerEpochLength;
-    uint256 public minStakeThreshold;
-    address public workerRewardPool;
-
-    constructor(uint256 _epochLength, uint256 _minStake, address _workerPool) {
-        workerEpochLength = _epochLength;
-        minStakeThreshold = _minStake;
-        workerRewardPool = _workerPool;
-    }
-}
-
 contract ActiveStakeCapacityE2ETest is Test {
     PortalPoolFactory public factory;
     PortalPoolImplementation public implementation;
     PortalRegistry public registry;
     FeeRouterModule public feeRouter;
-    MockNetworkController public networkController;
 
     MockERC20 public sqd;
     MockERC20 public usdc;
@@ -85,6 +73,7 @@ contract ActiveStakeCapacityE2ETest is Test {
     uint256 constant RATE_PRECISION = 1000;
     uint256 constant SCALED_RATE = 100 * RATE_PRECISION;
     uint256 constant USDC_UNIT = 1e6;
+    uint256 constant WORKER_EPOCH_LENGTH = 7200;
 
     uint256 poolCount;
     PortalPoolImplementation public pool;
@@ -93,24 +82,36 @@ contract ActiveStakeCapacityE2ETest is Test {
         sqd = new MockERC20("Subsquid", "SQD", 18);
         usdc = new MockERC20("USD Coin", "USDC", 6);
 
-        networkController = new MockNetworkController(7200, MIN_STAKE, workerRewardPool);
-        registry = new PortalRegistry(address(sqd), address(networkController), MIN_STAKE, MANA);
+        PortalRegistry registryImpl = new PortalRegistry();
+        ERC1967Proxy registryProxy = new ERC1967Proxy(
+            address(registryImpl),
+            abi.encodeWithSelector(PortalRegistry.initialize.selector, address(sqd), MIN_STAKE, MANA)
+        );
+        registry = PortalRegistry(address(registryProxy));
         feeRouter = new FeeRouterModule();
         feeRouter.setFeeConfig(10000, 0, 0);
 
         implementation = new PortalPoolImplementation();
-        factory = new PortalPoolFactory(
-            address(implementation),
-            address(registry),
-            address(feeRouter),
-            address(networkController),
-            address(sqd),
-            STAKE_PER_ACTOR
+        PortalPoolFactory factoryImpl = new PortalPoolFactory();
+        ERC1967Proxy factoryProxy = new ERC1967Proxy(
+            address(factoryImpl),
+            abi.encodeWithSelector(
+                PortalPoolFactory.initialize.selector,
+                address(implementation),
+                address(registry),
+                address(feeRouter),
+                address(sqd),
+                STAKE_PER_ACTOR,
+                MIN_STAKE,
+                WORKER_EPOCH_LENGTH
+            )
         );
+        factory = PortalPoolFactory(address(factoryProxy));
 
         registry.setFactory(address(factory));
         factory.addPaymentToken(address(usdc));
         factory.setWorkerPoolAddress(workerRewardPool);
+        factory.setDefaultWhitelistEnabled(false);
 
         for (uint256 i = 0; i < 10; i++) {
             actors[i] = address(uint160(100 + i));
@@ -121,6 +122,7 @@ contract ActiveStakeCapacityE2ETest is Test {
         }
 
         sqd.mint(operator, 100_000 * 1e18);
+        usdc.mint(admin, 1_000_000 * USDC_UNIT);
         usdc.mint(operator, 1_000_000 * USDC_UNIT);
 
         pool = _createPool();
@@ -138,6 +140,8 @@ contract ActiveStakeCapacityE2ETest is Test {
             rewardToken: address(usdc)
         });
 
+        uint256 initialDeposit = SCALED_RATE * 1 days / RATE_PRECISION;
+        usdc.approve(address(factory), initialDeposit);
         address portalAddress = factory.createPortalPool(params);
         return PortalPoolImplementation(portalAddress);
     }
@@ -178,7 +182,7 @@ contract ActiveStakeCapacityE2ETest is Test {
 
             assertEq(sqdBefore - sqdAfter, STAKE_PER_ACTOR, "SQD deducted correctly");
             assertEq(lptAfter, STAKE_PER_ACTOR, "LPT minted 1:1");
-            
+
             if (i < 9) {
                 assertEq(poolSqdAfter - poolSqdBefore, STAKE_PER_ACTOR, "Pool holds SQD before activation");
             } else {
@@ -186,9 +190,9 @@ contract ActiveStakeCapacityE2ETest is Test {
             }
         }
 
-        assertEq(pool.getPortalInfo().totalStaked, CAPACITY, "Total staked = capacity");
+        assertEq(pool.getPoolInfo().totalStaked, CAPACITY, "Total staked = capacity");
         assertEq(pool.getActiveStake(), CAPACITY, "Active stake = capacity");
-        assertEq(uint256(pool.getState()), uint256(IPortalPool.PortalState.ACTIVE), "Pool ACTIVE");
+        assertEq(uint256(pool.getState()), uint256(IPortalPool.PoolState.ACTIVE), "Pool ACTIVE");
         assertEq(sqd.balanceOf(address(registry)), CAPACITY, "Registry holds all SQD");
 
         for (uint256 i = 0; i < 10; i++) {
@@ -218,7 +222,7 @@ contract ActiveStakeCapacityE2ETest is Test {
         for (uint256 i = 0; i < 10; i++) {
             uint256 lptBefore = lpt.balanceOf(actors[i]);
             uint256 stakeBefore = pool.getProviderStake(actors[i]);
-            uint256 totalBefore = pool.getPortalInfo().totalStaked;
+            uint256 totalBefore = pool.getPoolInfo().totalStaked;
             uint256 activeBefore = pool.getActiveStake();
 
             vm.prank(actors[i]);
@@ -228,7 +232,7 @@ contract ActiveStakeCapacityE2ETest is Test {
 
             uint256 lptAfter = lpt.balanceOf(actors[i]);
             uint256 stakeAfter = pool.getProviderStake(actors[i]);
-            uint256 totalAfter = pool.getPortalInfo().totalStaked;
+            uint256 totalAfter = pool.getPoolInfo().totalStaked;
             uint256 activeAfter = pool.getActiveStake();
 
             assertEq(lptBefore - lptAfter, exitAmounts[i], "LPT burned = exit amount");
@@ -237,7 +241,7 @@ contract ActiveStakeCapacityE2ETest is Test {
             assertEq(stakeAfter, stakeBefore, "User stake unchanged (still allocated)");
         }
 
-        assertEq(pool.getPortalInfo().totalStaked, CAPACITY, "totalStaked = original capacity");
+        assertEq(pool.getPoolInfo().totalStaked, CAPACITY, "totalStaked = original capacity");
         assertEq(pool.getActiveStake(), CAPACITY - runningExitTotal, "activeStake = capacity - exits");
     }
 
@@ -275,7 +279,7 @@ contract ActiveStakeCapacityE2ETest is Test {
             assertEq(pool.getProviderStake(replacementActors[i]), STAKE_PER_ACTOR, "Replacer has stake");
         }
 
-        assertEq(pool.getPortalInfo().totalStaked, CAPACITY * 2, "Total = 2x capacity");
+        assertEq(pool.getPoolInfo().totalStaked, CAPACITY * 2, "Total = 2x capacity");
         assertEq(pool.getActiveStake(), CAPACITY, "Active = capacity");
 
         for (uint256 i = 0; i < 10; i++) {
@@ -402,7 +406,9 @@ contract ActiveStakeCapacityE2ETest is Test {
 
             if (activePercent > 0) {
                 uint256 expectedRunway = initialRunwaySeconds * 10 / (10 - i - 1);
-                assertApproxEqRel(runwaySeconds, expectedRunway, 0.05e18, "Runway inversely proportional to active stake");
+                assertApproxEqRel(
+                    runwaySeconds, expectedRunway, 0.05e18, "Runway inversely proportional to active stake"
+                );
             }
         }
 
@@ -438,7 +444,11 @@ contract ActiveStakeCapacityE2ETest is Test {
 
         for (uint256 i = 0; i < 5; i++) {
             assertEq(lpt.balanceOf(actors[i]), STAKE_PER_ACTOR / 4, "Sender has 25% LPT");
-            assertEq(pool.getProviderStake(actors[i]), (STAKE_PER_ACTOR * 75) / 100, "Sender stake = 75% (100% - 25% transferred)");
+            assertEq(
+                pool.getProviderStake(actors[i]),
+                (STAKE_PER_ACTOR * 75) / 100,
+                "Sender stake = 75% (100% - 25% transferred)"
+            );
             assertEq(lpt.balanceOf(replacementActors[i]), STAKE_PER_ACTOR / 4, "Receiver has 25% LPT");
             assertEq(pool.getProviderStake(replacementActors[i]), STAKE_PER_ACTOR / 4, "Receiver stake = 25%");
         }
@@ -449,7 +459,9 @@ contract ActiveStakeCapacityE2ETest is Test {
         vm.prank(replacementActors[0]);
         pool.requestExit(STAKE_PER_ACTOR / 4);
 
-        assertEq(pool.getProviderStake(actors[0]), (STAKE_PER_ACTOR * 75) / 100, "Actor 0 stake unchanged after 2nd exit");
+        assertEq(
+            pool.getProviderStake(actors[0]), (STAKE_PER_ACTOR * 75) / 100, "Actor 0 stake unchanged after 2nd exit"
+        );
         assertEq(pool.getProviderStake(replacementActors[0]), STAKE_PER_ACTOR / 4, "Replacement 0 stake unchanged");
 
         for (uint256 i = 5; i < 10; i++) {
@@ -466,7 +478,7 @@ contract ActiveStakeCapacityE2ETest is Test {
             pool.requestExit(STAKE_PER_ACTOR);
         }
 
-        assertEq(pool.getPortalInfo().totalStaked, CAPACITY, "Total unchanged after exits");
+        assertEq(pool.getPoolInfo().totalStaked, CAPACITY, "Total unchanged after exits");
         assertEq(pool.getActiveStake(), 0, "Active = 0 after all exits");
 
         for (uint256 i = 0; i < 10; i++) {
@@ -476,7 +488,7 @@ contract ActiveStakeCapacityE2ETest is Test {
             vm.stopPrank();
         }
 
-        assertEq(pool.getPortalInfo().totalStaked, CAPACITY * 2, "Total = 2x after replacements");
+        assertEq(pool.getPoolInfo().totalStaked, CAPACITY * 2, "Total = 2x after replacements");
         assertEq(pool.getActiveStake(), CAPACITY, "Active = capacity after replacements");
 
         vm.warp(block.timestamp + 365 days);
@@ -491,7 +503,7 @@ contract ActiveStakeCapacityE2ETest is Test {
             assertEq(sqdAfter - sqdBefore, STAKE_PER_ACTOR, "Received full stake back");
         }
 
-        assertEq(pool.getPortalInfo().totalStaked, CAPACITY, "Total = capacity after withdraws");
+        assertEq(pool.getPoolInfo().totalStaked, CAPACITY, "Total = capacity after withdraws");
         assertEq(pool.getActiveStake(), CAPACITY, "Active = capacity after withdraws");
 
         for (uint256 i = 0; i < 10; i++) {
@@ -503,7 +515,8 @@ contract ActiveStakeCapacityE2ETest is Test {
     function test_E2E_09_CreditDebt_10Actors_BalanceTransitions() public {
         _activatePool();
 
-        assertEq(pool.getCredit(), 0, "No initial credit");
+        // Pool now has initial credit from pool creation
+        assertTrue(pool.getCredit() > 0, "Should have initial credit from pool creation");
         assertEq(pool.getDebt(), 0, "No initial debt");
 
         _topUpRewards(10_000 * USDC_UNIT);

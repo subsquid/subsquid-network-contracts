@@ -36,6 +36,8 @@ contract SecurityTests is BaseTest {
             rewardToken: address(usdc)
         });
 
+        uint256 initialDeposit = REASONABLE_RATE * 1 days / 1000;
+        usdc.approve(address(factory), initialDeposit);
         portalAddress = factory.createPortalPool(params);
 
         // Activate by having user1 deposit full capacity
@@ -131,10 +133,12 @@ contract SecurityTests is BaseTest {
             capacity: DEFAULT_MAX_STAKE_PER_WALLET * 2,
             peerId: "limit-portal",
             tokenSuffix: "LimitPortal",
-            distributionRatePerSecond: 1 ether,
+            distributionRatePerSecond: 1000 * 1000,
             metadata: "",
             rewardToken: address(usdc)
         });
+        uint256 initialDeposit = params.distributionRatePerSecond * 1 days / 1000;
+        usdc.approve(address(factory), initialDeposit);
         address limitPortal = factory.createPortalPool(params);
         LiquidPortalToken limitLpt = PortalPoolImplementation(limitPortal).lptToken();
 
@@ -191,7 +195,6 @@ contract SecurityTests is BaseTest {
 
         uint256 user1ClaimableAfter = pool.getClaimableRewards(user1);
         uint256 user2ClaimableAfter = pool.getClaimableRewards(user2);
-
 
         assertApproxEqRel(user1ClaimableBefore, user1ClaimableAfter, 0.02e18, "User1 rewards should be ~preserved");
 

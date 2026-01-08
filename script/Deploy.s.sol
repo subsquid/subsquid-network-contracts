@@ -6,12 +6,15 @@ import {PortalPoolImplementation} from "../src/PortalPoolImplementation.sol";
 import {PortalPoolFactory} from "../src/PortalPoolFactory.sol";
 import {PortalRegistry} from "../src/PortalRegistry.sol";
 import {FeeRouterModule} from "../src/FeeRouterModule.sol";
-import {MockNetworkController} from "../test/mocks/MockNetworkController.sol";
+import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 
 contract DeployPortalSystem is Script {
     // Arbitrum Sepolia token addresses
     address public constant SQD = 0x24f9C46d86c064a6FA2a568F918fe62fC6917B3c;
     address public constant USDC = 0x8baf8707861a84e3d978aC067447de9AAd862FAc;
+
+    // Additional admin to be granted roles after deployment
+    address public constant ADDITIONAL_ADMIN = 0xc423362be9db384B79B7A8b21d68B65E3f1c63a7;
 
     // Configuration values
     uint256 public constant WORKER_EPOCH_LENGTH = 7200;
@@ -21,7 +24,6 @@ contract DeployPortalSystem is Script {
     uint256 public constant MANA = 1000;
 
     struct DeployedContracts {
-        address networkController;
         address portalRegistry;
         address feeRouter;
         address implementation;
@@ -69,16 +71,16 @@ contract DeployPortalSystem is Script {
     function _deployAll(address deployer) internal returns (DeployedContracts memory d) {
         address workerRewardPool = 0xFa27FdC303FA02F6F21Ec8F597421b7B34BD61Ee;
 
-        console.log("\n--- Deploying NetworkController ---");
-        MockNetworkController networkController =
-            new MockNetworkController(WORKER_EPOCH_LENGTH, MIN_STAKE_THRESHOLD, workerRewardPool);
-        d.networkController = address(networkController);
-        console.log("NetworkController deployed at:", d.networkController);
-
         console.log("\n--- Deploying PortalRegistry ---");
-        PortalRegistry portalRegistry = new PortalRegistry(SQD, d.networkController, MIN_STAKE_THRESHOLD, MANA);
+        PortalRegistry portalRegistryImpl = new PortalRegistry();
+        ERC1967Proxy portalRegistryProxy = new ERC1967Proxy(
+            address(portalRegistryImpl),
+            abi.encodeWithSelector(PortalRegistry.initialize.selector, SQD, MIN_STAKE_THRESHOLD, MANA)
+        );
+        PortalRegistry portalRegistry = PortalRegistry(address(portalRegistryProxy));
         d.portalRegistry = address(portalRegistry);
-        console.log("PortalRegistry deployed at:", d.portalRegistry);
+        console.log("PortalRegistry implementation:", address(portalRegistryImpl));
+        console.log("PortalRegistry proxy:", d.portalRegistry);
 
         console.log("\n--- Deploying FeeRouterModule ---");
         FeeRouterModule feeRouter = new FeeRouterModule();
@@ -91,9 +93,21 @@ contract DeployPortalSystem is Script {
         console.log("PortalPoolImplementation deployed at:", d.implementation);
 
         console.log("\n--- Deploying PortalPoolFactory ---");
-        PortalPoolFactory factory = new PortalPoolFactory(
-            d.implementation, d.portalRegistry, d.feeRouter, d.networkController, SQD, MAX_STAKE_PER_WALLET
+        PortalPoolFactory factoryImpl = new PortalPoolFactory();
+        ERC1967Proxy factoryProxy = new ERC1967Proxy(
+            address(factoryImpl),
+            abi.encodeWithSelector(
+                PortalPoolFactory.initialize.selector,
+                d.implementation,
+                d.portalRegistry,
+                d.feeRouter,
+                SQD,
+                MAX_STAKE_PER_WALLET,
+                MIN_STAKE_THRESHOLD,
+                WORKER_EPOCH_LENGTH
+            )
         );
+        PortalPoolFactory factory = PortalPoolFactory(address(factoryProxy));
         d.factory = address(factory);
         d.beacon = address(factory.beacon());
         console.log("PortalPoolFactory deployed at:", d.factory);
@@ -104,7 +118,6 @@ contract DeployPortalSystem is Script {
         console.log("Factory set in PortalRegistry");
 
         console.log("\n--- Setting Worker Pool Address ---");
-        // note: workerPoolAddress should be set after deployment:
         factory.setWorkerPoolAddress(workerRewardPool);
         console.log("Worker pool address set to:", workerRewardPool);
 
@@ -117,7 +130,24 @@ contract DeployPortalSystem is Script {
         require(factory.isAllowedPaymentToken(USDC), "USDC not added as payment token");
         require(portalRegistry.factory() == d.factory, "Factory not set in registry");
         require(factory.workerPoolAddress() == workerRewardPool, "Worker pool address not set");
+        require(factory.minStakeThreshold() == MIN_STAKE_THRESHOLD, "Min stake threshold mismatch");
+        require(factory.workerEpochLength() == WORKER_EPOCH_LENGTH, "Worker epoch length mismatch");
         console.log("Configuration verified successfully");
+
+        console.log("\n--- Granting Roles to Additional Admin ---");
+        console.log("Additional Admin:", ADDITIONAL_ADMIN);
+
+        // Grant admin role on Factory
+        factory.grantRole(factory.DEFAULT_ADMIN_ROLE(), ADDITIONAL_ADMIN);
+        console.log("Granted DEFAULT_ADMIN_ROLE on Factory");
+
+        // Grant pool deployer role on Factory
+        factory.grantRole(factory.POOL_DEPLOYER_ROLE(), ADDITIONAL_ADMIN);
+        console.log("Granted POOL_DEPLOYER_ROLE on Factory");
+
+        // Grant admin role on Registry
+        portalRegistry.grantRole(portalRegistry.DEFAULT_ADMIN_ROLE(), ADDITIONAL_ADMIN);
+        console.log("Granted DEFAULT_ADMIN_ROLE on Registry");
     }
 
     function _printSummary(DeployedContracts memory d) internal pure {
@@ -130,7 +160,6 @@ contract DeployPortalSystem is Script {
         console.log("  USDC:", USDC);
         console.log("");
         console.log("Core Contracts:");
-        console.log("  NetworkController:", d.networkController);
         console.log("  PortalRegistry:", d.portalRegistry);
         console.log("  FeeRouterModule:", d.feeRouter);
         console.log("");
@@ -143,31 +172,45 @@ contract DeployPortalSystem is Script {
         console.log("  Min Stake Threshold:", MIN_STAKE_THRESHOLD / 1e18, "SQD");
         console.log("  Max Pool Capacity:", MAX_POOL_CAPACITY / 1e18, "SQD");
         console.log("  Max Stake Per Wallet:", MAX_STAKE_PER_WALLET / 1e18, "SQD");
+        console.log("  Worker Epoch Length:", WORKER_EPOCH_LENGTH);
         console.log("  Mana:", MANA);
         console.log("  Worker Pool Address: 0xFa27FdC303FA02F6F21Ec8F597421b7B34BD61Ee");
+        console.log("");
+        console.log("Additional Admin:");
+        console.log("  Address:", ADDITIONAL_ADMIN);
+        console.log("  Roles: DEFAULT_ADMIN_ROLE, POOL_DEPLOYER_ROLE (Factory)");
+        console.log("  Roles: DEFAULT_ADMIN_ROLE (Registry)");
         console.log("========================================");
     }
 }
 
-contract DeployWithExistingController is Script {
+contract DeployArbitrum is Script {
     address public constant SQD = 0x1337420dED5ADb9980CFc35f8f2B054ea86f8aB1;
     address public constant USDC = 0xaf88d065e77c8cC2239327C5EDb3A432268e5831;
+
+    // Additional admin to be granted roles after deployment
+    address public constant ADDITIONAL_ADMIN = 0xc423362be9db384B79B7A8b21d68B65E3f1c63a7;
 
     uint256 public constant MIN_STAKE_THRESHOLD = 100_000 ether;
     uint256 public constant MAX_POOL_CAPACITY = 10_000_000 ether;
     uint256 public constant MAX_STAKE_PER_WALLET = 1_000_000 ether;
     uint256 public constant MANA = 1000;
+    uint256 public constant WORKER_EPOCH_LENGTH = 7200;
 
-    function run(address networkController) external {
+    function run() external {
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
-
-        console.log("Using existing NetworkController:", networkController);
 
         vm.startBroadcast(deployerPrivateKey);
 
         console.log("\n--- Deploying PortalRegistry ---");
-        PortalRegistry portalRegistry = new PortalRegistry(SQD, networkController, MIN_STAKE_THRESHOLD, MANA);
-        console.log("PortalRegistry deployed at:", address(portalRegistry));
+        PortalRegistry portalRegistryImpl = new PortalRegistry();
+        ERC1967Proxy portalRegistryProxy = new ERC1967Proxy(
+            address(portalRegistryImpl),
+            abi.encodeWithSelector(PortalRegistry.initialize.selector, SQD, MIN_STAKE_THRESHOLD, MANA)
+        );
+        PortalRegistry portalRegistry = PortalRegistry(address(portalRegistryProxy));
+        console.log("PortalRegistry implementation:", address(portalRegistryImpl));
+        console.log("PortalRegistry proxy:", address(portalRegistry));
 
         console.log("\n--- Deploying FeeRouterModule ---");
         FeeRouterModule feeRouter = new FeeRouterModule();
@@ -178,20 +221,42 @@ contract DeployWithExistingController is Script {
         console.log("PortalPoolImplementation deployed at:", address(implementation));
 
         console.log("\n--- Deploying PortalPoolFactory ---");
-        PortalPoolFactory factory = new PortalPoolFactory(
-            address(implementation),
-            address(portalRegistry),
-            address(feeRouter),
-            networkController,
-            SQD,
-            MAX_STAKE_PER_WALLET
+        PortalPoolFactory factoryImpl = new PortalPoolFactory();
+        ERC1967Proxy factoryProxy = new ERC1967Proxy(
+            address(factoryImpl),
+            abi.encodeWithSelector(
+                PortalPoolFactory.initialize.selector,
+                address(implementation),
+                address(portalRegistry),
+                address(feeRouter),
+                SQD,
+                MAX_STAKE_PER_WALLET,
+                MIN_STAKE_THRESHOLD,
+                WORKER_EPOCH_LENGTH
+            )
         );
+        PortalPoolFactory factory = PortalPoolFactory(address(factoryProxy));
         console.log("PortalPoolFactory deployed at:", address(factory));
         console.log("PortalPoolBeacon deployed at:", address(factory.beacon()));
 
         console.log("\n--- Setting Factory in Registry ---");
         portalRegistry.setFactory(address(factory));
         console.log("Factory set in PortalRegistry");
+
+        console.log("\n--- Granting Roles to Additional Admin ---");
+        console.log("Additional Admin:", ADDITIONAL_ADMIN);
+
+        // Grant admin role on Factory
+        factory.grantRole(factory.DEFAULT_ADMIN_ROLE(), ADDITIONAL_ADMIN);
+        console.log("Granted DEFAULT_ADMIN_ROLE on Factory");
+
+        // Grant pool deployer role on Factory
+        factory.grantRole(factory.POOL_DEPLOYER_ROLE(), ADDITIONAL_ADMIN);
+        console.log("Granted POOL_DEPLOYER_ROLE on Factory");
+
+        // Grant admin role on Registry
+        portalRegistry.grantRole(portalRegistry.DEFAULT_ADMIN_ROLE(), ADDITIONAL_ADMIN);
+        console.log("Granted DEFAULT_ADMIN_ROLE on Registry");
 
         vm.stopBroadcast();
 

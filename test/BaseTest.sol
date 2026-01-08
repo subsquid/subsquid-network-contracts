@@ -11,14 +11,13 @@ import {IPortalPool} from "../src/interfaces/IPortalPool.sol";
 import {IPortalFactory} from "../src/interfaces/IPortalFactory.sol";
 import {IPortalRegistry} from "../src/interfaces/IPortalRegistry.sol";
 import {MockERC20} from "./mocks/MockERC20.sol";
-import {MockNetworkController} from "./mocks/MockNetworkController.sol";
+import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 
 abstract contract BaseTest is Test {
     PortalPoolFactory public factory;
     PortalPoolImplementation public implementation;
     PortalRegistry public registry;
     FeeRouterModule public feeRouter;
-    MockNetworkController public networkController;
 
     MockERC20 public sqd;
     MockERC20 public usdc;
@@ -46,32 +45,43 @@ abstract contract BaseTest is Test {
         usdc = new MockERC20("USD Coin", "USDC", 6);
         dai = new MockERC20("Dai Stablecoin", "DAI", 18);
 
-        networkController = new MockNetworkController(WORKER_EPOCH_LENGTH, MIN_STAKE_THRESHOLD, workerRewardPool);
-
-        registry = new PortalRegistry(address(sqd), address(networkController), MIN_STAKE_THRESHOLD, MANA);
+        PortalRegistry registryImpl = new PortalRegistry();
+        ERC1967Proxy registryProxy = new ERC1967Proxy(
+            address(registryImpl),
+            abi.encodeWithSelector(PortalRegistry.initialize.selector, address(sqd), MIN_STAKE_THRESHOLD, MANA)
+        );
+        registry = PortalRegistry(address(registryProxy));
 
         feeRouter = new FeeRouterModule();
 
         implementation = new PortalPoolImplementation();
 
-        factory = new PortalPoolFactory(
-            address(implementation),
-            address(registry),
-            address(feeRouter),
-            address(networkController),
-            address(sqd),
-            DEFAULT_MAX_STAKE_PER_WALLET
+        PortalPoolFactory factoryImpl = new PortalPoolFactory();
+        ERC1967Proxy factoryProxy = new ERC1967Proxy(
+            address(factoryImpl),
+            abi.encodeWithSelector(
+                PortalPoolFactory.initialize.selector,
+                address(implementation),
+                address(registry),
+                address(feeRouter),
+                address(sqd),
+                DEFAULT_MAX_STAKE_PER_WALLET,
+                MIN_STAKE_THRESHOLD,
+                WORKER_EPOCH_LENGTH
+            )
         );
+        factory = PortalPoolFactory(address(factoryProxy));
 
         registry.setFactory(address(factory));
 
         factory.addPaymentToken(address(usdc));
         factory.addPaymentToken(address(dai));
 
-        // Set global worker pool address in factory
         factory.setWorkerPoolAddress(workerRewardPool);
 
         factory.setMaxDistributionRate(type(uint256).max);
+
+        factory.setDefaultWhitelistEnabled(false);
 
         _mintTokensToUsers();
 
@@ -94,9 +104,11 @@ abstract contract BaseTest is Test {
         sqd.mint(user2, 1_000_000 ether);
         sqd.mint(user3, 1_000_000 ether);
 
+        usdc.mint(admin, 10_000_000 * 1e6);
         usdc.mint(operator, 10_000_000 * 1e6);
         usdc.mint(user1, 1_000_000 * 1e6);
 
+        dai.mint(admin, 10_000_000 ether);
         dai.mint(operator, 10_000_000 ether);
     }
 
@@ -109,11 +121,15 @@ abstract contract BaseTest is Test {
             capacity: _capacity,
             peerId: abi.encodePacked("peer-", _name),
             tokenSuffix: _name,
-            // Rate is scaled by RATE_PRECISION (1000). 1 ether * 1000 = 1e18 tokens/sec actual rate
-            distributionRatePerSecond: 1 ether * 1000,
+            // Rate is scaled by RATE_PRECISION (1000). 1000 * 1000 = 1e6 = 1000 micro-USDC/sec
+            distributionRatePerSecond: 1000 * 1000,
             metadata: "",
             rewardToken: address(usdc)
         });
+
+        // Approve initial deposit for rewardToken (1 day of distribution)
+        uint256 initialDeposit = params.distributionRatePerSecond * 1 days / 1000;
+        usdc.approve(address(factory), initialDeposit);
 
         portalAddress = factory.createPortalPool(params);
     }
@@ -138,7 +154,7 @@ abstract contract BaseTest is Test {
     }
 
     function _warpToAfterDeadline(address portal) internal {
-        IPortalPool.PortalInfo memory info = IPortalPool(portal).getPortalInfo();
+        IPortalPool.PoolInfo memory info = IPortalPool(portal).getPoolInfo();
         vm.warp(info.depositDeadline + 1);
     }
 }

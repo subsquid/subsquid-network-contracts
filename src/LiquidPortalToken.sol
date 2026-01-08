@@ -7,17 +7,25 @@ import {IPortalPool} from "./interfaces/IPortalPool.sol";
 /**
  * @title LiquidPortalToken
  * @notice Transferable ERC20 token representing stake in a Portal Pool
+ * @dev minted 1:1 with SQD staked, burned when exiting
  */
 contract LiquidPortalToken is ERC20 {
     address public immutable PORTAL_POOL;
 
     error OnlyPortalPool();
 
+    /// @dev restricts function access to the portal pool contract only
     modifier onlyPool() {
         if (msg.sender != PORTAL_POOL) revert OnlyPortalPool();
         _;
     }
 
+    /**
+     * @dev initializes the LPT token with name, symbol, and portal pool reference.
+     * @param name_ the token name.
+     * @param symbol_ the token symbol.
+     * @param portalPool_ address of the portal pool that controls this token.
+     */
     constructor(string memory name_, string memory symbol_, address portalPool_) ERC20(name_, symbol_) {
         PORTAL_POOL = portalPool_;
     }
@@ -40,6 +48,13 @@ contract LiquidPortalToken is ERC20 {
         _burn(from, amount);
     }
 
+    /**
+     * @dev overrides ERC20 _update to notify portal pool of transfers.
+     * @notice Called on every transfer to update stake accounting in the pool.
+     * @param from the sender address.
+     * @param to the recipient address.
+     * @param value the amount being transferred.
+     */
     function _update(address from, address to, uint256 value) internal override {
         super._update(from, to, value);
 

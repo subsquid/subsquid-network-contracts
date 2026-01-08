@@ -1,12 +1,16 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.28;
 
+/// @title Portal Errors Library
+/// @notice Custom error definitions for portal pool contracts
 library PortalErrors {
     // State errors
     error InvalidState();
     error PortalPaused();
     error PortalNotFailed();
     error NotActivated();
+    error PoolClosed();
+    error PoolNotClosed();
 
     // Stake errors
     error InsufficientStake();
@@ -34,6 +38,9 @@ library PortalErrors {
     error NotPortalRegistry();
     error NotLPTToken();
     error NotAuthorized();
+    error NotAdmin();
+    error NotWhitelisted();
+    error WhitelistFeatureDisabled();
 
     // Validation errors
     error InvalidAmount();

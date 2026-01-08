@@ -9,6 +9,7 @@ import {FeeRouterModule} from "../src/FeeRouterModule.sol";
 import {IPortalPool} from "../src/interfaces/IPortalPool.sol";
 import {IPortalFactory} from "../src/interfaces/IPortalFactory.sol";
 import {PortalErrors} from "../src/libs/PortalErrors.sol";
+import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 
 contract MockERC20 {
     string public name;
@@ -48,24 +49,11 @@ contract MockERC20 {
     }
 }
 
-contract MockNetworkController {
-    uint256 public workerEpochLength;
-    uint256 public minStakeThreshold;
-    address public workerRewardPool;
-
-    constructor(uint256 _epochLength, uint256 _minStake, address _workerPool) {
-        workerEpochLength = _epochLength;
-        minStakeThreshold = _minStake;
-        workerRewardPool = _workerPool;
-    }
-}
-
 contract PortalPoolRunwayModelTest is Test {
     PortalPoolFactory public factory;
     PortalPoolImplementation public implementation;
     PortalRegistry public registry;
     FeeRouterModule public feeRouter;
-    MockNetworkController public networkController;
 
     MockERC20 public sqd;
     MockERC20 public usdc;
@@ -82,6 +70,7 @@ contract PortalPoolRunwayModelTest is Test {
     uint256 constant RATE_PER_SEC = 100_000;
     uint256 constant MANA = 1000;
     uint256 constant MAX_STAKE_PER_WALLET = 10_000_000;
+    uint256 constant WORKER_EPOCH_LENGTH = 7200;
 
     PortalPoolImplementation public pool;
 
@@ -89,32 +78,44 @@ contract PortalPoolRunwayModelTest is Test {
         sqd = new MockERC20("Subsquid", "SQD", 18);
         usdc = new MockERC20("USD Coin", "USDC", 6);
 
-        networkController = new MockNetworkController(7200, MIN_STAKE, workerRewardPool);
-
-        registry = new PortalRegistry(address(sqd), address(networkController), MIN_STAKE, MANA);
+        PortalRegistry registryImpl = new PortalRegistry();
+        ERC1967Proxy registryProxy = new ERC1967Proxy(
+            address(registryImpl),
+            abi.encodeWithSelector(PortalRegistry.initialize.selector, address(sqd), MIN_STAKE, MANA)
+        );
+        registry = PortalRegistry(address(registryProxy));
 
         feeRouter = new FeeRouterModule();
         feeRouter.setFeeConfig(10000, 0, 0);
 
         implementation = new PortalPoolImplementation();
 
-        factory = new PortalPoolFactory(
-            address(implementation),
-            address(registry),
-            address(feeRouter),
-            address(networkController),
-            address(sqd),
-            MAX_STAKE_PER_WALLET
+        PortalPoolFactory factoryImpl = new PortalPoolFactory();
+        ERC1967Proxy factoryProxy = new ERC1967Proxy(
+            address(factoryImpl),
+            abi.encodeWithSelector(
+                PortalPoolFactory.initialize.selector,
+                address(implementation),
+                address(registry),
+                address(feeRouter),
+                address(sqd),
+                MAX_STAKE_PER_WALLET,
+                MIN_STAKE,
+                WORKER_EPOCH_LENGTH
+            )
         );
+        factory = PortalPoolFactory(address(factoryProxy));
 
         registry.setFactory(address(factory));
         factory.addPaymentToken(address(usdc));
         factory.setWorkerPoolAddress(workerRewardPool);
+        factory.setDefaultWhitelistEnabled(false);
 
         sqd.mint(operator, 100_000_000);
         sqd.mint(alice, 10_000_000);
         sqd.mint(bob, 10_000_000);
         sqd.mint(charlie, 10_000_000);
+        usdc.mint(admin, 100_000_000);
         usdc.mint(operator, 100_000_000);
 
         pool = PortalPoolImplementation(_createAndActivatePortal());
@@ -135,6 +136,9 @@ contract PortalPoolRunwayModelTest is Test {
             metadata: "",
             rewardToken: address(usdc)
         });
+
+        uint256 initialDeposit = RATE_PER_SEC * 1 days / 1000;
+        usdc.approve(address(factory), initialDeposit);
 
         portalAddress = factory.createPortalPool(params);
 
@@ -203,15 +207,14 @@ contract PortalPoolRunwayModelTest is Test {
     }
 
     function test_DryPeriod_RewardsFlatten() public {
-        uint256 topUpAmount = 1000;
-        vm.startPrank(operator);
-        usdc.approve(address(pool), topUpAmount);
-        pool.topUpRewards(topUpAmount);
-        vm.stopPrank();
+        // Initial credit from pool creation: RATE_PER_SEC * 86400 / 1000 = 8,640,000
+        // Don't top up - just use initial credit
 
         uint256 drainRate = pool.getTotalDrainRate();
-        // drainRate is scaled by RATE_PRECISION (1000), so multiply topUpAmount to get correct duration
-        uint256 runwayDuration = (topUpAmount * 1000) / drainRate;
+        // drainRate = 100,000, initial credit = 8,640,000
+        // Runway = 8,640,000 * 1000 / 100,000 = 86,400 seconds
+        uint256 initialCredit = RATE_PER_SEC * 86400 / 1000;
+        uint256 runwayDuration = (initialCredit * 1000) / drainRate;
 
         vm.warp(block.timestamp + runwayDuration + 1000);
 
@@ -223,13 +226,12 @@ contract PortalPoolRunwayModelTest is Test {
     }
 
     function test_DryPeriod_ClaimableStaysConstant() public {
-        vm.startPrank(operator);
-        usdc.approve(address(pool), 750);
-        pool.topUpRewards(750);
-        vm.stopPrank();
+        // Initial credit = RATE_PER_SEC * 86400 / 1000 = 8,640,000
+        // Don't top up, use initial credit
 
         uint256 drainRate = pool.getTotalDrainRate();
-        uint256 runwaySeconds = 750 / drainRate;
+        uint256 initialCredit = RATE_PER_SEC * 86400 / 1000;
+        uint256 runwaySeconds = (initialCredit * 1000) / drainRate;
 
         vm.warp(block.timestamp + runwaySeconds + 100);
         uint256 claimableDay1 = pool.getClaimableRewards(alice);
@@ -242,20 +244,19 @@ contract PortalPoolRunwayModelTest is Test {
 
     function test_CatchUp_RetroactiveCompensation() public {
         uint256 START_TIME = block.timestamp;
-
         uint256 drainRate = pool.getTotalDrainRate();
-        uint256 initialTopUp = drainRate;
 
-        vm.startPrank(operator);
-        usdc.approve(address(pool), initialTopUp);
-        pool.topUpRewards(initialTopUp);
-        vm.stopPrank();
+        // Initial credit = RATE_PER_SEC * 86400 / 1000 = 8,640,000
+        // Runway from initial credit = 8,640,000 * 1000 / drainRate = 86,400 seconds
+        uint256 initialCredit = RATE_PER_SEC * 86400 / 1000;
+        uint256 initialRunway = (initialCredit * 1000) / drainRate;
 
-        vm.warp(START_TIME + 1500);
+        // Warp past initial runway to create debt
+        vm.warp(START_TIME + initialRunway + 1500);
 
         uint256 rewardsDuringDry = pool.getClaimableRewards(alice);
 
-        uint256 debtBefore = pool.getRewardDebt();
+        uint256 debtBefore = pool.getDebt();
         assertTrue(debtBefore > 0, "Should have debt");
 
         uint256 largeTopUp = debtBefore + drainRate * 2;
@@ -272,21 +273,20 @@ contract PortalPoolRunwayModelTest is Test {
     }
 
     function test_CatchUp_TopUpRestoresRewards() public {
-        vm.startPrank(operator);
-        usdc.approve(address(pool), 75000);
-        pool.topUpRewards(75000);
-        vm.stopPrank();
-
         uint256 drainRate = pool.getTotalDrainRate();
-        uint256 runwaySeconds = (75000 * 1000) / drainRate;
 
-        vm.warp(block.timestamp + runwaySeconds + 500);
+        // Initial credit = RATE_PER_SEC * 86400 / 1000 = 8,640,000
+        uint256 initialCredit = RATE_PER_SEC * 86400 / 1000;
+        uint256 initialRunwaySeconds = (initialCredit * 1000) / drainRate;
+
+        // Warp past initial runway + 500 to create debt
+        vm.warp(block.timestamp + initialRunwaySeconds + 500);
 
         uint256 claimableWhileDry = pool.getClaimableRewards(alice);
         (,,, bool isDry) = pool.getRewardStatus();
         assertTrue(isDry, "Should be dry");
 
-        uint256 debtBefore = pool.getRewardDebt();
+        uint256 debtBefore = pool.getDebt();
         uint256 topUp = debtBefore + 100000;
 
         vm.startPrank(operator);
@@ -438,7 +438,7 @@ contract PortalPoolRunwayModelTest is Test {
 
         vm.warp(block.timestamp + 100000);
 
-        uint256 debt = pool.getRewardDebt();
+        uint256 debt = pool.getDebt();
         assertTrue(debt > 0, "Should have debt when dry");
 
         (int256 balance,,, bool isDry) = pool.getRewardStatus();
@@ -453,17 +453,13 @@ contract PortalPoolRunwayModelTest is Test {
     }
 
     function test_GetRunway() public {
-        vm.startPrank(operator);
-        usdc.approve(address(pool), 1000);
-        pool.topUpRewards(1000);
-        vm.stopPrank();
-
         int256 runway = pool.getRunway();
-        assertTrue(runway > int256(block.timestamp), "Runway should be in future");
+        assertTrue(runway > int256(block.timestamp), "Runway should be in future (from initial credit)");
 
         uint256 drainRate = pool.getTotalDrainRate();
-        // drainRate is scaled by RATE_PRECISION (1000), so multiply credit to get correct duration
-        uint256 runwaySeconds = (1000 * 1000) / drainRate;
+        // Initial credit = RATE_PER_SEC * 86400 / 1000 = 8,640,000
+        uint256 initialCredit = RATE_PER_SEC * 86400 / 1000;
+        uint256 runwaySeconds = (initialCredit * 1000) / drainRate;
         vm.warp(block.timestamp + runwaySeconds + 1000);
 
         int256 runwayAfter = pool.getRunway();
@@ -472,6 +468,8 @@ contract PortalPoolRunwayModelTest is Test {
 
     function test_TopUpRewards_SplitBetweenProvidersAndWorkerPool() public {
         feeRouter.setFeeConfig(5000, 5000, 0);
+
+        uint256 initialCredit = RATE_PER_SEC * 86400 / 1000;
 
         uint256 topUpAmount = 10000;
         uint256 workerPoolBalanceBefore = usdc.balanceOf(workerRewardPool);
@@ -485,7 +483,8 @@ contract PortalPoolRunwayModelTest is Test {
         assertEq(workerPoolBalanceAfter - workerPoolBalanceBefore, 5000, "Worker pool should receive 50%");
 
         int256 providerBalance = pool.getCurrentRewardBalance();
-        assertEq(providerBalance, 5000, "Provider balance should be 50%");
+        // Provider balance = initial credit (100% to providers) + 50% of topup
+        assertEq(providerBalance, int256(initialCredit + 5000), "Provider balance should be initial + 50% of topup");
     }
 
     function test_TopUpRewards_RevertsIfWorkerPoolNotSet() public {

@@ -3,10 +3,9 @@ pragma solidity 0.8.28;
 
 /**
  * @title IPortalRegistry
- * @notice core registry for all portals - supports both direct portals (BYO stake) and pool-based portals (crowdfunded)
+ * @notice Core registry for all clusters - only factory-created pools can interact
  */
 interface IPortalRegistry {
-
     struct Portal {
         bytes peerId;
         string metadata;
@@ -19,12 +18,11 @@ interface IPortalRegistry {
         uint256 totalStaked;
         uint256 registeredAt;
         bool active;
-        ClusterType clusterType;
         string metadata;
         Portal[] portals;
     }
 
-    event ClusterCreated(bytes32 indexed clusterId, address indexed clusterAddress, address indexed operator, ClusterType clusterType);
+    event ClusterCreated(bytes32 indexed clusterId, address indexed clusterAddress, address indexed operator);
     event ClusterActivated(bytes32 indexed clusterId);
     event ClusterDeactivated(bytes32 indexed clusterId);
     event ClusterMetadataUpdated(bytes32 indexed clusterId, string metadata);
@@ -36,32 +34,19 @@ interface IPortalRegistry {
     event Staked(bytes32 indexed clusterId, uint256 amount);
     event Unstaked(bytes32 indexed clusterId, uint256 amount);
 
-   // no withdraw as we rely on unstaking - above activation unstaking is unlimited with no restrictions
-
     event MinStakeUpdated(uint256 oldValue, uint256 newValue);
     event ManaUpdated(uint256 oldValue, uint256 newValue);
     event FactoryUpdated(address indexed oldFactory, address indexed newFactory);
 
-    function registerCluster(
-        address clusterAddress,
-        address operator,
-        string calldata metadata
-    ) external returns (bytes32 clusterId);
+    function registerCluster(address clusterAddress, address operator, string calldata metadata)
+        external
+        returns (bytes32 clusterId);
 
-
-    function addPortal(
-        bytes32 clusterId,
-        bytes calldata peerId,
-        string calldata metadata
-    ) external;
+    function addPortal(bytes32 clusterId, bytes calldata peerId, string calldata metadata) external;
 
     function removePortal(bytes32 clusterId, uint256 portalIndex) external;
 
-    function setPortalMetadata(
-        bytes32 clusterId,
-        uint256 portalIndex,
-        string calldata metadata
-    ) external;
+    function setPortalMetadata(bytes32 clusterId, uint256 portalIndex, string calldata metadata) external;
 
     function setClusterMetadata(bytes32 clusterId, string calldata metadata) external;
 
@@ -83,11 +68,11 @@ interface IPortalRegistry {
 
     function isCluster(address clusterAddress) external view returns (bool);
 
-    function stakePoolFunds(uint256 amount) external;
-    // unification     function unstakeFromDirectCluster(uint256 amount) external; based on msg.sender
-    function unstake(uint256 amount) external; 
+    function stake(uint256 amount) external;
 
-    function stakeToDirectCluster(uint256 amount) external;
+    function unstake(address provider, uint256 amount) external;
+
+    function activateCluster() external;
 
     function pause() external;
 
@@ -105,14 +90,9 @@ interface IPortalRegistry {
 
     function mana() external view returns (uint256);
 
-    function ownerClusters(address operator) external view returns (bytes32[] memory);
+    function ownerClusters(address operator, uint256 index) external view returns (bytes32);
 
     function addressToClusterId(address clusterAddress) external view returns (bytes32);
 
     function peerIdToCluster(bytes32 peerIdHash) external view returns (bytes32);
-
-    function providerAllocations(bytes32 clusterId, address provider) external view returns (uint256);
-
-    function operatorToDirectCluster(address operator) external view returns (bytes32);
 }
-

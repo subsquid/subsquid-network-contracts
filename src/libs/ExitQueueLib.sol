@@ -98,11 +98,21 @@ library ExitQueueLib {
         self.totalRequested = endPosition;
     }
 
+    /// @notice Calculate seconds until a ticket is unlocked
+    /// @param self the queue state
+    /// @param ticket the exit ticket to check
+    /// @return seconds remaining until unlocked, or type(uint256).max if rate is zero
     function secondsUntilUnlocked(Queue storage self, Ticket storage ticket) internal view returns (uint256) {
         uint256 processed = totalProcessed(self);
         if (processed >= ticket.endPosition) {
             return 0;
         }
+
+        // Guard: zero rate means infinite wait (prevents division by zero)
+        if (self.unlockRatePerSecond == 0) {
+            return type(uint256).max;
+        }
+
         uint256 remaining = ticket.endPosition - processed;
         // use ceiling division to avoid returning 0 when fractional seconds remain
         // formula: ceil(a/b) = (a + b - 1) / b
@@ -127,24 +137,24 @@ library ExitQueueLib {
         ready = isUnlocked(self, ticket);
     }
 
-    function getSimulatedUnlockTimestamp(Queue storage self, uint256 simulatedAmount) 
-        internal 
-        view 
-        returns (uint256 unlockTimestamp) 
+    function getSimulatedUnlockTimestamp(Queue storage self, uint256 simulatedAmount)
+        internal
+        view
+        returns (uint256 unlockTimestamp)
     {
         uint256 processed = totalProcessed(self);
         uint256 simulatedEndPosition = self.totalRequested + simulatedAmount;
-        
+
         if (processed >= simulatedEndPosition) {
             return block.timestamp;
         }
-        
+
         uint256 remaining = simulatedEndPosition - processed;
-        
+
         if (self.unlockRatePerSecond == 0) {
             return type(uint256).max;
         }
-        
+
         uint256 secondsNeeded = (remaining + self.unlockRatePerSecond - 1) / self.unlockRatePerSecond;
         return block.timestamp + secondsNeeded;
     }

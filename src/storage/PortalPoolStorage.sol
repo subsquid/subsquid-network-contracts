@@ -4,18 +4,20 @@ pragma solidity 0.8.28;
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IPortalRegistry} from "../interfaces/IPortalRegistry.sol";
 import {IFeeRouter} from "../interfaces/IFeeRouter.sol";
-import {INetworkController} from "../interfaces/INetworkController.sol";
 import {IPortalFactory} from "../interfaces/IPortalFactory.sol";
 import {IPortalPool} from "../interfaces/IPortalPool.sol";
 import {LiquidPortalToken} from "../LiquidPortalToken.sol";
 import {ExitQueueLib} from "../libs/ExitQueueLib.sol";
 import {Constants} from "../libs/Constants.sol";
 
+/// @title Portal Pool Storage
+/// @notice Storage layout for portal pool implementation
+/// @dev Separated from implementation to ensure clean upgrade paths
 abstract contract PortalPoolStorage {
     uint256 public constant PRECISION = Constants.PRECISION;
     uint256 public constant RATE_PRECISION = Constants.RATE_PRECISION;
 
-    IPortalPool.PortalInfo internal _portalInfo;
+    IPortalPool.PoolInfo internal _portalInfo;
     bytes internal _peerId;
 
     mapping(address => uint256) internal _stakes;
@@ -26,7 +28,7 @@ abstract contract PortalPoolStorage {
     IERC20 internal _sqd;
     IPortalRegistry internal _portalRegistry;
     IFeeRouter internal _feeRouter;
-    INetworkController internal _networkController;
+    uint256 internal _minStakeThreshold;
     IPortalFactory internal _factory;
 
     IERC20 internal _rewardToken;
@@ -71,5 +73,14 @@ abstract contract PortalPoolStorage {
     address public workerPoolAddress;
     address public burnAddress;
 
-    uint256[50] private __gap;
+    bool public whitelistEnabled;
+    mapping(address => bool) public whitelist;
+
+    /// @notice Scaling factor for reward token decimals (10^decimals)
+    /// @dev For 18-decimal tokens = 1e18, for 6-decimal tokens = 1e6
+    /// @dev Rate formula: rate = (target_tokens_per_month * 10^decimals * 1000) / 2592000
+    /// @dev Example USDC rates: $1/mo=385, $100/mo=38580, $1000/mo=385802, $10000/mo=3858024
+    uint256 internal _rewardTokenDecimalScale;
+
+    uint256[47] private __gap;
 }

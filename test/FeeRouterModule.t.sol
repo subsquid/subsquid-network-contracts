@@ -174,14 +174,6 @@ contract FeeRouterModuleTest is BaseTest {
         assertEq(config.toBurnBPS, 0);
     }
 
-    function test_GetFeeConfig_ReturnsCorrectValues() public view {
-        IFeeRouter.FeeConfig memory config = feeRouter.getFeeConfig();
-
-        assertEq(config.toProvidersBPS, 5000);
-        assertEq(config.toWorkerPoolBPS, 5000);
-        assertEq(config.toBurnBPS, 0);
-    }
-
     function testFuzz_CalculateSplit_TotalEqualsInput(uint256 amount) public view {
         vm.assume(amount < type(uint256).max / 10000);
 

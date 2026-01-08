@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.28;
 
+/// @title IPortalFactory Interface
+/// @notice Interface for the portal pool factory contract
 interface IPortalFactory {
     event PortalCreated(
         address indexed portal,
@@ -20,6 +22,11 @@ interface IPortalFactory {
     event WorkerPoolAddressUpdated(address indexed oldValue, address indexed newValue);
     event MaxDistributionRateUpdated(uint256 oldValue, uint256 newValue);
     event MinDistributionRateUpdated(uint256 oldValue, uint256 newValue);
+    event MinStakeThresholdUpdated(uint256 oldValue, uint256 newValue);
+    event WorkerEpochLengthUpdated(uint256 oldValue, uint256 newValue);
+    event WhitelistFeatureEnabledUpdated(bool oldValue, bool newValue);
+    event DefaultWhitelistEnabledUpdated(bool oldValue, bool newValue);
+    event PoolDeploymentOpenUpdated(bool oldValue, bool newValue);
 
     struct CreatePortalPoolParams {
         address operator;
@@ -31,6 +38,16 @@ interface IPortalFactory {
         string metadata;
         address rewardToken;
     }
+
+    function initialize(
+        address _implementation,
+        address _portalRegistry,
+        address _feeRouter,
+        address _sqd,
+        uint256 _defaultMaxStakePerWallet,
+        uint256 _minStakeThreshold,
+        uint256 _workerEpochLength
+    ) external;
 
     function createPortalPool(CreatePortalPoolParams calldata params) external returns (address portal);
 
@@ -57,9 +74,20 @@ interface IPortalFactory {
     function setWorkerPoolAddress(address _workerPoolAddress) external;
     function setMaxDistributionRate(uint256 ratePerSecond) external;
     function setMinDistributionRate(uint256 ratePerSecond) external;
+    function setMinStakeThreshold(uint256 _minStakeThreshold) external;
+    function setWorkerEpochLength(uint256 _workerEpochLength) external;
     function workerPoolAddress() external view returns (address);
     function maxDistributionRatePerSecond() external view returns (uint256);
     function minDistributionRatePerSecond() external view returns (uint256);
+    function minStakeThreshold() external view returns (uint256);
+    function workerEpochLength() external view returns (uint256);
+
+    function whitelistFeatureEnabled() external view returns (bool);
+    function defaultWhitelistEnabled() external view returns (bool);
+    function poolDeploymentOpen() external view returns (bool);
+    function setWhitelistFeatureEnabled(bool enabled) external;
+    function setDefaultWhitelistEnabled(bool enabled) external;
+    function setPoolDeploymentOpen(bool open) external;
 
     function pause() external;
     function unpause() external;

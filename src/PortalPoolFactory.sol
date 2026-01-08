@@ -1,25 +1,41 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.28;
 
-import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
-import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
+import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import {AccessControlUpgradeable} from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
+import {PausableUpgradeable} from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
+import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import {BeaconProxy} from "@openzeppelin/contracts/proxy/beacon/BeaconProxy.sol";
 import {IPortalPool} from "./interfaces/IPortalPool.sol";
 import {IPortalFactory} from "./interfaces/IPortalFactory.sol";
-import {INetworkController} from "./interfaces/INetworkController.sol";
 import {IPortalRegistry} from "./interfaces/IPortalRegistry.sol";
 import {PortalPoolBeacon} from "./PortalPoolBeacon.sol";
 import {PortalErrors} from "./libs/PortalErrors.sol";
 import {Constants} from "./libs/Constants.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
-contract PortalPoolFactory is IPortalFactory, AccessControl, Pausable {
+/// @title Portal Pool Factory Contract
+/// @notice This contract creates and manages portal pool instances.
+/// @dev uses UUPS proxy pattern for upgradability and beacon proxy for pool implementations.
+contract PortalPoolFactory is
+    IPortalFactory,
+    Initializable,
+    AccessControlUpgradeable,
+    PausableUpgradeable,
+    UUPSUpgradeable
+{
+    using SafeERC20 for IERC20;
+
     bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
+    bytes32 public constant POOL_DEPLOYER_ROLE = keccak256("POOL_DEPLOYER_ROLE");
 
-    PortalPoolBeacon public immutable beacon;
+    PortalPoolBeacon public beacon;
     address public portalRegistry;
     address public feeRouter;
-    address public networkController;
     address public sqd;
+    uint256 public minStakeThreshold;
+    uint256 public workerEpochLength;
 
     mapping(uint256 => address) public allPortals;
     uint256 public portalCount;
@@ -39,46 +55,83 @@ contract PortalPoolFactory is IPortalFactory, AccessControl, Pausable {
     uint256 public maxDistributionRatePerSecond;
     uint256 public minDistributionRatePerSecond;
 
-    constructor(
+    bool public whitelistFeatureEnabled;
+    bool public defaultWhitelistEnabled;
+    bool public poolDeploymentOpen;
+
+    uint256[49] private __gap;
+
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() {
+        _disableInitializers();
+    }
+
+    /**
+     * @dev initializes the factory with required addresses and default values.
+     * @param _implementation address of the pool implementation.
+     * @param _portalRegistry address of the portal registry.
+     * @param _feeRouter address of the fee router.
+     * @param _sqd address of the SQD token.
+     * @param _defaultMaxStakePerWallet maximum stake per wallet.
+     * @param _minStakeThreshold minimum stake threshold for pools.
+     * @param _workerEpochLength worker epoch length in seconds.
+     */
+    function initialize(
         address _implementation,
         address _portalRegistry,
         address _feeRouter,
-        address _networkController,
         address _sqd,
-        uint256 _defaultMaxStakePerWallet
-    ) {
+        uint256 _defaultMaxStakePerWallet,
+        uint256 _minStakeThreshold,
+        uint256 _workerEpochLength
+    ) external initializer {
         if (_implementation == address(0)) revert PortalErrors.InvalidAddress();
         if (_portalRegistry == address(0)) revert PortalErrors.InvalidAddress();
         if (_feeRouter == address(0)) revert PortalErrors.InvalidAddress();
-        if (_networkController == address(0)) revert PortalErrors.InvalidAddress();
         if (_sqd == address(0)) revert PortalErrors.InvalidAddress();
+
+        __AccessControl_init();
+        __Pausable_init();
 
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
         _grantRole(PAUSER_ROLE, msg.sender);
+        _grantRole(POOL_DEPLOYER_ROLE, msg.sender);
 
         beacon = new PortalPoolBeacon(_implementation, address(this));
         portalRegistry = _portalRegistry;
         feeRouter = _feeRouter;
-        networkController = _networkController;
         sqd = _sqd;
         defaultMaxStakePerWallet = _defaultMaxStakePerWallet;
+        minStakeThreshold = _minStakeThreshold;
+        workerEpochLength = _workerEpochLength;
 
         maxPaymentTokens = Constants.MAX_PAYMENT_TOKENS;
         exitUnlockRatePerSecond = Constants.EXIT_UNLOCK_RATE_PER_SECOND;
         collectionDeadlineSeconds = Constants.COLLECTION_DEADLINE_SECONDS;
         maxDistributionRatePerSecond = Constants.MAX_DISTRIBUTION_RATE_PER_SECOND;
         minDistributionRatePerSecond = Constants.MIN_DISTRIBUTION_RATE_PER_SECOND;
+
+        whitelistFeatureEnabled = true;
+        defaultWhitelistEnabled = true;
     }
 
+    /**
+     * @dev creates a new portal pool with the given parameters.
+     * @notice Deploy a new staking pool with specified operator and configuration.
+     * @param params struct containing operator, capacity, peerId, tokenSuffix, distributionRate, and metadata.
+     * @return portal address of the newly created pool.
+     */
     function createPortalPool(CreatePortalPoolParams calldata params) external whenNotPaused returns (address portal) {
+        // If pool deployment is not open, only POOL_DEPLOYER_ROLE can create pools
+        if (!poolDeploymentOpen && !hasRole(POOL_DEPLOYER_ROLE, msg.sender)) {
+            revert PortalErrors.NotAuthorized();
+        }
+
         if (params.operator == address(0)) revert PortalErrors.InvalidAddress();
         if (params.rewardToken == address(0)) revert PortalErrors.InvalidAddress();
         if (!isAllowedPaymentToken[params.rewardToken]) revert PortalErrors.TokenNotAllowed();
-        uint256 minCapacity = INetworkController(networkController).minStakeThreshold();
-        if (params.capacity < minCapacity) revert PortalErrors.BelowMinimum();
+        if (params.capacity < minStakeThreshold) revert PortalErrors.BelowMinimum();
         if (params.peerId.length == 0) revert PortalErrors.EmptyPeerId();
-        // Validate distribution rate scale (protects against misconfigured decimals)
-        // Rate must be 0 (disabled) or >= minimum (for precision)
         if (params.distributionRatePerSecond > maxDistributionRatePerSecond) {
             revert PortalErrors.RateExceedsMaximum();
         }
@@ -96,7 +149,7 @@ contract PortalPoolFactory is IPortalFactory, AccessControl, Pausable {
             rewardToken: params.rewardToken,
             portalRegistry: portalRegistry,
             feeRouter: feeRouter,
-            networkController: networkController,
+            minStakeThreshold: minStakeThreshold,
             distributionRatePerSecond: params.distributionRatePerSecond,
             metadata: params.metadata
         });
@@ -105,8 +158,13 @@ contract PortalPoolFactory is IPortalFactory, AccessControl, Pausable {
 
         portal = address(new BeaconProxy(address(beacon), initData));
 
-        // Register the portal in the registry
-        IPortalRegistry(portalRegistry).registerPortalPool(params.peerId, portal, params.operator, params.metadata);
+        if (params.distributionRatePerSecond > 0) {
+            uint256 initialDeposit = params.distributionRatePerSecond * 1 days / Constants.RATE_PRECISION;
+            IERC20(params.rewardToken).safeTransferFrom(msg.sender, portal, initialDeposit);
+            IPortalPool(portal).initializeCredit(initialDeposit);
+        }
+
+        IPortalRegistry(portalRegistry).registerCluster(portal, params.operator, params.metadata);
 
         allPortals[portalCount] = portal;
         ++portalCount;
@@ -124,20 +182,34 @@ contract PortalPoolFactory is IPortalFactory, AccessControl, Pausable {
         );
     }
 
+    /**
+     * @dev upgrades the beacon to point to a new implementation.
+     * @param newImplementation address of the new pool implementation.
+     */
     function upgradeBeacon(address newImplementation) external onlyRole(DEFAULT_ADMIN_ROLE) {
         if (newImplementation == address(0)) revert PortalErrors.InvalidAddress();
         beacon.upgradeTo(newImplementation);
         emit BeaconUpgraded(newImplementation);
     }
 
+    /**
+     * @dev returns total number of portal pools created.
+     */
     function getPortalCount() external view returns (uint256) {
         return portalCount;
     }
 
+    /**
+     * @dev returns minimum stake threshold for pools.
+     */
     function getMinCapacity() external view returns (uint256) {
-        return INetworkController(networkController).minStakeThreshold();
+        return minStakeThreshold;
     }
 
+    /**
+     * @dev returns all pools created by an operator.
+     * @param operator the operator address.
+     */
     function getOperatorPortals(address operator) external view returns (address[] memory) {
         uint256 count = operatorPortalCount[operator];
         address[] memory portals = new address[](count);
@@ -147,6 +219,12 @@ contract PortalPoolFactory is IPortalFactory, AccessControl, Pausable {
         return portals;
     }
 
+    /**
+     * @dev returns paginated list of pools for an operator.
+     * @param operator the operator address.
+     * @param offset starting index.
+     * @param limit maximum number of results.
+     */
     function getOperatorPortalsPaginated(address operator, uint256 offset, uint256 limit)
         external
         view
@@ -220,6 +298,40 @@ contract PortalPoolFactory is IPortalFactory, AccessControl, Pausable {
         emit MinDistributionRateUpdated(oldValue, ratePerSecond);
     }
 
+    function setMinStakeThreshold(uint256 _minStakeThreshold) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        uint256 oldValue = minStakeThreshold;
+        minStakeThreshold = _minStakeThreshold;
+        emit MinStakeThresholdUpdated(oldValue, _minStakeThreshold);
+    }
+
+    function setWorkerEpochLength(uint256 _workerEpochLength) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        uint256 oldValue = workerEpochLength;
+        workerEpochLength = _workerEpochLength;
+        emit WorkerEpochLengthUpdated(oldValue, _workerEpochLength);
+    }
+
+    function setWhitelistFeatureEnabled(bool enabled) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        bool oldValue = whitelistFeatureEnabled;
+        whitelistFeatureEnabled = enabled;
+        emit WhitelistFeatureEnabledUpdated(oldValue, enabled);
+    }
+
+    function setDefaultWhitelistEnabled(bool enabled) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        bool oldValue = defaultWhitelistEnabled;
+        defaultWhitelistEnabled = enabled;
+        emit DefaultWhitelistEnabledUpdated(oldValue, enabled);
+    }
+
+    function setPoolDeploymentOpen(bool open) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        bool oldValue = poolDeploymentOpen;
+        poolDeploymentOpen = open;
+        emit PoolDeploymentOpenUpdated(oldValue, open);
+    }
+
+    /**
+     * @dev adds a token to the allowed payment tokens list.
+     * @param token address of the token to allow.
+     */
     function addPaymentToken(address token) external onlyRole(DEFAULT_ADMIN_ROLE) {
         if (token == address(0)) revert PortalErrors.InvalidAddress();
         if (isAllowedPaymentToken[token]) revert PortalErrors.TokenAlreadyAdded();
@@ -231,6 +343,10 @@ contract PortalPoolFactory is IPortalFactory, AccessControl, Pausable {
         emit PaymentTokenAdded(token);
     }
 
+    /**
+     * @dev removes a token from the allowed payment tokens list.
+     * @param token address of the token to remove.
+     */
     function removePaymentToken(address token) external onlyRole(DEFAULT_ADMIN_ROLE) {
         if (!isAllowedPaymentToken[token]) revert PortalErrors.TokenNotAllowed();
 
@@ -251,7 +367,13 @@ contract PortalPoolFactory is IPortalFactory, AccessControl, Pausable {
         emit PaymentTokenRemoved(token);
     }
 
+    /**
+     * @dev returns list of all allowed payment tokens.
+     */
     function getAllowedPaymentTokens() external view returns (address[] memory) {
         return paymentTokensList;
     }
+
+    /// @dev authorizes contract upgrades (UUPS pattern).
+    function _authorizeUpgrade(address newImplementation) internal override onlyRole(DEFAULT_ADMIN_ROLE) {}
 }
