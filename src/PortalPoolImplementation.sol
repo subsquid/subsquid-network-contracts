@@ -147,16 +147,21 @@ contract PortalPoolImplementation is
         uint256 newActiveStake = _getActiveStake() + amount;
         if (newActiveStake > _portalInfo.capacity) revert PortalErrors.CapacityExceeded();
 
-        uint256 newTotal = _portalInfo.totalStaked + amount;
-
+        // FoT-safe transfer: measure actual received amount
+        uint256 balanceBefore = _sqd.balanceOf(address(this));
         _sqd.safeTransferFrom(msg.sender, address(this), amount);
+        uint256 actualReceived = _sqd.balanceOf(address(this)) - balanceBefore;
+
+        // use actualReceived for all state updates (FoT protection)
+        uint256 actualNewUserStake = _stakes[msg.sender] + actualReceived;
+        uint256 actualNewTotal = _portalInfo.totalStaked + actualReceived;
 
         // Accrue global state and update user BEFORE changing stake
         _accrueGlobal(block.timestamp, true);
         _updateUser(msg.sender);
 
-        _stakes[msg.sender] = newUserStake;
-        _portalInfo.totalStaked = newTotal;
+        _stakes[msg.sender] = actualNewUserStake;
+        _portalInfo.totalStaked = actualNewTotal;
 
         // Update user's reward debt for new activeStake
         uint256 activeStake = _getUserActiveStake(msg.sender);
@@ -184,8 +189,9 @@ contract PortalPoolImplementation is
             emit StateChanged(PoolState.COLLECTING, PoolState.ACTIVE);
         } else if (currentState != PoolState.COLLECTING) {
             // Use forceApprove for USDT-style token compatibility
-            _sqd.forceApprove(address(_portalRegistry), amount);
-            _portalRegistry.stake(amount);
+            // Use actualReceived for FoT safety
+            _sqd.forceApprove(address(_portalRegistry), actualReceived);
+            _portalRegistry.stake(actualReceived);
 
             if (isRecoveringFromIdle) {
                 _portalRegistry.activateCluster();
@@ -193,10 +199,11 @@ contract PortalPoolImplementation is
             }
         }
 
-        lptToken.mint(msg.sender, amount);
+        // Mint LPT based on actualReceived (FoT safety)
+        lptToken.mint(msg.sender, actualReceived);
 
         // Emit event AFTER all operations (strict CEI)
-        emit Deposited(msg.sender, amount, _portalInfo.totalStaked);
+        emit Deposited(msg.sender, actualReceived, _portalInfo.totalStaked);
     }
 
     /**
@@ -267,40 +274,6 @@ contract PortalPoolImplementation is
         _portalRegistry.unstake(msg.sender, amount);
 
         emit ExitClaimed(msg.sender, amount);
-    }
-
-    /**
-     * @dev callback from PortalRegistry when a provider's allocation is reduced (slashing).
-     * @param provider the address of the provider being slashed.
-     * @param amount the amount of stake being reduced.
-     */
-    function onAllocationReduced(address provider, uint256 amount) external {
-        if (msg.sender != address(_portalRegistry)) revert PortalErrors.NotPortalRegistry();
-
-        // Accrue global state and update user BEFORE changing stake
-        _accrueGlobal(block.timestamp, true);
-        _updateUser(provider);
-
-        // Calculate LPT to burn (amount minus any already burned via exit requests)
-        uint256 exitAmount = _exitAmounts[provider];
-        uint256 lptToBurn = amount > exitAmount ? amount - exitAmount : 0;
-
-        _stakes[provider] -= amount;
-        _portalInfo.totalStaked -= amount;
-
-        if (exitAmount > 0) {
-            uint256 reduction = exitAmount >= amount ? amount : exitAmount;
-            _exitAmounts[provider] -= reduction;
-            _totalExitAmounts -= reduction;
-            // note: tickets remain in mapping but their amounts are tracked via _exitAmounts
-        }
-
-        // burn LPT tokens for the portion not already in exit queue
-        if (lptToBurn > 0) {
-            lptToken.burn(provider, lptToBurn);
-        }
-
-        emit AllocationReduced(provider, amount);
     }
 
     /**

@@ -37,9 +37,11 @@ contract FeeRouterModule is AccessControl, IFeeRouter {
         view
         returns (uint256 toProviders, uint256 toWorkerPool, uint256 toBurn)
     {
-        toProviders = FullMath.mulDiv(amount, feeConfig.toProvidersBPS, BASIS_POINTS);
-        toWorkerPool = FullMath.mulDiv(amount, feeConfig.toWorkerPoolBPS, BASIS_POINTS);
-        toBurn = FullMath.mulDiv(amount, feeConfig.toBurnBPS, BASIS_POINTS);
+        FeeConfig memory cfg = feeConfig;
+
+        toProviders = FullMath.mulDiv(amount, cfg.toProvidersBPS, BASIS_POINTS);
+        toWorkerPool = FullMath.mulDiv(amount, cfg.toWorkerPoolBPS, BASIS_POINTS);
+        toBurn = FullMath.mulDiv(amount, cfg.toBurnBPS, BASIS_POINTS);
 
         uint256 used = toProviders + toWorkerPool + toBurn;
         if (used > amount) {
@@ -47,7 +49,15 @@ contract FeeRouterModule is AccessControl, IFeeRouter {
         }
 
         uint256 dust = amount - used;
-        toProviders += dust;
+        if (dust > 0) {
+            if (cfg.toProvidersBPS > cfg.toWorkerPoolBPS && cfg.toProvidersBPS > cfg.toBurnBPS) {
+                toProviders += dust;
+            } else if (cfg.toBurnBPS > cfg.toWorkerPoolBPS) {
+                toBurn += dust;
+            } else {
+                toWorkerPool += dust;
+            }
+        }
     }
 
     /**

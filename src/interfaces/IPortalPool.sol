@@ -55,7 +55,6 @@ interface IPortalPool {
     event Withdrawn(address indexed provider, uint256 amount);
     event BurnAddressUpdated(address burnAddress);
     event StateChanged(PoolState oldState, PoolState newState);
-    event AllocationReduced(address indexed provider, uint256 amount);
     event StakeTransferred(address indexed from, address indexed to, uint256 amount);
     event RewardsToppedUp(address indexed operator, uint256 amount, uint256 newBalanceScaled);
     event RewardsClaimed(address indexed delegator, uint256 amount);
@@ -70,7 +69,6 @@ interface IPortalPool {
     function deposit(uint256 amount) external;
     function requestExit(uint256 amount) external returns (uint256 ticketId);
     function withdrawExit(uint256 ticketId) external;
-    function onAllocationReduced(address provider, uint256 amount) external;
     function onLPTTransfer(address from, address to, uint256 amount) external;
     function withdrawFromFailed() external;
 

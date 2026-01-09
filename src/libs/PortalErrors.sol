@@ -26,6 +26,7 @@ library PortalErrors {
     error NoActiveExitRequest();
     error StillInQueue();
     error AlreadyWithdrawn();
+    error InvalidExitRate();
 
     // Deadline errors
     error DeadlinePassed();
@@ -65,6 +66,7 @@ library PortalErrors {
     error PoolHasDebt();
     error RateExceedsMaximum();
     error RateBelowMinimum();
+    error InsufficientRewardPrecision();
 
     // Factory errors
     error InvalidPortal();

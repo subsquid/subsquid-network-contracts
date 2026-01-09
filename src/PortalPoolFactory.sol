@@ -59,7 +59,7 @@ contract PortalPoolFactory is
     bool public defaultWhitelistEnabled;
     bool public poolDeploymentOpen;
 
-    uint256[49] private __gap;
+    uint256[50] private __gap;
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
@@ -106,8 +106,8 @@ contract PortalPoolFactory is
         workerEpochLength = _workerEpochLength;
 
         maxPaymentTokens = Constants.MAX_PAYMENT_TOKENS;
-        exitUnlockRatePerSecond = Constants.EXIT_UNLOCK_RATE_PER_SECOND;
-        collectionDeadlineSeconds = Constants.COLLECTION_DEADLINE_SECONDS;
+        exitUnlockRatePerSecond = 1e18; 
+        collectionDeadlineSeconds = 30 days; 
         maxDistributionRatePerSecond = Constants.MAX_DISTRIBUTION_RATE_PER_SECOND;
         minDistributionRatePerSecond = Constants.MIN_DISTRIBUTION_RATE_PER_SECOND;
 
@@ -139,6 +139,14 @@ contract PortalPoolFactory is
             revert PortalErrors.RateBelowMinimum();
         }
 
+        if (params.distributionRatePerSecond > 0) {
+            uint256 perStakeRate = (params.distributionRatePerSecond * Constants.PRECISION)
+                / (params.capacity * Constants.RATE_PRECISION);
+            if (perStakeRate < Constants.MIN_PER_STAKE_RATE) {
+                revert PortalErrors.InsufficientRewardPrecision();
+            }
+        }
+
         IPortalPool.InitParams memory initParams = IPortalPool.InitParams({
             operator: params.operator,
             capacity: params.capacity,
@@ -160,8 +168,10 @@ contract PortalPoolFactory is
 
         if (params.distributionRatePerSecond > 0) {
             uint256 initialDeposit = params.distributionRatePerSecond * 1 days / Constants.RATE_PRECISION;
+            uint256 balanceBefore = IERC20(params.rewardToken).balanceOf(portal);
             IERC20(params.rewardToken).safeTransferFrom(msg.sender, portal, initialDeposit);
-            IPortalPool(portal).initializeCredit(initialDeposit);
+            uint256 actualReceived = IERC20(params.rewardToken).balanceOf(portal) - balanceBefore;
+            IPortalPool(portal).initializeCredit(actualReceived);
         }
 
         IPortalRegistry(portalRegistry).registerCluster(portal, params.operator, params.metadata);
@@ -269,6 +279,7 @@ contract PortalPoolFactory is
     }
 
     function setExitUnlockRate(uint256 ratePerSecond) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (ratePerSecond == 0) revert PortalErrors.InvalidExitRate();
         uint256 oldValue = exitUnlockRatePerSecond;
         exitUnlockRatePerSecond = ratePerSecond;
         emit ExitUnlockRateUpdated(oldValue, ratePerSecond);

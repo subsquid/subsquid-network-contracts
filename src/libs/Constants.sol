@@ -3,7 +3,7 @@ pragma solidity 0.8.28;
 
 /// @title Constants library for Portal contracts
 library Constants {
-    /// @notice precision multiplier for reward calculations (1e18)
+    /// @notice precision multiplier for reward calculations (1e27)
     uint256 internal constant PRECISION = 1e27;
 
     /// @notice basis points denominator (10000 = 100%)
@@ -11,16 +11,6 @@ library Constants {
 
     /// @notice maximum number of payment tokens allowed per portal
     uint256 internal constant MAX_PAYMENT_TOKENS = 10;
-
-    /// @notice default rate at which exit queue unlocks SQD per second (1 SQD/second)
-    uint256 internal constant EXIT_UNLOCK_RATE_PER_SECOND = 1e18;
-
-    /// @notice fee precision for cumulative fee calculations
-    uint256 internal constant FEE_PRECISION = 1e27;
-
-    /// @notice fixed collection deadline for portal pools (30 days)
-    /// @dev pools must reach capacity within this time or fail
-    uint256 internal constant COLLECTION_DEADLINE_SECONDS = 30 days;
 
     /// @notice maximum distribution rate per second
     /// @dev Supports 18-decimal tokens (ETH, DAI, SQD) up to ~2.6 trillion tokens/month
@@ -37,4 +27,9 @@ library Constants {
     /// @dev allows rates as low as 0.001 tokens per second (e.g., 1 = 0.001/sec, 1000 = 1/sec)
     /// @dev rate of 1 token/sec should be passed as 1000
     uint256 internal constant RATE_PRECISION = 1000;
+
+    /// @notice minimum per-stake rate to prevent precision loss in reward calculations
+    /// @dev ensures (rate * PRECISION) / (capacity * RATE_PRECISION) >= MIN_PER_STAKE_RATE
+    /// @dev equivalent to requiring capacity / rate <= 1e12
+    uint256 internal constant MIN_PER_STAKE_RATE = 1e12;
 }
