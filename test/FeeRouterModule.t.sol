@@ -77,9 +77,9 @@ contract FeeRouterModuleTest is BaseTest {
 
         (uint256 toProviders, uint256 toWorkerPool, uint256 toBurn) = feeRouter.calculateSplit(amount);
 
-        // FeeRouter adds dust to providers: 500 + 1 dust = 501
-        assertEq(toProviders, 501);
-        assertEq(toWorkerPool, 500);
+        // On equal BPS (50/50), worker pool wins tie for dust: 500 + 1 dust = 501
+        assertEq(toProviders, 500);
+        assertEq(toWorkerPool, 501);
         assertEq(toBurn, 0);
     }
 

@@ -367,4 +367,162 @@ contract PortalRegistryTest is BaseTest {
         bytes32[] memory clusters = registry.getOperatorClusters(operator);
         assertEq(clusters.length, 2);
     }
+
+    function test_SetPortalMetadata_Success() public {
+        address clusterAddress = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "MetadataCluster");
+        bytes32 clusterId = registry.getClusterIdByAddress(clusterAddress);
+
+        vm.prank(operator);
+        registry.addPortal(clusterId, TEST_PEER_ID, "initial metadata");
+
+        string memory newMetadata = "updated metadata";
+
+        vm.expectEmit(true, false, false, true);
+        emit IPortalRegistry.PortalMetadataUpdated(clusterId, 0, newMetadata);
+
+        vm.prank(operator);
+        registry.setPortalMetadata(clusterId, 0, newMetadata);
+
+        IPortalRegistry.Portal[] memory portals = registry.getClusterPortals(clusterId);
+        assertEq(portals[0].metadata, newMetadata);
+    }
+
+    function test_SetPortalMetadata_RevertOnClusterNotRegistered() public {
+        bytes32 invalidClusterId = bytes32(0);
+
+        vm.prank(operator);
+        vm.expectRevert(PortalRegistryErrors.ClusterNotRegistered.selector);
+        registry.setPortalMetadata(invalidClusterId, 0, "metadata");
+    }
+
+    function test_SetPortalMetadata_RevertOnNotClusterOperator() public {
+        address clusterAddress = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "OpTest");
+        bytes32 clusterId = registry.getClusterIdByAddress(clusterAddress);
+
+        vm.prank(operator);
+        registry.addPortal(clusterId, TEST_PEER_ID, "metadata");
+
+        vm.prank(user1);
+        vm.expectRevert(PortalRegistryErrors.NotClusterOperator.selector);
+        registry.setPortalMetadata(clusterId, 0, "new metadata");
+    }
+
+    function test_SetPortalMetadata_RevertOnInvalidPortalIndex() public {
+        address clusterAddress = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "IndexTest");
+        bytes32 clusterId = registry.getClusterIdByAddress(clusterAddress);
+
+        vm.prank(operator);
+        registry.addPortal(clusterId, TEST_PEER_ID, "metadata");
+
+        vm.prank(operator);
+        vm.expectRevert(PortalRegistryErrors.InvalidPortalIndex.selector);
+        registry.setPortalMetadata(clusterId, 1, "new metadata"); // Index 1 doesn't exist
+    }
+
+    function test_GetPortalCount_ReturnsZeroWhenEmpty() public {
+        address clusterAddress = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "CountTest");
+        bytes32 clusterId = registry.getClusterIdByAddress(clusterAddress);
+
+        assertEq(registry.getPortalCount(clusterId), 0);
+    }
+
+    function test_GetPortalCount_ReturnsCorrectCount() public {
+        address clusterAddress = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "CountTest2");
+        bytes32 clusterId = registry.getClusterIdByAddress(clusterAddress);
+
+        vm.startPrank(operator);
+        registry.addPortal(clusterId, "peer-1", "metadata1");
+        assertEq(registry.getPortalCount(clusterId), 1);
+
+        registry.addPortal(clusterId, "peer-2", "metadata2");
+        assertEq(registry.getPortalCount(clusterId), 2);
+
+        registry.addPortal(clusterId, "peer-3", "metadata3");
+        assertEq(registry.getPortalCount(clusterId), 3);
+        vm.stopPrank();
+    }
+
+    function test_GetPortalCount_ReturnsZeroForNonExistentCluster() public view {
+        bytes32 invalidClusterId = bytes32(uint256(12345));
+        assertEq(registry.getPortalCount(invalidClusterId), 0);
+    }
+
+    function test_AddPortal_RevertOnMaxPortalsReached() public {
+        address clusterAddress = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "MaxPortals");
+        bytes32 clusterId = registry.getClusterIdByAddress(clusterAddress);
+
+        // Add MAX_PORTALS_PER_CLUSTER (10) portals
+        vm.startPrank(operator);
+        for (uint256 i = 0; i < 10; i++) {
+            bytes memory peerId = abi.encodePacked("peer-", i);
+            registry.addPortal(clusterId, peerId, "metadata");
+        }
+        vm.stopPrank();
+
+        assertEq(registry.getPortalCount(clusterId), 10);
+
+        // 11th portal should fail
+        vm.prank(operator);
+        vm.expectRevert(PortalRegistryErrors.MaxPortalsReached.selector);
+        registry.addPortal(clusterId, "peer-overflow", "metadata");
+    }
+
+    function test_RemovePortal_RevertOnClusterNotRegistered() public {
+        bytes32 invalidClusterId = bytes32(uint256(99999));
+
+        vm.expectRevert(PortalRegistryErrors.ClusterNotRegistered.selector);
+        registry.removePortal(invalidClusterId, 0);
+    }
+
+    function test_RemovePortal_RevertOnNotClusterOperator() public {
+        address clusterAddress = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "RemoveOp");
+        bytes32 clusterId = registry.getClusterIdByAddress(clusterAddress);
+
+        // Add a portal
+        vm.prank(operator);
+        registry.addPortal(clusterId, "peer-remove", "metadata");
+
+        // Non-operator tries to remove
+        vm.prank(user1);
+        vm.expectRevert(PortalRegistryErrors.NotClusterOperator.selector);
+        registry.removePortal(clusterId, 0);
+    }
+
+    function test_RemovePortal_SwapBranch() public {
+        address clusterAddress = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "RemoveSwap");
+        bytes32 clusterId = registry.getClusterIdByAddress(clusterAddress);
+
+        // Add 3 portals
+        vm.startPrank(operator);
+        registry.addPortal(clusterId, "peer-0", "meta0");
+        registry.addPortal(clusterId, "peer-1", "meta1");
+        registry.addPortal(clusterId, "peer-2", "meta2");
+        vm.stopPrank();
+
+        assertEq(registry.getPortalCount(clusterId), 3);
+
+        // Remove portal at index 0 (not last) - triggers swap branch
+        vm.prank(operator);
+        registry.removePortal(clusterId, 0);
+
+        // Should have 2 portals left
+        assertEq(registry.getPortalCount(clusterId), 2);
+    }
+
+    function test_SetClusterMetadata_RevertOnClusterNotRegistered() public {
+        bytes32 invalidClusterId = bytes32(uint256(88888));
+
+        vm.expectRevert(PortalRegistryErrors.ClusterNotRegistered.selector);
+        registry.setClusterMetadata(invalidClusterId, "new metadata");
+    }
+
+    function test_SetClusterMetadata_RevertOnNotClusterOperator() public {
+        address clusterAddress = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "ClusterMeta");
+        bytes32 clusterId = registry.getClusterIdByAddress(clusterAddress);
+
+        // Non-operator tries to set metadata
+        vm.prank(user1);
+        vm.expectRevert(PortalRegistryErrors.NotClusterOperator.selector);
+        registry.setClusterMetadata(clusterId, "unauthorized");
+    }
 }

@@ -12,6 +12,12 @@ contract PortalPoolFactoryTest is BaseTest {
         super.setUp();
     }
 
+    /// @dev Calculate minimum rate to satisfy precision requirement: rate >= capacity / 1e12
+    function _minRateForCapacity(uint256 capacity) internal pure returns (uint256) {
+        uint256 minRate = capacity / 1e12;
+        return minRate < 1000 ? 1000 : minRate;
+    }
+
     function test_Constructor_SetsCorrectValues() public view {
         assertEq(factory.portalRegistry(), address(registry));
         assertEq(factory.feeRouter(), address(feeRouter));
@@ -49,12 +55,14 @@ contract PortalPoolFactoryTest is BaseTest {
     }
 
     function test_CreatePortal_EmitsEvent() public {
+        uint256 rate = _minRateForCapacity(MIN_STAKE_THRESHOLD);
+
         IPortalFactory.CreatePortalPoolParams memory params = IPortalFactory.CreatePortalPoolParams({
             operator: operator,
             capacity: MIN_STAKE_THRESHOLD,
             peerId: "test-peer-id",
             tokenSuffix: "TestPortal",
-            distributionRatePerSecond: 1000 * 1000,
+            distributionRatePerSecond: rate,
             metadata: "",
             rewardToken: address(usdc)
         });
@@ -63,7 +71,7 @@ contract PortalPoolFactoryTest is BaseTest {
         usdc.approve(address(factory), initialDeposit);
 
         vm.expectEmit(false, true, false, false);
-        emit IPortalFactory.PortalCreated(address(0), operator, MIN_STAKE_THRESHOLD, 1000 * 1000, "TestPortal", "");
+        emit IPortalFactory.PortalCreated(address(0), operator, MIN_STAKE_THRESHOLD, rate, "TestPortal", "");
 
         factory.createPortalPool(params);
     }
@@ -348,10 +356,11 @@ contract PortalPoolFactoryTest is BaseTest {
     }
 
     function test_SetExitUnlockRate_Success() public {
+        uint256 oldValue = factory.exitUnlockRatePerSecond();
         uint256 newValue = 2e18;
 
         vm.expectEmit(true, true, false, false);
-        emit IPortalFactory.ExitUnlockRateUpdated(Constants.EXIT_UNLOCK_RATE_PER_SECOND, newValue);
+        emit IPortalFactory.ExitUnlockRateUpdated(oldValue, newValue);
 
         factory.setExitUnlockRate(newValue);
 
@@ -365,10 +374,11 @@ contract PortalPoolFactoryTest is BaseTest {
     }
 
     function test_SetCollectionDeadline_Success() public {
+        uint256 oldValue = factory.collectionDeadlineSeconds();
         uint256 newValue = 14 days;
 
         vm.expectEmit(true, true, false, false);
-        emit IPortalFactory.CollectionDeadlineUpdated(Constants.COLLECTION_DEADLINE_SECONDS, newValue);
+        emit IPortalFactory.CollectionDeadlineUpdated(oldValue, newValue);
 
         factory.setCollectionDeadline(newValue);
 

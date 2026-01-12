@@ -71,7 +71,8 @@ contract ActiveStakeCapacityE2ETest is Test {
     uint256 constant STAKE_PER_ACTOR = 1_000 * 1e18;
     uint256 constant MANA = 1000;
     uint256 constant RATE_PRECISION = 1000;
-    uint256 constant SCALED_RATE = 100 * RATE_PRECISION;
+    // Minimum rate to satisfy precision: capacity / 1e12 = 1e22 / 1e12 = 1e10
+    uint256 constant SCALED_RATE = 1e10;
     uint256 constant USDC_UNIT = 1e6;
     uint256 constant WORKER_EPOCH_LENGTH = 7200;
 

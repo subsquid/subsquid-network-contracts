@@ -53,16 +53,22 @@ interface IPortalPool {
     event ExitRequested(address indexed provider, uint256 amount, uint256 endPosition);
     event ExitClaimed(address indexed provider, uint256 amount);
     event Withdrawn(address indexed provider, uint256 amount);
-    event BurnAddressUpdated(address burnAddress);
     event StateChanged(PoolState oldState, PoolState newState);
     event StakeTransferred(address indexed from, address indexed to, uint256 amount);
-    event RewardsToppedUp(address indexed operator, uint256 amount, uint256 newBalanceScaled);
+    event RewardsToppedUp(
+        address indexed operator,
+        uint256 received,
+        uint256 toProviders,
+        uint256 toWorkerPool,
+        uint256 toBurn
+    );
     event RewardsClaimed(address indexed delegator, uint256 amount);
     event DistributionRateChanged(uint256 oldRate, uint256 newRate);
     event CapacityUpdated(uint256 oldCapacity, uint256 newCapacity);
     event WhitelistEnabledChanged(bool enabled);
     event WhitelistUpdated(address indexed user, bool added);
     event PoolClosed(address indexed closedBy, uint256 timestamp);
+    event RewardsRecovered(address indexed operator, uint256 amount);
 
     function initialize(InitParams calldata params) external;
 
@@ -71,13 +77,13 @@ interface IPortalPool {
     function withdrawExit(uint256 ticketId) external;
     function onLPTTransfer(address from, address to, uint256 amount) external;
     function withdrawFromFailed() external;
+    function recoverRewardsFromFailed() external returns (uint256);
 
     function topUpRewards(uint256 amount) external;
     function initializeCredit(uint256 amount) external;
     function claimRewards() external returns (uint256);
     function setDistributionRate(uint256 newRatePerSecond) external;
     function setCapacity(uint256 newCapacity) external;
-    function setBurnAddress(address newBurnAddress) external;
 
     function getPoolInfo() external view returns (PoolInfo memory);
     function getProviderStake(address provider) external view returns (uint256);

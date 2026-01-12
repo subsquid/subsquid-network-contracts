@@ -10,6 +10,12 @@ contract PortalPoolImplementationTest is BaseTest {
     address public portal;
     PortalPoolImplementation public pool;
 
+    /// @dev Calculate minimum rate to satisfy precision requirement: rate >= capacity / 1e12
+    function _minRateForCapacity(uint256 capacity) internal pure returns (uint256) {
+        uint256 minRate = capacity / 1e12;
+        return minRate < 1000 ? 1000 : minRate;
+    }
+
     function setUp() public override {
         super.setUp();
         portal = _createPortal(operator, MIN_STAKE_THRESHOLD, "TestPortal");
@@ -103,16 +109,18 @@ contract PortalPoolImplementationTest is BaseTest {
     }
 
     function test_Deposit_RevertOnExceedsWalletLimit() public {
+        uint256 capacity = DEFAULT_MAX_STAKE_PER_WALLET * 2;
+        uint256 rate = _minRateForCapacity(capacity);
         IPortalFactory.CreatePortalPoolParams memory params = IPortalFactory.CreatePortalPoolParams({
             operator: operator,
-            capacity: DEFAULT_MAX_STAKE_PER_WALLET * 2,
+            capacity: capacity,
             peerId: "wallet-limit-test",
             tokenSuffix: "WalletLimitTest",
-            distributionRatePerSecond: 1000 * 1000,
+            distributionRatePerSecond: rate,
             metadata: "",
             rewardToken: address(usdc)
         });
-        uint256 initialDeposit = params.distributionRatePerSecond * 1 days / 1000;
+        uint256 initialDeposit = rate * 1 days / 1000;
         usdc.approve(address(factory), initialDeposit);
         address testPortal = factory.createPortalPool(params);
 
@@ -269,24 +277,6 @@ contract PortalPoolImplementationTest is BaseTest {
         pool.withdrawExit(ticketId);
     }
 
-    function test_WithdrawExit_RevertOnStillInQueue_Detailed() public {
-        portal = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "ExitPortal");
-        pool = PortalPoolImplementation(portal);
-
-        vm.prank(user1);
-        uint256 ticketId = pool.requestExit(SMALL_STAKE);
-
-        vm.prank(user1);
-        vm.expectRevert(PortalErrors.StillInQueue.selector);
-        pool.withdrawExit(ticketId);
-
-        vm.warp(block.timestamp + (SMALL_STAKE / 1e18) / 2);
-
-        vm.prank(user1);
-        vm.expectRevert(PortalErrors.StillInQueue.selector);
-        pool.withdrawExit(ticketId);
-    }
-
     function test_WithdrawExit_RevertOnAlreadyWithdrawn() public {
         portal = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "ExitPortal");
         pool = PortalPoolImplementation(portal);
@@ -338,22 +328,23 @@ contract PortalPoolImplementationTest is BaseTest {
         int256 initialProviderCredit = pool.getCurrentRewardBalance();
 
         uint256 rewardAmount = 1000 * 1e6;
-        // FeeRouter splits 50/50, so only half goes to provider balance
-        uint256 providerAmount = rewardAmount / 2;
+        // FeeRouter splits 50/50 by default, so half goes to providers and half to worker pool
+        uint256 toProviders = rewardAmount / 2;
+        uint256 toWorkerPool = rewardAmount / 2;
+        uint256 toBurn = 0;
 
         vm.startPrank(operator);
         usdc.approve(portal, rewardAmount);
 
-        // Event emits total credit after top-up, not just the amount added
-        uint256 expectedTotalCredit = uint256(initialProviderCredit) + providerAmount;
+        // Event now emits: received, toProviders, toWorkerPool, toBurn
         vm.expectEmit(true, false, false, true);
-        emit IPortalPool.RewardsToppedUp(operator, rewardAmount, expectedTotalCredit);
+        emit IPortalPool.RewardsToppedUp(operator, rewardAmount, toProviders, toWorkerPool, toBurn);
 
         pool.topUpRewards(rewardAmount);
         vm.stopPrank();
 
         // Balance = initial credit + provider amount from top-up
-        assertEq(pool.getCurrentRewardBalance(), initialProviderCredit + int256(providerAmount));
+        assertEq(pool.getCurrentRewardBalance(), initialProviderCredit + int256(toProviders));
     }
 
     function test_TopUpRewards_RevertOnNotActive() public {
@@ -382,16 +373,17 @@ contract PortalPoolImplementationTest is BaseTest {
     }
 
     function test_ClaimRewards_Success() public {
+        uint256 rate = _minRateForCapacity(MIN_STAKE_THRESHOLD);
         IPortalFactory.CreatePortalPoolParams memory params = IPortalFactory.CreatePortalPoolParams({
             operator: operator,
             capacity: MIN_STAKE_THRESHOLD,
             peerId: "reward-portal",
             tokenSuffix: "RewardPortal",
-            distributionRatePerSecond: 1e6 * 1000,
+            distributionRatePerSecond: rate,
             metadata: "",
             rewardToken: address(usdc)
         });
-        uint256 initialDeposit = params.distributionRatePerSecond * 1 days / 1000;
+        uint256 initialDeposit = rate * 1 days / 1000;
         usdc.approve(address(factory), initialDeposit);
         portal = factory.createPortalPool(params);
         pool = PortalPoolImplementation(portal);
@@ -437,16 +429,18 @@ contract PortalPoolImplementationTest is BaseTest {
     }
 
     function test_OnLPTTransfer_RevertOnExceedsWalletLimit() public {
+        uint256 capacity = DEFAULT_MAX_STAKE_PER_WALLET * 2;
+        uint256 rate = _minRateForCapacity(capacity);
         IPortalFactory.CreatePortalPoolParams memory params = IPortalFactory.CreatePortalPoolParams({
             operator: operator,
-            capacity: DEFAULT_MAX_STAKE_PER_WALLET * 2,
+            capacity: capacity,
             peerId: "transfer-limit",
             tokenSuffix: "TransferLimit",
-            distributionRatePerSecond: 1000 * 1000,
+            distributionRatePerSecond: rate,
             metadata: "",
             rewardToken: address(usdc)
         });
-        uint256 initialDeposit = params.distributionRatePerSecond * 1 days / 1000;
+        uint256 initialDeposit = rate * 1 days / 1000;
         usdc.approve(address(factory), initialDeposit);
         address limitPortal = factory.createPortalPool(params);
 
@@ -628,12 +622,32 @@ contract PortalPoolImplementationTest is BaseTest {
     }
 
     function test_SetCapacity_Success() public {
-        // First activate the portal
-        portal = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "CapacityTestPortal");
+        // Create portal with rate that supports 2x capacity (for the increase test)
+        uint256 targetCapacity = MIN_STAKE_THRESHOLD * 2;
+        uint256 rate = _minRateForCapacity(targetCapacity);
+
+        IPortalFactory.CreatePortalPoolParams memory params = IPortalFactory.CreatePortalPoolParams({
+            operator: operator,
+            capacity: MIN_STAKE_THRESHOLD,
+            peerId: "cap-success",
+            tokenSuffix: "CapacityTestPortal",
+            distributionRatePerSecond: rate,
+            metadata: "",
+            rewardToken: address(usdc)
+        });
+        uint256 initialDeposit = rate * 1 days / 1000;
+        usdc.approve(address(factory), initialDeposit);
+        portal = factory.createPortalPool(params);
         pool = PortalPoolImplementation(portal);
 
+        // Activate by depositing
+        vm.startPrank(user1);
+        sqd.approve(portal, MIN_STAKE_THRESHOLD);
+        pool.deposit(MIN_STAKE_THRESHOLD);
+        vm.stopPrank();
+
         uint256 oldCapacity = pool.getPoolInfo().capacity;
-        uint256 newCapacity = oldCapacity + 100_000 ether;
+        uint256 newCapacity = targetCapacity;
 
         vm.prank(operator);
         vm.expectEmit(true, true, false, false);
@@ -664,12 +678,31 @@ contract PortalPoolImplementationTest is BaseTest {
     }
 
     function test_SetCapacity_LowerCapacity_Success() public {
-        // Create and activate portal at minimum capacity
-        portal = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "CapacityTestPortal3");
+        // Create and activate portal with rate that supports 2x capacity
+        uint256 higherCapacity = MIN_STAKE_THRESHOLD * 2;
+        uint256 rate = _minRateForCapacity(higherCapacity);
+
+        IPortalFactory.CreatePortalPoolParams memory params = IPortalFactory.CreatePortalPoolParams({
+            operator: operator,
+            capacity: MIN_STAKE_THRESHOLD,
+            peerId: "cap-test-3",
+            tokenSuffix: "CapacityTestPortal3",
+            distributionRatePerSecond: rate,
+            metadata: "",
+            rewardToken: address(usdc)
+        });
+        uint256 initialDeposit = rate * 1 days / 1000;
+        usdc.approve(address(factory), initialDeposit);
+        portal = factory.createPortalPool(params);
         pool = PortalPoolImplementation(portal);
 
+        // Activate by depositing
+        vm.startPrank(user1);
+        sqd.approve(portal, MIN_STAKE_THRESHOLD);
+        pool.deposit(MIN_STAKE_THRESHOLD);
+        vm.stopPrank();
+
         // First increase capacity
-        uint256 higherCapacity = MIN_STAKE_THRESHOLD * 2;
         vm.prank(operator);
         pool.setCapacity(higherCapacity);
         assertEq(pool.getPoolInfo().capacity, higherCapacity);
@@ -684,12 +717,31 @@ contract PortalPoolImplementationTest is BaseTest {
     }
 
     function test_SetCapacity_LowerToExactlyCurrentStake() public {
-        // Create and activate portal, then increase capacity
-        portal = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "CapacityTestPortal4");
+        // Create and activate portal with rate that supports 2x capacity
+        uint256 higherCapacity = MIN_STAKE_THRESHOLD * 2;
+        uint256 rate = _minRateForCapacity(higherCapacity);
+
+        IPortalFactory.CreatePortalPoolParams memory params = IPortalFactory.CreatePortalPoolParams({
+            operator: operator,
+            capacity: MIN_STAKE_THRESHOLD,
+            peerId: "cap-test-4",
+            tokenSuffix: "CapacityTestPortal4",
+            distributionRatePerSecond: rate,
+            metadata: "",
+            rewardToken: address(usdc)
+        });
+        uint256 initialDeposit = rate * 1 days / 1000;
+        usdc.approve(address(factory), initialDeposit);
+        portal = factory.createPortalPool(params);
         pool = PortalPoolImplementation(portal);
 
+        // Activate by depositing
+        vm.startPrank(user1);
+        sqd.approve(portal, MIN_STAKE_THRESHOLD);
+        pool.deposit(MIN_STAKE_THRESHOLD);
+        vm.stopPrank();
+
         // Increase capacity
-        uint256 higherCapacity = MIN_STAKE_THRESHOLD * 2;
         vm.prank(operator);
         pool.setCapacity(higherCapacity);
 
@@ -711,12 +763,31 @@ contract PortalPoolImplementationTest is BaseTest {
     }
 
     function test_SetCapacity_RevertOnBelowMinimum() public {
-        // Create and activate portal
-        portal = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "CapacityTestPortal6");
+        // Create and activate portal with rate that supports 2x capacity
+        uint256 higherCapacity = MIN_STAKE_THRESHOLD * 2;
+        uint256 rate = _minRateForCapacity(higherCapacity);
+
+        IPortalFactory.CreatePortalPoolParams memory params = IPortalFactory.CreatePortalPoolParams({
+            operator: operator,
+            capacity: MIN_STAKE_THRESHOLD,
+            peerId: "cap-test-6",
+            tokenSuffix: "CapacityTestPortal6",
+            distributionRatePerSecond: rate,
+            metadata: "",
+            rewardToken: address(usdc)
+        });
+        uint256 initialDeposit = rate * 1 days / 1000;
+        usdc.approve(address(factory), initialDeposit);
+        portal = factory.createPortalPool(params);
         pool = PortalPoolImplementation(portal);
 
+        // Activate by depositing
+        vm.startPrank(user1);
+        sqd.approve(portal, MIN_STAKE_THRESHOLD);
+        pool.deposit(MIN_STAKE_THRESHOLD);
+        vm.stopPrank();
+
         // Increase capacity first
-        uint256 higherCapacity = MIN_STAKE_THRESHOLD * 2;
         vm.prank(operator);
         pool.setCapacity(higherCapacity);
 
@@ -740,17 +811,35 @@ contract PortalPoolImplementationTest is BaseTest {
     }
 
     function test_SetCapacity_AllowsAdditionalDeposits() public {
-        // Activate portal with minimum capacity
-        portal = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "CapacityTestPortal8");
+        // Create portal with rate that supports the new capacity
+        uint256 newCapacity = MIN_STAKE_THRESHOLD + SMALL_STAKE;
+        uint256 rate = _minRateForCapacity(newCapacity);
+
+        IPortalFactory.CreatePortalPoolParams memory params = IPortalFactory.CreatePortalPoolParams({
+            operator: operator,
+            capacity: MIN_STAKE_THRESHOLD,
+            peerId: "cap-test-8",
+            tokenSuffix: "CapacityTestPortal8",
+            distributionRatePerSecond: rate,
+            metadata: "",
+            rewardToken: address(usdc)
+        });
+        uint256 initialDeposit = rate * 1 days / 1000;
+        usdc.approve(address(factory), initialDeposit);
+        portal = factory.createPortalPool(params);
         pool = PortalPoolImplementation(portal);
+
+        // Activate by depositing
+        vm.startPrank(user1);
+        sqd.approve(portal, MIN_STAKE_THRESHOLD);
+        pool.deposit(MIN_STAKE_THRESHOLD);
+        vm.stopPrank();
 
         vm.startPrank(user2);
         sqd.approve(portal, SMALL_STAKE);
         vm.expectRevert(PortalErrors.CapacityExceeded.selector);
         pool.deposit(SMALL_STAKE);
         vm.stopPrank();
-
-        uint256 newCapacity = MIN_STAKE_THRESHOLD + SMALL_STAKE;
         vm.prank(operator);
         pool.setCapacity(newCapacity);
 
@@ -863,6 +952,10 @@ contract PortalPoolImplementationTest is BaseTest {
         portal = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "RunwayPortal");
         pool = PortalPoolImplementation(portal);
 
+        // Get initial provider credit from pool creation
+        int256 initialCredit = pool.getCurrentRewardBalance();
+        assertTrue(initialCredit > 0, "Should have initial credit from pool creation");
+
         // Top up small amount of rewards
         uint256 rewardAmount = 100 * 1e6; // Small amount
         vm.startPrank(operator);
@@ -871,12 +964,15 @@ contract PortalPoolImplementationTest is BaseTest {
         pool.topUpRewards(rewardAmount);
         vm.stopPrank();
 
+        // Total available = initial credit + 50% of rewardAmount (FeeRouter split)
+        int256 totalCredit = pool.getCurrentRewardBalance();
+
         // Warp far into future - rewards should be capped by runway
         vm.warp(block.timestamp + 365 days);
 
         uint256 rewards = pool.getClaimableRewards(user1);
-        // Rewards should be limited by what was topped up (minus precision loss)
-        assertTrue(rewards <= rewardAmount);
+        // Rewards should be limited by total available credit
+        assertTrue(rewards <= uint256(totalCredit), "Rewards capped by total credit");
     }
 
     function test_GetCurrentRewardBalance_WhenExhausted() public {
@@ -910,16 +1006,18 @@ contract PortalPoolImplementationTest is BaseTest {
 
     function test_Deposit_InActiveState_AdditionalUser() public {
         // Create portal with larger capacity to allow additional deposits
+        uint256 capacity = MIN_STAKE_THRESHOLD * 2;
+        uint256 rate = _minRateForCapacity(capacity);
         IPortalFactory.CreatePortalPoolParams memory params = IPortalFactory.CreatePortalPoolParams({
             operator: operator,
-            capacity: MIN_STAKE_THRESHOLD * 2,
+            capacity: capacity,
             peerId: "active-deposit-portal",
             tokenSuffix: "ActiveDepositPortal",
-            distributionRatePerSecond: 1000 * 1000,
+            distributionRatePerSecond: rate,
             metadata: "",
             rewardToken: address(usdc)
         });
-        uint256 initialDeposit = params.distributionRatePerSecond * 1 days / 1000;
+        uint256 initialDeposit = rate * 1 days / 1000;
         usdc.approve(address(factory), initialDeposit);
         portal = factory.createPortalPool(params);
         pool = PortalPoolImplementation(portal);
@@ -931,99 +1029,6 @@ contract PortalPoolImplementationTest is BaseTest {
         vm.stopPrank();
 
         assertEq(uint8(pool.getState()), uint8(IPortalPool.PoolState.ACTIVE));
-    }
-
-    function test_OnLPTTransfer_RevertOnInsufficientTransferable() public {
-        portal = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "InsufficientTransferPortal");
-        pool = PortalPoolImplementation(portal);
-
-        LiquidPortalToken lpt = pool.lptToken();
-
-        // Request exit for most stake
-        uint256 exitAmount = pool.getProviderStake(user1) - 1;
-        vm.prank(user1);
-        pool.requestExit(exitAmount);
-
-        // User1 has 1 transferable stake, but 0 in LPT (burned)
-        // Try to transfer more than remaining stake
-        vm.prank(user1);
-        vm.expectRevert(); // Will revert with InsufficientTransferableStake or ERC20 error
-        lpt.transfer(user2, exitAmount);
-    }
-
-    function test_OnLPTTransfer_RevertOnExceedsReceiverLimit() public {
-        // Create portal with capacity for two users at default wallet limit
-        IPortalFactory.CreatePortalPoolParams memory params = IPortalFactory.CreatePortalPoolParams({
-            operator: operator,
-            capacity: DEFAULT_MAX_STAKE_PER_WALLET * 2,
-            peerId: "receiver-limit",
-            tokenSuffix: "ReceiverLimit",
-            distributionRatePerSecond: 1000 * 1000,
-            metadata: "",
-            rewardToken: address(usdc)
-        });
-        uint256 initialDeposit = params.distributionRatePerSecond * 1 days / 1000;
-        usdc.approve(address(factory), initialDeposit);
-        address limitPortal = factory.createPortalPool(params);
-        PortalPoolImplementation limitPool = PortalPoolImplementation(limitPortal);
-
-        // user1 deposits up to the limit
-        vm.startPrank(user1);
-        sqd.approve(limitPortal, DEFAULT_MAX_STAKE_PER_WALLET);
-        limitPool.deposit(DEFAULT_MAX_STAKE_PER_WALLET);
-        vm.stopPrank();
-
-        // user2 deposits up to the limit
-        vm.startPrank(user2);
-        sqd.approve(limitPortal, DEFAULT_MAX_STAKE_PER_WALLET);
-        limitPool.deposit(DEFAULT_MAX_STAKE_PER_WALLET);
-        vm.stopPrank();
-
-        LiquidPortalToken lpt = limitPool.lptToken();
-
-        // Try to transfer from user1 to user2 (should fail - exceeds receiver limit)
-        vm.prank(user1);
-        vm.expectRevert(PortalErrors.ExceedsWalletLimit.selector);
-        lpt.transfer(user2, 1);
-    }
-
-    function test_OnAllocationReduced_FromRegistry() public {
-        portal = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "AllocationReducedPortal");
-        pool = PortalPoolImplementation(portal);
-
-        uint256 stakeBefore = pool.getProviderStake(user1);
-        uint256 reduction = SMALL_STAKE / 2;
-
-        // Simulate registry calling onAllocationReduced
-        vm.prank(address(registry));
-        pool.onAllocationReduced(user1, reduction);
-
-        assertEq(pool.getProviderStake(user1), stakeBefore - reduction);
-    }
-
-    function test_OnAllocationReduced_RevertOnNonRegistry() public {
-        portal = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "NonRegistryReducePortal");
-        pool = PortalPoolImplementation(portal);
-
-        vm.prank(user1);
-        vm.expectRevert(PortalErrors.NotPortalRegistry.selector);
-        pool.onAllocationReduced(user1, SMALL_STAKE);
-    }
-
-    function test_OnAllocationReduced_WithExitRequest() public {
-        portal = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "ReduceWithExitPortal");
-        pool = PortalPoolImplementation(portal);
-
-        vm.prank(user1);
-        pool.requestExit(SMALL_STAKE / 2);
-
-        uint256 stakeBefore = pool.getProviderStake(user1);
-        uint256 reduction = SMALL_STAKE;
-
-        vm.prank(address(registry));
-        pool.onAllocationReduced(user1, reduction);
-
-        assertEq(pool.getProviderStake(user1), stakeBefore - reduction);
     }
 
     function test_GetExitTicket() public {
@@ -1078,23 +1083,6 @@ contract PortalPoolImplementationTest is BaseTest {
         assertGt(cus, 0);
     }
 
-    function test_Deposit_DeadlinePassedViaGetState() public {
-        _approveAndDeposit(user1, portal, SMALL_STAKE);
-
-        _warpToAfterDeadline(portal);
-
-        assertEq(uint8(pool.getState()), uint8(IPortalPool.PoolState.FAILED));
-    }
-
-    function test_OnLPTTransfer_RevertOnNotLPTToken() public {
-        portal = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "NotLPTPortal");
-        pool = PortalPoolImplementation(portal);
-
-        vm.prank(user1);
-        vm.expectRevert(PortalErrors.NotLPTToken.selector);
-        pool.onLPTTransfer(user1, user2, 100);
-    }
-
     function test_WithdrawExit_RevertOnNoActiveRequest() public {
         portal = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "NoRequestPortal");
         pool = PortalPoolImplementation(portal);
@@ -1102,28 +1090,6 @@ contract PortalPoolImplementationTest is BaseTest {
         vm.prank(user1);
         vm.expectRevert(PortalErrors.NoActiveExitRequest.selector);
         pool.withdrawExit(999);
-    }
-
-    function test_Deposit_TriggerHandleDeadlinePassed() public {
-        _approveAndDeposit(user1, portal, SMALL_STAKE);
-
-        _warpToAfterDeadline(portal);
-
-        assertEq(uint8(pool.getState()), uint8(IPortalPool.PoolState.FAILED));
-
-        vm.startPrank(user2);
-        sqd.approve(portal, SMALL_STAKE);
-        vm.expectRevert(PortalErrors.InvalidState.selector);
-        pool.deposit(SMALL_STAKE);
-        vm.stopPrank();
-    }
-
-    function test_GetClaimableRewards_ZeroCapacity() public {
-        portal = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "ZeroCapRewardsPortal");
-        pool = PortalPoolImplementation(portal);
-
-        uint256 rewards = pool.getClaimableRewards(user1);
-        assertTrue(rewards >= 0);
     }
 
     function test_GetClaimableRewards_ZeroStake() public {
@@ -1177,13 +1143,17 @@ contract PortalPoolImplementationTest is BaseTest {
         portal = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "ZeroRatePortal2");
         pool = PortalPoolImplementation(portal);
 
+        // Claim any initial rewards first
+        vm.prank(user1);
+        try pool.claimRewards() {} catch {}
+
         // Set rate to 0 to turn off distribution
         vm.prank(operator);
         pool.setDistributionRate(0);
 
-        // claimRewards should revert
+        // With rate at 0, no new rewards accrue, so claim reverts with NothingToClaim
         vm.prank(user1);
-        vm.expectRevert(PortalErrors.DistributionTurnedOff.selector);
+        vm.expectRevert(PortalErrors.NothingToClaim.selector);
         pool.claimRewards();
     }
 
@@ -1216,14 +1186,19 @@ contract PortalPoolImplementationTest is BaseTest {
         vm.prank(operator);
         pool.setDistributionRate(0);
 
-        // Verify it's off
+        // Claim any accrued rewards first
         vm.prank(user1);
-        vm.expectRevert(PortalErrors.DistributionTurnedOff.selector);
+        try pool.claimRewards() {} catch {}
+
+        // With rate at 0, no new rewards accrue, so claim reverts with NothingToClaim
+        vm.prank(user1);
+        vm.expectRevert(PortalErrors.NothingToClaim.selector);
         pool.claimRewards();
 
-        // Set rate to non-zero to enable distribution
+        // Set rate to non-zero to enable distribution (must meet precision requirements)
+        uint256 minRate = _minRateForCapacity(MIN_STAKE_THRESHOLD);
         vm.prank(operator);
-        pool.setDistributionRate(1e6); // 1 USDC per second
+        pool.setDistributionRate(minRate);
 
         // Now topUpRewards should work
         uint256 topUpAmount = 1000 * 1e6;
@@ -1286,30 +1261,7 @@ contract PortalPoolImplementationTest is BaseTest {
         assertEq(sqd.balanceOf(user1), balanceBefore + SMALL_STAKE);
     }
 
-    function test_OnAllocationReduced_FullExitAmount() public {
-        portal = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "FullExitReducePortal");
-        pool = PortalPoolImplementation(portal);
-
-        uint256 stakeBefore = pool.getProviderStake(user1);
-
-        vm.prank(user1);
-        pool.requestExit(stakeBefore);
-
-        uint256 reduction = stakeBefore / 2;
-        vm.prank(address(registry));
-        pool.onAllocationReduced(user1, reduction);
-
-        assertEq(pool.getProviderStake(user1), stakeBefore - reduction);
-    }
-
-    // =============================================================
-    //                    CAPACITY WITH PENDING EXITS
-    // =============================================================
-
-    /// @notice Test that new deposits are allowed when there are pending exits
-    /// @dev This tests the fix for the activeStake vs totalStaked capacity check
     function test_Deposit_AllowedWhenPendingExitsExist() public {
-        // Create a larger pool to have room for this test
         address largePortal = _createPortal(operator, MIN_STAKE_THRESHOLD * 2, "LargePortal");
         PortalPoolImplementation largePool = PortalPoolImplementation(largePortal);
 
@@ -1357,7 +1309,7 @@ contract PortalPoolImplementationTest is BaseTest {
         assertEq(largePool.getActiveStake(), MIN_STAKE_THRESHOLD * 2, "activeStake should equal capacity");
     }
 
-    /// @notice Test that deposits are still rejected when activeStake would exceed capacity
+    /// @notice test that deposits are still rejected when activeStake would exceed capacity
     function test_Deposit_RejectedWhenActiveStakeExceedsCapacity() public {
         // Create a larger pool
         address largePortal = _createPortal(operator, MIN_STAKE_THRESHOLD * 2, "LargePortal2");

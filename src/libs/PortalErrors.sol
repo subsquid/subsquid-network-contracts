@@ -60,6 +60,7 @@ library PortalErrors {
     error TokenAlreadyAdded();
     error NoPaymentTokens();
     error NothingToClaim();
+    error InvalidDecimals();
 
     // Distribution errors
     error DistributionTurnedOff();

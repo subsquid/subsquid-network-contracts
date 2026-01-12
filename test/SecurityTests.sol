@@ -12,9 +12,6 @@ contract SecurityTests is BaseTest {
     PortalPoolImplementation public pool;
     LiquidPortalToken public lpt;
 
-    // ~$86.40/day = 1e6 USDC/day = ~11.57 USDC/second
-    uint256 constant REASONABLE_RATE = 12 * 1e6; // 12 USDC per second
-
     function setUp() public override {
         super.setUp();
         portal = _createSecurityTestPortal(operator, MIN_STAKE_THRESHOLD, "SecurityPortal");
@@ -22,21 +19,29 @@ contract SecurityTests is BaseTest {
         lpt = LiquidPortalToken(address(pool.lptToken()));
     }
 
+    /// @dev Calculate minimum rate to satisfy precision requirement: rate >= capacity / 1e12
+    function _minRateForCapacity(uint256 capacity) internal pure returns (uint256) {
+        uint256 minRate = capacity / 1e12;
+        return minRate < 1000 ? 1000 : minRate;
+    }
+
     function _createSecurityTestPortal(address _operator, uint256 _capacity, string memory _name)
         internal
         returns (address portalAddress)
     {
+        uint256 rate = _minRateForCapacity(_capacity);
+
         IPortalFactory.CreatePortalPoolParams memory params = IPortalFactory.CreatePortalPoolParams({
             operator: _operator,
             capacity: _capacity,
             peerId: abi.encodePacked("peer-", _name),
             tokenSuffix: _name,
-            distributionRatePerSecond: REASONABLE_RATE,
+            distributionRatePerSecond: rate,
             metadata: "",
             rewardToken: address(usdc)
         });
 
-        uint256 initialDeposit = REASONABLE_RATE * 1 days / 1000;
+        uint256 initialDeposit = rate * 1 days / 1000;
         usdc.approve(address(factory), initialDeposit);
         portalAddress = factory.createPortalPool(params);
 
@@ -128,16 +133,18 @@ contract SecurityTests is BaseTest {
         sqd.mint(user1, DEFAULT_MAX_STAKE_PER_WALLET);
         sqd.mint(user2, DEFAULT_MAX_STAKE_PER_WALLET);
 
+        uint256 capacity = DEFAULT_MAX_STAKE_PER_WALLET * 2;
+        uint256 rate = _minRateForCapacity(capacity);
         IPortalFactory.CreatePortalPoolParams memory params = IPortalFactory.CreatePortalPoolParams({
             operator: operator,
-            capacity: DEFAULT_MAX_STAKE_PER_WALLET * 2,
+            capacity: capacity,
             peerId: "limit-portal",
             tokenSuffix: "LimitPortal",
-            distributionRatePerSecond: 1000 * 1000,
+            distributionRatePerSecond: rate,
             metadata: "",
             rewardToken: address(usdc)
         });
-        uint256 initialDeposit = params.distributionRatePerSecond * 1 days / 1000;
+        uint256 initialDeposit = rate * 1 days / 1000;
         usdc.approve(address(factory), initialDeposit);
         address limitPortal = factory.createPortalPool(params);
         LiquidPortalToken limitLpt = PortalPoolImplementation(limitPortal).lptToken();

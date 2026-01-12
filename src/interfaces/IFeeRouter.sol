@@ -11,6 +11,7 @@ interface IFeeRouter {
     }
 
     event FeeConfigUpdated(uint16 toProviders, uint16 toWorkerPool, uint16 toBurn);
+    event BurnAddressUpdated(address burnAddress);
 
     function calculateSplit(uint256 amount)
         external
@@ -20,4 +21,8 @@ interface IFeeRouter {
     function setFeeConfig(uint16 toProvidersBPS, uint16 toWorkerPoolBPS, uint16 toBurnBPS) external;
 
     function getFeeConfig() external view returns (FeeConfig memory);
+
+    function setBurnAddress(address newBurnAddress) external;
+
+    function getBurnAddress() external view returns (address);
 }

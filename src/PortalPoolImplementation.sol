@@ -9,6 +9,7 @@ import {IPortalPool} from "./interfaces/IPortalPool.sol";
 import {PortalErrors} from "./libs/PortalErrors.sol";
 import {ExitQueueLib} from "./libs/ExitQueueLib.sol";
 import {FullMath} from "./libs/FullMath.sol";
+import {Constants} from "./libs/Constants.sol";
 import {LiquidPortalToken} from "./LiquidPortalToken.sol";
 import {Multicall} from "./utils/Multicall.sol";
 import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
@@ -60,7 +61,7 @@ contract PortalPoolImplementation is
         if (params.sqd == address(0)) revert PortalErrors.InvalidAddress();
         if (params.rewardToken == address(0)) revert PortalErrors.InvalidAddress();
         if (params.portalRegistry == address(0)) revert PortalErrors.InvalidAddress();
-        if (params.feeRouter == address(0)) revert PortalErrors.InvalidAddress();
+        // Note: feeRouter is now fetched dynamically from factory, not stored per-pool
 
         __AccessControl_init();
         __Pausable_init();
@@ -69,12 +70,13 @@ contract PortalPoolImplementation is
         _sqd = IERC20(params.sqd);
         _rewardToken = IERC20(params.rewardToken);
         _portalRegistry = IPortalRegistry(params.portalRegistry);
-        _feeRouter = IFeeRouter(params.feeRouter);
+        // _feeRouter storage slot preserved for upgrade compatibility but not used
         _minStakeThreshold = params.minStakeThreshold;
 
         // Rate interpretation: rate is in "raw units per second" scaled by RATE_PRECISION
         // Example: For USDC (6 decimals), rate=386000 gives ~$1000/month at full capacity
         uint8 rewardDecimals = IERC20Metadata(params.rewardToken).decimals();
+        if (rewardDecimals > 18) revert PortalErrors.InvalidDecimals();
         _rewardTokenDecimalScale = 10 ** rewardDecimals;
 
         if (params.capacity < _minStakeThreshold) revert PortalErrors.BelowMinimum();
@@ -100,8 +102,6 @@ contract PortalPoolImplementation is
         _setDistributionRate(params.distributionRatePerSecond);
 
         _exitQueue.initialize(_factory.exitUnlockRatePerSecond());
-
-        burnAddress = address(0xdead);
 
         whitelistEnabled = _factory.defaultWhitelistEnabled();
         if (whitelistEnabled) {
@@ -141,6 +141,7 @@ contract PortalPoolImplementation is
             }
         }
 
+        // Validate against requested amount (upper bound check)
         uint256 newUserStake = _stakes[msg.sender] + amount;
         if (newUserStake > _factory.defaultMaxStakePerWallet()) revert PortalErrors.ExceedsWalletLimit();
 
@@ -263,6 +264,9 @@ contract PortalPoolImplementation is
         // ccheck if ticket is unlocked using library (timestamp-based)
         if (!ExitQueueLib.isUnlocked(_exitQueue, ticket)) revert PortalErrors.StillInQueue();
 
+
+        _accrueGlobal(block.timestamp, true);
+
         ticket.withdrawn = true;
 
         uint256 amount = ticket.amount;
@@ -351,6 +355,26 @@ contract PortalPoolImplementation is
     }
 
     /**
+     * @dev allows operator to recover reward tokens from a FAILED pool.
+     * @notice Recover unused reward tokens when pool fails to activate.
+     * @return amount the amount of reward tokens recovered.
+     */
+    function recoverRewardsFromFailed() external onlyOperator nonReentrant returns (uint256) {
+        if (getState() != PoolState.FAILED) revert PortalErrors.PortalNotFailed();
+
+        uint256 amount = _rewardToken.balanceOf(address(this));
+        if (amount == 0) revert PortalErrors.NothingToClaim();
+
+        // Clear credit to prevent double recovery
+        credit = 0;
+
+        _rewardToken.safeTransfer(msg.sender, amount);
+
+        emit RewardsRecovered(msg.sender, amount);
+        return amount;
+    }
+
+    /**
      * @dev allows the operator to add reward tokens to the pool.
      * @notice Top up the reward pool to extend the runway for staker rewards.
      * @param amount the amount of reward tokens to add.
@@ -366,15 +390,19 @@ contract PortalPoolImplementation is
         _rewardToken.safeTransferFrom(msg.sender, address(this), amount);
         uint256 received = _rewardToken.balanceOf(address(this)) - balanceBefore;
 
-        // split based on actual received amount
-        (uint256 toProviders, uint256 toWorkerPool, uint256 toBurn) = _feeRouter.calculateSplit(received);
-
-        if (toBurn > 0) revert PortalErrors.InvalidAmount();
+        // split based on actual received amount - get feeRouter from factory for upgradeability
+        (uint256 toProviders, uint256 toWorkerPool, uint256 toBurn) =
+            IFeeRouter(_factory.feeRouter()).calculateSplit(received);
 
         address workerPool = _factory.workerPoolAddress();
         if (toWorkerPool > 0) {
             if (workerPool == address(0)) revert PortalErrors.InvalidAddress();
             _rewardToken.safeTransfer(workerPool, toWorkerPool);
+        }
+
+        if (toBurn > 0) {
+            address burn = IFeeRouter(_factory.feeRouter()).getBurnAddress();
+            _rewardToken.safeTransfer(burn, toBurn);
         }
 
         // Update credit/debt: checkpoint current state then add toProviders
@@ -394,7 +422,7 @@ contract PortalPoolImplementation is
 
         _accrueGlobal(block.timestamp, false);
 
-        emit RewardsToppedUp(msg.sender, amount, credit);
+        emit RewardsToppedUp(msg.sender, received, toProviders, toWorkerPool, toBurn);
     }
 
     /**
@@ -405,14 +433,18 @@ contract PortalPoolImplementation is
         if (msg.sender != address(_factory)) revert PortalErrors.NotFactory();
         if (credit > 0 || debt > 0) revert PortalErrors.AlreadyInitialized();
 
-        (uint256 toProviders, uint256 toWorkerPool, uint256 toBurn) = _feeRouter.calculateSplit(amount);
-
-        if (toBurn > 0) revert PortalErrors.InvalidAmount();
+        (uint256 toProviders, uint256 toWorkerPool, uint256 toBurn) =
+            IFeeRouter(_factory.feeRouter()).calculateSplit(amount);
 
         if (toWorkerPool > 0) {
             address workerPool = _factory.workerPoolAddress();
             if (workerPool == address(0)) revert PortalErrors.InvalidAddress();
             _rewardToken.safeTransfer(workerPool, toWorkerPool);
+        }
+
+        if (toBurn > 0) {
+            address burn = IFeeRouter(_factory.feeRouter()).getBurnAddress();
+            _rewardToken.safeTransfer(burn, toBurn);
         }
 
         credit = toProviders;
@@ -425,8 +457,8 @@ contract PortalPoolImplementation is
      * @return the amount of rewards claimed.
      */
     function claimRewards() external whenNotPaused nonReentrant returns (uint256) {
-        if (totalDistributionRatePerSec == 0) revert PortalErrors.DistributionTurnedOff();
-
+            // always allow claiming - users should be able to claim earned rewards
+            // even if distribution is turned off
         _accrueGlobal(block.timestamp, true);
         _updateUser(msg.sender);
 
@@ -434,10 +466,7 @@ contract PortalPoolImplementation is
         if (amount == 0) revert PortalErrors.NothingToClaim();
 
         _unclaimedRewards[msg.sender] = 0;
-
-        if (amount > 0) {
-            _rewardToken.safeTransfer(msg.sender, amount);
-        }
+        _rewardToken.safeTransfer(msg.sender, amount);
 
         emit RewardsClaimed(msg.sender, amount);
         return amount;
@@ -454,6 +483,15 @@ contract PortalPoolImplementation is
         }
         if (newRatePerSecond != 0 && newRatePerSecond < _factory.minDistributionRatePerSecond()) {
             revert PortalErrors.RateBelowMinimum();
+        }
+
+
+        if (newRatePerSecond > 0) {
+            uint256 perStakeRate = (newRatePerSecond * Constants.PRECISION)
+                / (_portalInfo.capacity * RATE_PRECISION);
+            if (perStakeRate < Constants.MIN_PER_STAKE_RATE) {
+                revert PortalErrors.InsufficientRewardPrecision();
+            }
         }
 
         _accrueGlobal(block.timestamp, true);
@@ -478,6 +516,15 @@ contract PortalPoolImplementation is
         if (newCapacity < minCapacity) revert PortalErrors.BelowMinimum();
         if (newCapacity < _portalInfo.totalStaked) revert PortalErrors.BelowCurrentStake();
 
+
+        if (totalDistributionRatePerSec > 0) {
+            uint256 perStakeRate = (totalDistributionRatePerSec * Constants.PRECISION)
+                / (newCapacity * RATE_PRECISION);
+            if (perStakeRate < Constants.MIN_PER_STAKE_RATE) {
+                revert PortalErrors.InsufficientRewardPrecision();
+            }
+        }
+
         _accrueGlobal(block.timestamp, true);
 
         // Cannot change capacity while pool has debt
@@ -493,15 +540,6 @@ contract PortalPoolImplementation is
         }
 
         emit CapacityUpdated(oldCapacity, newCapacity);
-    }
-
-    /**
-     * @dev sets the address where burned tokens are sent.
-     * @param newBurnAddress the new burn address.
-     */
-    function setBurnAddress(address newBurnAddress) external onlyOperator {
-        burnAddress = newBurnAddress;
-        emit BurnAddressUpdated(newBurnAddress);
     }
 
     /**
@@ -741,7 +779,14 @@ contract PortalPoolImplementation is
     {
         ExitQueueLib.Ticket storage ticket = _exitTickets[user][ticketId];
         (processed, userEndPos, secondsRemaining, ready) = ExitQueueLib.getStatus(_exitQueue, ticket);
-        unlockTimestamp = ready ? block.timestamp : block.timestamp + secondsRemaining;
+
+        if (ready) {
+            unlockTimestamp = block.timestamp;
+        } else if (secondsRemaining == type(uint256).max) {
+            unlockTimestamp = type(uint256).max;
+        } else {
+            unlockTimestamp = block.timestamp + secondsRemaining;
+        }
     }
 
     function getTotalProcessed() external view returns (uint256) {
@@ -815,6 +860,9 @@ contract PortalPoolImplementation is
     }
 
     function _totalDrainRate() internal view returns (uint256) {
+        // no drain if pool was never activated
+        if (!_portalInfo.firstActivated) return 0;
+
         uint256 activeStake = _getActiveStake();
         uint256 minStake = _minStakeThreshold;
         if (_portalInfo.totalStaked < minStake) return 0;
@@ -847,7 +895,8 @@ contract PortalPoolImplementation is
 
         uint256 activeStake = _getActiveStake();
         uint256 minStake = _minStakeThreshold;
-        if (_portalInfo.totalStaked < minStake || activeStake == 0 || perStakeRateWad == 0) {
+        // no accrual simulation if pool was never activated
+        if (!_portalInfo.firstActivated || _portalInfo.totalStaked < minStake || activeStake == 0 || perStakeRateWad == 0) {
             return (newRPS, uint64(timestamp));
         }
 
@@ -874,7 +923,7 @@ contract PortalPoolImplementation is
         uint256 activeStake = _getActiveStake();
         uint256 minStake = _minStakeThreshold;
 
-        if (_portalInfo.totalStaked >= minStake && activeStake > 0 && perStakeRateWad > 0) {
+        if (_portalInfo.firstActivated && _portalInfo.totalStaked >= minStake && activeStake > 0 && perStakeRateWad > 0) {
             int256 runway = getRunway();
 
             if (runway >= int256(timestamp)) {
@@ -998,8 +1047,12 @@ contract PortalPoolImplementation is
             lptToken.burn(msg.sender, lptToBurn);
         }
 
-        // Transfer SQD directly from registry to user
-        _portalRegistry.unstake(msg.sender, userStake);
+        // Transfer SQD based on whether pool was ever activated
+        if (_portalInfo.firstActivated) {
+            _portalRegistry.unstake(msg.sender, userStake);
+        } else {
+            _sqd.safeTransfer(msg.sender, userStake);
+        }
 
         emit Withdrawn(msg.sender, userStake);
     }

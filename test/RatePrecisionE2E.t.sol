@@ -147,7 +147,6 @@ contract RatePrecisionE2ETest is Test {
         return pool;
     }
 
-    // ============ TEST 1: Single Token (1 wei) Distribution ============
     function test_E2E_SingleTokenFee_MinimumRate() public {
         uint256 scaledRate = 1000; // 1 token/sec (minimum allowed)
         PortalPoolImplementation pool = _createPool(scaledRate);
@@ -165,7 +164,6 @@ contract RatePrecisionE2ETest is Test {
         assertEq(claimable, expectedActual, "Minimum rate precision: should get 10 tokens");
     }
 
-    // ============ TEST 2: Precision Loss at Boundary ============
     function test_E2E_PrecisionLoss_SmallTimeSmallRate() public {
         uint256 scaledRate = 1000; // 1 token/sec (minimum allowed)
         PortalPoolImplementation pool = _createPool(scaledRate);
@@ -182,7 +180,6 @@ contract RatePrecisionE2ETest is Test {
         assertEq(claimable, 1, "Precision: 1 second at min rate = 1 token");
     }
 
-    // ============ TEST 3: Drain Rate Precision with Partial Stake ============
     function test_E2E_DrainRate_PartialStake_Precision() public {
         uint256 scaledRate = 100 * RATE_PRECISION; // 100 tokens/sec
         PortalPoolImplementation pool = _createPool(scaledRate);
@@ -206,7 +203,6 @@ contract RatePrecisionE2ETest is Test {
         assertEq(drainRateAfter, expectedDrain, "Half stake: drain rate is 50%");
     }
 
-    // ============ TEST 4: Runway Calculation Precision ============
     function test_E2E_Runway_Precision_SmallCredit() public {
         uint256 scaledRate = 1000 * RATE_PRECISION; // 1000 tokens/sec
         PortalPoolImplementation pool = _createPool(scaledRate);
@@ -229,7 +225,6 @@ contract RatePrecisionE2ETest is Test {
         assertEq(runway, expectedRunway, "Runway: accounts for initial deposit + topup");
     }
 
-    // ============ TEST 5: Rate Change Attack Vector ============
     function test_E2E_RateChange_NoDebtManipulation() public {
         uint256 scaledRate = 100 * RATE_PRECISION;
         PortalPoolImplementation pool = _createPool(scaledRate);
@@ -248,7 +243,6 @@ contract RatePrecisionE2ETest is Test {
         pool.setDistributionRate(50 * RATE_PRECISION);
     }
 
-    // ============ TEST 6: Extreme Rate Values ============
     function test_E2E_ExtremeRates_MaxAndMin() public {
         // Test minimum rate (1000 = 1 token/sec, minimum allowed)
         PortalPoolImplementation poolMin = _createPool(1000);
@@ -275,7 +269,6 @@ contract RatePrecisionE2ETest is Test {
         factory.createPortalPool(params);
     }
 
-    // ============ TEST 7: Multi-User Reward Distribution Precision ============
     function test_E2E_MultiUser_PrecisionFairness() public {
         uint256 scaledRate = 3 * RATE_PRECISION; // 3 tokens/sec (not divisible by 2)
 
@@ -323,7 +316,6 @@ contract RatePrecisionE2ETest is Test {
         assertEq(aliceRewards + bobRewards, 300, "Total is exact");
     }
 
-    // ============ TEST 8: Credit/Debt Transition Precision ============
     function test_E2E_CreditDebt_TransitionPrecision() public {
         uint256 scaledRate = 10 * RATE_PRECISION; // 10 tokens/sec
         PortalPoolImplementation pool = _createPool(scaledRate);
@@ -355,9 +347,9 @@ contract RatePrecisionE2ETest is Test {
         assertEq(debtAfter, 10, "Debt should be exactly 10 (1 sec * 10 rate)");
     }
 
-    // ============ TEST 9: Overflow Protection with Large Values ============
     function test_E2E_Overflow_LargeStakeLargeTime() public {
-        uint256 scaledRate = 1e6 * RATE_PRECISION; // 1M tokens/sec
+        // For largeCapacity = 1e24, min rate = 1e24 / 1e12 = 1e12
+        uint256 scaledRate = 1e12; // min rate for precision requirements
 
         poolCount++;
         uint256 largeCapacity = 1e24; // 1M SQD with 18 decimals
@@ -402,7 +394,6 @@ contract RatePrecisionE2ETest is Test {
         assertTrue(runway != 0, "Runway calculation should work");
     }
 
-    // ============ TEST 10: Zero to Non-Zero Rate Transition ============
     function test_E2E_ZeroRate_EnableDisable() public {
         // Create pool with zero rate
         poolCount++;

@@ -9,6 +9,7 @@ import {BeaconProxy} from "@openzeppelin/contracts/proxy/beacon/BeaconProxy.sol"
 import {IPortalPool} from "./interfaces/IPortalPool.sol";
 import {IPortalFactory} from "./interfaces/IPortalFactory.sol";
 import {IPortalRegistry} from "./interfaces/IPortalRegistry.sol";
+import {IFeeRouter} from "./interfaces/IFeeRouter.sol";
 import {PortalPoolBeacon} from "./PortalPoolBeacon.sol";
 import {PortalErrors} from "./libs/PortalErrors.sol";
 import {Constants} from "./libs/Constants.sol";
@@ -106,8 +107,8 @@ contract PortalPoolFactory is
         workerEpochLength = _workerEpochLength;
 
         maxPaymentTokens = Constants.MAX_PAYMENT_TOKENS;
-        exitUnlockRatePerSecond = 1e18;
-        collectionDeadlineSeconds = 30 days;
+        exitUnlockRatePerSecond = 1e18; 
+        collectionDeadlineSeconds = 30 days; 
         maxDistributionRatePerSecond = Constants.MAX_DISTRIBUTION_RATE_PER_SECOND;
         minDistributionRatePerSecond = Constants.MIN_DISTRIBUTION_RATE_PER_SECOND;
 
@@ -140,11 +141,17 @@ contract PortalPoolFactory is
         }
 
         if (params.distributionRatePerSecond > 0) {
-            uint256 perStakeRate =
-                (params.distributionRatePerSecond * Constants.PRECISION) / (params.capacity * Constants.RATE_PRECISION);
+            uint256 perStakeRate = (params.distributionRatePerSecond * Constants.PRECISION)
+                / (params.capacity * Constants.RATE_PRECISION);
             if (perStakeRate < Constants.MIN_PER_STAKE_RATE) {
                 revert PortalErrors.InsufficientRewardPrecision();
             }
+        }
+
+
+        IFeeRouter.FeeConfig memory feeConfig = IFeeRouter(feeRouter).getFeeConfig();
+        if (feeConfig.toWorkerPoolBPS > 0 && workerPoolAddress == address(0)) {
+            revert PortalErrors.InvalidAddress();
         }
 
         IPortalPool.InitParams memory initParams = IPortalPool.InitParams({
@@ -297,6 +304,13 @@ contract PortalPoolFactory is
         emit WorkerPoolAddressUpdated(oldValue, _workerPoolAddress);
     }
 
+    function setFeeRouter(address _feeRouter) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (_feeRouter == address(0)) revert PortalErrors.InvalidAddress();
+        address oldValue = feeRouter;
+        feeRouter = _feeRouter;
+        emit FeeRouterUpdated(oldValue, _feeRouter);
+    }
+
     function setMaxDistributionRate(uint256 ratePerSecond) external onlyRole(DEFAULT_ADMIN_ROLE) {
         uint256 oldValue = maxDistributionRatePerSecond;
         maxDistributionRatePerSecond = ratePerSecond;
@@ -364,10 +378,12 @@ contract PortalPoolFactory is
         isAllowedPaymentToken[token] = false;
 
         uint256 length = paymentTokensList.length;
+        bool found = false;
         for (uint256 i = 0; i < length;) {
             if (paymentTokensList[i] == token) {
                 paymentTokensList[i] = paymentTokensList[length - 1];
                 paymentTokensList.pop();
+                found = true;
                 break;
             }
             unchecked {
@@ -386,5 +402,5 @@ contract PortalPoolFactory is
     }
 
     /// @dev authorizes contract upgrades (UUPS pattern).
-    function _authorizeUpgrade(address newImplementation) internal override onlyRole(DEFAULT_ADMIN_ROLE) {}
+    function _authorizeUpgrade(address newImplementation) internal virtual override onlyRole(DEFAULT_ADMIN_ROLE) {}
 }

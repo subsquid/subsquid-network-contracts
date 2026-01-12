@@ -13,6 +13,7 @@ contract FeeRouterModule is AccessControl, IFeeRouter {
     uint256 public constant BASIS_POINTS = 10000;
 
     FeeConfig public feeConfig;
+    address public burnAddress;
 
     /**
      * @dev initializes the fee router with default 50/50 split between providers and worker pool.
@@ -22,6 +23,7 @@ contract FeeRouterModule is AccessControl, IFeeRouter {
 
         // 50/50 split: 50% to providers, 50% to worker pool
         feeConfig = FeeConfig({toProvidersBPS: 5000, toWorkerPoolBPS: 5000, toBurnBPS: 0});
+        burnAddress = address(0xdead);
     }
 
     /**
@@ -50,11 +52,13 @@ contract FeeRouterModule is AccessControl, IFeeRouter {
 
         uint256 dust = amount - used;
         if (dust > 0) {
+            // On equal BPS, worker pool wins (protocol preference)
             if (cfg.toProvidersBPS > cfg.toWorkerPoolBPS && cfg.toProvidersBPS > cfg.toBurnBPS) {
                 toProviders += dust;
             } else if (cfg.toBurnBPS > cfg.toWorkerPoolBPS) {
                 toBurn += dust;
             } else {
+                // Worker pool wins ties (protocol benefits)
                 toWorkerPool += dust;
             }
         }
@@ -85,5 +89,22 @@ contract FeeRouterModule is AccessControl, IFeeRouter {
      */
     function getFeeConfig() external view returns (FeeConfig memory) {
         return feeConfig;
+    }
+
+    /**
+     * @dev sets the burn address where burned tokens are sent.
+     * @param newBurnAddress the new burn address.
+     */
+    function setBurnAddress(address newBurnAddress) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (newBurnAddress == address(0)) revert PortalErrors.InvalidAddress();
+        burnAddress = newBurnAddress;
+        emit BurnAddressUpdated(newBurnAddress);
+    }
+
+    /**
+     * @dev returns the current burn address.
+     */
+    function getBurnAddress() external view returns (address) {
+        return burnAddress;
     }
 }

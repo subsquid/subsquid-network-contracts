@@ -104,8 +104,9 @@ abstract contract BaseTest is Test {
         sqd.mint(user2, 1_000_000 ether);
         sqd.mint(user3, 1_000_000 ether);
 
-        usdc.mint(admin, 10_000_000 * 1e6);
-        usdc.mint(operator, 10_000_000 * 1e6);
+        // Mint large amounts for tests with high distribution rates
+        usdc.mint(admin, type(uint128).max);
+        usdc.mint(operator, type(uint128).max);
         usdc.mint(user1, 1_000_000 * 1e6);
 
         dai.mint(admin, 10_000_000 ether);
@@ -116,13 +117,16 @@ abstract contract BaseTest is Test {
         internal
         returns (address portalAddress)
     {
+
+        uint256 minRate = (_capacity / 1e12);
+        if (minRate < 1000) minRate = 1000; // Minimum 1 token/sec
+
         IPortalFactory.CreatePortalPoolParams memory params = IPortalFactory.CreatePortalPoolParams({
             operator: _operator,
             capacity: _capacity,
             peerId: abi.encodePacked("peer-", _name),
             tokenSuffix: _name,
-            // Rate is scaled by RATE_PRECISION (1000). 1000 * 1000 = 1e6 = 1000 micro-USDC/sec
-            distributionRatePerSecond: 1000 * 1000,
+            distributionRatePerSecond: minRate,
             metadata: "",
             rewardToken: address(usdc)
         });
