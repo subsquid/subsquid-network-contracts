@@ -2,7 +2,7 @@
 pragma solidity 0.8.28;
 
 import "./BaseTest.sol";
-import {PortalErrors} from "../src/libs/PortalErrors.sol";
+import {PoolErrors} from "../src/libs/PoolErrors.sol";
 import {Constants} from "../src/libs/Constants.sol";
 
 /// @title Factory Admin Tests
@@ -83,7 +83,7 @@ contract FactoryAdminTest is BaseTest {
 
 
     function test_SetFeeRouter_RevertOnZeroAddress() public {
-        vm.expectRevert(PortalErrors.InvalidAddress.selector);
+        vm.expectRevert(PoolErrors.InvalidAddress.selector);
         factory.setFeeRouter(address(0));
     }
 
@@ -95,22 +95,23 @@ contract FactoryAdminTest is BaseTest {
 
         // Non-deployer tries to create
         uint256 rate = _minRateForCapacity(MIN_STAKE_THRESHOLD);
+        uint256 initialDeposit = rate * 1 days / 1000;
+
         IPortalFactory.CreatePortalPoolParams memory params = IPortalFactory.CreatePortalPoolParams({
             operator: user1,
             capacity: MIN_STAKE_THRESHOLD,
             peerId: "test-peer-id",
             tokenSuffix: "TestPortal",
             distributionRatePerSecond: rate,
+            initialDeposit: initialDeposit,
             metadata: "",
             rewardToken: address(usdc)
         });
 
-        uint256 initialDeposit = rate * 1 days / 1000;
-
         vm.startPrank(user1);
         usdc.mint(user1, initialDeposit);
         usdc.approve(address(factory), initialDeposit);
-        vm.expectRevert(PortalErrors.NotAuthorized.selector);
+        vm.expectRevert(PoolErrors.NotAuthorized.selector);
         factory.createPortalPool(params);
         vm.stopPrank();
 
@@ -131,11 +132,12 @@ contract FactoryAdminTest is BaseTest {
             peerId: "test-peer-id",
             tokenSuffix: "TestPortal",
             distributionRatePerSecond: minRate, // Below new minimum
+            initialDeposit: minRate * 1 days / 1000,
             metadata: "",
             rewardToken: address(usdc)
         });
 
-        vm.expectRevert(PortalErrors.RateBelowMinimum.selector);
+        vm.expectRevert(PoolErrors.RateBelowMinimum.selector);
         factory.createPortalPool(params);
     }
 
@@ -153,11 +155,12 @@ contract FactoryAdminTest is BaseTest {
             peerId: "test-peer-id",
             tokenSuffix: "TestPortal",
             distributionRatePerSecond: rate,
+            initialDeposit: rate * 1 days / 1000,
             metadata: "",
             rewardToken: address(usdc)
         });
 
-        vm.expectRevert(PortalErrors.RateExceedsMaximum.selector);
+        vm.expectRevert(PoolErrors.RateExceedsMaximum.selector);
         factory.createPortalPool(params);
     }
 
@@ -175,11 +178,12 @@ contract FactoryAdminTest is BaseTest {
             peerId: "test-peer-id",
             tokenSuffix: "TestPortal",
             distributionRatePerSecond: tinyRate,
+            initialDeposit: tinyRate * 1 days / 1000,
             metadata: "",
             rewardToken: address(usdc)
         });
 
-        vm.expectRevert(PortalErrors.InsufficientRewardPrecision.selector);
+        vm.expectRevert(PoolErrors.InsufficientRewardPrecision.selector);
         factory.createPortalPool(params);
     }
 }

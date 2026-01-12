@@ -36,6 +36,8 @@ interface IPortalFactory {
         string tokenSuffix;
         /// @dev scaled by RATE_PRECISION (1000). To set 1 token/sec, pass 1000.
         uint256 distributionRatePerSecond;
+        /// @dev initial reward deposit. Must be >= distributionRatePerSecond * 1 day / RATE_PRECISION
+        uint256 initialDeposit;
         string metadata;
         address rewardToken;
     }

@@ -2,7 +2,7 @@
 pragma solidity 0.8.28;
 
 import "./BaseTest.sol";
-import {PortalErrors} from "../src/libs/PortalErrors.sol";
+import {PoolErrors} from "../src/libs/PoolErrors.sol";
 import {IFeeRouter} from "../src/interfaces/IFeeRouter.sol";
 
 contract FeeRouterModuleTest is BaseTest {
@@ -132,12 +132,12 @@ contract FeeRouterModuleTest is BaseTest {
     }
 
     function test_SetFeeConfig_RevertOnInvalidTotal() public {
-        vm.expectRevert(PortalErrors.InvalidFeeConfig.selector);
+        vm.expectRevert(PoolErrors.InvalidFeeConfig.selector);
         feeRouter.setFeeConfig(3000, 5000, 1000);
     }
 
     function test_SetFeeConfig_RevertOnOverflow() public {
-        vm.expectRevert(PortalErrors.InvalidFeeConfig.selector);
+        vm.expectRevert(PoolErrors.InvalidFeeConfig.selector);
         feeRouter.setFeeConfig(5000, 5000, 1);
     }
 

@@ -2,7 +2,7 @@
 pragma solidity 0.8.28;
 
 import "./BaseTest.sol";
-import {PortalErrors} from "../src/libs/PortalErrors.sol";
+import {PoolErrors} from "../src/libs/PoolErrors.sol";
 import {PortalPoolImplementation} from "../src/PortalPoolImplementation.sol";
 
 contract WhitelistTest is BaseTest {
@@ -17,7 +17,7 @@ contract WhitelistTest is BaseTest {
     function test_Deposit_RevertsWhenNotWhitelisted() public {
         vm.startPrank(user1);
         sqd.approve(pool, MIN_STAKE_THRESHOLD);
-        vm.expectRevert(PortalErrors.NotWhitelisted.selector);
+        vm.expectRevert(PoolErrors.NotWhitelisted.selector);
         IPortalPool(pool).deposit(MIN_STAKE_THRESHOLD);
         vm.stopPrank();
     }
@@ -106,7 +106,7 @@ contract WhitelistTest is BaseTest {
         factory.setWhitelistFeatureEnabled(false);
 
         vm.prank(operator);
-        vm.expectRevert(PortalErrors.WhitelistFeatureDisabled.selector);
+        vm.expectRevert(PoolErrors.WhitelistFeatureDisabled.selector);
         IPortalPool(pool).setWhitelistEnabled(true);
     }
 
@@ -137,7 +137,7 @@ contract WhitelistTest is BaseTest {
         factory.setWhitelistFeatureEnabled(false);
 
         vm.prank(operator);
-        vm.expectRevert(PortalErrors.WhitelistFeatureDisabled.selector);
+        vm.expectRevert(PoolErrors.WhitelistFeatureDisabled.selector);
         IPortalPool(newPool).setWhitelistEnabled(true);
     }
 
@@ -146,7 +146,7 @@ contract WhitelistTest is BaseTest {
         users[0] = user1;
 
         vm.prank(user2);
-        vm.expectRevert(PortalErrors.NotOperator.selector);
+        vm.expectRevert(PoolErrors.NotOperator.selector);
         IPortalPool(pool).addToWhitelist(users);
     }
 
@@ -155,13 +155,13 @@ contract WhitelistTest is BaseTest {
         users[0] = user1;
 
         vm.prank(user2);
-        vm.expectRevert(PortalErrors.NotOperator.selector);
+        vm.expectRevert(PoolErrors.NotOperator.selector);
         IPortalPool(pool).removeFromWhitelist(users);
     }
 
     function test_SetWhitelistEnabled_RevertsOnNonOperator() public {
         vm.prank(user1);
-        vm.expectRevert(PortalErrors.NotOperator.selector);
+        vm.expectRevert(PoolErrors.NotOperator.selector);
         IPortalPool(pool).setWhitelistEnabled(false);
     }
 

@@ -9,7 +9,7 @@ import {FeeRouterModule} from "../src/FeeRouterModule.sol";
 import {LiquidPortalToken} from "../src/LiquidPortalToken.sol";
 import {IPortalPool} from "../src/interfaces/IPortalPool.sol";
 import {IPortalFactory} from "../src/interfaces/IPortalFactory.sol";
-import {PortalErrors} from "../src/libs/PortalErrors.sol";
+import {PoolErrors} from "../src/libs/PoolErrors.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 
 contract MockERC20 {
@@ -131,17 +131,18 @@ contract ActiveStakeCapacityE2ETest is Test {
 
     function _createPool() internal returns (PortalPoolImplementation) {
         poolCount++;
+        uint256 initialDeposit = SCALED_RATE * 1 days / RATE_PRECISION;
         IPortalFactory.CreatePortalPoolParams memory params = IPortalFactory.CreatePortalPoolParams({
             operator: operator,
             capacity: CAPACITY,
             peerId: abi.encodePacked("peer-active-stake-", poolCount),
             tokenSuffix: string(abi.encodePacked("AS", poolCount)),
             distributionRatePerSecond: SCALED_RATE,
+            initialDeposit: initialDeposit,
             metadata: "",
             rewardToken: address(usdc)
         });
 
-        uint256 initialDeposit = SCALED_RATE * 1 days / RATE_PRECISION;
         usdc.approve(address(factory), initialDeposit);
         address portalAddress = factory.createPortalPool(params);
         return PortalPoolImplementation(portalAddress);

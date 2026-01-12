@@ -4,7 +4,7 @@ pragma solidity 0.8.28;
 /// @title exit Queue Library for Portal Pools
 /// @notice implements a "conveyor belt" exit queue for fair, Sybil-resistant unstaking
 library ExitQueueLib {
-    /// @notice exit queue state (stored in PortalPoolStorage)
+    /// @notice exit queue state (stored in PoolStorage)
     struct Queue {
         uint256 totalRequested; // total amount ever requested for exit
         uint256 processedAmount; // total amount processed (capped at totalRequested)

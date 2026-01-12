@@ -2,7 +2,7 @@
 pragma solidity 0.8.28;
 
 import "./BaseTest.sol";
-import {PortalErrors} from "../src/libs/PortalErrors.sol";
+import {PoolErrors} from "../src/libs/PoolErrors.sol";
 import {PortalPoolImplementation} from "../src/PortalPoolImplementation.sol";
 import {IFeeRouter} from "../src/interfaces/IFeeRouter.sol";
 
@@ -29,7 +29,7 @@ contract FeeRouterDustTest is BaseTest {
         assertEq(feeRouter.getBurnAddress(), newBurn);
 
         // Revert: zero address
-        vm.expectRevert(PortalErrors.InvalidAddress.selector);
+        vm.expectRevert(PoolErrors.InvalidAddress.selector);
         feeRouter.setBurnAddress(address(0));
 
         // Revert: non-admin

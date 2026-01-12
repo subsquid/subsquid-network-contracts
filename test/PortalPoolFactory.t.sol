@@ -2,7 +2,7 @@
 pragma solidity 0.8.28;
 
 import "./BaseTest.sol";
-import {PortalErrors} from "../src/libs/PortalErrors.sol";
+import {PoolErrors} from "../src/libs/PoolErrors.sol";
 import {Constants} from "../src/libs/Constants.sol";
 import {PortalPoolImplementation} from "../src/PortalPoolImplementation.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
@@ -29,7 +29,7 @@ contract PortalPoolFactoryTest is BaseTest {
 
     function test_Initialize_RevertOnZeroAddresses() public {
         PortalPoolFactory newFactoryImpl = new PortalPoolFactory();
-        vm.expectRevert(PortalErrors.InvalidAddress.selector);
+        vm.expectRevert(PoolErrors.InvalidAddress.selector);
         new ERC1967Proxy(
             address(newFactoryImpl),
             abi.encodeWithSelector(
@@ -56,6 +56,7 @@ contract PortalPoolFactoryTest is BaseTest {
 
     function test_CreatePortal_EmitsEvent() public {
         uint256 rate = _minRateForCapacity(MIN_STAKE_THRESHOLD);
+        uint256 initialDeposit = rate * 1 days / 1000;
 
         IPortalFactory.CreatePortalPoolParams memory params = IPortalFactory.CreatePortalPoolParams({
             operator: operator,
@@ -63,11 +64,11 @@ contract PortalPoolFactoryTest is BaseTest {
             peerId: "test-peer-id",
             tokenSuffix: "TestPortal",
             distributionRatePerSecond: rate,
+            initialDeposit: initialDeposit,
             metadata: "",
             rewardToken: address(usdc)
         });
 
-        uint256 initialDeposit = params.distributionRatePerSecond * 1 days / 1000;
         usdc.approve(address(factory), initialDeposit);
 
         vm.expectEmit(false, true, false, false);
@@ -77,47 +78,53 @@ contract PortalPoolFactoryTest is BaseTest {
     }
 
     function test_CreatePortal_RevertOnZeroOperator() public {
+        uint256 rate = 1000 * 1000;
         IPortalFactory.CreatePortalPoolParams memory params = IPortalFactory.CreatePortalPoolParams({
             operator: address(0),
             capacity: MIN_STAKE_THRESHOLD,
             peerId: "test-peer-id",
             tokenSuffix: "TestPortal",
-            distributionRatePerSecond: 1000 * 1000,
+            distributionRatePerSecond: rate,
+            initialDeposit: rate * 1 days / 1000,
             metadata: "",
             rewardToken: address(usdc)
         });
 
-        vm.expectRevert(PortalErrors.InvalidAddress.selector);
+        vm.expectRevert(PoolErrors.InvalidAddress.selector);
         factory.createPortalPool(params);
     }
 
     function test_CreatePortal_RevertOnCapacityBelowMinimum() public {
+        uint256 rate = 1000 * 1000;
         IPortalFactory.CreatePortalPoolParams memory params = IPortalFactory.CreatePortalPoolParams({
             operator: operator,
             capacity: MIN_STAKE_THRESHOLD - 1,
             peerId: "test-peer-id",
             tokenSuffix: "TestPortal",
-            distributionRatePerSecond: 1000 * 1000,
+            distributionRatePerSecond: rate,
+            initialDeposit: rate * 1 days / 1000,
             metadata: "",
             rewardToken: address(usdc)
         });
 
-        vm.expectRevert(PortalErrors.BelowMinimum.selector);
+        vm.expectRevert(PoolErrors.BelowMinimum.selector);
         factory.createPortalPool(params);
     }
 
     function test_CreatePortal_RevertOnEmptyPeerId() public {
+        uint256 rate = 1000 * 1000;
         IPortalFactory.CreatePortalPoolParams memory params = IPortalFactory.CreatePortalPoolParams({
             operator: operator,
             capacity: MIN_STAKE_THRESHOLD,
             peerId: "",
             tokenSuffix: "TestPortal",
-            distributionRatePerSecond: 1000 * 1000,
+            distributionRatePerSecond: rate,
+            initialDeposit: rate * 1 days / 1000,
             metadata: "",
             rewardToken: address(usdc)
         });
 
-        vm.expectRevert(PortalErrors.EmptyPeerId.selector);
+        vm.expectRevert(PoolErrors.EmptyPeerId.selector);
         factory.createPortalPool(params);
     }
 
@@ -210,12 +217,14 @@ contract PortalPoolFactoryTest is BaseTest {
     function test_CreatePortal_RevertWhenPaused() public {
         factory.pause();
 
+        uint256 rate = 1000 * 1000;
         IPortalFactory.CreatePortalPoolParams memory params = IPortalFactory.CreatePortalPoolParams({
             operator: operator,
             capacity: MIN_STAKE_THRESHOLD,
             peerId: "test-peer-id",
             tokenSuffix: "TestPortal",
-            distributionRatePerSecond: 1000 * 1000,
+            distributionRatePerSecond: rate,
+            initialDeposit: rate * 1 days / 1000,
             metadata: "",
             rewardToken: address(usdc)
         });
@@ -236,12 +245,12 @@ contract PortalPoolFactoryTest is BaseTest {
     }
 
     function test_AddPaymentToken_RevertOnZeroAddress() public {
-        vm.expectRevert(PortalErrors.InvalidAddress.selector);
+        vm.expectRevert(PoolErrors.InvalidAddress.selector);
         factory.addPaymentToken(address(0));
     }
 
     function test_AddPaymentToken_RevertOnDuplicate() public {
-        vm.expectRevert(PortalErrors.TokenAlreadyAdded.selector);
+        vm.expectRevert(PoolErrors.TokenAlreadyAdded.selector);
         factory.addPaymentToken(address(usdc));
     }
 
@@ -252,7 +261,7 @@ contract PortalPoolFactoryTest is BaseTest {
         }
 
         MockERC20 extraToken = new MockERC20("Extra", "EXT", 18);
-        vm.expectRevert(PortalErrors.TooManyTokens.selector);
+        vm.expectRevert(PoolErrors.TooManyTokens.selector);
         factory.addPaymentToken(address(extraToken));
     }
 
@@ -276,7 +285,7 @@ contract PortalPoolFactoryTest is BaseTest {
     function test_RemovePaymentToken_RevertOnNotAllowed() public {
         MockERC20 unknownToken = new MockERC20("Unknown", "UNK", 18);
 
-        vm.expectRevert(PortalErrors.TokenNotAllowed.selector);
+        vm.expectRevert(PoolErrors.TokenNotAllowed.selector);
         factory.removePaymentToken(address(unknownToken));
     }
 
@@ -326,7 +335,7 @@ contract PortalPoolFactoryTest is BaseTest {
     }
 
     function test_UpgradeBeacon_RevertOnZeroAddress() public {
-        vm.expectRevert(PortalErrors.InvalidAddress.selector);
+        vm.expectRevert(PoolErrors.InvalidAddress.selector);
         factory.upgradeBeacon(address(0));
     }
 
@@ -394,32 +403,36 @@ contract PortalPoolFactoryTest is BaseTest {
     function test_CreatePortal_RevertOnDisallowedRewardToken() public {
         MockERC20 unknownToken = new MockERC20("Unknown", "UNK", 18);
 
+        uint256 rate = 1000 * 1000;
         IPortalFactory.CreatePortalPoolParams memory params = IPortalFactory.CreatePortalPoolParams({
             operator: operator,
             capacity: MIN_STAKE_THRESHOLD,
             peerId: "test-peer-id",
             tokenSuffix: "TestPortal",
-            distributionRatePerSecond: 1000 * 1000,
+            distributionRatePerSecond: rate,
+            initialDeposit: rate * 1 days / 1000,
             metadata: "",
             rewardToken: address(unknownToken)
         });
 
-        vm.expectRevert(PortalErrors.TokenNotAllowed.selector);
+        vm.expectRevert(PoolErrors.TokenNotAllowed.selector);
         factory.createPortalPool(params);
     }
 
     function test_CreatePortal_RevertOnZeroRewardToken() public {
+        uint256 rate = 1000 * 1000;
         IPortalFactory.CreatePortalPoolParams memory params = IPortalFactory.CreatePortalPoolParams({
             operator: operator,
             capacity: MIN_STAKE_THRESHOLD,
             peerId: "test-peer-id",
             tokenSuffix: "TestPortal",
-            distributionRatePerSecond: 1000 * 1000,
+            distributionRatePerSecond: rate,
+            initialDeposit: rate * 1 days / 1000,
             metadata: "",
             rewardToken: address(0)
         });
 
-        vm.expectRevert(PortalErrors.InvalidAddress.selector);
+        vm.expectRevert(PoolErrors.InvalidAddress.selector);
         factory.createPortalPool(params);
     }
 

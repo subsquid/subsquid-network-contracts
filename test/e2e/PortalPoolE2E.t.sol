@@ -238,17 +238,19 @@ contract PortalPoolE2ETest is Test {
     }
 
     function _setupFullMonthPool() internal returns (uint256 initialDeposit) {
+        initialDeposit = RATE_PER_SEC * 1 days / 1000;
+
         IPortalFactory.CreatePortalPoolParams memory params = IPortalFactory.CreatePortalPoolParams({
             operator: operator,
             capacity: POOL_CAPACITY,
             peerId: abi.encodePacked("peer-e2e-test"),
             tokenSuffix: "E2E",
             distributionRatePerSecond: RATE_PER_SEC,
+            initialDeposit: initialDeposit,
             metadata: "E2E Test",
             rewardToken: address(usdc)
         });
 
-        initialDeposit = RATE_PER_SEC * 1 days / 1000;
         usdc.approve(address(factory), initialDeposit);
         address poolAddr = factory.createPortalPool(params);
         pool = PortalPoolImplementation(poolAddr);
@@ -332,17 +334,19 @@ contract PortalPoolE2ETest is Test {
     }
 
     function test_E2E_RewardProportionality() public {
+        uint256 initialDeposit = RATE_PER_SEC * 1 days / 1000;
+
         IPortalFactory.CreatePortalPoolParams memory params = IPortalFactory.CreatePortalPoolParams({
             operator: operator,
             capacity: POOL_CAPACITY,
             peerId: abi.encodePacked("peer-prop-test"),
             tokenSuffix: "PROP",
             distributionRatePerSecond: RATE_PER_SEC,
+            initialDeposit: initialDeposit,
             metadata: "",
             rewardToken: address(usdc)
         });
 
-        uint256 initialDeposit = RATE_PER_SEC * 1 days / 1000;
         usdc.approve(address(factory), initialDeposit);
         address poolAddr = factory.createPortalPool(params);
         pool = PortalPoolImplementation(poolAddr);
@@ -452,6 +456,7 @@ contract PortalPoolE2ETest is Test {
     function _setupTwoStakersPool() internal returns (uint256 initialDeposit, uint256 rate) {
         uint256 poolCap = 2000 * 1e18;
         rate = _minRateForCapacity(poolCap);
+        initialDeposit = rate * 1 days / 1000;
 
         IPortalFactory.CreatePortalPoolParams memory params = IPortalFactory.CreatePortalPoolParams({
             operator: operator,
@@ -459,11 +464,11 @@ contract PortalPoolE2ETest is Test {
             peerId: abi.encodePacked("peer-two-stakers"),
             tokenSuffix: "TWO",
             distributionRatePerSecond: rate,
+            initialDeposit: initialDeposit,
             metadata: "",
             rewardToken: address(usdc)
         });
 
-        initialDeposit = rate * 1 days / 1000;
         usdc.approve(address(factory), initialDeposit);
         address poolAddr = factory.createPortalPool(params);
         pool = PortalPoolImplementation(poolAddr);
@@ -552,17 +557,18 @@ contract PortalPoolE2ETest is Test {
 
         factory.setDefaultMaxStakePerWallet(type(uint256).max);
 
+        initialDeposit = rate * 1 days / 1000;
         IPortalFactory.CreatePortalPoolParams memory params = IPortalFactory.CreatePortalPoolParams({
             operator: operator,
             capacity: poolCap,
             peerId: abi.encodePacked("peer-debt-phantom-test"),
             tokenSuffix: "DEBT",
             distributionRatePerSecond: rate,
+            initialDeposit: initialDeposit,
             metadata: "Debt Test",
             rewardToken: address(usdc)
         });
 
-        initialDeposit = rate * 1 days / 1000;
         usdc.approve(address(factory), initialDeposit);
         address poolAddr = factory.createPortalPool(params);
         pool = PortalPoolImplementation(poolAddr);
@@ -711,17 +717,19 @@ contract PortalPoolE2ETest is Test {
 
         factory.setDefaultMaxStakePerWallet(type(uint256).max);
 
+        uint256 initialDeposit = RATE * 1 days / 1000;
         IPortalFactory.CreatePortalPoolParams memory params = IPortalFactory.CreatePortalPoolParams({
             operator: operator,
             capacity: POOL_CAP,
             peerId: abi.encodePacked("peer-convoy-belt"),
             tokenSuffix: "CONV",
             distributionRatePerSecond: RATE,
+            initialDeposit: initialDeposit,
             metadata: "Convoy Belt Test",
             rewardToken: address(usdc)
         });
 
-        usdc.approve(address(factory), RATE * 1 days / 1000);
+        usdc.approve(address(factory), initialDeposit);
         address poolAddr = factory.createPortalPool(params);
         pool = PortalPoolImplementation(poolAddr);
 

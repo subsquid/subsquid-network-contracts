@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.28;
 
-/// @title Portal Errors Library
+/// @title Pool Errors Library
 /// @notice Custom error definitions for portal pool contracts
-library PortalErrors {
+library PoolErrors {
     // State errors
     error InvalidState();
-    error PortalPaused();
-    error PortalNotFailed();
+    error PoolPaused();
+    error PoolNotFailed();
     error NotActivated();
     error PoolClosed();
     error PoolNotClosed();
@@ -36,7 +36,7 @@ library PortalErrors {
     // Authorization errors
     error NotOperator();
     error NotFactory();
-    error NotPortalRegistry();
+    error NotPoolRegistry();
     error NotLPTToken();
     error NotAuthorized();
     error NotAdmin();
@@ -70,7 +70,7 @@ library PortalErrors {
     error InsufficientRewardPrecision();
 
     // Factory errors
-    error InvalidPortal();
+    error InvalidPool();
     error InvalidRange();
 
     // Fee router errors

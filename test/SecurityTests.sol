@@ -2,7 +2,7 @@
 pragma solidity 0.8.28;
 
 import "./BaseTest.sol";
-import {PortalErrors} from "../src/libs/PortalErrors.sol";
+import {PoolErrors} from "../src/libs/PoolErrors.sol";
 import {PortalPoolImplementation} from "../src/PortalPoolImplementation.sol";
 import {LiquidPortalToken} from "../src/LiquidPortalToken.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
@@ -31,17 +31,19 @@ contract SecurityTests is BaseTest {
     {
         uint256 rate = _minRateForCapacity(_capacity);
 
+        uint256 initialDeposit = rate * 1 days / 1000;
+
         IPortalFactory.CreatePortalPoolParams memory params = IPortalFactory.CreatePortalPoolParams({
             operator: _operator,
             capacity: _capacity,
             peerId: abi.encodePacked("peer-", _name),
             tokenSuffix: _name,
             distributionRatePerSecond: rate,
+            initialDeposit: initialDeposit,
             metadata: "",
             rewardToken: address(usdc)
         });
 
-        uint256 initialDeposit = rate * 1 days / 1000;
         usdc.approve(address(factory), initialDeposit);
         portalAddress = factory.createPortalPool(params);
 
@@ -109,7 +111,7 @@ contract SecurityTests is BaseTest {
     }
 
     function test_OnLPTTransfer_RevertOnNotLPTToken() public {
-        vm.expectRevert(PortalErrors.NotLPTToken.selector);
+        vm.expectRevert(PoolErrors.NotLPTToken.selector);
         pool.onLPTTransfer(user1, user2, SMALL_STAKE);
     }
 
@@ -135,16 +137,18 @@ contract SecurityTests is BaseTest {
 
         uint256 capacity = DEFAULT_MAX_STAKE_PER_WALLET * 2;
         uint256 rate = _minRateForCapacity(capacity);
+        uint256 initialDeposit = rate * 1 days / 1000;
+
         IPortalFactory.CreatePortalPoolParams memory params = IPortalFactory.CreatePortalPoolParams({
             operator: operator,
             capacity: capacity,
             peerId: "limit-portal",
             tokenSuffix: "LimitPortal",
             distributionRatePerSecond: rate,
+            initialDeposit: initialDeposit,
             metadata: "",
             rewardToken: address(usdc)
         });
-        uint256 initialDeposit = rate * 1 days / 1000;
         usdc.approve(address(factory), initialDeposit);
         address limitPortal = factory.createPortalPool(params);
         LiquidPortalToken limitLpt = PortalPoolImplementation(limitPortal).lptToken();
@@ -160,7 +164,7 @@ contract SecurityTests is BaseTest {
         vm.stopPrank();
 
         vm.prank(user1);
-        vm.expectRevert(PortalErrors.ExceedsWalletLimit.selector);
+        vm.expectRevert(PoolErrors.ExceedsWalletLimit.selector);
         limitLpt.transfer(user2, 1);
     }
 

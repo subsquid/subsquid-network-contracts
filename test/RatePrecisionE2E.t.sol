@@ -8,7 +8,7 @@ import {PortalRegistry} from "../src/PortalRegistry.sol";
 import {FeeRouterModule} from "../src/FeeRouterModule.sol";
 import {IPortalPool} from "../src/interfaces/IPortalPool.sol";
 import {IPortalFactory} from "../src/interfaces/IPortalFactory.sol";
-import {PortalErrors} from "../src/libs/PortalErrors.sol";
+import {PoolErrors} from "../src/libs/PoolErrors.sol";
 import {Constants} from "../src/libs/Constants.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 
@@ -118,18 +118,20 @@ contract RatePrecisionE2ETest is Test {
 
     function _createPool(uint256 scaledRate) internal returns (PortalPoolImplementation) {
         poolCount++;
+        uint256 initialDeposit = scaledRate > 0 ? scaledRate * 1 days / RATE_PRECISION : 0;
+
         IPortalFactory.CreatePortalPoolParams memory params = IPortalFactory.CreatePortalPoolParams({
             operator: operator,
             capacity: CAPACITY,
             peerId: abi.encodePacked("peer-", poolCount),
             tokenSuffix: string(abi.encodePacked("TEST", poolCount)),
             distributionRatePerSecond: scaledRate,
+            initialDeposit: initialDeposit,
             metadata: "",
             rewardToken: address(usdc)
         });
 
         if (scaledRate > 0) {
-            uint256 initialDeposit = scaledRate * 1 days / RATE_PRECISION;
             if (usdc.balanceOf(admin) < initialDeposit) {
                 usdc.mint(admin, initialDeposit);
             }
@@ -239,7 +241,7 @@ contract RatePrecisionE2ETest is Test {
 
         // Try to change rate while in debt - should revert
         vm.prank(operator);
-        vm.expectRevert(PortalErrors.PoolHasDebt.selector);
+        vm.expectRevert(PoolErrors.PoolHasDebt.selector);
         pool.setDistributionRate(50 * RATE_PRECISION);
     }
 
@@ -256,21 +258,24 @@ contract RatePrecisionE2ETest is Test {
 
         // Test that rate below minimum reverts
         poolCount++;
+        uint256 belowMinRate = 999;
         IPortalFactory.CreatePortalPoolParams memory params = IPortalFactory.CreatePortalPoolParams({
             operator: operator,
             capacity: CAPACITY,
             peerId: abi.encodePacked("peer-below-min-", poolCount),
             tokenSuffix: string(abi.encodePacked("BMIN", poolCount)),
-            distributionRatePerSecond: 999, // Just below minimum
+            distributionRatePerSecond: belowMinRate, // Just below minimum
+            initialDeposit: belowMinRate * 1 days / RATE_PRECISION,
             metadata: "",
             rewardToken: address(usdc)
         });
-        vm.expectRevert(PortalErrors.RateBelowMinimum.selector);
+        vm.expectRevert(PoolErrors.RateBelowMinimum.selector);
         factory.createPortalPool(params);
     }
 
     function test_E2E_MultiUser_PrecisionFairness() public {
         uint256 scaledRate = 3 * RATE_PRECISION; // 3 tokens/sec (not divisible by 2)
+        uint256 initialDeposit = scaledRate * 1 days / RATE_PRECISION;
 
         poolCount++;
         IPortalFactory.CreatePortalPoolParams memory params = IPortalFactory.CreatePortalPoolParams({
@@ -279,11 +284,11 @@ contract RatePrecisionE2ETest is Test {
             peerId: abi.encodePacked("peer-multi-", poolCount),
             tokenSuffix: "MULTI",
             distributionRatePerSecond: scaledRate,
+            initialDeposit: initialDeposit,
             metadata: "",
             rewardToken: address(usdc)
         });
 
-        uint256 initialDeposit = scaledRate * 1 days / RATE_PRECISION;
         usdc.approve(address(factory), initialDeposit);
         address portalAddress = factory.createPortalPool(params);
         PortalPoolImplementation pool = PortalPoolImplementation(portalAddress);
@@ -355,17 +360,18 @@ contract RatePrecisionE2ETest is Test {
         uint256 largeCapacity = 1e24; // 1M SQD with 18 decimals
         factory.setDefaultMaxStakePerWallet(type(uint256).max);
 
+        uint256 initialDeposit = scaledRate * 1 days / RATE_PRECISION;
         IPortalFactory.CreatePortalPoolParams memory params = IPortalFactory.CreatePortalPoolParams({
             operator: operator,
             capacity: largeCapacity,
             peerId: abi.encodePacked("peer-large-", poolCount),
             tokenSuffix: "LARGE",
             distributionRatePerSecond: scaledRate,
+            initialDeposit: initialDeposit,
             metadata: "",
             rewardToken: address(usdc)
         });
 
-        uint256 initialDeposit = scaledRate * 1 days / RATE_PRECISION;
         usdc.approve(address(factory), initialDeposit);
         address portalAddress = factory.createPortalPool(params);
         PortalPoolImplementation pool = PortalPoolImplementation(portalAddress);
@@ -403,6 +409,7 @@ contract RatePrecisionE2ETest is Test {
             peerId: abi.encodePacked("peer-zero-", poolCount),
             tokenSuffix: "ZERO",
             distributionRatePerSecond: 0,
+            initialDeposit: 0,
             metadata: "",
             rewardToken: address(usdc)
         });

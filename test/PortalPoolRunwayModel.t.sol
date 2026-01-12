@@ -8,7 +8,7 @@ import {PortalRegistry} from "../src/PortalRegistry.sol";
 import {FeeRouterModule} from "../src/FeeRouterModule.sol";
 import {IPortalPool} from "../src/interfaces/IPortalPool.sol";
 import {IPortalFactory} from "../src/interfaces/IPortalFactory.sol";
-import {PortalErrors} from "../src/libs/PortalErrors.sol";
+import {PoolErrors} from "../src/libs/PoolErrors.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 
 contract MockERC20 {
@@ -127,17 +127,18 @@ contract PortalPoolRunwayModelTest is Test {
     }
 
     function _createAndActivatePortal() internal returns (address portalAddress) {
+        uint256 initialDeposit = RATE_PER_SEC * 1 days / 1000;
         IPortalFactory.CreatePortalPoolParams memory params = IPortalFactory.CreatePortalPoolParams({
             operator: operator,
             capacity: CAPACITY,
             peerId: abi.encodePacked("peer-test"),
             tokenSuffix: "TEST",
             distributionRatePerSecond: RATE_PER_SEC,
+            initialDeposit: initialDeposit,
             metadata: "",
             rewardToken: address(usdc)
         });
 
-        uint256 initialDeposit = RATE_PER_SEC * 1 days / 1000;
         usdc.approve(address(factory), initialDeposit);
 
         portalAddress = factory.createPortalPool(params);
@@ -495,7 +496,7 @@ contract PortalPoolRunwayModelTest is Test {
 
         vm.startPrank(operator);
         usdc.approve(address(pool), 10000);
-        vm.expectRevert(PortalErrors.InvalidAddress.selector);
+        vm.expectRevert(PoolErrors.InvalidAddress.selector);
         pool.topUpRewards(10000);
         vm.stopPrank();
     }

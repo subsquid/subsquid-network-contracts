@@ -10,14 +10,14 @@ import {LiquidPortalToken} from "../LiquidPortalToken.sol";
 import {ExitQueueLib} from "../libs/ExitQueueLib.sol";
 import {Constants} from "../libs/Constants.sol";
 
-/// @title Portal Pool Storage
+/// @title Pool Storage
 /// @notice Storage layout for portal pool implementation
 /// @dev Separated from implementation to ensure clean upgrade paths
-abstract contract PortalPoolStorage {
+abstract contract PoolStorage {
     uint256 public constant PRECISION = Constants.PRECISION;
     uint256 public constant RATE_PRECISION = Constants.RATE_PRECISION;
 
-    IPortalPool.PoolInfo internal _portalInfo;
+    IPortalPool.PoolInfo internal _poolInfo;
     bytes internal _peerId;
 
     mapping(address => uint256) internal _stakes;
@@ -82,5 +82,5 @@ abstract contract PortalPoolStorage {
     /// @dev Example USDC rates: $1/mo=385, $100/mo=38580, $1000/mo=385802, $10000/mo=3858024
     uint256 internal _rewardTokenDecimalScale;
 
-    uint256[47] private __gap;
+    uint256[50] private __gap;
 }

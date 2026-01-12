@@ -121,18 +121,19 @@ abstract contract BaseTest is Test {
         uint256 minRate = (_capacity / 1e12);
         if (minRate < 1000) minRate = 1000; // Minimum 1 token/sec
 
+        uint256 initialDeposit = minRate * 1 days / 1000;
+
         IPortalFactory.CreatePortalPoolParams memory params = IPortalFactory.CreatePortalPoolParams({
             operator: _operator,
             capacity: _capacity,
             peerId: abi.encodePacked("peer-", _name),
             tokenSuffix: _name,
             distributionRatePerSecond: minRate,
+            initialDeposit: initialDeposit,
             metadata: "",
             rewardToken: address(usdc)
         });
 
-        // Approve initial deposit for rewardToken (1 day of distribution)
-        uint256 initialDeposit = params.distributionRatePerSecond * 1 days / 1000;
         usdc.approve(address(factory), initialDeposit);
 
         portalAddress = factory.createPortalPool(params);

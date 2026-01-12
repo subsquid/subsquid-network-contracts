@@ -11,7 +11,7 @@ import {IPortalFactory} from "./interfaces/IPortalFactory.sol";
 import {IPortalRegistry} from "./interfaces/IPortalRegistry.sol";
 import {IFeeRouter} from "./interfaces/IFeeRouter.sol";
 import {PortalPoolBeacon} from "./PortalPoolBeacon.sol";
-import {PortalErrors} from "./libs/PortalErrors.sol";
+import {PoolErrors} from "./libs/PoolErrors.sol";
 import {Constants} from "./libs/Constants.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
@@ -86,10 +86,10 @@ contract PortalPoolFactory is
         uint256 _minStakeThreshold,
         uint256 _workerEpochLength
     ) external initializer {
-        if (_implementation == address(0)) revert PortalErrors.InvalidAddress();
-        if (_portalRegistry == address(0)) revert PortalErrors.InvalidAddress();
-        if (_feeRouter == address(0)) revert PortalErrors.InvalidAddress();
-        if (_sqd == address(0)) revert PortalErrors.InvalidAddress();
+        if (_implementation == address(0)) revert PoolErrors.InvalidAddress();
+        if (_portalRegistry == address(0)) revert PoolErrors.InvalidAddress();
+        if (_feeRouter == address(0)) revert PoolErrors.InvalidAddress();
+        if (_sqd == address(0)) revert PoolErrors.InvalidAddress();
 
         __AccessControl_init();
         __Pausable_init();
@@ -125,33 +125,33 @@ contract PortalPoolFactory is
     function createPortalPool(CreatePortalPoolParams calldata params) external whenNotPaused returns (address portal) {
         // If pool deployment is not open, only POOL_DEPLOYER_ROLE can create pools
         if (!poolDeploymentOpen && !hasRole(POOL_DEPLOYER_ROLE, msg.sender)) {
-            revert PortalErrors.NotAuthorized();
+            revert PoolErrors.NotAuthorized();
         }
 
-        if (params.operator == address(0)) revert PortalErrors.InvalidAddress();
-        if (params.rewardToken == address(0)) revert PortalErrors.InvalidAddress();
-        if (!isAllowedPaymentToken[params.rewardToken]) revert PortalErrors.TokenNotAllowed();
-        if (params.capacity < minStakeThreshold) revert PortalErrors.BelowMinimum();
-        if (params.peerId.length == 0) revert PortalErrors.EmptyPeerId();
+        if (params.operator == address(0)) revert PoolErrors.InvalidAddress();
+        if (params.rewardToken == address(0)) revert PoolErrors.InvalidAddress();
+        if (!isAllowedPaymentToken[params.rewardToken]) revert PoolErrors.TokenNotAllowed();
+        if (params.capacity < minStakeThreshold) revert PoolErrors.BelowMinimum();
+        if (params.peerId.length == 0) revert PoolErrors.EmptyPeerId();
         if (params.distributionRatePerSecond > maxDistributionRatePerSecond) {
-            revert PortalErrors.RateExceedsMaximum();
+            revert PoolErrors.RateExceedsMaximum();
         }
         if (params.distributionRatePerSecond != 0 && params.distributionRatePerSecond < minDistributionRatePerSecond) {
-            revert PortalErrors.RateBelowMinimum();
+            revert PoolErrors.RateBelowMinimum();
         }
 
         if (params.distributionRatePerSecond > 0) {
             uint256 perStakeRate = (params.distributionRatePerSecond * Constants.PRECISION)
                 / (params.capacity * Constants.RATE_PRECISION);
             if (perStakeRate < Constants.MIN_PER_STAKE_RATE) {
-                revert PortalErrors.InsufficientRewardPrecision();
+                revert PoolErrors.InsufficientRewardPrecision();
             }
         }
 
 
         IFeeRouter.FeeConfig memory feeConfig = IFeeRouter(feeRouter).getFeeConfig();
         if (feeConfig.toWorkerPoolBPS > 0 && workerPoolAddress == address(0)) {
-            revert PortalErrors.InvalidAddress();
+            revert PoolErrors.InvalidAddress();
         }
 
         IPortalPool.InitParams memory initParams = IPortalPool.InitParams({
@@ -174,9 +174,11 @@ contract PortalPoolFactory is
         portal = address(new BeaconProxy(address(beacon), initData));
 
         if (params.distributionRatePerSecond > 0) {
-            uint256 initialDeposit = params.distributionRatePerSecond * 1 days / Constants.RATE_PRECISION;
+            uint256 minDeposit = params.distributionRatePerSecond * 1 days / Constants.RATE_PRECISION;
+            if (params.initialDeposit < minDeposit) revert PoolErrors.BelowMinimum();
+
             uint256 balanceBefore = IERC20(params.rewardToken).balanceOf(portal);
-            IERC20(params.rewardToken).safeTransferFrom(msg.sender, portal, initialDeposit);
+            IERC20(params.rewardToken).safeTransferFrom(msg.sender, portal, params.initialDeposit);
             uint256 actualReceived = IERC20(params.rewardToken).balanceOf(portal) - balanceBefore;
             IPortalPool(portal).initializeCredit(actualReceived);
         }
@@ -204,7 +206,7 @@ contract PortalPoolFactory is
      * @param newImplementation address of the new pool implementation.
      */
     function upgradeBeacon(address newImplementation) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        if (newImplementation == address(0)) revert PortalErrors.InvalidAddress();
+        if (newImplementation == address(0)) revert PoolErrors.InvalidAddress();
         beacon.upgradeTo(newImplementation);
         emit BeaconUpgraded(newImplementation);
     }
@@ -286,7 +288,7 @@ contract PortalPoolFactory is
     }
 
     function setExitUnlockRate(uint256 ratePerSecond) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        if (ratePerSecond == 0) revert PortalErrors.InvalidExitRate();
+        if (ratePerSecond == 0) revert PoolErrors.InvalidExitRate();
         uint256 oldValue = exitUnlockRatePerSecond;
         exitUnlockRatePerSecond = ratePerSecond;
         emit ExitUnlockRateUpdated(oldValue, ratePerSecond);
@@ -305,7 +307,7 @@ contract PortalPoolFactory is
     }
 
     function setFeeRouter(address _feeRouter) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        if (_feeRouter == address(0)) revert PortalErrors.InvalidAddress();
+        if (_feeRouter == address(0)) revert PoolErrors.InvalidAddress();
         address oldValue = feeRouter;
         feeRouter = _feeRouter;
         emit FeeRouterUpdated(oldValue, _feeRouter);
@@ -358,9 +360,9 @@ contract PortalPoolFactory is
      * @param token address of the token to allow.
      */
     function addPaymentToken(address token) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        if (token == address(0)) revert PortalErrors.InvalidAddress();
-        if (isAllowedPaymentToken[token]) revert PortalErrors.TokenAlreadyAdded();
-        if (paymentTokensList.length >= maxPaymentTokens) revert PortalErrors.TooManyTokens();
+        if (token == address(0)) revert PoolErrors.InvalidAddress();
+        if (isAllowedPaymentToken[token]) revert PoolErrors.TokenAlreadyAdded();
+        if (paymentTokensList.length >= maxPaymentTokens) revert PoolErrors.TooManyTokens();
 
         isAllowedPaymentToken[token] = true;
         paymentTokensList.push(token);
@@ -373,7 +375,7 @@ contract PortalPoolFactory is
      * @param token address of the token to remove.
      */
     function removePaymentToken(address token) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        if (!isAllowedPaymentToken[token]) revert PortalErrors.TokenNotAllowed();
+        if (!isAllowedPaymentToken[token]) revert PoolErrors.TokenNotAllowed();
 
         isAllowedPaymentToken[token] = false;
 

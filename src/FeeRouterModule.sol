@@ -3,7 +3,7 @@ pragma solidity 0.8.28;
 
 import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
 import {IFeeRouter} from "./interfaces/IFeeRouter.sol";
-import {PortalErrors} from "./libs/PortalErrors.sol";
+import {PoolErrors} from "./libs/PoolErrors.sol";
 import {FullMath} from "./libs/FullMath.sol";
 
 /// @title Fee Router Module
@@ -47,7 +47,7 @@ contract FeeRouterModule is AccessControl, IFeeRouter {
 
         uint256 used = toProviders + toWorkerPool + toBurn;
         if (used > amount) {
-            revert PortalErrors.InvalidFeeConfig();
+            revert PoolErrors.InvalidFeeConfig();
         }
 
         uint256 dust = amount - used;
@@ -76,7 +76,7 @@ contract FeeRouterModule is AccessControl, IFeeRouter {
         onlyRole(DEFAULT_ADMIN_ROLE)
     {
         if (toProvidersBPS + toWorkerPoolBPS + toBurnBPS != BASIS_POINTS) {
-            revert PortalErrors.InvalidFeeConfig();
+            revert PoolErrors.InvalidFeeConfig();
         }
 
         feeConfig = FeeConfig({toProvidersBPS: toProvidersBPS, toWorkerPoolBPS: toWorkerPoolBPS, toBurnBPS: toBurnBPS});
@@ -96,7 +96,7 @@ contract FeeRouterModule is AccessControl, IFeeRouter {
      * @param newBurnAddress the new burn address.
      */
     function setBurnAddress(address newBurnAddress) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        if (newBurnAddress == address(0)) revert PortalErrors.InvalidAddress();
+        if (newBurnAddress == address(0)) revert PoolErrors.InvalidAddress();
         burnAddress = newBurnAddress;
         emit BurnAddressUpdated(newBurnAddress);
     }

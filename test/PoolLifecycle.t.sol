@@ -2,7 +2,7 @@
 pragma solidity 0.8.28;
 
 import "./BaseTest.sol";
-import {PortalErrors} from "../src/libs/PortalErrors.sol";
+import {PoolErrors} from "../src/libs/PoolErrors.sol";
 import {PortalPoolImplementation} from "../src/PortalPoolImplementation.sol";
 import {LiquidPortalToken} from "../src/LiquidPortalToken.sol";
 import {IAccessControl} from "@openzeppelin/contracts/access/IAccessControl.sol";
@@ -23,17 +23,19 @@ contract PoolLifecycleTest is BaseTest {
     /// @dev Helper: create pool without activation (stays in COLLECTING)
     function _createCollectingPool() internal returns (address) {
         uint256 rate = _minRateForCapacity(MIN_STAKE_THRESHOLD);
+        uint256 initialDeposit = rate * 1 days / 1000;
+
         IPortalFactory.CreatePortalPoolParams memory params = IPortalFactory.CreatePortalPoolParams({
             operator: operator,
             capacity: MIN_STAKE_THRESHOLD,
             peerId: "collecting-pool",
             tokenSuffix: "Collecting",
             distributionRatePerSecond: rate,
+            initialDeposit: initialDeposit,
             metadata: "",
             rewardToken: address(usdc)
         });
 
-        uint256 initialDeposit = rate * 1 days / 1000;
         usdc.approve(address(factory), initialDeposit);
         return factory.createPortalPool(params);
     }
@@ -69,7 +71,7 @@ contract PoolLifecycleTest is BaseTest {
 
         // Revert: non-admin tries to close
         vm.prank(user1);
-        vm.expectRevert(PortalErrors.NotAdmin.selector);
+        vm.expectRevert(PoolErrors.NotAdmin.selector);
         pool.closePool();
 
         // Close the pool first
@@ -77,7 +79,7 @@ contract PoolLifecycleTest is BaseTest {
         assertEq(uint256(pool.getState()), uint256(IPortalPool.PoolState.CLOSED));
 
         // Revert: already CLOSED
-        vm.expectRevert(PortalErrors.PoolClosed.selector);
+        vm.expectRevert(PoolErrors.PoolClosed.selector);
         pool.closePool();
 
         // Create failed pool for FAILED state test
@@ -88,7 +90,7 @@ contract PoolLifecycleTest is BaseTest {
         assertEq(uint256(failedPool.getState()), uint256(IPortalPool.PoolState.FAILED));
 
         // Revert: FAILED state
-        vm.expectRevert(PortalErrors.InvalidState.selector);
+        vm.expectRevert(PoolErrors.InvalidState.selector);
         failedPool.closePool();
     }
 
@@ -173,7 +175,7 @@ contract PoolLifecycleTest is BaseTest {
         // Revert: trying to claim from non-closed pool (create another)
         address activePortal = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "StillActive");
         vm.prank(user1);
-        vm.expectRevert(PortalErrors.PoolNotClosed.selector);
+        vm.expectRevert(PoolErrors.PoolNotClosed.selector);
         PortalPoolImplementation(activePortal).claimRewardsFromClosed();
 
         // Success: claim from closed pool
@@ -187,7 +189,7 @@ contract PoolLifecycleTest is BaseTest {
 
         // Revert: nothing left to claim
         vm.prank(user1);
-        vm.expectRevert(PortalErrors.NothingToClaim.selector);
+        vm.expectRevert(PoolErrors.NothingToClaim.selector);
         pool.claimRewardsFromClosed();
     }
 
@@ -222,7 +224,7 @@ contract PoolLifecycleTest is BaseTest {
 
         // Revert: nothing left
         vm.prank(operator);
-        vm.expectRevert(PortalErrors.NothingToClaim.selector);
+        vm.expectRevert(PoolErrors.NothingToClaim.selector);
         pool.recoverRewardsFromFailed();
     }
 
@@ -232,7 +234,7 @@ contract PoolLifecycleTest is BaseTest {
 
         // Pool is ACTIVE, not FAILED
         vm.prank(operator);
-        vm.expectRevert(PortalErrors.PortalNotFailed.selector);
+        vm.expectRevert(PoolErrors.PoolNotFailed.selector);
         pool.recoverRewardsFromFailed();
     }
 
@@ -259,7 +261,7 @@ contract PoolLifecycleTest is BaseTest {
         // Deposit after deadline reverts with InvalidState
         vm.startPrank(user2);
         sqd.approve(portal, SMALL_STAKE);
-        vm.expectRevert(PortalErrors.InvalidState.selector);
+        vm.expectRevert(PoolErrors.InvalidState.selector);
         pool.deposit(SMALL_STAKE);
         vm.stopPrank();
 
@@ -338,7 +340,7 @@ contract PoolLifecycleTest is BaseTest {
         address portal = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "WaitTest");
         PortalPoolImplementation pool = PortalPoolImplementation(portal);
 
-        vm.expectRevert(PortalErrors.InvalidAmount.selector);
+        vm.expectRevert(PoolErrors.InvalidAmount.selector);
         pool.getWithdrawalWaitingTimestamp(0);
     }
 
@@ -361,7 +363,7 @@ contract PoolLifecycleTest is BaseTest {
         uint256 newMax = factory.maxDistributionRatePerSecond();
 
         vm.prank(operator);
-        vm.expectRevert(PortalErrors.RateExceedsMaximum.selector);
+        vm.expectRevert(PoolErrors.RateExceedsMaximum.selector);
         pool.setDistributionRate(newMax + 1);
     }
 
@@ -372,7 +374,7 @@ contract PoolLifecycleTest is BaseTest {
         uint256 minRate = factory.minDistributionRatePerSecond();
 
         vm.prank(operator);
-        vm.expectRevert(PortalErrors.RateBelowMinimum.selector);
+        vm.expectRevert(PoolErrors.RateBelowMinimum.selector);
         pool.setDistributionRate(minRate - 1);
     }
 
@@ -387,7 +389,7 @@ contract PoolLifecycleTest is BaseTest {
         uint256 tinyRate = 1000; // This will fail precision for large capacity
 
         vm.prank(operator);
-        vm.expectRevert(PortalErrors.InsufficientRewardPrecision.selector);
+        vm.expectRevert(PoolErrors.InsufficientRewardPrecision.selector);
         pool.setDistributionRate(tinyRate);
     }
 
@@ -402,7 +404,7 @@ contract PoolLifecycleTest is BaseTest {
 
         // Try to request exit - should revert with PoolClosed
         vm.prank(user1);
-        vm.expectRevert(PortalErrors.PoolClosed.selector);
+        vm.expectRevert(PoolErrors.PoolClosed.selector);
         pool.requestExit(SMALL_STAKE);
     }
 
@@ -422,7 +424,7 @@ contract PoolLifecycleTest is BaseTest {
         LiquidPortalToken lpt = pool.lptToken();
 
         vm.prank(user1);
-        vm.expectRevert(PortalErrors.NotWhitelisted.selector);
+        vm.expectRevert(PoolErrors.NotWhitelisted.selector);
         lpt.transfer(user2, SMALL_STAKE);
     }
 }
