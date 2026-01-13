@@ -107,8 +107,8 @@ contract PortalPoolFactory is
         workerEpochLength = _workerEpochLength;
 
         maxPaymentTokens = Constants.MAX_PAYMENT_TOKENS;
-        exitUnlockRatePerSecond = 1e18; 
-        collectionDeadlineSeconds = 30 days; 
+        exitUnlockRatePerSecond = 1e18;
+        collectionDeadlineSeconds = 30 days;
         maxDistributionRatePerSecond = Constants.MAX_DISTRIBUTION_RATE_PER_SECOND;
         minDistributionRatePerSecond = Constants.MIN_DISTRIBUTION_RATE_PER_SECOND;
 
@@ -140,13 +140,12 @@ contract PortalPoolFactory is
         }
 
         if (params.distributionRatePerSecond > 0) {
-            uint256 perStakeRate = (params.distributionRatePerSecond * Constants.PRECISION)
-                / (params.capacity * Constants.RATE_PRECISION);
+            uint256 perStakeRate =
+                (params.distributionRatePerSecond * Constants.PRECISION) / (params.capacity * Constants.RATE_PRECISION);
             if (perStakeRate < Constants.MIN_PER_STAKE_RATE) {
                 revert PoolErrors.InsufficientRewardPrecision();
             }
         }
-
 
         IFeeRouter.FeeConfig memory feeConfig = IFeeRouter(feeRouter).getFeeConfig();
         if (feeConfig.toWorkerPoolBPS > 0 && workerPoolAddress == address(0)) {

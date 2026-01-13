@@ -59,7 +59,6 @@ contract FactoryAdminTest is BaseTest {
         assertFalse(factory.poolDeploymentOpen());
     }
 
-
     function test_AdminSetters_RevertOnNonAdmin() public {
         vm.startPrank(user1);
 
@@ -81,13 +80,11 @@ contract FactoryAdminTest is BaseTest {
         vm.stopPrank();
     }
 
-
     function test_SetFeeRouter_RevertOnZeroAddress() public {
         vm.expectRevert(PoolErrors.InvalidAddress.selector);
         factory.setFeeRouter(address(0));
     }
 
-  
     function test_CreatePortal_RevertWhenDeploymentClosed() public {
         // Close deployment
         factory.setPoolDeploymentOpen(false);

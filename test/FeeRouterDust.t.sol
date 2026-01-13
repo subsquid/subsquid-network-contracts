@@ -19,7 +19,6 @@ contract FeeRouterDustTest is BaseTest {
         return minRate < 1000 ? 1000 : minRate;
     }
 
- 
     function test_SetBurnAddress_SuccessAndRevertCases() public {
         // Success: set new burn address
         address newBurn = address(0x123);
@@ -47,7 +46,6 @@ contract FeeRouterDustTest is BaseTest {
         assertEq(feeRouter.getBurnAddress(), address(0xbeef));
     }
 
-  
     function test_CalculateSplit_DustToProviders() public {
         // Config: providers > workers > burn
         // 6000, 2000, 2000 with amount 1001
@@ -109,7 +107,6 @@ contract FeeRouterDustTest is BaseTest {
         assertEq(toBurn, 300);
     }
 
-
     function test_TopUpRewards_WithBurnAllocation() public {
         // Set fee config with burn allocation
         feeRouter.setFeeConfig(4000, 4000, 2000); // 40% providers, 40% workers, 20% burn
@@ -135,7 +132,6 @@ contract FeeRouterDustTest is BaseTest {
         assertEq(usdc.balanceOf(workerRewardPool) - workerPoolBalBefore, expectedWorkers);
     }
 
- 
     function test_TopUpRewards_DebtPaymentScenarios() public {
         address portal = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "DebtTest");
         PortalPoolImplementation pool = PortalPoolImplementation(portal);

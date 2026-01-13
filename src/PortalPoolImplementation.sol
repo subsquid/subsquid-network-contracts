@@ -263,7 +263,6 @@ contract PortalPoolImplementation is
         // ccheck if ticket is unlocked using library (timestamp-based)
         if (!ExitQueueLib.isUnlocked(_exitQueue, ticket)) revert PoolErrors.StillInQueue();
 
-
         _accrueGlobal(block.timestamp, true);
 
         ticket.withdrawn = true;
@@ -458,8 +457,8 @@ contract PortalPoolImplementation is
      * @return the amount of rewards claimed.
      */
     function claimRewards() external whenNotPaused nonReentrant returns (uint256) {
-            // always allow claiming - users should be able to claim earned rewards
-            // even if distribution is turned off
+        // always allow claiming - users should be able to claim earned rewards
+        // even if distribution is turned off
         _accrueGlobal(block.timestamp, true);
         _updateUser(msg.sender);
 
@@ -486,10 +485,8 @@ contract PortalPoolImplementation is
             revert PoolErrors.RateBelowMinimum();
         }
 
-
         if (newRatePerSecond > 0) {
-            uint256 perStakeRate = (newRatePerSecond * Constants.PRECISION)
-                / (_poolInfo.capacity * RATE_PRECISION);
+            uint256 perStakeRate = (newRatePerSecond * Constants.PRECISION) / (_poolInfo.capacity * RATE_PRECISION);
             if (perStakeRate < Constants.MIN_PER_STAKE_RATE) {
                 revert PoolErrors.InsufficientRewardPrecision();
             }
@@ -517,10 +514,8 @@ contract PortalPoolImplementation is
         if (newCapacity < minCapacity) revert PoolErrors.BelowMinimum();
         if (newCapacity < _poolInfo.totalStaked) revert PoolErrors.BelowCurrentStake();
 
-
         if (totalDistributionRatePerSec > 0) {
-            uint256 perStakeRate = (totalDistributionRatePerSec * Constants.PRECISION)
-                / (newCapacity * RATE_PRECISION);
+            uint256 perStakeRate = (totalDistributionRatePerSec * Constants.PRECISION) / (newCapacity * RATE_PRECISION);
             if (perStakeRate < Constants.MIN_PER_STAKE_RATE) {
                 revert PoolErrors.InsufficientRewardPrecision();
             }

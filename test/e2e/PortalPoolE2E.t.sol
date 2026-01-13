@@ -163,7 +163,6 @@ contract PortalPoolE2ETest is Test {
             sqd.mint(stakers[i], stakeAmounts[i]);
             totalStaked += stakeAmounts[i];
         }
-
     }
 
     function _logBalance(string memory label, int256 value) internal pure {
@@ -394,8 +393,7 @@ contract PortalPoolE2ETest is Test {
         assertApproxEqRel(claimables[0], expectedStaker0, 0.05e18, "Staker 0 proportion");
         assertApproxEqRel(claimables[1], expectedStaker1, 0.05e18, "Staker 1 proportion");
         assertApproxEqRel(claimables[2], expectedStaker2, 0.05e18, "Staker 2 proportion");
-
-            }
+    }
 
     /**
      * @notice E2E test: Two equal stakers split rewards proportionally
@@ -436,12 +434,7 @@ contract PortalPoolE2ETest is Test {
         assertTrue(bobClaimable > 0, "Bob has rewards");
 
         // Total distributed matches rate * time
-        assertApproxEqRel(
-            aliceClaimable + bobClaimable,
-            warpTime * actualRate,
-            0.05e18,
-            "Total distributed"
-        );
+        assertApproxEqRel(aliceClaimable + bobClaimable, warpTime * actualRate, 0.05e18, "Total distributed");
 
         // Claim and verify
         vm.prank(alice);
@@ -516,7 +509,7 @@ contract PortalPoolE2ETest is Test {
         vm.warp(block.timestamp + 270 days);
 
         // Verify pool is in debt/dry
-        (,, , bool isDry) = pool.getRewardStatus();
+        (,,, bool isDry) = pool.getRewardStatus();
         assertTrue(pool.getCurrentRewardBalance() < 0 || isDry, "Pool should be in debt/dry");
 
         // Users 10-14 never claimed - verify no phantom rewards
@@ -524,13 +517,14 @@ contract PortalPoolE2ETest is Test {
 
         // Final accounting verification
         assertEq(
-            usdc.balanceOf(workerRewardPool),
-            (initialDeposit / 2) + (firstTop + secondTop) / 2,
-            "Worker pool total"
+            usdc.balanceOf(workerRewardPool), (initialDeposit / 2) + (firstTop + secondTop) / 2, "Worker pool total"
         );
     }
 
-    function _setupDebtScenarioPool() internal returns (uint256 initialDeposit, uint256 rate, uint256[15] memory variedStakes) {
+    function _setupDebtScenarioPool()
+        internal
+        returns (uint256 initialDeposit, uint256 rate, uint256[15] memory variedStakes)
+    {
         uint256 poolCap = 1_000_000 * 1e18;
         rate = _minRateForCapacity(poolCap);
 

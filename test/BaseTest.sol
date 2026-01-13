@@ -117,7 +117,6 @@ abstract contract BaseTest is Test {
         internal
         returns (address portalAddress)
     {
-
         uint256 minRate = (_capacity / 1e12);
         if (minRate < 1000) minRate = 1000; // Minimum 1 token/sec
 

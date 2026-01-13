@@ -40,7 +40,6 @@ contract PoolLifecycleTest is BaseTest {
         return factory.createPortalPool(params);
     }
 
-
     function test_ClosePool_Success_EmitsEventAndZerosRates() public {
         // Create and activate pool
         address portal = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "CloseTest");
@@ -94,7 +93,6 @@ contract PoolLifecycleTest is BaseTest {
         failedPool.closePool();
     }
 
- 
     function test_EmergencyWithdraw_NeverActivated() public {
         // Create pool but don't fill to capacity
         address portal = _createCollectingPool();
@@ -151,7 +149,6 @@ contract PoolLifecycleTest is BaseTest {
         assertEq(pool.getProviderStake(user1), 0);
     }
 
- 
     function test_ClaimRewardsFromClosed_Success() public {
         address portal = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "ClaimClosed");
         PortalPoolImplementation pool = PortalPoolImplementation(portal);
@@ -193,7 +190,6 @@ contract PoolLifecycleTest is BaseTest {
         pool.claimRewardsFromClosed();
     }
 
-  
     function test_RecoverRewardsFromFailed_Success() public {
         // Create pool and deposit initial rewards
         address portal = _createCollectingPool();
@@ -238,7 +234,6 @@ contract PoolLifecycleTest is BaseTest {
         pool.recoverRewardsFromFailed();
     }
 
-  
     function test_PoolFailsOnDeadline_DepositsBlocked() public {
         address portal = _createCollectingPool();
         PortalPoolImplementation pool = PortalPoolImplementation(portal);
@@ -271,7 +266,6 @@ contract PoolLifecycleTest is BaseTest {
         assertEq(pool.getProviderStake(user1), 0);
     }
 
- 
     function test_IdleToActiveRecovery() public {
         // Create pool with capacity that allows partial fill
         uint256 capacity = MIN_STAKE_THRESHOLD * 2;
@@ -313,7 +307,6 @@ contract PoolLifecycleTest is BaseTest {
         // Pool should transition back to ACTIVE
         assertEq(uint256(pool.getState()), uint256(IPortalPool.PoolState.ACTIVE));
     }
-
 
     function test_GetQueueStatusWithTimestamp_AllBranches() public {
         address portal = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "QueueTest");
@@ -392,7 +385,6 @@ contract PoolLifecycleTest is BaseTest {
         vm.expectRevert(PoolErrors.InsufficientRewardPrecision.selector);
         pool.setDistributionRate(tinyRate);
     }
-
 
     function test_RequestExit_RevertWhenClosed() public {
         address portal = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "ExitClosed");

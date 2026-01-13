@@ -55,11 +55,7 @@ interface IPortalPool {
     event StateChanged(PoolState oldState, PoolState newState);
     event StakeTransferred(address indexed from, address indexed to, uint256 amount);
     event RewardsToppedUp(
-        address indexed operator,
-        uint256 received,
-        uint256 toProviders,
-        uint256 toWorkerPool,
-        uint256 toBurn
+        address indexed operator, uint256 received, uint256 toProviders, uint256 toWorkerPool, uint256 toBurn
     );
     event RewardsClaimed(address indexed delegator, uint256 amount);
     event DistributionRateChanged(uint256 oldRate, uint256 newRate);
