@@ -111,7 +111,7 @@ contract PortalPoolImplementation is
         _grantRole(OPERATOR_ROLE, params.operator);
         _grantRole(FACTORY_ROLE, msg.sender);
 
-        string memory tokenName = string(abi.encodePacked("Portal Locked SQD ", params.tokenSuffix));
+        string memory tokenName = string(abi.encodePacked("Portal Pool Locked SQD ", params.tokenSuffix));
         string memory tokenSymbol = string(abi.encodePacked("plSQD-", params.tokenSuffix));
         lptToken = new LiquidPortalToken(tokenName, tokenSymbol, address(this));
     }

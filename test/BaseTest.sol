@@ -125,7 +125,6 @@ abstract contract BaseTest is Test {
         IPortalFactory.CreatePortalPoolParams memory params = IPortalFactory.CreatePortalPoolParams({
             operator: _operator,
             capacity: _capacity,
-            peerId: abi.encodePacked("peer-", _name),
             tokenSuffix: _name,
             distributionRatePerSecond: minRate,
             initialDeposit: initialDeposit,

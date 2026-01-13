@@ -188,7 +188,7 @@ contract PortalPoolFactory is
         ++operatorPortalCount[params.operator];
         isPortal[portal] = true;
 
-        emit PortalCreated(
+        emit PoolCreated(
             portal,
             params.operator,
             params.rewardToken,

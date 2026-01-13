@@ -123,7 +123,6 @@ contract RatePrecisionE2ETest is Test {
         IPortalFactory.CreatePortalPoolParams memory params = IPortalFactory.CreatePortalPoolParams({
             operator: operator,
             capacity: CAPACITY,
-            peerId: abi.encodePacked("peer-", poolCount),
             tokenSuffix: string(abi.encodePacked("TEST", poolCount)),
             distributionRatePerSecond: scaledRate,
             initialDeposit: initialDeposit,
@@ -262,7 +261,6 @@ contract RatePrecisionE2ETest is Test {
         IPortalFactory.CreatePortalPoolParams memory params = IPortalFactory.CreatePortalPoolParams({
             operator: operator,
             capacity: CAPACITY,
-            peerId: abi.encodePacked("peer-below-min-", poolCount),
             tokenSuffix: string(abi.encodePacked("BMIN", poolCount)),
             distributionRatePerSecond: belowMinRate, // Just below minimum
             initialDeposit: belowMinRate * 1 days / RATE_PRECISION,
@@ -281,7 +279,6 @@ contract RatePrecisionE2ETest is Test {
         IPortalFactory.CreatePortalPoolParams memory params = IPortalFactory.CreatePortalPoolParams({
             operator: operator,
             capacity: CAPACITY,
-            peerId: abi.encodePacked("peer-multi-", poolCount),
             tokenSuffix: "MULTI",
             distributionRatePerSecond: scaledRate,
             initialDeposit: initialDeposit,
@@ -364,7 +361,6 @@ contract RatePrecisionE2ETest is Test {
         IPortalFactory.CreatePortalPoolParams memory params = IPortalFactory.CreatePortalPoolParams({
             operator: operator,
             capacity: largeCapacity,
-            peerId: abi.encodePacked("peer-large-", poolCount),
             tokenSuffix: "LARGE",
             distributionRatePerSecond: scaledRate,
             initialDeposit: initialDeposit,
@@ -406,7 +402,6 @@ contract RatePrecisionE2ETest is Test {
         IPortalFactory.CreatePortalPoolParams memory params = IPortalFactory.CreatePortalPoolParams({
             operator: operator,
             capacity: CAPACITY,
-            peerId: abi.encodePacked("peer-zero-", poolCount),
             tokenSuffix: "ZERO",
             distributionRatePerSecond: 0,
             initialDeposit: 0,

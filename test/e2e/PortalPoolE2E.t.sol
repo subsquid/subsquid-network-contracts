@@ -242,7 +242,6 @@ contract PortalPoolE2ETest is Test {
         IPortalFactory.CreatePortalPoolParams memory params = IPortalFactory.CreatePortalPoolParams({
             operator: operator,
             capacity: POOL_CAPACITY,
-            peerId: abi.encodePacked("peer-e2e-test"),
             tokenSuffix: "E2E",
             distributionRatePerSecond: RATE_PER_SEC,
             initialDeposit: initialDeposit,
@@ -338,7 +337,6 @@ contract PortalPoolE2ETest is Test {
         IPortalFactory.CreatePortalPoolParams memory params = IPortalFactory.CreatePortalPoolParams({
             operator: operator,
             capacity: POOL_CAPACITY,
-            peerId: abi.encodePacked("peer-prop-test"),
             tokenSuffix: "PROP",
             distributionRatePerSecond: RATE_PER_SEC,
             initialDeposit: initialDeposit,
@@ -454,7 +452,6 @@ contract PortalPoolE2ETest is Test {
         IPortalFactory.CreatePortalPoolParams memory params = IPortalFactory.CreatePortalPoolParams({
             operator: operator,
             capacity: poolCap,
-            peerId: abi.encodePacked("peer-two-stakers"),
             tokenSuffix: "TWO",
             distributionRatePerSecond: rate,
             initialDeposit: initialDeposit,
@@ -555,7 +552,6 @@ contract PortalPoolE2ETest is Test {
         IPortalFactory.CreatePortalPoolParams memory params = IPortalFactory.CreatePortalPoolParams({
             operator: operator,
             capacity: poolCap,
-            peerId: abi.encodePacked("peer-debt-phantom-test"),
             tokenSuffix: "DEBT",
             distributionRatePerSecond: rate,
             initialDeposit: initialDeposit,
@@ -715,7 +711,6 @@ contract PortalPoolE2ETest is Test {
         IPortalFactory.CreatePortalPoolParams memory params = IPortalFactory.CreatePortalPoolParams({
             operator: operator,
             capacity: POOL_CAP,
-            peerId: abi.encodePacked("peer-convoy-belt"),
             tokenSuffix: "CONV",
             distributionRatePerSecond: RATE,
             initialDeposit: initialDeposit,

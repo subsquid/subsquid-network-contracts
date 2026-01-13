@@ -18,7 +18,7 @@ contract LiquidPortalTokenTest is BaseTest {
 
     function test_Constructor_SetsCorrectValues() public view {
         assertEq(lpt.PORTAL_POOL(), portal);
-        assertEq(lpt.name(), "Portal Locked SQD TestPortal");
+        assertEq(lpt.name(), "Portal Pool Locked SQD TestPortal");
         assertEq(lpt.symbol(), "plSQD-TestPortal");
     }
 

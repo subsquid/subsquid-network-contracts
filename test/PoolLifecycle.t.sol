@@ -28,7 +28,6 @@ contract PoolLifecycleTest is BaseTest {
         IPortalFactory.CreatePortalPoolParams memory params = IPortalFactory.CreatePortalPoolParams({
             operator: operator,
             capacity: MIN_STAKE_THRESHOLD,
-            peerId: "collecting-pool",
             tokenSuffix: "Collecting",
             distributionRatePerSecond: rate,
             initialDeposit: initialDeposit,

@@ -61,7 +61,6 @@ contract PortalPoolFactoryTest is BaseTest {
         IPortalFactory.CreatePortalPoolParams memory params = IPortalFactory.CreatePortalPoolParams({
             operator: operator,
             capacity: MIN_STAKE_THRESHOLD,
-            peerId: "test-peer-id",
             tokenSuffix: "TestPortal",
             distributionRatePerSecond: rate,
             initialDeposit: initialDeposit,
@@ -71,8 +70,8 @@ contract PortalPoolFactoryTest is BaseTest {
 
         usdc.approve(address(factory), initialDeposit);
 
-        vm.expectEmit(false, true, false, false);
-        emit IPortalFactory.PortalCreated(address(0), operator, MIN_STAKE_THRESHOLD, rate, "TestPortal", "");
+        vm.expectEmit(false, true, true, false);
+        emit IPortalFactory.PoolCreated(address(0), operator, address(usdc), MIN_STAKE_THRESHOLD, rate, initialDeposit, "TestPortal", "");
 
         factory.createPortalPool(params);
     }
@@ -82,7 +81,6 @@ contract PortalPoolFactoryTest is BaseTest {
         IPortalFactory.CreatePortalPoolParams memory params = IPortalFactory.CreatePortalPoolParams({
             operator: address(0),
             capacity: MIN_STAKE_THRESHOLD,
-            peerId: "test-peer-id",
             tokenSuffix: "TestPortal",
             distributionRatePerSecond: rate,
             initialDeposit: rate * 1 days / 1000,
@@ -99,7 +97,6 @@ contract PortalPoolFactoryTest is BaseTest {
         IPortalFactory.CreatePortalPoolParams memory params = IPortalFactory.CreatePortalPoolParams({
             operator: operator,
             capacity: MIN_STAKE_THRESHOLD - 1,
-            peerId: "test-peer-id",
             tokenSuffix: "TestPortal",
             distributionRatePerSecond: rate,
             initialDeposit: rate * 1 days / 1000,
@@ -108,23 +105,6 @@ contract PortalPoolFactoryTest is BaseTest {
         });
 
         vm.expectRevert(PoolErrors.BelowMinimum.selector);
-        factory.createPortalPool(params);
-    }
-
-    function test_CreatePortal_RevertOnEmptyPeerId() public {
-        uint256 rate = 1000 * 1000;
-        IPortalFactory.CreatePortalPoolParams memory params = IPortalFactory.CreatePortalPoolParams({
-            operator: operator,
-            capacity: MIN_STAKE_THRESHOLD,
-            peerId: "",
-            tokenSuffix: "TestPortal",
-            distributionRatePerSecond: rate,
-            initialDeposit: rate * 1 days / 1000,
-            metadata: "",
-            rewardToken: address(usdc)
-        });
-
-        vm.expectRevert(PoolErrors.EmptyPeerId.selector);
         factory.createPortalPool(params);
     }
 
@@ -221,7 +201,6 @@ contract PortalPoolFactoryTest is BaseTest {
         IPortalFactory.CreatePortalPoolParams memory params = IPortalFactory.CreatePortalPoolParams({
             operator: operator,
             capacity: MIN_STAKE_THRESHOLD,
-            peerId: "test-peer-id",
             tokenSuffix: "TestPortal",
             distributionRatePerSecond: rate,
             initialDeposit: rate * 1 days / 1000,
@@ -407,7 +386,6 @@ contract PortalPoolFactoryTest is BaseTest {
         IPortalFactory.CreatePortalPoolParams memory params = IPortalFactory.CreatePortalPoolParams({
             operator: operator,
             capacity: MIN_STAKE_THRESHOLD,
-            peerId: "test-peer-id",
             tokenSuffix: "TestPortal",
             distributionRatePerSecond: rate,
             initialDeposit: rate * 1 days / 1000,
@@ -424,7 +402,6 @@ contract PortalPoolFactoryTest is BaseTest {
         IPortalFactory.CreatePortalPoolParams memory params = IPortalFactory.CreatePortalPoolParams({
             operator: operator,
             capacity: MIN_STAKE_THRESHOLD,
-            peerId: "test-peer-id",
             tokenSuffix: "TestPortal",
             distributionRatePerSecond: rate,
             initialDeposit: rate * 1 days / 1000,

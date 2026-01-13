@@ -36,7 +36,6 @@ contract SecurityTests is BaseTest {
         IPortalFactory.CreatePortalPoolParams memory params = IPortalFactory.CreatePortalPoolParams({
             operator: _operator,
             capacity: _capacity,
-            peerId: abi.encodePacked("peer-", _name),
             tokenSuffix: _name,
             distributionRatePerSecond: rate,
             initialDeposit: initialDeposit,
@@ -142,7 +141,6 @@ contract SecurityTests is BaseTest {
         IPortalFactory.CreatePortalPoolParams memory params = IPortalFactory.CreatePortalPoolParams({
             operator: operator,
             capacity: capacity,
-            peerId: "limit-portal",
             tokenSuffix: "LimitPortal",
             distributionRatePerSecond: rate,
             initialDeposit: initialDeposit,

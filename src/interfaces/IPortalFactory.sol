@@ -4,7 +4,7 @@ pragma solidity 0.8.28;
 /// @title IPortalFactory Interface
 /// @notice Interface for the portal pool factory contract
 interface IPortalFactory {
-    event PortalCreated(
+    event PoolCreated(
         address indexed portal,
         address indexed operator,
         address indexed rewardToken,

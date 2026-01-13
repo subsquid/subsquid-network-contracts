@@ -131,7 +131,6 @@ contract PortalPoolRunwayModelTest is Test {
         IPortalFactory.CreatePortalPoolParams memory params = IPortalFactory.CreatePortalPoolParams({
             operator: operator,
             capacity: CAPACITY,
-            peerId: abi.encodePacked("peer-test"),
             tokenSuffix: "TEST",
             distributionRatePerSecond: RATE_PER_SEC,
             initialDeposit: initialDeposit,

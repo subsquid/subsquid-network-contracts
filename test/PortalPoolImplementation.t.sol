@@ -35,7 +35,7 @@ contract PortalPoolImplementationTest is BaseTest {
 
     function test_Initialize_DeploysLPTToken() public view {
         LiquidPortalToken lpt = LiquidPortalToken(address(pool.lptToken()));
-        assertEq(lpt.name(), "Portal Locked SQD TestPortal");
+        assertEq(lpt.name(), "Portal Pool Locked SQD TestPortal");
         assertEq(lpt.symbol(), "plSQD-TestPortal");
     }
 
@@ -44,7 +44,6 @@ contract PortalPoolImplementationTest is BaseTest {
         IPortalFactory.CreatePortalPoolParams memory params = IPortalFactory.CreatePortalPoolParams({
             operator: address(0),
             capacity: MIN_STAKE_THRESHOLD,
-            peerId: "zero-op",
             tokenSuffix: "ZeroOp",
             distributionRatePerSecond: rate,
             initialDeposit: rate * 1 days / 1000,
@@ -61,7 +60,6 @@ contract PortalPoolImplementationTest is BaseTest {
         IPortalFactory.CreatePortalPoolParams memory params = IPortalFactory.CreatePortalPoolParams({
             operator: operator,
             capacity: MIN_STAKE_THRESHOLD - 1,
-            peerId: "low-cap",
             tokenSuffix: "LowCap",
             distributionRatePerSecond: rate,
             initialDeposit: rate * 1 days / 1000,
@@ -119,7 +117,6 @@ contract PortalPoolImplementationTest is BaseTest {
         IPortalFactory.CreatePortalPoolParams memory params = IPortalFactory.CreatePortalPoolParams({
             operator: operator,
             capacity: capacity,
-            peerId: "wallet-limit-test",
             tokenSuffix: "WalletLimitTest",
             distributionRatePerSecond: rate,
             initialDeposit: initialDeposit,
@@ -383,7 +380,6 @@ contract PortalPoolImplementationTest is BaseTest {
         IPortalFactory.CreatePortalPoolParams memory params = IPortalFactory.CreatePortalPoolParams({
             operator: operator,
             capacity: MIN_STAKE_THRESHOLD,
-            peerId: "reward-portal",
             tokenSuffix: "RewardPortal",
             distributionRatePerSecond: rate,
             initialDeposit: initialDeposit,
@@ -441,7 +437,6 @@ contract PortalPoolImplementationTest is BaseTest {
         IPortalFactory.CreatePortalPoolParams memory params = IPortalFactory.CreatePortalPoolParams({
             operator: operator,
             capacity: capacity,
-            peerId: "transfer-limit",
             tokenSuffix: "TransferLimit",
             distributionRatePerSecond: rate,
             initialDeposit: initialDeposit,
@@ -637,7 +632,6 @@ contract PortalPoolImplementationTest is BaseTest {
         IPortalFactory.CreatePortalPoolParams memory params = IPortalFactory.CreatePortalPoolParams({
             operator: operator,
             capacity: MIN_STAKE_THRESHOLD,
-            peerId: "cap-success",
             tokenSuffix: "CapacityTestPortal",
             distributionRatePerSecond: rate,
             initialDeposit: initialDeposit,
@@ -694,7 +688,6 @@ contract PortalPoolImplementationTest is BaseTest {
         IPortalFactory.CreatePortalPoolParams memory params = IPortalFactory.CreatePortalPoolParams({
             operator: operator,
             capacity: MIN_STAKE_THRESHOLD,
-            peerId: "cap-test-3",
             tokenSuffix: "CapacityTestPortal3",
             distributionRatePerSecond: rate,
             initialDeposit: initialDeposit,
@@ -734,7 +727,6 @@ contract PortalPoolImplementationTest is BaseTest {
         IPortalFactory.CreatePortalPoolParams memory params = IPortalFactory.CreatePortalPoolParams({
             operator: operator,
             capacity: MIN_STAKE_THRESHOLD,
-            peerId: "cap-test-4",
             tokenSuffix: "CapacityTestPortal4",
             distributionRatePerSecond: rate,
             initialDeposit: initialDeposit,
@@ -781,7 +773,6 @@ contract PortalPoolImplementationTest is BaseTest {
         IPortalFactory.CreatePortalPoolParams memory params = IPortalFactory.CreatePortalPoolParams({
             operator: operator,
             capacity: MIN_STAKE_THRESHOLD,
-            peerId: "cap-test-6",
             tokenSuffix: "CapacityTestPortal6",
             distributionRatePerSecond: rate,
             initialDeposit: initialDeposit,
@@ -830,7 +821,6 @@ contract PortalPoolImplementationTest is BaseTest {
         IPortalFactory.CreatePortalPoolParams memory params = IPortalFactory.CreatePortalPoolParams({
             operator: operator,
             capacity: MIN_STAKE_THRESHOLD,
-            peerId: "cap-test-8",
             tokenSuffix: "CapacityTestPortal8",
             distributionRatePerSecond: rate,
             initialDeposit: initialDeposit,
@@ -1024,7 +1014,6 @@ contract PortalPoolImplementationTest is BaseTest {
         IPortalFactory.CreatePortalPoolParams memory params = IPortalFactory.CreatePortalPoolParams({
             operator: operator,
             capacity: capacity,
-            peerId: "active-deposit-portal",
             tokenSuffix: "ActiveDepositPortal",
             distributionRatePerSecond: rate,
             initialDeposit: initialDeposit,
@@ -1230,7 +1219,6 @@ contract PortalPoolImplementationTest is BaseTest {
         IPortalFactory.CreatePortalPoolParams memory params = IPortalFactory.CreatePortalPoolParams({
             operator: operator,
             capacity: MIN_STAKE_THRESHOLD,
-            peerId: "peer-zero-rate",
             tokenSuffix: "ZeroRatePool",
             distributionRatePerSecond: 0, // Zero rate
             initialDeposit: 0,

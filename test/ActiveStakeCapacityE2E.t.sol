@@ -135,7 +135,6 @@ contract ActiveStakeCapacityE2ETest is Test {
         IPortalFactory.CreatePortalPoolParams memory params = IPortalFactory.CreatePortalPoolParams({
             operator: operator,
             capacity: CAPACITY,
-            peerId: abi.encodePacked("peer-active-stake-", poolCount),
             tokenSuffix: string(abi.encodePacked("AS", poolCount)),
             distributionRatePerSecond: SCALED_RATE,
             initialDeposit: initialDeposit,

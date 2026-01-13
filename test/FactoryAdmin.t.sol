@@ -97,7 +97,6 @@ contract FactoryAdminTest is BaseTest {
         IPortalFactory.CreatePortalPoolParams memory params = IPortalFactory.CreatePortalPoolParams({
             operator: user1,
             capacity: MIN_STAKE_THRESHOLD,
-            peerId: "test-peer-id",
             tokenSuffix: "TestPortal",
             distributionRatePerSecond: rate,
             initialDeposit: initialDeposit,
@@ -126,7 +125,6 @@ contract FactoryAdminTest is BaseTest {
         IPortalFactory.CreatePortalPoolParams memory params = IPortalFactory.CreatePortalPoolParams({
             operator: operator,
             capacity: MIN_STAKE_THRESHOLD,
-            peerId: "test-peer-id",
             tokenSuffix: "TestPortal",
             distributionRatePerSecond: minRate, // Below new minimum
             initialDeposit: minRate * 1 days / 1000,
@@ -149,7 +147,6 @@ contract FactoryAdminTest is BaseTest {
         IPortalFactory.CreatePortalPoolParams memory params = IPortalFactory.CreatePortalPoolParams({
             operator: operator,
             capacity: MIN_STAKE_THRESHOLD,
-            peerId: "test-peer-id",
             tokenSuffix: "TestPortal",
             distributionRatePerSecond: rate,
             initialDeposit: rate * 1 days / 1000,
@@ -172,7 +169,6 @@ contract FactoryAdminTest is BaseTest {
         IPortalFactory.CreatePortalPoolParams memory params = IPortalFactory.CreatePortalPoolParams({
             operator: operator,
             capacity: hugeCapacity,
-            peerId: "test-peer-id",
             tokenSuffix: "TestPortal",
             distributionRatePerSecond: tinyRate,
             initialDeposit: tinyRate * 1 days / 1000,
