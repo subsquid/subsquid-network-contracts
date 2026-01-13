@@ -119,7 +119,7 @@ contract PortalPoolFactory is
     /**
      * @dev creates a new portal pool with the given parameters.
      * @notice Deploy a new staking pool with specified operator and configuration.
-     * @param params struct containing operator, capacity, peerId, tokenSuffix, distributionRate, and metadata.
+     * @param params struct containing operator, capacity, tokenSuffix, distributionRate, and metadata.
      * @return portal address of the newly created pool.
      */
     function createPortalPool(CreatePortalPoolParams calldata params) external whenNotPaused returns (address portal) {
@@ -132,7 +132,6 @@ contract PortalPoolFactory is
         if (params.rewardToken == address(0)) revert PoolErrors.InvalidAddress();
         if (!isAllowedPaymentToken[params.rewardToken]) revert PoolErrors.TokenNotAllowed();
         if (params.capacity < minStakeThreshold) revert PoolErrors.BelowMinimum();
-        if (params.peerId.length == 0) revert PoolErrors.EmptyPeerId();
         if (params.distributionRatePerSecond > maxDistributionRatePerSecond) {
             revert PoolErrors.RateExceedsMaximum();
         }
@@ -158,7 +157,6 @@ contract PortalPoolFactory is
             operator: params.operator,
             capacity: params.capacity,
             depositDeadline: 0,
-            peerId: params.peerId,
             tokenSuffix: params.tokenSuffix,
             sqd: sqd,
             rewardToken: params.rewardToken,
@@ -194,8 +192,10 @@ contract PortalPoolFactory is
         emit PortalCreated(
             portal,
             params.operator,
+            params.rewardToken,
             params.capacity,
             params.distributionRatePerSecond,
+            params.initialDeposit,
             params.tokenSuffix,
             params.metadata
         );

@@ -38,7 +38,6 @@ interface IPortalPool {
         address operator;
         uint256 capacity;
         uint256 depositDeadline;
-        bytes peerId;
         string tokenSuffix;
         address sqd;
         address rewardToken;
@@ -113,7 +112,6 @@ interface IPortalPool {
         );
     function getTotalDrainRate() external view returns (uint256);
     function getRunway() external view returns (int256);
-    function getPeerId() external view returns (bytes memory);
     function getActiveStake() external view returns (uint256);
     function getComputationUnits() external view returns (uint256);
     function getState() external view returns (PoolState);

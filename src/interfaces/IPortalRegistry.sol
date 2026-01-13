@@ -64,6 +64,16 @@ interface IPortalRegistry {
 
     function getOperatorClusters(address operator) external view returns (bytes32[] memory);
 
+    function getClustersPaginated(uint256 offset, uint256 limit)
+        external
+        view
+        returns (bytes32[] memory clusterIds, Cluster[] memory clusters);
+
+    function getActiveClusters(uint256 offset, uint256 limit)
+        external
+        view
+        returns (bytes32[] memory clusterIds, Cluster[] memory clusters, uint256 totalActive);
+
     function getComputationUnits(bytes32 clusterId) external view returns (uint256);
 
     function isCluster(address clusterAddress) external view returns (bool);
@@ -95,4 +105,8 @@ interface IPortalRegistry {
     function addressToClusterId(address clusterAddress) external view returns (bytes32);
 
     function peerIdToCluster(bytes32 peerIdHash) external view returns (bytes32);
+
+    function allClusterIds(uint256 index) external view returns (bytes32);
+
+    function clusterCount() external view returns (uint256);
 }

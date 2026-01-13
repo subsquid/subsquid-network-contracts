@@ -7,8 +7,10 @@ interface IPortalFactory {
     event PortalCreated(
         address indexed portal,
         address indexed operator,
+        address indexed rewardToken,
         uint256 capacity,
         uint256 distributionRatePerSecond,
+        uint256 initialDeposit,
         string tokenSuffix,
         string metadata
     );
@@ -32,7 +34,6 @@ interface IPortalFactory {
     struct CreatePortalPoolParams {
         address operator;
         uint256 capacity;
-        bytes peerId;
         string tokenSuffix;
         /// @dev scaled by RATE_PRECISION (1000). To set 1 token/sec, pass 1000.
         uint256 distributionRatePerSecond;

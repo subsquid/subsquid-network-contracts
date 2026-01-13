@@ -11,6 +11,7 @@ import {IPortalRegistry} from "../src/interfaces/IPortalRegistry.sol";
 import {IPortalFactory} from "../src/interfaces/IPortalFactory.sol";
 import {PortalRegistryErrors} from "../src/libs/PortalRegistryErrors.sol";
 import {FullMath} from "../src/libs/FullMath.sol";
+import {Multicall} from "../src/utils/Multicall.sol";
 
 /**
  * @title PortalRegistry
@@ -23,7 +24,8 @@ contract PortalRegistry is
     Initializable,
     AccessControlUpgradeable,
     PausableUpgradeable,
-    UUPSUpgradeable
+    UUPSUpgradeable,
+    Multicall
 {
     using SafeERC20 for IERC20;
 
@@ -45,7 +47,12 @@ contract PortalRegistry is
     uint256 public mana;
     address public factory;
 
-    uint256[50] private __gap;
+    /// @notice All cluster IDs indexed by sequential number
+    mapping(uint256 => bytes32) public allClusterIds;
+    /// @notice Total number of clusters registered
+    uint256 public clusterCount;
+
+    uint256[48] private __gap;
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
@@ -96,6 +103,9 @@ contract PortalRegistry is
         addressToClusterId[clusterAddress] = clusterId;
         ownerClusters[operator].push(clusterId);
         _isCluster[clusterAddress] = true;
+
+        allClusterIds[clusterCount] = clusterId;
+        ++clusterCount;
 
         emit ClusterCreated(clusterId, clusterAddress, operator);
     }
@@ -222,6 +232,82 @@ contract PortalRegistry is
     /// @inheritdoc IPortalRegistry
     function getOperatorClusters(address operator) external view returns (bytes32[] memory) {
         return ownerClusters[operator];
+    }
+
+    /// @inheritdoc IPortalRegistry
+    function getClustersPaginated(uint256 offset, uint256 limit)
+        external
+        view
+        returns (bytes32[] memory clusterIds, Cluster[] memory clusters)
+    {
+        if (offset >= clusterCount) {
+            return (new bytes32[](0), new Cluster[](0));
+        }
+
+        uint256 end = offset + limit;
+        if (end > clusterCount) {
+            end = clusterCount;
+        }
+
+        uint256 size = end - offset;
+        clusterIds = new bytes32[](size);
+        clusters = new Cluster[](size);
+
+        for (uint256 i = 0; i < size;) {
+            bytes32 clusterId = allClusterIds[offset + i];
+            clusterIds[i] = clusterId;
+            clusters[i] = _clusters[clusterId];
+            unchecked {
+                ++i;
+            }
+        }
+    }
+
+    /// @inheritdoc IPortalRegistry
+    function getActiveClusters(uint256 offset, uint256 limit)
+        external
+        view
+        returns (bytes32[] memory clusterIds, Cluster[] memory clusters, uint256 totalActive)
+    {
+        // First pass: count active clusters
+        for (uint256 i = 0; i < clusterCount;) {
+            if (_clusters[allClusterIds[i]].active) {
+                ++totalActive;
+            }
+            unchecked {
+                ++i;
+            }
+        }
+
+        if (offset >= totalActive) {
+            return (new bytes32[](0), new Cluster[](0), totalActive);
+        }
+
+        uint256 end = offset + limit;
+        if (end > totalActive) {
+            end = totalActive;
+        }
+
+        uint256 size = end - offset;
+        clusterIds = new bytes32[](size);
+        clusters = new Cluster[](size);
+
+        uint256 activeIndex = 0;
+        uint256 collected = 0;
+        for (uint256 i = 0; i < clusterCount && collected < size;) {
+            bytes32 clusterId = allClusterIds[i];
+            if (_clusters[clusterId].active) {
+                if (activeIndex >= offset) {
+                    clusterIds[collected] = clusterId;
+                    clusters[collected] = _clusters[clusterId];
+                    ++collected;
+                }
+                ++activeIndex;
+            }
+            unchecked {
+                ++i;
+            }
+        }
     }
 
     /// @inheritdoc IPortalRegistry

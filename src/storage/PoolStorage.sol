@@ -18,7 +18,6 @@ abstract contract PoolStorage {
     uint256 public constant RATE_PRECISION = Constants.RATE_PRECISION;
 
     IPortalPool.PoolInfo internal _poolInfo;
-    bytes internal _peerId;
 
     mapping(address => uint256) internal _stakes;
 

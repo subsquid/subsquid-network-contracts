@@ -66,7 +66,6 @@ contract PortalPoolImplementation is
         __AccessControl_init();
         __Pausable_init();
 
-        _peerId = params.peerId;
         _sqd = IERC20(params.sqd);
         _rewardToken = IERC20(params.rewardToken);
         _portalRegistry = IPortalRegistry(params.portalRegistry);
@@ -449,6 +448,8 @@ contract PortalPoolImplementation is
 
         credit = toProviders;
         balanceTs = uint64(block.timestamp);
+
+        emit RewardsToppedUp(address(_factory), amount, toProviders, toWorkerPool, toBurn);
     }
 
     /**
@@ -744,10 +745,6 @@ contract PortalPoolImplementation is
 
         // runway = balanceTs + credit * RATE_PRECISION / drainRate
         return int256(uint256(balanceTs)) + int256(FullMath.mulDiv(credit, RATE_PRECISION, drainRate));
-    }
-
-    function getPeerId() external view returns (bytes memory) {
-        return _peerId;
     }
 
     function getActiveStake() external view returns (uint256) {
