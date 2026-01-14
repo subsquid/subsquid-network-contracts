@@ -158,13 +158,13 @@ contract PortalPoolImplementation is
 
         // Accrue global state and update user BEFORE changing stake
         _accrueGlobal(block.timestamp, true);
-        _updateUser(msg.sender);
+        _updateProvider(msg.sender);
 
         _stakes[msg.sender] = actualNewUserStake;
         _poolInfo.totalStaked = actualNewTotal;
 
         // Update user's reward debt for new activeStake
-        uint256 activeStake = _getUserActiveStake(msg.sender);
+        uint256 activeStake = _getProviderActiveStake(msg.sender);
         _rewardCheckpoint[msg.sender] = FullMath.mulDiv(activeStake, rewardPerStakeStored, ACC);
 
         bool shouldActivate = !_poolInfo.firstActivated && _poolInfo.totalStaked >= _poolInfo.capacity;
@@ -227,7 +227,7 @@ contract PortalPoolImplementation is
 
         // Accrue global state and update user BEFORE changing exit amounts
         _accrueGlobal(block.timestamp, true);
-        _updateUser(msg.sender);
+        _updateProvider(msg.sender);
 
         uint256 endPos = _exitQueue.enqueue(amount);
 
@@ -240,7 +240,7 @@ contract PortalPoolImplementation is
         _totalExitAmounts += amount;
 
         // Update user's reward debt for new activeStake
-        uint256 activeStake = _getUserActiveStake(msg.sender);
+        uint256 activeStake = _getProviderActiveStake(msg.sender);
         _rewardCheckpoint[msg.sender] = FullMath.mulDiv(activeStake, rewardPerStakeStored, ACC);
 
         lptToken.burn(msg.sender, amount);
@@ -298,15 +298,15 @@ contract PortalPoolImplementation is
 
         // Accrue global state and update both users BEFORE changing stakes
         _accrueGlobal(block.timestamp, true);
-        _updateUser(from);
-        _updateUser(to);
+        _updateProvider(from);
+        _updateProvider(to);
 
         _stakes[from] -= amount;
         _stakes[to] = receiverNewStake;
 
         // Update reward debts for new activeStakes
-        uint256 fromActiveStake = _getUserActiveStake(from);
-        uint256 toActiveStake = _getUserActiveStake(to);
+        uint256 fromActiveStake = _getProviderActiveStake(from);
+        uint256 toActiveStake = _getProviderActiveStake(to);
         _rewardCheckpoint[from] = FullMath.mulDiv(fromActiveStake, rewardPerStakeStored, ACC);
         _rewardCheckpoint[to] = FullMath.mulDiv(toActiveStake, rewardPerStakeStored, ACC);
 
@@ -458,7 +458,7 @@ contract PortalPoolImplementation is
         // always allow claiming - users should be able to claim earned rewards
         // even if distribution is turned off
         _accrueGlobal(block.timestamp, true);
-        _updateUser(msg.sender);
+        _updateProvider(msg.sender);
 
         uint256 amount = _unclaimedRewards[msg.sender];
         if (amount == 0) revert PoolErrors.NothingToClaim();
@@ -495,10 +495,7 @@ contract PortalPoolImplementation is
         // Cannot change rate while pool has debt
         if (debt > 0) revert PoolErrors.PoolHasDebt();
 
-        uint256 oldRate = totalDistributionRatePerSec;
         _setDistributionRate(newRatePerSecond);
-
-        emit DistributionRateChanged(oldRate, newRatePerSecond);
     }
 
     /**
@@ -528,9 +525,9 @@ contract PortalPoolImplementation is
         _poolInfo.capacity = newCapacity;
 
         // Recalculate per-stake rate
-        // Note: delegatorRatePerSec is scaled by RATE_PRECISION, divide to get actual rate
+        // Note: providerRatePerSec is scaled by RATE_PRECISION, divide to get actual rate
         if (newCapacity > 0) {
-            perStakeRateWad = FullMath.mulDiv(delegatorRatePerSec, ACC, newCapacity * RATE_PRECISION);
+            perStakeRateWad = FullMath.mulDiv(providerRatePerSec, ACC, newCapacity * RATE_PRECISION);
         }
 
         emit CapacityUpdated(oldCapacity, newCapacity);
@@ -636,22 +633,22 @@ contract PortalPoolImplementation is
     }
 
     /**
-     * @notice Get claimable rewards for a delegator
+     * @notice Get claimable rewards for a provider
      * @dev Uses global RPS model with simulated accrual
      */
-    function getClaimableRewards(address delegator) external view returns (uint256) {
-        uint256 activeStake = _getUserActiveStake(delegator);
-        if (activeStake == 0) return _unclaimedRewards[delegator];
+    function getClaimableRewards(address provider) external view returns (uint256) {
+        uint256 activeStake = _getProviderActiveStake(provider);
+        if (activeStake == 0) return _unclaimedRewards[provider];
 
         // Simulate global accrual
         (uint256 newRPS,) = _simulateGlobalAccrual(block.timestamp);
 
         // Calculate pending based on activeStake
         uint256 accumulated = FullMath.mulDiv(activeStake, newRPS, ACC);
-        uint256 checkpoint = _rewardCheckpoint[delegator];
+        uint256 checkpoint = _rewardCheckpoint[provider];
         uint256 pending = accumulated > checkpoint ? accumulated - checkpoint : 0;
 
-        return _unclaimedRewards[delegator] + pending;
+        return _unclaimedRewards[provider] + pending;
     }
 
     function getCurrentRewardBalance() external view returns (int256) {
@@ -689,8 +686,8 @@ contract PortalPoolImplementation is
         return currentCredit == 0;
     }
 
-    /// @notice get consolidated pool status with user rewards
-    function getPoolStatusWithRewards(address user)
+    /// @notice get consolidated pool status with provider rewards
+    function getPoolStatusWithRewards(address provider)
         external
         view
         returns (
@@ -699,8 +696,8 @@ contract PortalPoolImplementation is
             int256 poolBalance,
             int256 runway,
             bool outOfMoney,
-            uint256 userRewards,
-            uint256 userStake
+            uint256 providerRewards,
+            uint256 providerStake
         )
     {
         (poolCredit, poolDebt) = _currentCreditDebt(block.timestamp);
@@ -708,15 +705,15 @@ contract PortalPoolImplementation is
         runway = getRunway();
         outOfMoney = poolCredit == 0;
 
-        userStake = _getUserActiveStake(user);
-        if (userStake == 0) {
-            userRewards = _unclaimedRewards[user];
+        providerStake = _getProviderActiveStake(provider);
+        if (providerStake == 0) {
+            providerRewards = _unclaimedRewards[provider];
         } else {
             (uint256 newRPS,) = _simulateGlobalAccrual(block.timestamp);
-            uint256 accumulated = FullMath.mulDiv(userStake, newRPS, ACC);
-            uint256 checkpoint = _rewardCheckpoint[user];
+            uint256 accumulated = FullMath.mulDiv(providerStake, newRPS, ACC);
+            uint256 checkpoint = _rewardCheckpoint[provider];
             uint256 pending = accumulated > checkpoint ? accumulated - checkpoint : 0;
-            userRewards = _unclaimedRewards[user] + pending;
+            providerRewards = _unclaimedRewards[provider] + pending;
         }
     }
 
@@ -753,22 +750,22 @@ contract PortalPoolImplementation is
         return address(_rewardToken);
     }
 
-    function getQueueStatus(address user, uint256 ticketId)
+    function getQueueStatus(address provider, uint256 ticketId)
         external
         view
-        returns (uint256 processed, uint256 userEndPos, uint256 secondsRemaining, bool ready)
+        returns (uint256 processed, uint256 providerEndPos, uint256 secondsRemaining, bool ready)
     {
-        ExitQueueLib.Ticket storage ticket = _exitTickets[user][ticketId];
+        ExitQueueLib.Ticket storage ticket = _exitTickets[provider][ticketId];
         return ExitQueueLib.getStatus(_exitQueue, ticket);
     }
 
-    function getQueueStatusWithTimestamp(address user, uint256 ticketId)
+    function getQueueStatusWithTimestamp(address provider, uint256 ticketId)
         external
         view
-        returns (uint256 processed, uint256 userEndPos, uint256 secondsRemaining, bool ready, uint256 unlockTimestamp)
+        returns (uint256 processed, uint256 providerEndPos, uint256 secondsRemaining, bool ready, uint256 unlockTimestamp)
     {
-        ExitQueueLib.Ticket storage ticket = _exitTickets[user][ticketId];
-        (processed, userEndPos, secondsRemaining, ready) = ExitQueueLib.getStatus(_exitQueue, ticket);
+        ExitQueueLib.Ticket storage ticket = _exitTickets[provider][ticketId];
+        (processed, providerEndPos, secondsRemaining, ready) = ExitQueueLib.getStatus(_exitQueue, ticket);
 
         if (ready) {
             unlockTimestamp = block.timestamp;
@@ -839,9 +836,9 @@ contract PortalPoolImplementation is
         }
     }
 
-    function _getUserActiveStake(address user) internal view returns (uint256) {
-        uint256 stake = _stakes[user];
-        uint256 exitAmount = _exitAmounts[user];
+    function _getProviderActiveStake(address provider) internal view returns (uint256) {
+        uint256 stake = _stakes[provider];
+        uint256 exitAmount = _exitAmounts[provider];
         return stake > exitAmount ? stake - exitAmount : 0;
     }
 
@@ -857,26 +854,29 @@ contract PortalPoolImplementation is
         uint256 minStake = _minStakeThreshold;
         if (_poolInfo.totalStaked < minStake) return 0;
         if (activeStake == 0) return 0;
-        // treasuryRate + (delegatorRate * activeStake / capacity)
+        // treasuryRate + (providerRate * activeStake / capacity)
         // Note: rates are scaled by RATE_PRECISION, returned value is also scaled
         uint256 capacity = _poolInfo.capacity;
         if (capacity == 0) return 0;
         // Return scaled drain rate (still multiplied by RATE_PRECISION)
-        uint256 delegatorDrain = FullMath.mulDiv(delegatorRatePerSec, activeStake, capacity);
-        return treasuryRatePerSec + delegatorDrain;
+        uint256 providerDrain = FullMath.mulDiv(providerRatePerSec, activeStake, capacity);
+        return treasuryRatePerSec + providerDrain;
     }
 
     function _setDistributionRate(uint256 newRatePerSec) internal {
+        uint256 oldRate = totalDistributionRatePerSec;
         totalDistributionRatePerSec = newRatePerSec;
 
-        delegatorRatePerSec = newRatePerSec;
+        providerRatePerSec = newRatePerSec;
         treasuryRatePerSec = 0;
-        // Note: delegatorRatePerSec is scaled by RATE_PRECISION, divide to get actual rate
+        // Note: providerRatePerSec is scaled by RATE_PRECISION, divide to get actual rate
         // Rate is in "raw token units per second" - caller must account for token decimals
         uint256 capacity = _poolInfo.capacity;
         if (capacity > 0) {
-            perStakeRateWad = FullMath.mulDiv(delegatorRatePerSec, ACC, capacity * RATE_PRECISION);
+            perStakeRateWad = FullMath.mulDiv(providerRatePerSec, ACC, capacity * RATE_PRECISION);
         }
+
+        emit DistributionRateChanged(oldRate, newRatePerSec);
     }
 
     function _simulateGlobalAccrual(uint256 timestamp) internal view returns (uint256 newRPS, uint64 newEffectiveTs) {
@@ -939,16 +939,16 @@ contract PortalPoolImplementation is
         }
     }
 
-    function _updateUser(address user) internal {
-        uint256 activeStake = _getUserActiveStake(user);
+    function _updateProvider(address provider) internal {
+        uint256 activeStake = _getProviderActiveStake(provider);
         if (activeStake > 0) {
             uint256 accumulated = FullMath.mulDiv(activeStake, rewardPerStakeStored, ACC);
-            uint256 checkpoint = _rewardCheckpoint[user];
+            uint256 checkpoint = _rewardCheckpoint[provider];
             uint256 pending = accumulated > checkpoint ? accumulated - checkpoint : 0;
-            _unclaimedRewards[user] += pending;
-            _rewardCheckpoint[user] = accumulated;
-        } else if (_stakes[user] > 0) {
-            _rewardCheckpoint[user] = 0;
+            _unclaimedRewards[provider] += pending;
+            _rewardCheckpoint[provider] = accumulated;
+        } else if (_stakes[provider] > 0) {
+            _rewardCheckpoint[provider] = 0;
         }
     }
 
@@ -992,7 +992,7 @@ contract PortalPoolImplementation is
 
         // Stop all reward distribution (prevents further debt accumulation)
         totalDistributionRatePerSec = 0;
-        delegatorRatePerSec = 0;
+        providerRatePerSec = 0;
         treasuryRatePerSec = 0;
         perStakeRateWad = 0;
 
@@ -1010,7 +1010,7 @@ contract PortalPoolImplementation is
         if (userStake == 0) revert PoolErrors.NoStakeToWithdraw();
 
         // Update user's reward state before withdrawal
-        _updateUser(msg.sender);
+        _updateProvider(msg.sender);
 
         // Calculate LPT to burn (stake minus any already burned via exit requests)
         uint256 exitAmount = _exitAmounts[msg.sender];
@@ -1052,7 +1052,7 @@ contract PortalPoolImplementation is
     function claimRewardsFromClosed() external nonReentrant returns (uint256) {
         if (getState() != PoolState.CLOSED) revert PoolErrors.PoolNotClosed();
 
-        _updateUser(msg.sender);
+        _updateProvider(msg.sender);
 
         uint256 amount = _unclaimedRewards[msg.sender];
         if (amount == 0) revert PoolErrors.NothingToClaim();

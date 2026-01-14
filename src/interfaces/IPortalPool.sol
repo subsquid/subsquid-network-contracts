@@ -52,7 +52,7 @@ interface IPortalPool {
     event RewardsToppedUp(
         address indexed operator, uint256 received, uint256 toProviders, uint256 toWorkerPool, uint256 toBurn
     );
-    event RewardsClaimed(address indexed delegator, uint256 amount);
+    event RewardsClaimed(address indexed provider, uint256 amount);
     event DistributionRateChanged(uint256 oldRate, uint256 newRate);
     event CapacityUpdated(uint256 oldCapacity, uint256 newCapacity);
     event WhitelistEnabledChanged(bool enabled);
@@ -79,7 +79,7 @@ interface IPortalPool {
     function getProviderStake(address provider) external view returns (uint256);
     function getExitTicket(address provider, uint256 ticketId) external view returns (ExitTicket memory);
     function getTicketCount(address provider) external view returns (uint256);
-    function getClaimableRewards(address delegator) external view returns (uint256);
+    function getClaimableRewards(address provider) external view returns (uint256);
     function getRewardToken() external view returns (address);
     function getCurrentRewardBalance() external view returns (int256);
     function getRewardStatus()
@@ -89,7 +89,7 @@ interface IPortalPool {
     function getCredit() external view returns (uint256);
     function getDebt() external view returns (uint256);
     function isOutOfMoney() external view returns (bool);
-    function getPoolStatusWithRewards(address user)
+    function getPoolStatusWithRewards(address provider)
         external
         view
         returns (
@@ -98,23 +98,23 @@ interface IPortalPool {
             int256 poolBalance,
             int256 runway,
             bool outOfMoney,
-            uint256 userRewards,
-            uint256 userStake
+            uint256 providerRewards,
+            uint256 providerStake
         );
     function getTotalDrainRate() external view returns (uint256);
     function getRunway() external view returns (int256);
     function getActiveStake() external view returns (uint256);
     function getComputationUnits() external view returns (uint256);
     function getState() external view returns (PoolState);
-    function getQueueStatus(address user, uint256 ticketId)
+    function getQueueStatus(address provider, uint256 ticketId)
         external
         view
-        returns (uint256 processed, uint256 userEndPos, uint256 secondsRemaining, bool ready);
+        returns (uint256 processed, uint256 providerEndPos, uint256 secondsRemaining, bool ready);
 
-    function getQueueStatusWithTimestamp(address user, uint256 ticketId)
+    function getQueueStatusWithTimestamp(address provider, uint256 ticketId)
         external
         view
-        returns (uint256 processed, uint256 userEndPos, uint256 secondsRemaining, bool ready, uint256 unlockTimestamp);
+        returns (uint256 processed, uint256 providerEndPos, uint256 secondsRemaining, bool ready, uint256 unlockTimestamp);
     function getTotalProcessed() external view returns (uint256);
     function getMetadata() external view returns (string memory);
     function getMinCapacity() external view returns (uint256);

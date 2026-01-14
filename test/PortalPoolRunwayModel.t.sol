@@ -150,8 +150,8 @@ contract PortalPoolRunwayModelTest is Test {
 
     function test_InitialState() public view {
         assertEq(pool.totalDistributionRatePerSec(), RATE_PER_SEC);
-        // Delegators get 100% of distribution rate (FeeRouter already split for worker pool)
-        assertEq(pool.delegatorRatePerSec(), RATE_PER_SEC);
+        // Providers get 100% of distribution rate (FeeRouter already split for worker pool)
+        assertEq(pool.providerRatePerSec(), RATE_PER_SEC);
         assertEq(pool.treasuryRatePerSec(), 0);
         assertEq(pool.getActiveStake(), CAPACITY);
     }
@@ -200,7 +200,7 @@ contract PortalPoolRunwayModelTest is Test {
 
     function test_DrainRate_Formula() public {
         uint256 drainRate = pool.getTotalDrainRate();
-        uint256 expectedDrainRate = pool.treasuryRatePerSec() + (pool.delegatorRatePerSec() * CAPACITY / CAPACITY);
+        uint256 expectedDrainRate = pool.treasuryRatePerSec() + (pool.providerRatePerSec() * CAPACITY / CAPACITY);
 
         assertEq(drainRate, expectedDrainRate, "Drain rate should match formula");
         assertEq(drainRate, RATE_PER_SEC, "Drain rate should equal total rate at full capacity");
@@ -381,12 +381,12 @@ contract PortalPoolRunwayModelTest is Test {
         pool.topUpRewards(100000);
         vm.stopPrank();
 
-        uint256 rateBefore = pool.delegatorRatePerSec();
+        uint256 rateBefore = pool.providerRatePerSec();
 
         vm.prank(operator);
         pool.setDistributionRate(RATE_PER_SEC * 2);
 
-        uint256 rateAfter = pool.delegatorRatePerSec();
+        uint256 rateAfter = pool.providerRatePerSec();
 
         assertEq(rateAfter, rateBefore * 2, "Rate should double when distribution rate doubles");
     }

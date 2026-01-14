@@ -123,16 +123,16 @@ library ExitQueueLib {
     /// @param self the queue state
     /// @param ticket the exit ticket
     /// @return processed the total SQD processed by the queue
-    /// @return userEndPos the user's end position in queue
+    /// @return providerEndPos the provider's end position in queue
     /// @return secondsRemaining the seconds remaining until unlocked
     /// @return ready whether ticket is ready for withdrawal
     function getStatus(Queue storage self, Ticket storage ticket)
         internal
         view
-        returns (uint256 processed, uint256 userEndPos, uint256 secondsRemaining, bool ready)
+        returns (uint256 processed, uint256 providerEndPos, uint256 secondsRemaining, bool ready)
     {
         processed = totalProcessed(self);
-        userEndPos = ticket.endPosition;
+        providerEndPos = ticket.endPosition;
         secondsRemaining = secondsUntilUnlocked(self, ticket);
         ready = isUnlocked(self, ticket);
     }

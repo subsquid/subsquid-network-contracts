@@ -255,14 +255,14 @@ contract PortalPoolImplementationTest is BaseTest {
         assertEq(ticket.amount, SMALL_STAKE);
         assertFalse(ticket.withdrawn);
 
-        (uint256 processed, uint256 userEndPos, uint256 secondsRemaining, bool ready) =
+        (uint256 processed, uint256 providerEndPos, uint256 secondsRemaining, bool ready) =
             pool.getQueueStatus(user1, ticketId);
         assertFalse(ready);
         assertTrue(secondsRemaining > 0);
 
         vm.warp(block.timestamp + SMALL_STAKE / 1e18 + 1);
 
-        (processed, userEndPos, secondsRemaining, ready) = pool.getQueueStatus(user1, ticketId);
+        (processed, providerEndPos, secondsRemaining, ready) = pool.getQueueStatus(user1, ticketId);
         assertTrue(ready);
         assertEq(secondsRemaining, 0);
     }
@@ -530,17 +530,17 @@ contract PortalPoolImplementationTest is BaseTest {
         vm.prank(user1);
         uint256 ticketId = pool.requestExit(SMALL_STAKE);
 
-        (uint256 processed, uint256 userEndPos, uint256 secondsRemaining, bool ready) =
+        (uint256 processed, uint256 providerEndPos, uint256 secondsRemaining, bool ready) =
             pool.getQueueStatus(user1, ticketId);
 
         assertEq(processed, 0);
-        assertEq(userEndPos, SMALL_STAKE);
+        assertEq(providerEndPos, SMALL_STAKE);
         assertEq(secondsRemaining, SMALL_STAKE / 1e18);
         assertFalse(ready);
 
         vm.warp(block.timestamp + SMALL_STAKE / 1e18 + 1);
 
-        (processed, userEndPos, secondsRemaining, ready) = pool.getQueueStatus(user1, ticketId);
+        (processed, providerEndPos, secondsRemaining, ready) = pool.getQueueStatus(user1, ticketId);
 
         assertTrue(processed >= SMALL_STAKE);
         assertEq(secondsRemaining, 0);

@@ -32,9 +32,9 @@ abstract contract PoolStorage {
 
     IERC20 internal _rewardToken;
 
-    /// @notice provider's available credit (funds available for distribution)
+    /// @notice pool's available credit (funds available for distribution)
     uint256 public credit;
-    /// @notice provider's accumulated debt (owed but unpaid rewards)
+    /// @notice pool's accumulated debt (owed but unpaid rewards)
     uint256 public debt;
     /// @notice timestamp of last balance checkpoint
     uint64 public balanceTs;
@@ -43,23 +43,23 @@ abstract contract PoolStorage {
     /// @notice timestamp when rewards were last effectively accrued (stays at runway when dry)
     uint64 public lastEffectiveRewardTs;
 
-    /// @notice total distribution rate per second (delegators + treasury)
+    /// @notice total distribution rate per second (providers + treasury)
     /// @dev scaled by RATE_PRECISION (1000). A value of 1000 = 1 token/sec
     uint256 public totalDistributionRatePerSec;
-    /// @notice delegator portion of rate
+    /// @notice provider portion of rate
     /// @dev scaled by RATE_PRECISION (1000). A value of 1000 = 1 token/sec
-    uint256 public delegatorRatePerSec;
+    uint256 public providerRatePerSec;
     /// @notice treasury portion of rate
     /// @dev scaled by RATE_PRECISION (1000). A value of 1000 = 1 token/sec
     uint256 public treasuryRatePerSec;
-    /// @notice per-stake rate = delegatorRate * ACC / capacity
+    /// @notice per-stake rate = providerRate * ACC / capacity
     uint256 public perStakeRateWad;
     /// @notice treasury accumulated rewards
     uint256 public treasuryAccumulated;
 
-    /// @notice per-user reward checkpoint (accumulated rewards at last update)
+    /// @notice per-provider reward checkpoint (accumulated rewards at last update)
     mapping(address => uint256) internal _rewardCheckpoint;
-    /// @notice Per-user unclaimed rewards
+    /// @notice per-provider unclaimed rewards
     mapping(address => uint256) internal _unclaimedRewards;
 
     ExitQueueLib.Queue internal _exitQueue;

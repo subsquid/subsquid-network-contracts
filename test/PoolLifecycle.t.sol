@@ -58,7 +58,7 @@ contract PoolLifecycleTest is BaseTest {
 
         // Verify rates zeroed
         assertEq(pool.totalDistributionRatePerSec(), 0);
-        assertEq(pool.delegatorRatePerSec(), 0);
+        assertEq(pool.providerRatePerSec(), 0);
         assertEq(pool.treasuryRatePerSec(), 0);
         assertEq(pool.perStakeRateWad(), 0);
     }
