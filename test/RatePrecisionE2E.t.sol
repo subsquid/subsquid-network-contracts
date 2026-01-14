@@ -106,7 +106,7 @@ contract RatePrecisionE2ETest is Test {
 
         registry.setFactory(address(factory));
         factory.addPaymentToken(address(usdc));
-        factory.setWorkerPoolAddress(workerRewardPool);
+        feeRouter.setWorkerPoolAddress(workerRewardPool);
         factory.setDefaultWhitelistEnabled(false);
 
         sqd.mint(operator, 100_000_000);

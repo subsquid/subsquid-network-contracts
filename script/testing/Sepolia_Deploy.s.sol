@@ -91,7 +91,7 @@ contract DeploySepoliaWithTSQDAndMockUSDC is Script {
         console.log("PortalPoolBeacon:", d.beacon);
 
         registry.setFactory(d.factory);
-        factory.setWorkerPoolAddress(WORKER_POOL);
+        feeRouter.setWorkerPoolAddress(WORKER_POOL);
         factory.addPaymentToken(usdc);
 
         return d;

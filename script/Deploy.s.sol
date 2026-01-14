@@ -14,7 +14,7 @@ contract DeployPortalSystem is Script {
     address public constant USDC = 0x8baf8707861a84e3d978aC067447de9AAd862FAc;
 
     // Additional admin to be granted roles after deployment
-    address public constant ADDITIONAL_ADMIN = 0xc423362be9db384B79B7A8b21d68B65E3f1c63a7;
+    address public constant ADDITIONAL_ADMIN = 0x2A2fBDef84219BdAa0C657e45447D6BDd7EDAaE2;
 
     // Configuration values
     uint256 public constant WORKER_EPOCH_LENGTH = 7200;
@@ -117,9 +117,9 @@ contract DeployPortalSystem is Script {
         portalRegistry.setFactory(d.factory);
         console.log("Factory set in PortalRegistry");
 
-        console.log("\n--- Setting Worker Pool Address ---");
-        factory.setWorkerPoolAddress(workerRewardPool);
-        console.log("Worker pool address set to:", workerRewardPool);
+        console.log("\n--- Setting Worker Pool Address on FeeRouter ---");
+        FeeRouterModule(d.feeRouter).setWorkerPoolAddress(workerRewardPool);
+        console.log("Worker pool address set on FeeRouter to:", workerRewardPool);
 
         console.log("\n--- Adding Payment Tokens ---");
         factory.addPaymentToken(USDC);
@@ -129,7 +129,7 @@ contract DeployPortalSystem is Script {
         require(factory.sqd() == SQD, "SQD address mismatch");
         require(factory.isAllowedPaymentToken(USDC), "USDC not added as payment token");
         require(portalRegistry.factory() == d.factory, "Factory not set in registry");
-        require(factory.workerPoolAddress() == workerRewardPool, "Worker pool address not set");
+        require(FeeRouterModule(d.feeRouter).getWorkerPoolAddress() == workerRewardPool, "Worker pool address not set on FeeRouter");
         require(factory.minStakeThreshold() == MIN_STAKE_THRESHOLD, "Min stake threshold mismatch");
         require(factory.workerEpochLength() == WORKER_EPOCH_LENGTH, "Worker epoch length mismatch");
         console.log("Configuration verified successfully");
@@ -148,6 +148,10 @@ contract DeployPortalSystem is Script {
         // Grant admin role on Registry
         portalRegistry.grantRole(portalRegistry.DEFAULT_ADMIN_ROLE(), ADDITIONAL_ADMIN);
         console.log("Granted DEFAULT_ADMIN_ROLE on Registry");
+
+        // Grant admin role on FeeRouter
+        feeRouter.grantRole(feeRouter.DEFAULT_ADMIN_ROLE(), ADDITIONAL_ADMIN);
+        console.log("Granted DEFAULT_ADMIN_ROLE on FeeRouter");
     }
 
     function _printSummary(DeployedContracts memory d) internal pure {
@@ -180,6 +184,7 @@ contract DeployPortalSystem is Script {
         console.log("  Address:", ADDITIONAL_ADMIN);
         console.log("  Roles: DEFAULT_ADMIN_ROLE, POOL_DEPLOYER_ROLE (Factory)");
         console.log("  Roles: DEFAULT_ADMIN_ROLE (Registry)");
+        console.log("  Roles: DEFAULT_ADMIN_ROLE (FeeRouter)");
         console.log("========================================");
     }
 }
@@ -189,7 +194,7 @@ contract DeployArbitrum is Script {
     address public constant USDC = 0xaf88d065e77c8cC2239327C5EDb3A432268e5831;
 
     // Additional admin to be granted roles after deployment
-    address public constant ADDITIONAL_ADMIN = 0xc423362be9db384B79B7A8b21d68B65E3f1c63a7;
+    address public constant ADDITIONAL_ADMIN = 0x2A2fBDef84219BdAa0C657e45447D6BDd7EDAaE2;
 
     uint256 public constant MIN_STAKE_THRESHOLD = 100_000 ether;
     uint256 public constant MAX_POOL_CAPACITY = 10_000_000 ether;
@@ -243,6 +248,11 @@ contract DeployArbitrum is Script {
         portalRegistry.setFactory(address(factory));
         console.log("Factory set in PortalRegistry");
 
+        console.log("\n--- Setting Worker Pool Address on FeeRouter ---");
+        address workerRewardPool = 0xFa27FdC303FA02F6F21Ec8F597421b7B34BD61Ee;
+        feeRouter.setWorkerPoolAddress(workerRewardPool);
+        console.log("Worker pool address set on FeeRouter to:", workerRewardPool);
+
         console.log("\n--- Granting Roles to Additional Admin ---");
         console.log("Additional Admin:", ADDITIONAL_ADMIN);
 
@@ -257,6 +267,10 @@ contract DeployArbitrum is Script {
         // Grant admin role on Registry
         portalRegistry.grantRole(portalRegistry.DEFAULT_ADMIN_ROLE(), ADDITIONAL_ADMIN);
         console.log("Granted DEFAULT_ADMIN_ROLE on Registry");
+
+        // Grant admin role on FeeRouter
+        feeRouter.grantRole(feeRouter.DEFAULT_ADMIN_ROLE(), ADDITIONAL_ADMIN);
+        console.log("Granted DEFAULT_ADMIN_ROLE on FeeRouter");
 
         vm.stopBroadcast();
 

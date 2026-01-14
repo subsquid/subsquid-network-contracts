@@ -362,8 +362,12 @@ contract PortalPoolImplementationTest is BaseTest {
         portal = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "RewardPortalMissingWorker");
         pool = PortalPoolImplementation(portal);
 
-        // Set factory's worker pool address to zero
-        factory.setWorkerPoolAddress(address(0));
+        // Create a new feeRouter without workerPoolAddress set
+        FeeRouterModule newFeeRouter = new FeeRouterModule();
+        // Note: workerPoolAddress is not set (remains address(0))
+
+        // Update factory to use this new feeRouter
+        factory.setFeeRouter(address(newFeeRouter));
 
         uint256 rewardAmount = 1000 * 1e6;
 

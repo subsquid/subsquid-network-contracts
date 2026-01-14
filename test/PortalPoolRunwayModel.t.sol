@@ -108,7 +108,7 @@ contract PortalPoolRunwayModelTest is Test {
 
         registry.setFactory(address(factory));
         factory.addPaymentToken(address(usdc));
-        factory.setWorkerPoolAddress(workerRewardPool);
+        feeRouter.setWorkerPoolAddress(workerRewardPool);
         factory.setDefaultWhitelistEnabled(false);
 
         sqd.mint(operator, 100_000_000);
@@ -488,10 +488,13 @@ contract PortalPoolRunwayModelTest is Test {
     }
 
     function test_TopUpRewards_RevertsIfWorkerPoolNotSet() public {
-        feeRouter.setFeeConfig(5000, 5000, 0);
+        // Create a new feeRouter without workerPoolAddress set
+        FeeRouterModule newFeeRouter = new FeeRouterModule();
+        newFeeRouter.setFeeConfig(5000, 5000, 0);
+        // Note: workerPoolAddress is not set (remains address(0))
 
-        // Set factory's worker pool address to zero
-        factory.setWorkerPoolAddress(address(0));
+        // Update factory to use this new feeRouter
+        factory.setFeeRouter(address(newFeeRouter));
 
         vm.startPrank(operator);
         usdc.approve(address(pool), 10000);

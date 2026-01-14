@@ -77,7 +77,7 @@ abstract contract BaseTest is Test {
         factory.addPaymentToken(address(usdc));
         factory.addPaymentToken(address(dai));
 
-        factory.setWorkerPoolAddress(workerRewardPool);
+        feeRouter.setWorkerPoolAddress(workerRewardPool);
 
         factory.setMaxDistributionRate(type(uint256).max);
 

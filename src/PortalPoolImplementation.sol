@@ -387,18 +387,22 @@ contract PortalPoolImplementation is
         uint256 received = _rewardToken.balanceOf(address(this)) - balanceBefore;
 
         // split based on actual received amount - get feeRouter from factory for upgradeability
+        address feeRouter = _factory.feeRouter();
         (uint256 toProviders, uint256 toWorkerPool, uint256 toBurn) =
-            IFeeRouter(_factory.feeRouter()).calculateSplit(received);
+            IFeeRouter(feeRouter).calculateSplit(received);
 
-        address workerPool = _factory.workerPoolAddress();
+        // Route via FeeRouter (FeeRouter pulls and forwards)
+        uint256 toRoute = toWorkerPool + toBurn;
+        if (toRoute > 0) {
+            _rewardToken.forceApprove(feeRouter, toRoute);
+        }
+
         if (toWorkerPool > 0) {
-            if (workerPool == address(0)) revert PoolErrors.InvalidAddress();
-            _rewardToken.safeTransfer(workerPool, toWorkerPool);
+            IFeeRouter(feeRouter).routeToWorkerPool(address(_rewardToken), toWorkerPool);
         }
 
         if (toBurn > 0) {
-            address burn = IFeeRouter(_factory.feeRouter()).getBurnAddress();
-            _rewardToken.safeTransfer(burn, toBurn);
+            IFeeRouter(feeRouter).routeToBurn(address(_rewardToken), toBurn);
         }
 
         // Update credit/debt: checkpoint current state then add toProviders
@@ -429,18 +433,22 @@ contract PortalPoolImplementation is
         if (msg.sender != address(_factory)) revert PoolErrors.NotFactory();
         if (credit > 0 || debt > 0) revert PoolErrors.AlreadyInitialized();
 
+        address feeRouter = _factory.feeRouter();
         (uint256 toProviders, uint256 toWorkerPool, uint256 toBurn) =
-            IFeeRouter(_factory.feeRouter()).calculateSplit(amount);
+            IFeeRouter(feeRouter).calculateSplit(amount);
+
+        // Route via FeeRouter (FeeRouter pulls and forwards)
+        uint256 toRoute = toWorkerPool + toBurn;
+        if (toRoute > 0) {
+            _rewardToken.forceApprove(feeRouter, toRoute);
+        }
 
         if (toWorkerPool > 0) {
-            address workerPool = _factory.workerPoolAddress();
-            if (workerPool == address(0)) revert PoolErrors.InvalidAddress();
-            _rewardToken.safeTransfer(workerPool, toWorkerPool);
+            IFeeRouter(feeRouter).routeToWorkerPool(address(_rewardToken), toWorkerPool);
         }
 
         if (toBurn > 0) {
-            address burn = IFeeRouter(_factory.feeRouter()).getBurnAddress();
-            _rewardToken.safeTransfer(burn, toBurn);
+            IFeeRouter(feeRouter).routeToBurn(address(_rewardToken), toBurn);
         }
 
         credit = toProviders;

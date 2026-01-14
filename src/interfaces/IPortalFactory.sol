@@ -21,7 +21,6 @@ interface IPortalFactory {
     event MaxPaymentTokensUpdated(uint256 oldValue, uint256 newValue);
     event ExitUnlockRateUpdated(uint256 oldValue, uint256 newValue);
     event CollectionDeadlineUpdated(uint256 oldValue, uint256 newValue);
-    event WorkerPoolAddressUpdated(address indexed oldValue, address indexed newValue);
     event FeeRouterUpdated(address indexed oldValue, address indexed newValue);
     event MaxDistributionRateUpdated(uint256 oldValue, uint256 newValue);
     event MinDistributionRateUpdated(uint256 oldValue, uint256 newValue);
@@ -75,12 +74,10 @@ interface IPortalFactory {
     function setMaxPaymentTokens(uint256 value) external;
     function setExitUnlockRate(uint256 ratePerSecond) external;
     function setCollectionDeadline(uint256 seconds_) external;
-    function setWorkerPoolAddress(address _workerPoolAddress) external;
     function setMaxDistributionRate(uint256 ratePerSecond) external;
     function setMinDistributionRate(uint256 ratePerSecond) external;
     function setMinStakeThreshold(uint256 _minStakeThreshold) external;
     function setWorkerEpochLength(uint256 _workerEpochLength) external;
-    function workerPoolAddress() external view returns (address);
     function feeRouter() external view returns (address);
     function setFeeRouter(address _feeRouter) external;
     function maxDistributionRatePerSecond() external view returns (uint256);

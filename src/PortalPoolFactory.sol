@@ -52,7 +52,6 @@ contract PortalPoolFactory is
     uint256 public maxPaymentTokens;
     uint256 public exitUnlockRatePerSecond;
     uint256 public collectionDeadlineSeconds;
-    address public workerPoolAddress;
     uint256 public maxDistributionRatePerSecond;
     uint256 public minDistributionRatePerSecond;
 
@@ -148,7 +147,7 @@ contract PortalPoolFactory is
         }
 
         IFeeRouter.FeeConfig memory feeConfig = IFeeRouter(feeRouter).getFeeConfig();
-        if (feeConfig.toWorkerPoolBPS > 0 && workerPoolAddress == address(0)) {
+        if (feeConfig.toWorkerPoolBPS > 0 && IFeeRouter(feeRouter).getWorkerPoolAddress() == address(0)) {
             revert PoolErrors.InvalidAddress();
         }
 
@@ -297,12 +296,6 @@ contract PortalPoolFactory is
         uint256 oldValue = collectionDeadlineSeconds;
         collectionDeadlineSeconds = seconds_;
         emit CollectionDeadlineUpdated(oldValue, seconds_);
-    }
-
-    function setWorkerPoolAddress(address _workerPoolAddress) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        address oldValue = workerPoolAddress;
-        workerPoolAddress = _workerPoolAddress;
-        emit WorkerPoolAddressUpdated(oldValue, _workerPoolAddress);
     }
 
     function setFeeRouter(address _feeRouter) external onlyRole(DEFAULT_ADMIN_ROLE) {

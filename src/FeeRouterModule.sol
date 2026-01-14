@@ -2,6 +2,8 @@
 pragma solidity 0.8.28;
 
 import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {IFeeRouter} from "./interfaces/IFeeRouter.sol";
 import {PoolErrors} from "./libs/PoolErrors.sol";
 import {FullMath} from "./libs/FullMath.sol";
@@ -10,10 +12,13 @@ import {FullMath} from "./libs/FullMath.sol";
 /// @notice Manages fee distribution configuration between providers, worker pool, and burn
 /// @dev uses basis points (BPS) for fee splits, must sum to 10000 (100%)
 contract FeeRouterModule is AccessControl, IFeeRouter {
+    using SafeERC20 for IERC20;
+
     uint256 public constant BASIS_POINTS = 10000;
 
     FeeConfig public feeConfig;
     address public burnAddress;
+    address public workerPoolAddress;
 
     /**
      * @dev initializes the fee router with default 50/50 split between providers and worker pool.
@@ -106,5 +111,47 @@ contract FeeRouterModule is AccessControl, IFeeRouter {
      */
     function getBurnAddress() external view returns (address) {
         return burnAddress;
+    }
+
+    /**
+     * @dev sets the worker pool address.
+     * @param _workerPoolAddress the new worker pool address.
+     */
+    function setWorkerPoolAddress(address _workerPoolAddress) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (_workerPoolAddress == address(0)) revert PoolErrors.InvalidAddress();
+        workerPoolAddress = _workerPoolAddress;
+        emit WorkerPoolAddressUpdated(_workerPoolAddress);
+    }
+
+    /**
+     * @dev returns the current worker pool address.
+     */
+    function getWorkerPoolAddress() external view returns (address) {
+        return workerPoolAddress;
+    }
+
+    /**
+     * @dev routes tokens from caller to worker pool.
+     * @notice Caller must approve this contract first.
+     * @param rewardToken the token to route.
+     * @param amount the amount to route.
+     */
+    function routeToWorkerPool(address rewardToken, uint256 amount) external {
+        if (amount == 0) return;
+        if (workerPoolAddress == address(0)) revert PoolErrors.InvalidAddress();
+        IERC20(rewardToken).safeTransferFrom(msg.sender, workerPoolAddress, amount);
+        emit RoutedToWorkerPool(msg.sender, rewardToken, amount);
+    }
+
+    /**
+     * @dev routes tokens from caller to burn address.
+     * @notice Caller must approve this contract first.
+     * @param rewardToken the token to route.
+     * @param amount the amount to route.
+     */
+    function routeToBurn(address rewardToken, uint256 amount) external {
+        if (amount == 0) return;
+        IERC20(rewardToken).safeTransferFrom(msg.sender, burnAddress, amount);
+        emit RoutedToBurn(msg.sender, rewardToken, amount);
     }
 }

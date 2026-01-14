@@ -111,7 +111,7 @@ contract ActiveStakeCapacityE2ETest is Test {
 
         registry.setFactory(address(factory));
         factory.addPaymentToken(address(usdc));
-        factory.setWorkerPoolAddress(workerRewardPool);
+        feeRouter.setWorkerPoolAddress(workerRewardPool);
         factory.setDefaultWhitelistEnabled(false);
 
         for (uint256 i = 0; i < 10; i++) {

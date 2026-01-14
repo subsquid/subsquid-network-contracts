@@ -130,7 +130,7 @@ contract PortalPoolE2ETest is Test {
 
         registry.setFactory(address(factory));
         factory.addPaymentToken(address(usdc));
-        factory.setWorkerPoolAddress(workerRewardPool);
+        feeRouter.setWorkerPoolAddress(workerRewardPool);
         factory.setDefaultWhitelistEnabled(false);
 
         _setupStakers();
