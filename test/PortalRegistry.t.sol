@@ -100,25 +100,6 @@ contract PortalRegistryTest is BaseTest {
         assertTrue(cluster.active);
     }
 
-    function test_ActivateCluster_RevertOnNonCluster() public {
-        vm.prank(user1);
-        vm.expectRevert(PortalRegistryErrors.ClusterNotRegistered.selector);
-        registry.activateCluster();
-    }
-
-    function test_ActivateCluster_NoOpWhenAlreadyActive() public {
-        address clusterAddress = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "TestCluster");
-
-        IPortalRegistry.Cluster memory clusterBefore = registry.getClusterByAddress(clusterAddress);
-        assertTrue(clusterBefore.active);
-
-        vm.prank(clusterAddress);
-        registry.activateCluster();
-
-        IPortalRegistry.Cluster memory clusterAfter = registry.getClusterByAddress(clusterAddress);
-        assertTrue(clusterAfter.active);
-    }
-
     function test_Unstake_Success() public {
         address clusterAddress = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "TestCluster");
 

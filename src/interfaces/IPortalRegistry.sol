@@ -82,8 +82,6 @@ interface IPortalRegistry {
 
     function unstake(address provider, uint256 amount) external;
 
-    function activateCluster() external;
-
     function pause() external;
 
     function unpause() external;

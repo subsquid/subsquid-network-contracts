@@ -165,7 +165,7 @@ contract PortalPoolImplementation is
 
         // Update user's reward debt for new activeStake
         uint256 activeStake = _getUserActiveStake(msg.sender);
-        _rewardDebt[msg.sender] = FullMath.mulDiv(activeStake, rewardPerStakeStored, ACC);
+        _rewardCheckpoint[msg.sender] = FullMath.mulDiv(activeStake, rewardPerStakeStored, ACC);
 
         bool shouldActivate = !_poolInfo.firstActivated && _poolInfo.totalStaked >= _poolInfo.capacity;
 
@@ -184,7 +184,6 @@ contract PortalPoolImplementation is
             // Use forceApprove for USDT-style token compatibility (reset to 0 first)
             _sqd.forceApprove(address(_portalRegistry), _poolInfo.totalStaked);
             _portalRegistry.stake(_poolInfo.totalStaked);
-            _portalRegistry.activateCluster();
 
             emit StateChanged(PoolState.COLLECTING, PoolState.ACTIVE);
         } else if (currentState != PoolState.COLLECTING) {
@@ -194,7 +193,6 @@ contract PortalPoolImplementation is
             _portalRegistry.stake(actualReceived);
 
             if (isRecoveringFromIdle) {
-                _portalRegistry.activateCluster();
                 emit StateChanged(PoolState.IDLE, PoolState.ACTIVE);
             }
         }
@@ -243,7 +241,7 @@ contract PortalPoolImplementation is
 
         // Update user's reward debt for new activeStake
         uint256 activeStake = _getUserActiveStake(msg.sender);
-        _rewardDebt[msg.sender] = FullMath.mulDiv(activeStake, rewardPerStakeStored, ACC);
+        _rewardCheckpoint[msg.sender] = FullMath.mulDiv(activeStake, rewardPerStakeStored, ACC);
 
         lptToken.burn(msg.sender, amount);
 
@@ -309,8 +307,8 @@ contract PortalPoolImplementation is
         // Update reward debts for new activeStakes
         uint256 fromActiveStake = _getUserActiveStake(from);
         uint256 toActiveStake = _getUserActiveStake(to);
-        _rewardDebt[from] = FullMath.mulDiv(fromActiveStake, rewardPerStakeStored, ACC);
-        _rewardDebt[to] = FullMath.mulDiv(toActiveStake, rewardPerStakeStored, ACC);
+        _rewardCheckpoint[from] = FullMath.mulDiv(fromActiveStake, rewardPerStakeStored, ACC);
+        _rewardCheckpoint[to] = FullMath.mulDiv(toActiveStake, rewardPerStakeStored, ACC);
 
         emit StakeTransferred(from, to, amount);
     }
@@ -650,8 +648,8 @@ contract PortalPoolImplementation is
 
         // Calculate pending based on activeStake
         uint256 accumulated = FullMath.mulDiv(activeStake, newRPS, ACC);
-        uint256 userDebt = _rewardDebt[delegator];
-        uint256 pending = accumulated > userDebt ? accumulated - userDebt : 0;
+        uint256 checkpoint = _rewardCheckpoint[delegator];
+        uint256 pending = accumulated > checkpoint ? accumulated - checkpoint : 0;
 
         return _unclaimedRewards[delegator] + pending;
     }
@@ -716,8 +714,8 @@ contract PortalPoolImplementation is
         } else {
             (uint256 newRPS,) = _simulateGlobalAccrual(block.timestamp);
             uint256 accumulated = FullMath.mulDiv(userStake, newRPS, ACC);
-            uint256 userDebt = _rewardDebt[user];
-            uint256 pending = accumulated > userDebt ? accumulated - userDebt : 0;
+            uint256 checkpoint = _rewardCheckpoint[user];
+            uint256 pending = accumulated > checkpoint ? accumulated - checkpoint : 0;
             userRewards = _unclaimedRewards[user] + pending;
         }
     }
@@ -945,12 +943,12 @@ contract PortalPoolImplementation is
         uint256 activeStake = _getUserActiveStake(user);
         if (activeStake > 0) {
             uint256 accumulated = FullMath.mulDiv(activeStake, rewardPerStakeStored, ACC);
-            uint256 userDebt = _rewardDebt[user];
-            uint256 pending = accumulated > userDebt ? accumulated - userDebt : 0;
+            uint256 checkpoint = _rewardCheckpoint[user];
+            uint256 pending = accumulated > checkpoint ? accumulated - checkpoint : 0;
             _unclaimedRewards[user] += pending;
-            _rewardDebt[user] = accumulated;
+            _rewardCheckpoint[user] = accumulated;
         } else if (_stakes[user] > 0) {
-            _rewardDebt[user] = 0;
+            _rewardCheckpoint[user] = 0;
         }
     }
 

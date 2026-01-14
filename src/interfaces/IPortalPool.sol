@@ -29,11 +29,6 @@ interface IPortalPool {
         bool withdrawn;
     }
 
-    struct DelegatorCheckpoint {
-        uint256 lastClaimedBalanceScaled;
-        uint256 lastTimestamp;
-    }
-
     struct InitParams {
         address operator;
         uint256 capacity;

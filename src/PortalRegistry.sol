@@ -342,6 +342,13 @@ contract PortalRegistry is
 
         cluster.totalStaked += amount;
 
+        // auto-activate when stake threshold is met
+        uint256 minStakeThreshold = IPortalFactory(factory).minStakeThreshold();
+        if (!cluster.active && cluster.totalStaked >= minStakeThreshold) {
+            cluster.active = true;
+            emit ClusterActivated(clusterId);
+        }
+
         emit Staked(clusterId, amount);
     }
 
@@ -368,22 +375,6 @@ contract PortalRegistry is
         SQD.safeTransfer(provider, amount);
 
         emit Unstaked(clusterId, amount);
-    }
-
-    /// @inheritdoc IPortalRegistry
-    function activateCluster() external whenNotPaused {
-        bytes32 clusterId = addressToClusterId[msg.sender];
-        Cluster storage cluster = _clusters[clusterId];
-
-        if (cluster.clusterAddress == address(0)) {
-            revert PortalRegistryErrors.ClusterNotRegistered();
-        }
-        if (cluster.active) {
-            return;
-        }
-
-        cluster.active = true;
-        emit ClusterActivated(clusterId);
     }
 
     /// @inheritdoc IPortalRegistry

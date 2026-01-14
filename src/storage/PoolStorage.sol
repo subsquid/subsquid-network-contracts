@@ -57,8 +57,8 @@ abstract contract PoolStorage {
     /// @notice treasury accumulated rewards
     uint256 public treasuryAccumulated;
 
-    /// @notice per-user reward debt (stake * RPS / ACC at last update)
-    mapping(address => uint256) internal _rewardDebt;
+    /// @notice per-user reward checkpoint (accumulated rewards at last update)
+    mapping(address => uint256) internal _rewardCheckpoint;
     /// @notice Per-user unclaimed rewards
     mapping(address => uint256) internal _unclaimedRewards;
 
