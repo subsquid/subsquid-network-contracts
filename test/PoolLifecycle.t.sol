@@ -370,21 +370,6 @@ contract PoolLifecycleTest is BaseTest {
         pool.setDistributionRate(minRate - 1);
     }
 
-    function test_SetDistributionRate_RevertOnInsufficientPrecision() public {
-        // Create pool with larger capacity
-        uint256 largeCapacity = 1e24; // Very large
-        address portal = _createAndActivatePortal(operator, largeCapacity, "PrecTest");
-        PortalPoolImplementation pool = PortalPoolImplementation(portal);
-
-        // Try to set a rate that would fail precision check
-        // perStakeRate = (rate * 1e27) / (capacity * 1000) < 1e12
-        uint256 tinyRate = 1000; // This will fail precision for large capacity
-
-        vm.prank(operator);
-        vm.expectRevert(PoolErrors.InsufficientRewardPrecision.selector);
-        pool.setDistributionRate(tinyRate);
-    }
-
     function test_RequestExit_RevertWhenClosed() public {
         address portal = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "ExitClosed");
         PortalPoolImplementation pool = PortalPoolImplementation(portal);

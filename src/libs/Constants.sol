@@ -30,6 +30,6 @@ library Constants {
 
     /// @notice minimum per-stake rate to prevent precision loss in reward calculations
     /// @dev ensures (rate * PRECISION) / (capacity * RATE_PRECISION) >= MIN_PER_STAKE_RATE
-    /// @dev equivalent to requiring capacity / rate <= 1e12
-    uint256 internal constant MIN_PER_STAKE_RATE = 1e12;
+    /// @dev set to 1e3 to support large capacity pools
+    uint256 internal constant MIN_PER_STAKE_RATE = 1e3;
 }
