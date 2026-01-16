@@ -26,8 +26,8 @@ contract FeeRouterModule is AccessControl, IFeeRouter {
     constructor() {
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
 
-        // 50/50 split: 50% to providers, 50% to worker pool
-        feeConfig = FeeConfig({toProvidersBPS: 5000, toWorkerPoolBPS: 5000, toBurnBPS: 0});
+        // 100% to providers, 0% to worker pool, 0% to burn
+        feeConfig = FeeConfig({toProvidersBPS: 10000, toWorkerPoolBPS: 0, toBurnBPS: 0});
         burnAddress = address(0xdead);
     }
 
@@ -82,6 +82,12 @@ contract FeeRouterModule is AccessControl, IFeeRouter {
     {
         if (toProvidersBPS + toWorkerPoolBPS + toBurnBPS != BASIS_POINTS) {
             revert PoolErrors.InvalidFeeConfig();
+        }
+        if (toWorkerPoolBPS > 0 && workerPoolAddress == address(0)) {
+            revert PoolErrors.InvalidAddress();
+        }
+        if (toBurnBPS > 0 && burnAddress == address(0)) {
+            revert PoolErrors.InvalidAddress();
         }
 
         feeConfig = FeeConfig({toProvidersBPS: toProvidersBPS, toWorkerPoolBPS: toWorkerPoolBPS, toBurnBPS: toBurnBPS});

@@ -358,26 +358,6 @@ contract PortalPoolImplementationTest is BaseTest {
         vm.stopPrank();
     }
 
-    function test_TopUpRewards_RevertOnMissingWorkerPool() public {
-        portal = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "RewardPortalMissingWorker");
-        pool = PortalPoolImplementation(portal);
-
-        // Create a new feeRouter without workerPoolAddress set
-        FeeRouterModule newFeeRouter = new FeeRouterModule();
-        // Note: workerPoolAddress is not set (remains address(0))
-
-        // Update factory to use this new feeRouter
-        factory.setFeeRouter(address(newFeeRouter));
-
-        uint256 rewardAmount = 1000 * 1e6;
-
-        vm.startPrank(operator);
-        usdc.approve(portal, rewardAmount);
-        vm.expectRevert(PoolErrors.InvalidAddress.selector);
-        pool.topUpRewards(rewardAmount);
-        vm.stopPrank();
-    }
-
     function test_ClaimRewards_Success() public {
         uint256 rate = _minRateForCapacity(MIN_STAKE_THRESHOLD);
         uint256 initialDeposit = rate * 1 days / 1000;

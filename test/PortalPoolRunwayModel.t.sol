@@ -487,19 +487,4 @@ contract PortalPoolRunwayModelTest is Test {
         assertEq(providerBalance, int256(initialCredit + 5000), "Provider balance should be initial + 50% of topup");
     }
 
-    function test_TopUpRewards_RevertsIfWorkerPoolNotSet() public {
-        // Create a new feeRouter without workerPoolAddress set
-        FeeRouterModule newFeeRouter = new FeeRouterModule();
-        newFeeRouter.setFeeConfig(5000, 5000, 0);
-        // Note: workerPoolAddress is not set (remains address(0))
-
-        // Update factory to use this new feeRouter
-        factory.setFeeRouter(address(newFeeRouter));
-
-        vm.startPrank(operator);
-        usdc.approve(address(pool), 10000);
-        vm.expectRevert(PoolErrors.InvalidAddress.selector);
-        pool.topUpRewards(10000);
-        vm.stopPrank();
-    }
 }

@@ -108,6 +108,8 @@ contract PortalPoolE2ETest is Test {
         registry = PortalRegistry(address(registryProxy));
         feeRouter = new FeeRouterModule();
 
+        // Must set worker pool address before configuring fee split with worker pool percentage
+        feeRouter.setWorkerPoolAddress(workerRewardPool);
         feeRouter.setFeeConfig(5000, 5000, 0);
 
         implementation = new PortalPoolImplementation();
@@ -130,7 +132,6 @@ contract PortalPoolE2ETest is Test {
 
         registry.setFactory(address(factory));
         factory.addPaymentToken(address(usdc));
-        feeRouter.setWorkerPoolAddress(workerRewardPool);
         factory.setDefaultWhitelistEnabled(false);
 
         _setupStakers();

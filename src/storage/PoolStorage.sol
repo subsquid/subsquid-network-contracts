@@ -27,7 +27,6 @@ abstract contract PoolStorage {
     IERC20 internal _sqd;
     IPortalRegistry internal _portalRegistry;
     IFeeRouter internal _feeRouter;
-    uint256 internal _minStakeThreshold;
     IPortalFactory internal _factory;
 
     IERC20 internal _rewardToken;

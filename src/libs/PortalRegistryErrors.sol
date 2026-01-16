@@ -9,6 +9,7 @@ library PortalRegistryErrors {
     error InvalidPortalIndex();
     error ClusterAlreadyRegistered();
     error ClusterNotRegistered();
+    error InvalidStakeTransfer();
     error MaxClustersReached();
     error MaxPortalsReached();
     error PeerIdInUse();

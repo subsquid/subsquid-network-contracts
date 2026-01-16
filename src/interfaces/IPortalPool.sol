@@ -38,7 +38,6 @@ interface IPortalPool {
         address rewardToken;
         address portalRegistry;
         address feeRouter;
-        uint256 minStakeThreshold;
         uint256 distributionRatePerSecond;
         string metadata;
     }

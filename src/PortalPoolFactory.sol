@@ -160,7 +160,6 @@ contract PortalPoolFactory is
             rewardToken: params.rewardToken,
             portalRegistry: portalRegistry,
             feeRouter: feeRouter,
-            minStakeThreshold: minStakeThreshold,
             distributionRatePerSecond: params.distributionRatePerSecond,
             metadata: params.metadata
         });

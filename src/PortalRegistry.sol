@@ -9,6 +9,7 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {IPortalRegistry} from "../src/interfaces/IPortalRegistry.sol";
 import {IPortalFactory} from "../src/interfaces/IPortalFactory.sol";
+import {IPortalPool} from "../src/interfaces/IPortalPool.sol";
 import {PortalRegistryErrors} from "../src/libs/PortalRegistryErrors.sol";
 import {FullMath} from "../src/libs/FullMath.sol";
 import {Multicall} from "../src/utils/Multicall.sol";
@@ -338,12 +339,15 @@ contract PortalRegistry is
             revert PortalRegistryErrors.ClusterNotRegistered();
         }
 
+        uint256 balanceBefore = SQD.balanceOf(address(this));
         SQD.safeTransferFrom(msg.sender, address(this), amount);
+        uint256 received = SQD.balanceOf(address(this)) - balanceBefore;
+        if (received != amount) revert PortalRegistryErrors.InvalidStakeTransfer();
 
-        cluster.totalStaked += amount;
+        cluster.totalStaked += received;
 
         // auto-activate when stake threshold is met
-        uint256 minStakeThreshold = IPortalFactory(factory).minStakeThreshold();
+        uint256 minStakeThreshold = IPortalPool(msg.sender).getMinCapacity();
         if (!cluster.active && cluster.totalStaked >= minStakeThreshold) {
             cluster.active = true;
             emit ClusterActivated(clusterId);
@@ -366,7 +370,7 @@ contract PortalRegistry is
 
         cluster.totalStaked -= amount;
 
-        uint256 minStakeThreshold = IPortalFactory(factory).minStakeThreshold();
+        uint256 minStakeThreshold = IPortalPool(msg.sender).getMinCapacity();
         if (cluster.active && cluster.totalStaked < minStakeThreshold) {
             cluster.active = false;
             emit ClusterDeactivated(clusterId);

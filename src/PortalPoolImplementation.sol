@@ -69,8 +69,7 @@ contract PortalPoolImplementation is
         _sqd = IERC20(params.sqd);
         _rewardToken = IERC20(params.rewardToken);
         _portalRegistry = IPortalRegistry(params.portalRegistry);
-        // _feeRouter storage slot preserved for upgrade compatibility but not used
-        _minStakeThreshold = params.minStakeThreshold;
+        _factory = IPortalFactory(msg.sender);
 
         // Rate interpretation: rate is in "raw units per second" scaled by RATE_PRECISION
         // Example: For USDC (6 decimals), rate=386000 gives ~$1000/month at full capacity
@@ -78,9 +77,8 @@ contract PortalPoolImplementation is
         if (rewardDecimals > 18) revert PoolErrors.InvalidDecimals();
         _rewardTokenDecimalScale = 10 ** rewardDecimals;
 
-        if (params.capacity < _minStakeThreshold) revert PoolErrors.BelowMinimum();
-
-        _factory = IPortalFactory(msg.sender);
+        // read minStakeThreshold from factory (globally configurable)
+        if (params.capacity < _factory.minStakeThreshold()) revert PoolErrors.BelowMinimum();
 
         _poolInfo.operator = params.operator;
         _poolInfo.capacity = params.capacity;
@@ -151,6 +149,7 @@ contract PortalPoolImplementation is
         uint256 balanceBefore = _sqd.balanceOf(address(this));
         _sqd.safeTransferFrom(msg.sender, address(this), amount);
         uint256 actualReceived = _sqd.balanceOf(address(this)) - balanceBefore;
+        if (actualReceived != amount) revert PoolErrors.InvalidStakeTransfer();
 
         // use actualReceived for all state updates (FoT protection)
         uint256 actualNewUserStake = _stakes[msg.sender] + actualReceived;
@@ -169,7 +168,7 @@ contract PortalPoolImplementation is
 
         bool shouldActivate = !_poolInfo.firstActivated && _poolInfo.totalStaked >= _poolInfo.capacity;
 
-        uint256 minStakeThreshold = _minStakeThreshold;
+        uint256 minStakeThreshold = _factory.minStakeThreshold();
         bool isRecoveringFromIdle = currentState == PoolState.IDLE && _poolInfo.totalStaked >= minStakeThreshold;
 
         if (shouldActivate) {
@@ -513,7 +512,7 @@ contract PortalPoolImplementation is
     function setCapacity(uint256 newCapacity) external onlyOperator {
         if (!_poolInfo.firstActivated) revert PoolErrors.NotActivated();
         if (newCapacity == _poolInfo.capacity) revert PoolErrors.NoChange();
-        uint256 minCapacity = _minStakeThreshold;
+        uint256 minCapacity = _factory.minStakeThreshold();
         if (newCapacity < minCapacity) revert PoolErrors.BelowMinimum();
         if (newCapacity < _poolInfo.totalStaked) revert PoolErrors.BelowCurrentStake();
 
@@ -611,7 +610,7 @@ contract PortalPoolImplementation is
         }
 
         if (info.firstActivated) {
-            uint256 minStake = _minStakeThreshold;
+            uint256 minStake = _factory.minStakeThreshold();
             if (info.totalStaked < minStake) {
                 return PoolState.IDLE;
             }
@@ -794,7 +793,7 @@ contract PortalPoolImplementation is
     }
 
     function getMinCapacity() external view returns (uint256) {
-        return _minStakeThreshold;
+        return _factory.minStakeThreshold();
     }
 
     function getWithdrawalWaitingTimestamp(uint256 amount) external view returns (uint256 unlockTimestamp) {
@@ -859,7 +858,7 @@ contract PortalPoolImplementation is
         if (!_poolInfo.firstActivated) return 0;
 
         uint256 activeStake = _getActiveStake();
-        uint256 minStake = _minStakeThreshold;
+        uint256 minStake = _factory.minStakeThreshold();
         if (_poolInfo.totalStaked < minStake) return 0;
         if (activeStake == 0) return 0;
         // treasuryRate + (providerRate * activeStake / capacity)
@@ -892,7 +891,7 @@ contract PortalPoolImplementation is
         newEffectiveTs = lastEffectiveRewardTs;
 
         uint256 activeStake = _getActiveStake();
-        uint256 minStake = _minStakeThreshold;
+        uint256 minStake = _factory.minStakeThreshold();
         // no accrual simulation if pool was never activated
         if (!_poolInfo.firstActivated || _poolInfo.totalStaked < minStake || activeStake == 0 || perStakeRateWad == 0) {
             return (newRPS, uint64(timestamp));
@@ -919,7 +918,7 @@ contract PortalPoolImplementation is
 
     function _accrueGlobal(uint256 timestamp, bool updateBalance) internal {
         uint256 activeStake = _getActiveStake();
-        uint256 minStake = _minStakeThreshold;
+        uint256 minStake = _factory.minStakeThreshold();
 
         if (_poolInfo.firstActivated && _poolInfo.totalStaked >= minStake && activeStake > 0 && perStakeRateWad > 0) {
             int256 runway = getRunway();

@@ -78,6 +78,7 @@ abstract contract BaseTest is Test {
         factory.addPaymentToken(address(dai));
 
         feeRouter.setWorkerPoolAddress(workerRewardPool);
+        feeRouter.setFeeConfig(5000, 5000, 0); // 50/50 split for tests
 
         factory.setMaxDistributionRate(type(uint256).max);
 

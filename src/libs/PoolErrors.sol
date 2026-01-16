@@ -18,6 +18,7 @@ library PoolErrors {
     error CapacityExceeded();
     error ExceedsWalletLimit();
     error NoStakeToWithdraw();
+    error InvalidStakeTransfer();
 
     // Exit queue errors
     error UseWithdrawFromFailed();
