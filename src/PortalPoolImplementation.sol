@@ -284,6 +284,9 @@ contract PortalPoolImplementation is
     function onLPTTransfer(address from, address to, uint256 amount) external whenNotPaused nonReentrant {
         if (msg.sender != address(lptToken)) revert PoolErrors.NotLPTToken();
 
+        // Prevent self-transfer stake inflation attack
+        if (from == to) return;
+
         if (whitelistEnabled && !whitelist[to]) revert PoolErrors.NotWhitelisted();
 
         uint256 senderStake = _stakes[from];
