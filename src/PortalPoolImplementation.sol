@@ -387,8 +387,7 @@ contract PortalPoolImplementation is
 
         // split based on actual received amount - get feeRouter from factory for upgradeability
         address feeRouter = _factory.feeRouter();
-        (uint256 toProviders, uint256 toWorkerPool, uint256 toBurn) =
-            IFeeRouter(feeRouter).calculateSplit(received);
+        (uint256 toProviders, uint256 toWorkerPool, uint256 toBurn) = IFeeRouter(feeRouter).calculateSplit(received);
 
         // Route via FeeRouter (FeeRouter pulls and forwards)
         uint256 toRoute = toWorkerPool + toBurn;
@@ -433,8 +432,7 @@ contract PortalPoolImplementation is
         if (credit > 0 || debt > 0) revert PoolErrors.AlreadyInitialized();
 
         address feeRouter = _factory.feeRouter();
-        (uint256 toProviders, uint256 toWorkerPool, uint256 toBurn) =
-            IFeeRouter(feeRouter).calculateSplit(amount);
+        (uint256 toProviders, uint256 toWorkerPool, uint256 toBurn) = IFeeRouter(feeRouter).calculateSplit(amount);
 
         // Route via FeeRouter (FeeRouter pulls and forwards)
         uint256 toRoute = toWorkerPool + toBurn;
@@ -769,7 +767,13 @@ contract PortalPoolImplementation is
     function getQueueStatusWithTimestamp(address provider, uint256 ticketId)
         external
         view
-        returns (uint256 processed, uint256 providerEndPos, uint256 secondsRemaining, bool ready, uint256 unlockTimestamp)
+        returns (
+            uint256 processed,
+            uint256 providerEndPos,
+            uint256 secondsRemaining,
+            bool ready,
+            uint256 unlockTimestamp
+        )
     {
         ExitQueueLib.Ticket storage ticket = _exitTickets[provider][ticketId];
         (processed, providerEndPos, secondsRemaining, ready) = ExitQueueLib.getStatus(_exitQueue, ticket);

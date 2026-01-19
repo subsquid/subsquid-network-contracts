@@ -486,5 +486,4 @@ contract PortalPoolRunwayModelTest is Test {
         // Provider balance = initial credit (100% to providers) + 50% of topup
         assertEq(providerBalance, int256(initialCredit + 5000), "Provider balance should be initial + 50% of topup");
     }
-
 }

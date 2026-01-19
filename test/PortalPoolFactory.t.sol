@@ -71,7 +71,9 @@ contract PortalPoolFactoryTest is BaseTest {
         usdc.approve(address(factory), initialDeposit);
 
         vm.expectEmit(false, true, true, false);
-        emit IPortalFactory.PoolCreated(address(0), operator, address(usdc), MIN_STAKE_THRESHOLD, rate, initialDeposit, "TestPortal", "");
+        emit IPortalFactory.PoolCreated(
+            address(0), operator, address(usdc), MIN_STAKE_THRESHOLD, rate, initialDeposit, "TestPortal", ""
+        );
 
         factory.createPortalPool(params);
     }

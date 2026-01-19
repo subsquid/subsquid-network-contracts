@@ -19,10 +19,6 @@ library ExitQueueLib {
         bool withdrawn; // whether already claimed
     }
 
-    error StillInQueue(uint256 currentPosition, uint256 requiredPosition);
-    error NoActiveExitRequest();
-    error AlreadyWithdrawn();
-
     /// @notice initialize the queue (call once at pool creation)
     /// @param self the queue state
     /// @param ratePerSecond the unlock rate (SQD per second, typically 1e18 for 18-decimal tokens)

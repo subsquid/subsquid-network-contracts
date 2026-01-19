@@ -113,7 +113,13 @@ interface IPortalPool {
     function getQueueStatusWithTimestamp(address provider, uint256 ticketId)
         external
         view
-        returns (uint256 processed, uint256 providerEndPos, uint256 secondsRemaining, bool ready, uint256 unlockTimestamp);
+        returns (
+            uint256 processed,
+            uint256 providerEndPos,
+            uint256 secondsRemaining,
+            bool ready,
+            uint256 unlockTimestamp
+        );
     function getTotalProcessed() external view returns (uint256);
     function getMetadata() external view returns (string memory);
     function getMinCapacity() external view returns (uint256);

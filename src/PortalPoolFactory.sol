@@ -229,7 +229,7 @@ contract PortalPoolFactory is
     function getOperatorPortals(address operator) external view returns (address[] memory) {
         uint256 count = operatorPortalCount[operator];
         address[] memory portals = new address[](count);
-        for (uint256 i = 0; i < count; i++) {
+        for (uint256 i = 0; i < count; ++i) {
             portals[i] = operatorPortalPools[operator][i];
         }
         return portals;
@@ -258,7 +258,7 @@ contract PortalPoolFactory is
 
         uint256 size = end - offset;
         address[] memory portals = new address[](size);
-        for (uint256 i = 0; i < size; i++) {
+        for (uint256 i = 0; i < size; ++i) {
             portals[i] = operatorPortalPools[operator][offset + i];
         }
         return portals;
@@ -395,5 +395,6 @@ contract PortalPoolFactory is
     }
 
     /// @dev authorizes contract upgrades (UUPS pattern).
+    // solhint-disable-next-line no-empty-blocks
     function _authorizeUpgrade(address newImplementation) internal virtual override onlyRole(DEFAULT_ADMIN_ROLE) {}
 }

@@ -14,12 +14,9 @@ interface IFeeRouterV2 is IFeeRouter {
     /// @return toProviders Amount returned to pool for provider distribution
     /// @return toWorkerPool Amount sent to worker pool
     /// @return sqdBought Amount of SQD bought and burned (0 if buyback skipped)
-    function routeFeesWithBuyback(
-        address rewardToken,
-        uint256 amount,
-        address workerPoolAddress,
-        uint256 minSqdOut
-    ) external returns (uint256 toProviders, uint256 toWorkerPool, uint256 sqdBought);
+    function routeFeesWithBuyback(address rewardToken, uint256 amount, address workerPoolAddress, uint256 minSqdOut)
+        external
+        returns (uint256 toProviders, uint256 toWorkerPool, uint256 sqdBought);
 
     /// @notice Configures buyback parameters
     /// @param pancakeRouter PancakeSwap V3 SmartRouter address
@@ -42,22 +39,10 @@ interface IFeeRouterV2 is IFeeRouter {
     function getBuybackConfig()
         external
         view
-        returns (
-            address router,
-            address sqdToken,
-            uint24 fee,
-            uint16 slippage,
-            uint256 minThreshold,
-            bool enabled
-        );
+        returns (address router, address sqdToken, uint24 fee, uint16 slippage, uint256 minThreshold, bool enabled);
 
     /// @notice Emitted when a buyback is executed
-    event BuybackExecuted(
-        address indexed rewardToken,
-        uint256 amountIn,
-        uint256 sqdBought,
-        address indexed recipient
-    );
+    event BuybackExecuted(address indexed rewardToken, uint256 amountIn, uint256 sqdBought, address indexed recipient);
 
     /// @notice Emitted when buyback config is updated
     event BuybackConfigUpdated(

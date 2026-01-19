@@ -129,7 +129,10 @@ contract DeployPortalSystem is Script {
         require(factory.sqd() == SQD, "SQD address mismatch");
         require(factory.isAllowedPaymentToken(USDC), "USDC not added as payment token");
         require(portalRegistry.factory() == d.factory, "Factory not set in registry");
-        require(FeeRouterModule(d.feeRouter).getWorkerPoolAddress() == workerRewardPool, "Worker pool address not set on FeeRouter");
+        require(
+            FeeRouterModule(d.feeRouter).getWorkerPoolAddress() == workerRewardPool,
+            "Worker pool address not set on FeeRouter"
+        );
         require(factory.minStakeThreshold() == MIN_STAKE_THRESHOLD, "Min stake threshold mismatch");
         require(factory.workerEpochLength() == WORKER_EPOCH_LENGTH, "Worker epoch length mismatch");
         console.log("Configuration verified successfully");

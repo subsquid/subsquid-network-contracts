@@ -34,6 +34,7 @@ contract PortalRegistry is
     uint8 public constant MAX_PORTALS_PER_CLUSTER = 10;
     uint256 public constant MAX_CLUSTERS_PER_OWNER = 100;
 
+    // solhint-disable-next-line var-name-mixedcase
     IERC20 public SQD;
 
     mapping(bytes32 => Cluster) internal _clusters;
@@ -417,5 +418,6 @@ contract PortalRegistry is
         return keccak256(abi.encodePacked(clusterAddress, block.chainid, block.number));
     }
 
+    // solhint-disable-next-line no-empty-blocks
     function _authorizeUpgrade(address newImplementation) internal override onlyRole(DEFAULT_ADMIN_ROLE) {}
 }
