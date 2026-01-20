@@ -218,7 +218,9 @@ contract PortalPoolRunwayModelTest is Test {
 
         vm.warp(block.timestamp + runwayDuration + 1000);
 
-        (int256 balance, uint256 debt,, bool isDry) = pool.getRewardStatus();
+        int256 balance = int256(pool.getCredit()) - int256(pool.getDebt());
+        uint256 debt = pool.getDebt();
+        bool isDry = pool.getCredit() == 0;
 
         assertTrue(isDry, "Should be dry");
         assertTrue(balance <= 0, "Balance should be <= 0");

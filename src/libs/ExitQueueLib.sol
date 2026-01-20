@@ -100,7 +100,11 @@ library ExitQueueLib {
     /// @param ticket the exit ticket to check
     /// @param unlockRatePerSecond the unlock rate fetched from factory
     /// @return true if the ticket can be withdrawn
-    function isUnlocked(Queue storage self, Ticket storage ticket, uint256 unlockRatePerSecond) internal view returns (bool) {
+    function isUnlocked(Queue storage self, Ticket storage ticket, uint256 unlockRatePerSecond)
+        internal
+        view
+        returns (bool)
+    {
         return !ticket.withdrawn && ticket.amount > 0 && totalProcessed(self, unlockRatePerSecond) >= ticket.endPosition;
     }
 
@@ -109,7 +113,10 @@ library ExitQueueLib {
     /// @param amount the SQD amount being requested for exit
     /// @param unlockRatePerSecond the unlock rate fetched from factory
     /// @return endPosition the queue position when this request will be unlocked
-    function enqueue(Queue storage self, uint256 amount, uint256 unlockRatePerSecond) internal returns (uint256 endPosition) {
+    function enqueue(Queue storage self, uint256 amount, uint256 unlockRatePerSecond)
+        internal
+        returns (uint256 endPosition)
+    {
         _sync(self, unlockRatePerSecond);
 
         endPosition = self.totalRequested + amount;
@@ -121,7 +128,11 @@ library ExitQueueLib {
     /// @param ticket the exit ticket to check
     /// @param unlockRatePerSecond the unlock rate fetched from factory
     /// @return seconds remaining until unlocked, or type(uint256).max if rate is zero
-    function secondsUntilUnlocked(Queue storage self, Ticket storage ticket, uint256 unlockRatePerSecond) internal view returns (uint256) {
+    function secondsUntilUnlocked(Queue storage self, Ticket storage ticket, uint256 unlockRatePerSecond)
+        internal
+        view
+        returns (uint256)
+    {
         uint256 processed = totalProcessed(self, unlockRatePerSecond);
         if (processed >= ticket.endPosition) {
             return 0;

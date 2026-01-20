@@ -255,14 +255,14 @@ contract PortalPoolImplementationTest is BaseTest {
         assertEq(ticket.amount, SMALL_STAKE);
         assertFalse(ticket.withdrawn);
 
-        (uint256 processed, uint256 providerEndPos, uint256 secondsRemaining, bool ready) =
-            pool.getQueueStatus(user1, ticketId);
+        (uint256 processed, uint256 providerEndPos, uint256 secondsRemaining, bool ready,) =
+            pool.getQueueStatusWithTimestamp(user1, ticketId);
         assertFalse(ready);
         assertTrue(secondsRemaining > 0);
 
         vm.warp(block.timestamp + SMALL_STAKE / 1e18 + 1);
 
-        (processed, providerEndPos, secondsRemaining, ready) = pool.getQueueStatus(user1, ticketId);
+        (processed, providerEndPos, secondsRemaining, ready,) = pool.getQueueStatusWithTimestamp(user1, ticketId);
         assertTrue(ready);
         assertEq(secondsRemaining, 0);
     }
@@ -286,7 +286,7 @@ contract PortalPoolImplementationTest is BaseTest {
         vm.prank(user1);
         uint256 ticketId = pool.requestExit(SMALL_STAKE);
 
-        (,, uint256 secondsRemaining,) = pool.getQueueStatus(user1, ticketId);
+        (,, uint256 secondsRemaining,,) = pool.getQueueStatusWithTimestamp(user1, ticketId);
         vm.warp(block.timestamp + secondsRemaining + 1);
 
         vm.prank(user1);
@@ -511,8 +511,8 @@ contract PortalPoolImplementationTest is BaseTest {
         vm.prank(user1);
         uint256 ticketId = pool.requestExit(SMALL_STAKE);
 
-        (uint256 processed, uint256 providerEndPos, uint256 secondsRemaining, bool ready) =
-            pool.getQueueStatus(user1, ticketId);
+        (uint256 processed, uint256 providerEndPos, uint256 secondsRemaining, bool ready,) =
+            pool.getQueueStatusWithTimestamp(user1, ticketId);
 
         assertEq(processed, 0);
         assertEq(providerEndPos, SMALL_STAKE);
@@ -521,7 +521,7 @@ contract PortalPoolImplementationTest is BaseTest {
 
         vm.warp(block.timestamp + SMALL_STAKE / 1e18 + 1);
 
-        (processed, providerEndPos, secondsRemaining, ready) = pool.getQueueStatus(user1, ticketId);
+        (processed, providerEndPos, secondsRemaining, ready,) = pool.getQueueStatusWithTimestamp(user1, ticketId);
 
         assertTrue(processed >= SMALL_STAKE);
         assertEq(secondsRemaining, 0);

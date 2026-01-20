@@ -140,7 +140,8 @@ contract FeeRouterDustTest is BaseTest {
         vm.warp(block.timestamp + 1 hours);
 
         // Get balance and debt before topup
-        (int256 balanceBefore, uint256 debtBefore,,) = pool.getRewardStatus();
+        int256 balanceBefore = int256(pool.getCredit()) - int256(pool.getDebt());
+        uint256 debtBefore = pool.getDebt();
 
         // Top up - this exercises both debt payment branches
         uint256 topUpAmount = 1000 * 1e6;

@@ -16,7 +16,6 @@ contract OperatorTransferEdgeCasesTest is BaseTest {
         vm.label(newOperator, "NewOperator");
     }
 
-
     function test_transferOperator_bypassesMaxClustersLimit() public {
         for (uint256 i = 0; i < 100; i++) {
             _createPortal(newOperator, MIN_STAKE_THRESHOLD, string(abi.encodePacked("POOL", i)));

@@ -88,7 +88,6 @@ interface IPortalPool {
         returns (int256 balance, uint256 currentDebt, int256 runwayTimestamp, bool isDry);
     function getCredit() external view returns (uint256);
     function getDebt() external view returns (uint256);
-    function isOutOfMoney() external view returns (bool);
     function getPoolStatusWithRewards(address provider)
         external
         view
@@ -106,10 +105,6 @@ interface IPortalPool {
     function getActiveStake() external view returns (uint256);
     function getComputationUnits() external view returns (uint256);
     function getState() external view returns (PoolState);
-    function getQueueStatus(address provider, uint256 ticketId)
-        external
-        view
-        returns (uint256 processed, uint256 providerEndPos, uint256 secondsRemaining, bool ready);
 
     function getQueueStatusWithTimestamp(address provider, uint256 ticketId)
         external
@@ -122,7 +117,6 @@ interface IPortalPool {
             uint256 unlockTimestamp
         );
     function getTotalProcessed() external view returns (uint256);
-    function getMetadata() external view returns (string memory);
     function getMinCapacity() external view returns (uint256);
     function getWithdrawalWaitingTimestamp(uint256 amount) external view returns (uint256 unlockTimestamp);
 

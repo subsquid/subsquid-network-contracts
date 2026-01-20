@@ -226,7 +226,7 @@ contract TransferOperatorTest is BaseTest {
         PortalPoolImplementation(portal).setMetadata(newMetadata);
 
         // Verify metadata updated in registry
-        string memory storedMetadata = IPortalPool(portal).getMetadata();
+        string memory storedMetadata = registry.getClusterByAddress(portal).metadata;
         assertEq(storedMetadata, newMetadata);
     }
 
@@ -257,7 +257,7 @@ contract TransferOperatorTest is BaseTest {
         vm.prank(newOperator);
         PortalPoolImplementation(portal).setMetadata(newMetadata);
 
-        assertEq(IPortalPool(portal).getMetadata(), newMetadata);
+        assertEq(registry.getClusterByAddress(portal).metadata, newMetadata);
     }
 
     function test_setMetadata_oldOperatorCannotSetAfterTransfer() public {
@@ -275,13 +275,13 @@ contract TransferOperatorTest is BaseTest {
         vm.startPrank(operator);
 
         PortalPoolImplementation(portal).setMetadata("First update");
-        assertEq(IPortalPool(portal).getMetadata(), "First update");
+        assertEq(registry.getClusterByAddress(portal).metadata, "First update");
 
         PortalPoolImplementation(portal).setMetadata("Second update");
-        assertEq(IPortalPool(portal).getMetadata(), "Second update");
+        assertEq(registry.getClusterByAddress(portal).metadata, "Second update");
 
         PortalPoolImplementation(portal).setMetadata("");
-        assertEq(IPortalPool(portal).getMetadata(), "");
+        assertEq(registry.getClusterByAddress(portal).metadata, "");
 
         vm.stopPrank();
     }
@@ -312,7 +312,7 @@ contract TransferOperatorTest is BaseTest {
         vm.prank(newOperator);
         registry.setClusterMetadata(clusterId, "Set by new operator");
 
-        assertEq(IPortalPool(portal).getMetadata(), "Set by new operator");
+        assertEq(registry.getClusterByAddress(portal).metadata, "Set by new operator");
 
         // Old operator cannot call setClusterMetadata on registry anymore
         vm.prank(operator);

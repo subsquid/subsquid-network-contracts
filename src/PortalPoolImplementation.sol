@@ -11,7 +11,6 @@ import {ExitQueueLib} from "./libs/ExitQueueLib.sol";
 import {FullMath} from "./libs/FullMath.sol";
 import {Constants} from "./libs/Constants.sol";
 import {LiquidPortalToken} from "./LiquidPortalToken.sol";
-import {Multicall} from "./utils/Multicall.sol";
 import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import {AccessControlUpgradeable} from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
 import {PausableUpgradeable} from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
@@ -30,8 +29,7 @@ contract PortalPoolImplementation is
     Initializable,
     AccessControlUpgradeable,
     PausableUpgradeable,
-    ReentrancyGuard,
-    Multicall
+    ReentrancyGuard
 {
     using SafeERC20 for IERC20;
     using ExitQueueLib for ExitQueueLib.Queue;
@@ -138,8 +136,6 @@ contract PortalPoolImplementation is
 
         if (currentState == PoolState.COLLECTING) {
             if (block.timestamp > _poolInfo.depositDeadline) {
-                // don't revert
-                // just mark as FAILED and return. User's stake is not accepted.
                 _handleDeadlinePassed();
                 return;
             }
@@ -333,28 +329,7 @@ contract PortalPoolImplementation is
         uint256 amount = _stakes[msg.sender];
         if (amount == 0) revert PoolErrors.NoStakeToWithdraw();
 
-        // Calculate LPT to burn (stake minus any already burned via exit requests)
-        uint256 exitAmount = _exitAmounts[msg.sender];
-        uint256 lptToBurn = amount > exitAmount ? amount - exitAmount : 0;
-
-        uint256 userLptBalance = lptToken.balanceOf(msg.sender);
-        if (lptToBurn > userLptBalance) {
-            lptToBurn = userLptBalance;
-        }
-
-        _stakes[msg.sender] = 0;
-        _poolInfo.totalStaked -= amount;
-
-        if (exitAmount > 0) {
-            _totalExitAmounts -= exitAmount;
-            _exitAmounts[msg.sender] = 0;
-            // note: tickets remain in mapping, they're just not withdrawable
-        }
-
-        if (lptToBurn > 0) {
-            lptToken.burn(msg.sender, lptToBurn);
-        }
-
+        _clearUserStake(amount);
         _sqd.safeTransfer(msg.sender, amount);
 
         emit Withdrawn(msg.sender, amount);
@@ -388,7 +363,6 @@ contract PortalPoolImplementation is
     function topUpRewards(uint256 amount) external onlyOperator nonReentrant {
         if (totalDistributionRatePerSec == 0) revert PoolErrors.DistributionTurnedOff();
         if (amount == 0) revert PoolErrors.InvalidAmount();
-
         if (getState() != PoolState.ACTIVE) revert PoolErrors.InvalidState();
 
         // measure actual received for fee-on-transfer token safety
@@ -396,34 +370,16 @@ contract PortalPoolImplementation is
         _rewardToken.safeTransferFrom(msg.sender, address(this), amount);
         uint256 received = _rewardToken.balanceOf(address(this)) - balanceBefore;
 
-        // split based on actual received amount - get feeRouter from factory for upgradeability
-        address feeRouter = _factory.feeRouter();
-        (uint256 toProviders, uint256 toWorkerPool, uint256 toBurn) = IFeeRouter(feeRouter).calculateSplit(received);
-
-        // Route via FeeRouter (FeeRouter pulls and forwards)
-        uint256 toRoute = toWorkerPool + toBurn;
-        if (toRoute > 0) {
-            _rewardToken.forceApprove(feeRouter, toRoute);
-        }
-
-        if (toWorkerPool > 0) {
-            IFeeRouter(feeRouter).routeToWorkerPool(address(_rewardToken), toWorkerPool);
-        }
-
-        if (toBurn > 0) {
-            IFeeRouter(feeRouter).routeToBurn(address(_rewardToken), toBurn);
-        }
+        (uint256 toProviders, uint256 toWorkerPool, uint256 toBurn) = _routeFees(received);
 
         // Update credit/debt: checkpoint current state then add toProviders
         (uint256 currentCredit, uint256 currentDebt) = _currentCreditDebt(block.timestamp);
 
         // Apply topup: pay off debt first, remainder goes to credit
         if (toProviders <= currentDebt) {
-            // All goes to paying off debt
             credit = currentCredit;
             debt = currentDebt - toProviders;
         } else {
-            // Pay off all debt, remainder goes to credit
             credit = currentCredit + (toProviders - currentDebt);
             debt = 0;
         }
@@ -442,27 +398,27 @@ contract PortalPoolImplementation is
         if (msg.sender != address(_factory)) revert PoolErrors.NotFactory();
         if (credit > 0 || debt > 0) revert PoolErrors.AlreadyInitialized();
 
-        address feeRouter = _factory.feeRouter();
-        (uint256 toProviders, uint256 toWorkerPool, uint256 toBurn) = IFeeRouter(feeRouter).calculateSplit(amount);
-
-        // Route via FeeRouter (FeeRouter pulls and forwards)
-        uint256 toRoute = toWorkerPool + toBurn;
-        if (toRoute > 0) {
-            _rewardToken.forceApprove(feeRouter, toRoute);
-        }
-
-        if (toWorkerPool > 0) {
-            IFeeRouter(feeRouter).routeToWorkerPool(address(_rewardToken), toWorkerPool);
-        }
-
-        if (toBurn > 0) {
-            IFeeRouter(feeRouter).routeToBurn(address(_rewardToken), toBurn);
-        }
+        (uint256 toProviders, uint256 toWorkerPool, uint256 toBurn) = _routeFees(amount);
 
         credit = toProviders;
         balanceTs = uint64(block.timestamp);
 
         emit RewardsToppedUp(address(_factory), amount, toProviders, toWorkerPool, toBurn);
+    }
+
+    function _routeFees(uint256 amount) internal returns (uint256 toProviders, uint256 toWorkerPool, uint256 toBurn) {
+        address feeRouter = _factory.feeRouter();
+        (toProviders, toWorkerPool, toBurn) = IFeeRouter(feeRouter).calculateSplit(amount);
+        uint256 toRoute = toWorkerPool + toBurn;
+        if (toRoute > 0) {
+            _rewardToken.forceApprove(feeRouter, toRoute);
+        }
+        if (toWorkerPool > 0) {
+            IFeeRouter(feeRouter).routeToWorkerPool(address(_rewardToken), toWorkerPool);
+        }
+        if (toBurn > 0) {
+            IFeeRouter(feeRouter).routeToBurn(address(_rewardToken), toBurn);
+        }
     }
 
     /**
@@ -742,12 +698,6 @@ contract PortalPoolImplementation is
         return currentDebt;
     }
 
-    /// @notice check if pool has run out of rewards (credit exhausted)
-    function isOutOfMoney() external view returns (bool) {
-        (uint256 currentCredit,) = _currentCreditDebt(block.timestamp);
-        return currentCredit == 0;
-    }
-
     /// @notice get consolidated pool status with provider rewards
     function getPoolStatusWithRewards(address provider)
         external
@@ -812,15 +762,6 @@ contract PortalPoolImplementation is
         return address(_rewardToken);
     }
 
-    function getQueueStatus(address provider, uint256 ticketId)
-        external
-        view
-        returns (uint256 processed, uint256 providerEndPos, uint256 secondsRemaining, bool ready)
-    {
-        ExitQueueLib.Ticket storage ticket = _exitTickets[provider][ticketId];
-        return ExitQueueLib.getStatus(_exitQueue, ticket, _factory.exitUnlockRatePerSecond());
-    }
-
     function getQueueStatusWithTimestamp(address provider, uint256 ticketId)
         external
         view
@@ -847,11 +788,6 @@ contract PortalPoolImplementation is
 
     function getTotalProcessed() external view returns (uint256) {
         return _exitQueue.totalProcessed(_factory.exitUnlockRatePerSecond());
-    }
-
-    function getMetadata() external view returns (string memory) {
-        IPortalRegistry.Cluster memory cluster = _portalRegistry.getClusterByAddress(address(this));
-        return cluster.metadata;
     }
 
     function getMinCapacity() external view returns (uint256) {
@@ -1028,6 +964,22 @@ contract PortalPoolImplementation is
         }
     }
 
+    function _clearUserStake(uint256 amount) internal {
+        uint256 exitAmount = _exitAmounts[msg.sender];
+        uint256 lptToBurn = amount > exitAmount ? amount - exitAmount : 0;
+        uint256 userLptBalance = lptToken.balanceOf(msg.sender);
+        if (lptToBurn > userLptBalance) lptToBurn = userLptBalance;
+
+        _stakes[msg.sender] = 0;
+        _poolInfo.totalStaked -= amount;
+
+        if (exitAmount > 0) {
+            _totalExitAmounts -= exitAmount;
+            _exitAmounts[msg.sender] = 0;
+        }
+        if (lptToBurn > 0) lptToken.burn(msg.sender, lptToBurn);
+    }
+
     function checkAndFailPortal() external {
         if (_poolInfo.state != PoolState.COLLECTING) revert PoolErrors.InvalidState();
         if (block.timestamp <= _poolInfo.depositDeadline) revert PoolErrors.DeadlineNotPassed();
@@ -1067,39 +1019,13 @@ contract PortalPoolImplementation is
     /// @notice Emergency withdraw - allows immediate stake withdrawal when pool is closed
     /// @dev Bypasses exit queue, users get their full stake back immediately
     function emergencyWithdraw() external nonReentrant {
-        // Only available when pool is CLOSED
         if (getState() != PoolState.CLOSED) revert PoolErrors.PoolNotClosed();
 
         uint256 userStake = _stakes[msg.sender];
         if (userStake == 0) revert PoolErrors.NoStakeToWithdraw();
 
-        // Update user's reward state before withdrawal
         _updateProvider(msg.sender);
-
-        // Calculate LPT to burn (stake minus any already burned via exit requests)
-        uint256 exitAmount = _exitAmounts[msg.sender];
-        uint256 lptToBurn = userStake > exitAmount ? userStake - exitAmount : 0;
-
-        // Check actual LPT balance (user may have transferred some)
-        uint256 userLptBalance = lptToken.balanceOf(msg.sender);
-        if (lptToBurn > userLptBalance) {
-            lptToBurn = userLptBalance;
-        }
-
-        // Clear user's state
-        _stakes[msg.sender] = 0;
-        _poolInfo.totalStaked -= userStake;
-
-        // Clear any pending exit amounts
-        if (exitAmount > 0) {
-            _totalExitAmounts -= exitAmount;
-            _exitAmounts[msg.sender] = 0;
-        }
-
-        // Burn LPT tokens
-        if (lptToBurn > 0) {
-            lptToken.burn(msg.sender, lptToBurn);
-        }
+        _clearUserStake(userStake);
 
         // Transfer SQD based on whether pool was ever activated
         if (_poolInfo.firstActivated) {
