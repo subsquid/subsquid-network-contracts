@@ -52,6 +52,14 @@ contract PortalPoolImplementation is
         _;
     }
 
+    /// @dev ensures that the caller is a Factory admin.
+    modifier onlyFactoryAdmin() {
+        if (!IAccessControl(address(_factory)).hasRole(DEFAULT_ADMIN_ROLE, msg.sender)) {
+            revert PoolErrors.NotAdmin();
+        }
+        _;
+    }
+
     /**
      * @dev initializes the pool with the given parameters.
      * @param params struct containing operator, capacity, peerId, tokens, and distribution rate.
@@ -105,7 +113,6 @@ contract PortalPoolImplementation is
             whitelist[params.operator] = true;
         }
 
-        _grantRole(DEFAULT_ADMIN_ROLE, params.operator);
         _grantRole(OPERATOR_ROLE, params.operator);
         _grantRole(FACTORY_ROLE, msg.sender);
 
@@ -228,7 +235,7 @@ contract PortalPoolImplementation is
         _accrueGlobal(block.timestamp, true);
         _updateProvider(msg.sender);
 
-        uint256 endPos = _exitQueue.enqueue(amount);
+        uint256 endPos = _exitQueue.enqueue(amount, _factory.exitUnlockRatePerSecond());
 
         ticketId = _nextTicketId[msg.sender];
         _exitTickets[msg.sender][ticketId] =
@@ -257,8 +264,9 @@ contract PortalPoolImplementation is
         if (ticket.amount == 0) revert PoolErrors.NoActiveExitRequest();
         if (ticket.withdrawn) revert PoolErrors.AlreadyWithdrawn();
 
-        // ccheck if ticket is unlocked using library (timestamp-based)
-        if (!ExitQueueLib.isUnlocked(_exitQueue, ticket)) revert PoolErrors.StillInQueue();
+        // check if ticket is unlocked using library (timestamp-based)
+        uint256 unlockRate = _factory.exitUnlockRatePerSecond();
+        if (!ExitQueueLib.isUnlocked(_exitQueue, ticket, unlockRate)) revert PoolErrors.StillInQueue();
 
         _accrueGlobal(block.timestamp, true);
 
@@ -589,6 +597,52 @@ contract PortalPoolImplementation is
     }
 
     /**
+     * @dev allows the operator to transfer their role to a new address.
+     * @notice Transfer operator role to a new wallet. Only callable by current operator.
+     * @param newOperator the address of the new operator.
+     */
+    function transferOperator(address newOperator) external onlyOperator {
+        if (newOperator == address(0)) revert PoolErrors.InvalidAddress();
+
+        address previousOperator = _poolInfo.operator;
+        if (newOperator == previousOperator) revert PoolErrors.NoChange();
+
+        // Update pool info
+        _poolInfo.operator = newOperator;
+
+        // Transfer OPERATOR_ROLE from old operator to new operator
+        _revokeRole(OPERATOR_ROLE, previousOperator);
+        _grantRole(OPERATOR_ROLE, newOperator);
+
+        // Update operator in registry (updates cluster.operator and ownerClusters mapping)
+        _portalRegistry.updateClusterOperator(newOperator);
+
+        // If whitelist is enabled, add new operator to whitelist
+        if (whitelistEnabled) {
+            whitelist[newOperator] = true;
+            emit WhitelistUpdated(newOperator, true);
+        }
+
+        emit OperatorTransferred(previousOperator, newOperator);
+    }
+
+    /**
+     * @dev allows the operator to update the pool's metadata in the registry.
+     * @notice Update pool metadata. Only callable by operator.
+     * @param metadata the new metadata string.
+     */
+    function setMetadata(string calldata metadata) external onlyOperator {
+        _portalRegistry.setClusterMetadataByPool(metadata);
+    }
+
+    /**
+     * @dev returns the current operator of the pool.
+     */
+    function getOperator() external view returns (address) {
+        return _poolInfo.operator;
+    }
+
+    /**
      * @dev returns the current state of the pool.
      */
     function getState() public view returns (PoolState) {
@@ -764,7 +818,7 @@ contract PortalPoolImplementation is
         returns (uint256 processed, uint256 providerEndPos, uint256 secondsRemaining, bool ready)
     {
         ExitQueueLib.Ticket storage ticket = _exitTickets[provider][ticketId];
-        return ExitQueueLib.getStatus(_exitQueue, ticket);
+        return ExitQueueLib.getStatus(_exitQueue, ticket, _factory.exitUnlockRatePerSecond());
     }
 
     function getQueueStatusWithTimestamp(address provider, uint256 ticketId)
@@ -779,7 +833,8 @@ contract PortalPoolImplementation is
         )
     {
         ExitQueueLib.Ticket storage ticket = _exitTickets[provider][ticketId];
-        (processed, providerEndPos, secondsRemaining, ready) = ExitQueueLib.getStatus(_exitQueue, ticket);
+        uint256 unlockRate = _factory.exitUnlockRatePerSecond();
+        (processed, providerEndPos, secondsRemaining, ready) = ExitQueueLib.getStatus(_exitQueue, ticket, unlockRate);
 
         if (ready) {
             unlockTimestamp = block.timestamp;
@@ -791,7 +846,7 @@ contract PortalPoolImplementation is
     }
 
     function getTotalProcessed() external view returns (uint256) {
-        return _exitQueue.totalProcessed();
+        return _exitQueue.totalProcessed(_factory.exitUnlockRatePerSecond());
     }
 
     function getMetadata() external view returns (string memory) {
@@ -805,14 +860,14 @@ contract PortalPoolImplementation is
 
     function getWithdrawalWaitingTimestamp(uint256 amount) external view returns (uint256 unlockTimestamp) {
         if (amount == 0) revert PoolErrors.InvalidAmount();
-        return ExitQueueLib.getSimulatedUnlockTimestamp(_exitQueue, amount);
+        return ExitQueueLib.getSimulatedUnlockTimestamp(_exitQueue, amount, _factory.exitUnlockRatePerSecond());
     }
 
-    function pause() external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function pause() external onlyFactoryAdmin {
         _pause();
     }
 
-    function unpause() external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function unpause() external onlyFactoryAdmin {
         _unpause();
     }
 
@@ -984,12 +1039,7 @@ contract PortalPoolImplementation is
 
     /// @notice Emergency shutdown - closes the pool, stops debt, allows immediate withdrawals
     /// @dev Only callable by Factory admin (not pool operator)
-    function closePool() external {
-        // Only Factory admin can close pools
-        if (!IAccessControl(address(_factory)).hasRole(DEFAULT_ADMIN_ROLE, msg.sender)) {
-            revert PoolErrors.NotAdmin();
-        }
-
+    function closePool() external onlyFactoryAdmin {
         // Cannot close already closed or failed pools
         PoolState currentState = getState();
         if (currentState == PoolState.CLOSED) revert PoolErrors.PoolClosed();

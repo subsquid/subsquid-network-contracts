@@ -58,6 +58,7 @@ interface IPortalPool {
     event WhitelistUpdated(address indexed user, bool added);
     event PoolClosed(address indexed closedBy, uint256 timestamp);
     event RewardsRecovered(address indexed operator, uint256 amount);
+    event OperatorTransferred(address indexed previousOperator, address indexed newOperator);
 
     function initialize(InitParams calldata params) external;
 
@@ -135,4 +136,10 @@ interface IPortalPool {
     function addToWhitelist(address[] calldata users) external;
     function removeFromWhitelist(address[] calldata users) external;
     function isWhitelisted(address user) external view returns (bool);
+
+    function transferOperator(address newOperator) external;
+
+    function setMetadata(string calldata metadata) external;
+
+    function getOperator() external view returns (address);
 }

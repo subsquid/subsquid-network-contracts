@@ -463,7 +463,6 @@ contract PortalPoolImplementationTest is BaseTest {
     }
 
     function test_Pause_BlocksDeposit() public {
-        vm.prank(operator);
         pool.pause();
 
         vm.startPrank(user1);
@@ -475,10 +474,8 @@ contract PortalPoolImplementationTest is BaseTest {
     }
 
     function test_Unpause_AllowsDeposit() public {
-        vm.prank(operator);
+        // Only factory admin can pause/unpause (not operator)
         pool.pause();
-
-        vm.prank(operator);
         pool.unpause();
 
         _approveAndDeposit(user1, portal, SMALL_STAKE);
@@ -583,10 +580,11 @@ contract PortalPoolImplementationTest is BaseTest {
         pool.pause();
     }
 
-    function test_Unpause_RevertOnNonOperator() public {
-        vm.prank(operator);
+    function test_Unpause_RevertOnNonAdmin() public {
+        // Factory admin can pause
         pool.pause();
 
+        // Non-admin (including operator) cannot unpause
         vm.prank(user1);
         vm.expectRevert();
         pool.unpause();

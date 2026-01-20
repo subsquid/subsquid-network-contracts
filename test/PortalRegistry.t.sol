@@ -35,8 +35,8 @@ contract PortalRegistryTest is BaseTest {
         assertTrue(registry.isCluster(clusterAddress));
 
         IPortalRegistry.Cluster memory cluster = registry.getClusterByAddress(clusterAddress);
-        assertEq(cluster.operator, operator);
         assertEq(cluster.clusterAddress, clusterAddress);
+        assertEq(cluster.operator, operator);
     }
 
     function test_RegisterCluster_OnlyCallableByFactory() public {

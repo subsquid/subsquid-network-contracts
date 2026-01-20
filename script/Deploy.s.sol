@@ -196,17 +196,22 @@ contract DeployArbitrum is Script {
     address public constant SQD = 0x1337420dED5ADb9980CFc35f8f2B054ea86f8aB1;
     address public constant USDC = 0xaf88d065e77c8cC2239327C5EDb3A432268e5831;
 
-    // Additional admin to be granted roles after deployment
-    address public constant ADDITIONAL_ADMIN = 0x2A2fBDef84219BdAa0C657e45447D6BDd7EDAaE2;
+    address public constant WORKER_POOL = 0x1291847E44A9144306CABA8B83504E1430C92E66;
+    address public constant POOL_DEPLOYER_1 = 0x2A2fBDef84219BdAa0C657e45447D6BDd7EDAaE2;
+    address public constant POOL_DEPLOYER_2 = 0xc423362be9db384B79B7A8b21d68B65E3f1c63a7;
 
-    uint256 public constant MIN_STAKE_THRESHOLD = 100_000 ether;
-    uint256 public constant MAX_POOL_CAPACITY = 10_000_000 ether;
-    uint256 public constant MAX_STAKE_PER_WALLET = 1_000_000 ether;
+    uint256 public constant MIN_STAKE_THRESHOLD = 1_000_000 ether;
+    uint256 public constant MAX_STAKE_PER_WALLET = 100_000 ether;
     uint256 public constant MANA = 1000;
     uint256 public constant WORKER_EPOCH_LENGTH = 7200;
 
     function run() external {
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
+        address deployer = vm.addr(deployerPrivateKey);
+
+        console.log("Deployer:", deployer);
+        console.log("SQD:", SQD);
+        console.log("USDC:", USDC);
 
         vm.startBroadcast(deployerPrivateKey);
 
@@ -251,32 +256,58 @@ contract DeployArbitrum is Script {
         portalRegistry.setFactory(address(factory));
         console.log("Factory set in PortalRegistry");
 
+        console.log("\n--- Adding USDC as Payment Token ---");
+        factory.addPaymentToken(USDC);
+        console.log("USDC added as payment token");
+
         console.log("\n--- Setting Worker Pool Address on FeeRouter ---");
-        address workerRewardPool = 0xFa27FdC303FA02F6F21Ec8F597421b7B34BD61Ee;
-        feeRouter.setWorkerPoolAddress(workerRewardPool);
-        console.log("Worker pool address set on FeeRouter to:", workerRewardPool);
+        feeRouter.setWorkerPoolAddress(WORKER_POOL);
+        console.log("Worker pool address set on FeeRouter to:", WORKER_POOL);
 
-        console.log("\n--- Granting Roles to Additional Admin ---");
-        console.log("Additional Admin:", ADDITIONAL_ADMIN);
+        console.log("\n--- Enabling Default Whitelist ---");
+        factory.setDefaultWhitelistEnabled(true);
+        console.log("Default whitelist enabled");
 
-        // Grant admin role on Factory
-        factory.grantRole(factory.DEFAULT_ADMIN_ROLE(), ADDITIONAL_ADMIN);
-        console.log("Granted DEFAULT_ADMIN_ROLE on Factory");
+        console.log("\n--- Granting Roles ---");
 
-        // Grant pool deployer role on Factory
-        factory.grantRole(factory.POOL_DEPLOYER_ROLE(), ADDITIONAL_ADMIN);
-        console.log("Granted POOL_DEPLOYER_ROLE on Factory");
+        factory.grantRole(factory.DEFAULT_ADMIN_ROLE(), POOL_DEPLOYER_1);
+        factory.grantRole(factory.POOL_DEPLOYER_ROLE(), POOL_DEPLOYER_1);
+        console.log("Granted DEFAULT_ADMIN_ROLE and POOL_DEPLOYER_ROLE to:", POOL_DEPLOYER_1);
 
-        // Grant admin role on Registry
-        portalRegistry.grantRole(portalRegistry.DEFAULT_ADMIN_ROLE(), ADDITIONAL_ADMIN);
-        console.log("Granted DEFAULT_ADMIN_ROLE on Registry");
+        factory.grantRole(factory.DEFAULT_ADMIN_ROLE(), POOL_DEPLOYER_2);
+        factory.grantRole(factory.POOL_DEPLOYER_ROLE(), POOL_DEPLOYER_2);
+        console.log("Granted DEFAULT_ADMIN_ROLE and POOL_DEPLOYER_ROLE to:", POOL_DEPLOYER_2);
 
-        // Grant admin role on FeeRouter
-        feeRouter.grantRole(feeRouter.DEFAULT_ADMIN_ROLE(), ADDITIONAL_ADMIN);
-        console.log("Granted DEFAULT_ADMIN_ROLE on FeeRouter");
+        portalRegistry.grantRole(portalRegistry.DEFAULT_ADMIN_ROLE(), POOL_DEPLOYER_1);
+        portalRegistry.grantRole(portalRegistry.DEFAULT_ADMIN_ROLE(), POOL_DEPLOYER_2);
+        console.log("Granted DEFAULT_ADMIN_ROLE on Registry to both deployers");
+
+        feeRouter.grantRole(feeRouter.DEFAULT_ADMIN_ROLE(), POOL_DEPLOYER_1);
+        feeRouter.grantRole(feeRouter.DEFAULT_ADMIN_ROLE(), POOL_DEPLOYER_2);
+        console.log("Granted DEFAULT_ADMIN_ROLE on FeeRouter to both deployers");
 
         vm.stopBroadcast();
 
-        console.log("\n=== Deployment Complete ===");
+        console.log("\n========================================");
+        console.log("       DEPLOYMENT SUMMARY");
+        console.log("========================================");
+        console.log("PortalRegistry:", address(portalRegistry));
+        console.log("FeeRouterModule:", address(feeRouter));
+        console.log("PortalPoolImplementation:", address(implementation));
+        console.log("PortalPoolFactory:", address(factory));
+        console.log("PortalPoolBeacon:", address(factory.beacon()));
+        console.log("");
+        console.log("Configuration:");
+        console.log("  Min Stake Threshold: 1,000,000 SQD");
+        console.log("  Max Stake Per Wallet: 100,000 SQD");
+        console.log("  Worker Epoch Length:", WORKER_EPOCH_LENGTH);
+        console.log("  Default Whitelist: ENABLED");
+        console.log("  Worker Pool:", WORKER_POOL);
+        console.log("");
+        console.log("Pool Deployers:");
+        console.log("  ", deployer);
+        console.log("  ", POOL_DEPLOYER_1);
+        console.log("  ", POOL_DEPLOYER_2);
+        console.log("========================================");
     }
 }

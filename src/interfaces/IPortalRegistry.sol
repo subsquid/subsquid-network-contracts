@@ -26,6 +26,7 @@ interface IPortalRegistry {
     event ClusterActivated(bytes32 indexed clusterId);
     event ClusterDeactivated(bytes32 indexed clusterId);
     event ClusterMetadataUpdated(bytes32 indexed clusterId, string metadata);
+    event ClusterOperatorUpdated(bytes32 indexed clusterId, address indexed oldOperator, address indexed newOperator);
 
     event PortalAdded(bytes32 indexed clusterId, bytes peerId, string metadata);
     event PortalRemoved(bytes32 indexed clusterId, bytes peerId);
@@ -49,6 +50,10 @@ interface IPortalRegistry {
     function setPortalMetadata(bytes32 clusterId, uint256 portalIndex, string calldata metadata) external;
 
     function setClusterMetadata(bytes32 clusterId, string calldata metadata) external;
+
+    function setClusterMetadataByPool(string calldata metadata) external;
+
+    function updateClusterOperator(address newOperator) external;
 
     function getCluster(bytes32 clusterId) external view returns (Cluster memory);
 

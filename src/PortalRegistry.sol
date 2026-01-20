@@ -54,7 +54,7 @@ contract PortalRegistry is
     /// @notice Total number of clusters registered
     uint256 public clusterCount;
 
-    uint256[48] private __gap;
+    uint256[50] private __gap;
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
@@ -118,7 +118,7 @@ contract PortalRegistry is
         if (cluster.clusterAddress == address(0)) {
             revert PortalRegistryErrors.ClusterNotRegistered();
         }
-        if (msg.sender != cluster.operator) {
+        if (msg.sender != _getClusterOperator(cluster.clusterAddress)) {
             revert PortalRegistryErrors.NotClusterOperator();
         }
         if (peerId.length == 0) {
@@ -146,7 +146,7 @@ contract PortalRegistry is
         if (cluster.clusterAddress == address(0)) {
             revert PortalRegistryErrors.ClusterNotRegistered();
         }
-        if (msg.sender != cluster.operator) {
+        if (msg.sender != _getClusterOperator(cluster.clusterAddress)) {
             revert PortalRegistryErrors.NotClusterOperator();
         }
         if (portalIndex >= cluster.portals.length) {
@@ -173,7 +173,7 @@ contract PortalRegistry is
         if (cluster.clusterAddress == address(0)) {
             revert PortalRegistryErrors.ClusterNotRegistered();
         }
-        if (msg.sender != cluster.operator) {
+        if (msg.sender != _getClusterOperator(cluster.clusterAddress)) {
             revert PortalRegistryErrors.NotClusterOperator();
         }
         if (portalIndex >= cluster.portals.length) {
@@ -191,13 +191,62 @@ contract PortalRegistry is
         if (cluster.clusterAddress == address(0)) {
             revert PortalRegistryErrors.ClusterNotRegistered();
         }
-        if (msg.sender != cluster.operator) {
+        if (msg.sender != _getClusterOperator(cluster.clusterAddress)) {
             revert PortalRegistryErrors.NotClusterOperator();
         }
 
         cluster.metadata = metadata;
 
         emit ClusterMetadataUpdated(clusterId, metadata);
+    }
+
+    /// @inheritdoc IPortalRegistry
+    function setClusterMetadataByPool(string calldata metadata) external {
+        bytes32 clusterId = addressToClusterId[msg.sender];
+        Cluster storage cluster = _clusters[clusterId];
+        if (cluster.clusterAddress == address(0)) {
+            revert PortalRegistryErrors.ClusterNotRegistered();
+        }
+
+        cluster.metadata = metadata;
+
+        emit ClusterMetadataUpdated(clusterId, metadata);
+    }
+
+    /// @inheritdoc IPortalRegistry
+    function updateClusterOperator(address newOperator) external {
+        if (newOperator == address(0)) revert PortalRegistryErrors.InvalidAddress();
+
+        bytes32 clusterId = addressToClusterId[msg.sender];
+        Cluster storage cluster = _clusters[clusterId];
+        if (cluster.clusterAddress == address(0)) {
+            revert PortalRegistryErrors.ClusterNotRegistered();
+        }
+
+        address oldOperator = cluster.operator;
+        if (newOperator == oldOperator) return; // No change
+
+        // Update cluster operator
+        cluster.operator = newOperator;
+
+        // Remove clusterId from old operator's list
+        bytes32[] storage oldOperatorClusters = ownerClusters[oldOperator];
+        for (uint256 i = 0; i < oldOperatorClusters.length;) {
+            if (oldOperatorClusters[i] == clusterId) {
+                // Swap with last and pop
+                oldOperatorClusters[i] = oldOperatorClusters[oldOperatorClusters.length - 1];
+                oldOperatorClusters.pop();
+                break;
+            }
+            unchecked {
+                ++i;
+            }
+        }
+
+        // Add clusterId to new operator's list
+        ownerClusters[newOperator].push(clusterId);
+
+        emit ClusterOperatorUpdated(clusterId, oldOperator, newOperator);
     }
 
     /// @inheritdoc IPortalRegistry
@@ -416,6 +465,11 @@ contract PortalRegistry is
 
     function _generateClusterId(address clusterAddress) internal view returns (bytes32) {
         return keccak256(abi.encodePacked(clusterAddress, block.chainid, block.number));
+    }
+
+    /// @dev Gets the current operator of a cluster by reading from the pool contract
+    function _getClusterOperator(address clusterAddress) internal view returns (address) {
+        return IPortalPool(clusterAddress).getOperator();
     }
 
     // solhint-disable-next-line no-empty-blocks
