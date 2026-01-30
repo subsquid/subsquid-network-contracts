@@ -76,4 +76,6 @@ library PoolErrors {
 
     // Fee router errors
     error InvalidFeeConfig();
+    error InvalidPoolFee();
+    error NothingToBuyback();
 }
