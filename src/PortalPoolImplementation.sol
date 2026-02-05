@@ -173,8 +173,9 @@ contract PortalPoolImplementation is
         _poolInfo.totalStaked = actualNewTotal;
 
         // Update user's reward debt for new activeStake
+        // Use _checkpointRPS() to prevent inflated rewards when depositing during dry period (H-02/H-05)
         uint256 activeStake = _getProviderActiveStake(msg.sender);
-        _rewardCheckpoint[msg.sender] = FullMath.mulDiv(activeStake, rewardPerStakeStored, ACC);
+        _rewardCheckpoint[msg.sender] = FullMath.mulDiv(activeStake, _checkpointRPS(), ACC);
 
         bool shouldActivate = !_poolInfo.firstActivated && _poolInfo.totalStaked >= _poolInfo.capacity;
 
@@ -318,10 +319,12 @@ contract PortalPoolImplementation is
         _stakes[to] = receiverNewStake;
 
         // Update reward debts for new activeStakes
+        // Sender uses rewardPerStakeStored (conservative: underpays slightly during dry period)
+        // Receiver uses _checkpointRPS() to prevent inflated rewards during dry period (H-02/H-05)
         uint256 fromActiveStake = _getProviderActiveStake(from);
         uint256 toActiveStake = _getProviderActiveStake(to);
         _rewardCheckpoint[from] = FullMath.mulDiv(fromActiveStake, rewardPerStakeStored, ACC);
-        _rewardCheckpoint[to] = FullMath.mulDiv(toActiveStake, rewardPerStakeStored, ACC);
+        _rewardCheckpoint[to] = FullMath.mulDiv(toActiveStake, _checkpointRPS(), ACC);
 
         emit StakeTransferred(from, to, amount);
     }
@@ -343,19 +346,23 @@ contract PortalPoolImplementation is
     }
 
     /**
-     * @dev allows operator to recover reward tokens from a FAILED pool.
-     * @notice Recover unused reward tokens when pool fails to activate.
+     * @dev allows operator to recover reward tokens from a FAILED or CLOSED pool.
+     * @notice In FAILED state recovers full token balance; in CLOSED state recovers unused credit.
      * @return amount the amount of reward tokens recovered.
      */
-    function recoverRewardsFromFailed() external onlyOperator nonReentrant returns (uint256) {
-        if (getState() != PoolState.FAILED) revert PoolErrors.PoolNotFailed();
-
-        uint256 amount = _rewardToken.balanceOf(address(this));
+    function recoverRewards() external onlyOperator nonReentrant returns (uint256) {
+        PoolState currentState = getState();
+        uint256 amount;
+        if (currentState == PoolState.FAILED) {
+            amount = _rewardToken.balanceOf(address(this));
+        } else if (currentState == PoolState.CLOSED) {
+            amount = credit;
+        } else {
+            revert PoolErrors.InvalidState();
+        }
         if (amount == 0) revert PoolErrors.NothingToClaim();
 
-        // Clear credit to prevent double recovery
         credit = 0;
-
         _rewardToken.safeTransfer(msg.sender, amount);
 
         emit RewardsRecovered(msg.sender, amount);
@@ -874,6 +881,16 @@ contract PortalPoolImplementation is
         return _poolInfo.totalStaked > _totalExitAmounts ? _poolInfo.totalStaked - _totalExitAmounts : 0;
     }
 
+    /// @dev Returns the "virtual" RPS during dry periods 
+    /// used for checkpointing new depositors / LPT receivers so they don't earn rewards for time before entry
+    function _checkpointRPS() internal view returns (uint256) {
+        if (perStakeRateWad > 0 && uint256(lastEffectiveRewardTs) < block.timestamp) {
+            uint256 frozenDelta = block.timestamp - uint256(lastEffectiveRewardTs);
+            return rewardPerStakeStored + FullMath.mulDiv(perStakeRateWad, frozenDelta, 1);
+        }
+        return rewardPerStakeStored;
+    }
+
     function _totalDrainRate() internal view returns (uint256) {
         // no drain if pool was never activated
         if (!_poolInfo.firstActivated) return 0;
@@ -939,26 +956,9 @@ contract PortalPoolImplementation is
     }
 
     function _accrueGlobal(uint256 timestamp, bool updateBalance) internal {
-        uint256 activeStake = _getActiveStake();
-        uint256 minStake = _factory.minStakeThreshold();
-
-        if (_poolInfo.firstActivated && _poolInfo.totalStaked >= minStake && activeStake > 0 && perStakeRateWad > 0) {
-            int256 runway = getRunway();
-
-            if (runway >= int256(timestamp)) {
-                if (timestamp > uint256(lastEffectiveRewardTs)) {
-                    uint256 delta = timestamp - uint256(lastEffectiveRewardTs);
-                    rewardPerStakeStored += FullMath.mulDiv(perStakeRateWad, delta, 1);
-                    lastEffectiveRewardTs = uint64(timestamp);
-                }
-            } else if (runway > int256(uint256(lastEffectiveRewardTs))) {
-                uint256 delta = uint256(runway) - uint256(lastEffectiveRewardTs);
-                rewardPerStakeStored += FullMath.mulDiv(perStakeRateWad, delta, 1);
-                lastEffectiveRewardTs = uint64(uint256(runway));
-            }
-        } else {
-            lastEffectiveRewardTs = uint64(timestamp);
-        }
+        (uint256 newRPS, uint64 newEffectiveTs) = _simulateGlobalAccrual(timestamp);
+        rewardPerStakeStored = newRPS;
+        lastEffectiveRewardTs = newEffectiveTs;
 
         if (updateBalance) {
             (uint256 currentCredit, uint256 currentDebt) = _currentCreditDebt(timestamp);
@@ -1059,23 +1059,6 @@ contract PortalPoolImplementation is
         }
 
         emit Withdrawn(msg.sender, userStake);
-    }
-
-    /// @notice Recover unused reward credit from a closed pool
-    /// @dev Only callable by operator. Only recovers credit (unused funds), not provider rewards.
-    function recoverRewardsFromClosed() external onlyOperator nonReentrant returns (uint256) {
-        if (getState() != PoolState.CLOSED) revert PoolErrors.PoolNotClosed();
-
-        uint256 amount = credit;
-        if (amount == 0) revert PoolErrors.NothingToClaim();
-
-        // Clear credit to prevent double recovery
-        credit = 0;
-
-        _rewardToken.safeTransfer(msg.sender, amount);
-
-        emit RewardsRecovered(msg.sender, amount);
-        return amount;
     }
 
     /// @notice Claim any pending rewards when pool is closed

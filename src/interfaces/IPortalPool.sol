@@ -67,7 +67,7 @@ interface IPortalPool {
     function withdrawExit(uint256 ticketId) external;
     function onLPTTransfer(address from, address to, uint256 amount) external;
     function withdrawFromFailed() external;
-    function recoverRewardsFromFailed() external returns (uint256);
+    function recoverRewards() external returns (uint256);
 
     function topUpRewards(uint256 amount) external;
     function initializeCredit(uint256 amount) external;

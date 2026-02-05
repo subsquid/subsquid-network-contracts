@@ -8,7 +8,7 @@ import {LiquidPortalToken} from "../src/LiquidPortalToken.sol";
 import {IAccessControl} from "@openzeppelin/contracts/access/IAccessControl.sol";
 
 /// @title Pool Lifecycle Tests
-/// @notice Tests for closePool, emergencyWithdraw, claimRewardsFromClosed, recoverRewardsFromFailed
+/// @notice Tests for closePool, emergencyWithdraw, claimRewardsFromClosed, recoverRewards
 contract PoolLifecycleTest is BaseTest {
     function setUp() public override {
         super.setUp();
@@ -189,7 +189,7 @@ contract PoolLifecycleTest is BaseTest {
         pool.claimRewardsFromClosed();
     }
 
-    function test_RecoverRewardsFromFailed_Success() public {
+    function test_RecoverRewards_FromFailed_Success() public {
         // Create pool and deposit initial rewards
         address portal = _createCollectingPool();
         PortalPoolImplementation pool = PortalPoolImplementation(portal);
@@ -212,7 +212,7 @@ contract PoolLifecycleTest is BaseTest {
         uint256 operatorBalBefore = usdc.balanceOf(operator);
 
         vm.prank(operator);
-        uint256 recovered = pool.recoverRewardsFromFailed();
+        uint256 recovered = pool.recoverRewards();
 
         assertTrue(recovered > 0, "Should recover rewards");
         assertEq(usdc.balanceOf(operator), operatorBalBefore + recovered);
@@ -220,17 +220,17 @@ contract PoolLifecycleTest is BaseTest {
         // Revert: nothing left
         vm.prank(operator);
         vm.expectRevert(PoolErrors.NothingToClaim.selector);
-        pool.recoverRewardsFromFailed();
+        pool.recoverRewards();
     }
 
-    function test_RecoverRewardsFromFailed_RevertOnNotFailed() public {
+    function test_RecoverRewards_RevertOnNotFailedOrClosed() public {
         address portal = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "NotFailed");
         PortalPoolImplementation pool = PortalPoolImplementation(portal);
 
-        // Pool is ACTIVE, not FAILED
+        // Pool is ACTIVE, not FAILED or CLOSED
         vm.prank(operator);
-        vm.expectRevert(PoolErrors.PoolNotFailed.selector);
-        pool.recoverRewardsFromFailed();
+        vm.expectRevert(PoolErrors.InvalidState.selector);
+        pool.recoverRewards();
     }
 
     function test_PoolFailsOnDeadline_DepositsBlocked() public {
