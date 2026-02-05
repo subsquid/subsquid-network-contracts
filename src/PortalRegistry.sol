@@ -370,7 +370,11 @@ contract PortalRegistry is
         uint256 epochLength = IPortalFactory(factory).workerEpochLength();
         uint256 boostFactor = 30000;
 
-        uint256 cus = FullMath.mulDiv(cluster.totalStaked * epochLength, mana * boostFactor, 10000 * 1e18 * 1000);
+        // Cap totalStaked at pool capacity to prevent inflation via deposit/exit cycling
+        uint256 poolCapacity = IPortalPool(cluster.clusterAddress).getPoolInfo().capacity;
+        uint256 effectiveStake = cluster.totalStaked > poolCapacity ? poolCapacity : cluster.totalStaked;
+
+        uint256 cus = FullMath.mulDiv(effectiveStake * epochLength, mana * boostFactor, 10000 * 1e18 * 1000);
 
         return cus;
     }

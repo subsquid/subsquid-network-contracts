@@ -252,12 +252,15 @@ contract PoolLifecycleTest is BaseTest {
         // getState() dynamically returns FAILED after deadline without activation
         assertEq(uint256(pool.getState()), uint256(IPortalPool.PoolState.FAILED));
 
-        // Deposit after deadline reverts with InvalidState
+        // Deposit after deadline gracefully transitions to FAILED and returns
+        // without reverting, but user's stake is not accepted
         vm.startPrank(user2);
         sqd.approve(portal, SMALL_STAKE);
-        vm.expectRevert(PoolErrors.InvalidState.selector);
+        uint256 user2StakeBefore = pool.getProviderStake(user2);
         pool.deposit(SMALL_STAKE);
         vm.stopPrank();
+        assertEq(pool.getProviderStake(user2), user2StakeBefore);
+        assertEq(uint256(pool.getState()), uint256(IPortalPool.PoolState.FAILED));
 
         // User1 can withdraw from failed pool
         vm.prank(user1);

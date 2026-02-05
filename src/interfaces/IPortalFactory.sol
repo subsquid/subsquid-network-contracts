@@ -29,6 +29,7 @@ interface IPortalFactory {
     event WhitelistFeatureEnabledUpdated(bool oldValue, bool newValue);
     event DefaultWhitelistEnabledUpdated(bool oldValue, bool newValue);
     event PoolDeploymentOpenUpdated(bool oldValue, bool newValue);
+    event OperatorTransferNotified(address indexed pool, address indexed oldOperator, address indexed newOperator);
 
     struct CreatePortalPoolParams {
         address operator;
@@ -91,6 +92,8 @@ interface IPortalFactory {
     function setWhitelistFeatureEnabled(bool enabled) external;
     function setDefaultWhitelistEnabled(bool enabled) external;
     function setPoolDeploymentOpen(bool open) external;
+
+    function notifyOperatorTransfer(address oldOperator, address newOperator) external;
 
     function pause() external;
     function unpause() external;

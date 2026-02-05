@@ -107,18 +107,20 @@ contract OperatorTransferEdgeCasesTest is BaseTest {
         assertEq(PortalPoolImplementation(portal).getOperator(), newOperator);
     }
 
-    function test_transferOperator_worksInFailedState() public {
+    function test_transferOperator_revertsInFailedState() public {
         vm.warp(block.timestamp + 31 days);
 
         assertEq(uint256(IPortalPool(portal).getState()), uint256(IPortalPool.PoolState.FAILED));
 
         vm.prank(operator);
+        vm.expectRevert(PoolErrors.InvalidState.selector);
         PortalPoolImplementation(portal).transferOperator(newOperator);
 
-        assertEq(PortalPoolImplementation(portal).getOperator(), newOperator);
+        // Operator unchanged
+        assertEq(PortalPoolImplementation(portal).getOperator(), operator);
     }
 
-    function test_transferOperator_worksInClosedState() public {
+    function test_transferOperator_revertsInClosedState() public {
         vm.startPrank(user1);
         sqd.approve(portal, MIN_STAKE_THRESHOLD);
         IPortalPool(portal).deposit(MIN_STAKE_THRESHOLD);
@@ -129,9 +131,11 @@ contract OperatorTransferEdgeCasesTest is BaseTest {
         assertEq(uint256(IPortalPool(portal).getState()), uint256(IPortalPool.PoolState.CLOSED));
 
         vm.prank(operator);
+        vm.expectRevert(PoolErrors.PoolClosed.selector);
         PortalPoolImplementation(portal).transferOperator(newOperator);
 
-        assertEq(PortalPoolImplementation(portal).getOperator(), newOperator);
+        // Operator unchanged
+        assertEq(PortalPoolImplementation(portal).getOperator(), operator);
     }
 
     function test_transferOperator_registryFunctionsWorkForNewOperator() public {
@@ -204,21 +208,16 @@ contract OperatorTransferEdgeCasesTest is BaseTest {
         registry.updateClusterOperator(newOperator);
     }
 
-    function test_transferOperator_worksWhenPoolIsPaused() public {
+    function test_transferOperator_revertsWhenPoolIsPaused() public {
         PortalPoolImplementation(portal).pause();
         assertTrue(PortalPoolImplementation(portal).paused());
 
         vm.prank(operator);
+        vm.expectRevert();
         PortalPoolImplementation(portal).transferOperator(newOperator);
 
-        assertEq(PortalPoolImplementation(portal).getOperator(), newOperator);
-
-        vm.startPrank(newOperator);
-        sqd.mint(newOperator, MIN_STAKE_THRESHOLD);
-        sqd.approve(portal, MIN_STAKE_THRESHOLD);
-        vm.expectRevert();
-        IPortalPool(portal).deposit(MIN_STAKE_THRESHOLD);
-        vm.stopPrank();
+        // Operator unchanged
+        assertEq(PortalPoolImplementation(portal).getOperator(), operator);
     }
 
     function test_transferOperator_canTransferToContractAddress() public {

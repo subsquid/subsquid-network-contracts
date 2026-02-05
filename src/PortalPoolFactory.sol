@@ -59,7 +59,10 @@ contract PortalPoolFactory is
     bool public defaultWhitelistEnabled;
     bool public poolDeploymentOpen;
 
-    uint256[50] private __gap;
+    /// @notice Reverse index: pool address → index in operatorPortalPools[operator]
+    mapping(address => uint256) public operatorPortalPoolIndex;
+
+    uint256[49] private __gap;
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
@@ -127,6 +130,13 @@ contract PortalPoolFactory is
             revert PoolErrors.NotAuthorized();
         }
 
+        // When open deployment, caller must be the operator to prevent griefing
+        // (attacker could exhaust victim's MAX_CLUSTERS_PER_OWNER limit)
+        // POOL_DEPLOYER_ROLE can still create on behalf of others (trusted role)
+        if (poolDeploymentOpen && !hasRole(POOL_DEPLOYER_ROLE, msg.sender)) {
+            if (params.operator != msg.sender) revert PoolErrors.NotAuthorized();
+        }
+
         if (params.operator == address(0)) revert PoolErrors.InvalidAddress();
         if (params.rewardToken == address(0)) revert PoolErrors.InvalidAddress();
         if (!isAllowedPaymentToken[params.rewardToken]) revert PoolErrors.TokenNotAllowed();
@@ -182,7 +192,9 @@ contract PortalPoolFactory is
 
         allPortals[portalCount] = portal;
         ++portalCount;
-        operatorPortalPools[params.operator][operatorPortalCount[params.operator]] = portal;
+        uint256 idx = operatorPortalCount[params.operator];
+        operatorPortalPools[params.operator][idx] = portal;
+        operatorPortalPoolIndex[portal] = idx;
         ++operatorPortalCount[params.operator];
         isPortal[portal] = true;
 
@@ -305,12 +317,14 @@ contract PortalPoolFactory is
     }
 
     function setMaxDistributionRate(uint256 ratePerSecond) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (ratePerSecond < minDistributionRatePerSecond) revert PoolErrors.InvalidRange();
         uint256 oldValue = maxDistributionRatePerSecond;
         maxDistributionRatePerSecond = ratePerSecond;
         emit MaxDistributionRateUpdated(oldValue, ratePerSecond);
     }
 
     function setMinDistributionRate(uint256 ratePerSecond) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (ratePerSecond > maxDistributionRatePerSecond) revert PoolErrors.InvalidRange();
         uint256 oldValue = minDistributionRatePerSecond;
         minDistributionRatePerSecond = ratePerSecond;
         emit MinDistributionRateUpdated(oldValue, ratePerSecond);
@@ -392,6 +406,40 @@ contract PortalPoolFactory is
      */
     function getAllowedPaymentTokens() external view returns (address[] memory) {
         return paymentTokensList;
+    }
+
+    /**
+     * @dev called by pool contracts during transferOperator to keep factory mappings in sync.
+     * @param oldOperator the previous operator address.
+     * @param newOperator the new operator address.
+     */
+    function notifyOperatorTransfer(address oldOperator, address newOperator) external {
+        if (!isPortal[msg.sender]) revert PoolErrors.InvalidPool();
+
+        // Remove from old operator (O(1) swap-and-pop via reverse index)
+        uint256 count = operatorPortalCount[oldOperator];
+        uint256 idx = operatorPortalPoolIndex[msg.sender];
+
+        // verify index consistency — prevent silent corruption from stale index
+        if (operatorPortalPools[oldOperator][idx] != msg.sender) revert PoolErrors.InvalidPool();
+
+        uint256 lastIdx = count - 1;
+
+        if (idx != lastIdx) {
+            address lastPool = operatorPortalPools[oldOperator][lastIdx];
+            operatorPortalPools[oldOperator][idx] = lastPool;
+            operatorPortalPoolIndex[lastPool] = idx;
+        }
+        delete operatorPortalPools[oldOperator][lastIdx];
+        --operatorPortalCount[oldOperator];
+
+        // add to new operator
+        uint256 newIdx = operatorPortalCount[newOperator];
+        operatorPortalPools[newOperator][newIdx] = msg.sender;
+        operatorPortalPoolIndex[msg.sender] = newIdx;
+        ++operatorPortalCount[newOperator];
+
+        emit OperatorTransferNotified(msg.sender, oldOperator, newOperator);
     }
 
     /// @dev authorizes contract upgrades (UUPS pattern).

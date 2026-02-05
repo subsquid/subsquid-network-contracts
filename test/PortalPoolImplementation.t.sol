@@ -99,15 +99,17 @@ contract PortalPoolImplementationTest is BaseTest {
         vm.stopPrank();
     }
 
-    function test_Deposit_RevertOnExceedsCapacity() public {
+    function test_Deposit_AutoCapsToRemainingCapacity() public {
         uint256 amount = MIN_STAKE_THRESHOLD + 1;
 
         vm.startPrank(user1);
         sqd.approve(portal, amount);
-
-        vm.expectRevert(PoolErrors.CapacityExceeded.selector);
+        // Deposit exceeding capacity should auto-cap to capacity
         pool.deposit(amount);
         vm.stopPrank();
+
+        // Only capacity amount should have been deposited
+        assertEq(pool.getProviderStake(user1), MIN_STAKE_THRESHOLD);
     }
 
     function test_Deposit_RevertOnExceedsWalletLimit() public {
@@ -158,14 +160,17 @@ contract PortalPoolImplementationTest is BaseTest {
 
         assertEq(uint8(pool.getState()), uint8(IPortalPool.PoolState.FAILED));
 
+        // Deposit after deadline should gracefully transition to FAILED and return
+        // without reverting, but user's stake is not accepted
         vm.startPrank(user2);
         sqd.approve(portal, SMALL_STAKE);
         uint256 user2StakeBefore = pool.getProviderStake(user2);
-        vm.expectRevert(PoolErrors.InvalidState.selector);
         pool.deposit(SMALL_STAKE);
         vm.stopPrank();
 
+        // User2's stake should not have changed
         assertEq(pool.getProviderStake(user2), user2StakeBefore);
+        assertEq(uint8(pool.getState()), uint8(IPortalPool.PoolState.FAILED));
     }
 
     function test_Deposit_InActiveState() public {
@@ -919,11 +924,16 @@ contract PortalPoolImplementationTest is BaseTest {
     function test_Deposit_RevertOnFailed() public {
         _warpToAfterDeadline(portal);
 
+        // Deposit on a failed pool should gracefully transition to FAILED
+        // and return without reverting, but user's stake is not accepted
         vm.startPrank(user1);
         sqd.approve(portal, SMALL_STAKE);
-        vm.expectRevert(PoolErrors.InvalidState.selector);
+        uint256 stakeBefore = pool.getProviderStake(user1);
         pool.deposit(SMALL_STAKE);
         vm.stopPrank();
+
+        assertEq(pool.getProviderStake(user1), stakeBefore);
+        assertEq(uint8(pool.getState()), uint8(IPortalPool.PoolState.FAILED));
     }
 
     function test_GetClaimableRewards_InCollectingState() public {
@@ -1294,7 +1304,7 @@ contract PortalPoolImplementationTest is BaseTest {
     }
 
     /// @notice test that deposits are still rejected when activeStake would exceed capacity
-    function test_Deposit_RejectedWhenActiveStakeExceedsCapacity() public {
+    function test_Deposit_AutoCapsWhenActiveStakeExceedsCapacity() public {
         // Create a larger pool
         address largePortal = _createPortal(operator, MIN_STAKE_THRESHOLD * 2, "LargePortal2");
         PortalPoolImplementation largePool = PortalPoolImplementation(largePortal);
@@ -1310,14 +1320,15 @@ contract PortalPoolImplementationTest is BaseTest {
         vm.prank(user1);
         largePool.requestExit(exitAmount);
 
-        // User2 tries to deposit more than the freed capacity - should fail
+        // User2 tries to deposit more than the freed capacity - auto-caps to freed amount
         uint256 depositAmount = exitAmount + 1;
         vm.startPrank(user2);
         sqd.approve(largePortal, depositAmount);
-
-        vm.expectRevert(PoolErrors.CapacityExceeded.selector);
         largePool.deposit(depositAmount);
         vm.stopPrank();
+
+        // Only exitAmount should have been deposited (auto-capped)
+        assertEq(largePool.getProviderStake(user2), exitAmount);
     }
 
     /// @notice Test deposit at exact capacity boundary with pending exits

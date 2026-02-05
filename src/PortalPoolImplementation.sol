@@ -128,25 +128,34 @@ contract PortalPoolImplementation is
         if (amount == 0) revert PoolErrors.InvalidAmount();
         if (whitelistEnabled && !whitelist[msg.sender]) revert PoolErrors.NotWhitelisted();
 
+        // Handle deposit deadline before state check so pool transitions
+        // gracefully to FAILED instead of reverting with InvalidState()
+        if (
+            _poolInfo.state == PoolState.COLLECTING && !_poolInfo.firstActivated
+                && block.timestamp > _poolInfo.depositDeadline
+        ) {
+            _handleDeadlinePassed();
+            return;
+        }
+
         PoolState currentState = getState();
         if (currentState != PoolState.COLLECTING && currentState != PoolState.ACTIVE && currentState != PoolState.IDLE)
         {
             revert PoolErrors.InvalidState();
         }
 
-        if (currentState == PoolState.COLLECTING) {
-            if (block.timestamp > _poolInfo.depositDeadline) {
-                _handleDeadlinePassed();
-                return;
-            }
+        // Auto-cap deposit to remaining capacity to prevent dust frontrunning DoS
+        uint256 remainingCapacity = _poolInfo.capacity > _getActiveStake()
+            ? _poolInfo.capacity - _getActiveStake()
+            : 0;
+        if (remainingCapacity == 0) revert PoolErrors.CapacityExceeded();
+        if (amount > remainingCapacity) {
+            amount = remainingCapacity;
         }
 
         // Validate against requested amount (upper bound check)
         uint256 newUserStake = _stakes[msg.sender] + amount;
         if (newUserStake > _factory.defaultMaxStakePerWallet()) revert PoolErrors.ExceedsWalletLimit();
-
-        uint256 newActiveStake = _getActiveStake() + amount;
-        if (newActiveStake > _poolInfo.capacity) revert PoolErrors.CapacityExceeded();
 
         // FoT-safe transfer: measure actual received amount
         uint256 balanceBefore = _sqd.balanceOf(address(this));
@@ -447,7 +456,10 @@ contract PortalPoolImplementation is
      * @param newRatePerSecond the new rate scaled by RATE_PRECISION.
      */
     function setDistributionRate(uint256 newRatePerSecond) external onlyOperator {
-        if (getState() == PoolState.COLLECTING) revert PoolErrors.InvalidState();
+        PoolState currentState = getState();
+        if (currentState == PoolState.COLLECTING || currentState == PoolState.CLOSED) {
+            revert PoolErrors.InvalidState();
+        }
         if (newRatePerSecond > _factory.maxDistributionRatePerSecond()) {
             revert PoolErrors.RateExceedsMaximum();
         }
@@ -475,6 +487,7 @@ contract PortalPoolImplementation is
      * @param newCapacity the new maximum stake capacity.
      */
     function setCapacity(uint256 newCapacity) external onlyOperator {
+        if (getState() == PoolState.CLOSED) revert PoolErrors.PoolClosed();
         if (!_poolInfo.firstActivated) revert PoolErrors.NotActivated();
         if (newCapacity == _poolInfo.capacity) revert PoolErrors.NoChange();
         uint256 minCapacity = _factory.minStakeThreshold();
@@ -557,8 +570,12 @@ contract PortalPoolImplementation is
      * @notice Transfer operator role to a new wallet. Only callable by current operator.
      * @param newOperator the address of the new operator.
      */
-    function transferOperator(address newOperator) external onlyOperator {
+    function transferOperator(address newOperator) external onlyOperator whenNotPaused {
         if (newOperator == address(0)) revert PoolErrors.InvalidAddress();
+
+        PoolState currentState = getState();
+        if (currentState == PoolState.CLOSED) revert PoolErrors.PoolClosed();
+        if (currentState == PoolState.FAILED) revert PoolErrors.InvalidState();
 
         address previousOperator = _poolInfo.operator;
         if (newOperator == previousOperator) revert PoolErrors.NoChange();
@@ -572,6 +589,9 @@ contract PortalPoolImplementation is
 
         // Update operator in registry (updates cluster.operator and ownerClusters mapping)
         _portalRegistry.updateClusterOperator(newOperator);
+
+        // Update factory mappings (keeps getOperatorPortals in sync)
+        _factory.notifyOperatorTransfer(previousOperator, newOperator);
 
         // If whitelist is enabled, add new operator to whitelist
         if (whitelistEnabled) {
@@ -742,7 +762,8 @@ contract PortalPoolImplementation is
         // drainRate is scaled by RATE_PRECISION, so multiply credit/debt by RATE_PRECISION before dividing
         if (debt > 0) {
             // time when credit ran out: balanceTs - (debt * RATE_PRECISION / drainRate)
-            return int256(uint256(balanceTs)) - int256(FullMath.mulDiv(debt, RATE_PRECISION, drainRate));
+            // Round UP so runway appears earlier (conservative)
+            return int256(uint256(balanceTs)) - int256(FullMath.mulDivRoundingUp(debt, RATE_PRECISION, drainRate));
         }
 
         // runway = balanceTs + credit * RATE_PRECISION / drainRate
@@ -827,8 +848,15 @@ contract PortalPoolImplementation is
         }
 
         uint256 elapsed = timestamp - uint256(balanceTs);
-        // drainRate is scaled by RATE_PRECISION, so divide to get actual drained amount
-        uint256 drained = FullMath.mulDiv(elapsed, drainRate, RATE_PRECISION);
+        // Split drain to match reward formula exactly, rounding UP so drain >= rewards
+        uint256 treasuryDrained = FullMath.mulDiv(elapsed, treasuryRatePerSec, RATE_PRECISION);
+        uint256 activeStake = _getActiveStake();
+        uint256 providerDrained = FullMath.mulDivRoundingUp(
+            FullMath.mulDiv(activeStake, perStakeRateWad, 1),
+            elapsed,
+            ACC
+        );
+        uint256 drained = treasuryDrained + providerDrained;
 
         // apply drain: first reduce credit, then increase debt
         if (drained <= credit) {
@@ -864,7 +892,8 @@ contract PortalPoolImplementation is
         uint256 capacity = _poolInfo.capacity;
         if (capacity == 0) return 0;
         // Return scaled drain rate (still multiplied by RATE_PRECISION)
-        uint256 providerDrain = FullMath.mulDiv(providerRatePerSec, activeStake, capacity);
+        // Round UP so drain >= actual rewards, preventing credit overestimation
+        uint256 providerDrain = FullMath.mulDivRoundingUp(providerRatePerSec, activeStake, capacity);
         return treasuryRatePerSec + providerDrain;
     }
 
@@ -1035,6 +1064,23 @@ contract PortalPoolImplementation is
         }
 
         emit Withdrawn(msg.sender, userStake);
+    }
+
+    /// @notice Recover unused reward credit from a closed pool
+    /// @dev Only callable by operator. Only recovers credit (unused funds), not provider rewards.
+    function recoverRewardsFromClosed() external onlyOperator nonReentrant returns (uint256) {
+        if (getState() != PoolState.CLOSED) revert PoolErrors.PoolNotClosed();
+
+        uint256 amount = credit;
+        if (amount == 0) revert PoolErrors.NothingToClaim();
+
+        // Clear credit to prevent double recovery
+        credit = 0;
+
+        _rewardToken.safeTransfer(msg.sender, amount);
+
+        emit RewardsRecovered(msg.sender, amount);
+        return amount;
     }
 
     /// @notice Claim any pending rewards when pool is closed

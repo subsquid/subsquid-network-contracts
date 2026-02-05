@@ -49,7 +49,8 @@ library ExitQueueLib {
         unchecked {
             uint256 maxDt = type(uint256).max / unlockRatePerSecond;
             if (dt > maxDt) {
-                newlyProcessed = type(uint256).max;
+                // Saturated: enough time has passed to process everything
+                return self.totalRequested;
             } else {
                 newlyProcessed = dt * unlockRatePerSecond;
             }
