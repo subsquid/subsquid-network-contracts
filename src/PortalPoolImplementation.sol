@@ -145,9 +145,7 @@ contract PortalPoolImplementation is
         }
 
         // Auto-cap deposit to remaining capacity to prevent dust frontrunning DoS
-        uint256 remainingCapacity = _poolInfo.capacity > _getActiveStake()
-            ? _poolInfo.capacity - _getActiveStake()
-            : 0;
+        uint256 remainingCapacity = _poolInfo.capacity > _getActiveStake() ? _poolInfo.capacity - _getActiveStake() : 0;
         if (remainingCapacity == 0) revert PoolErrors.CapacityExceeded();
         if (amount > remainingCapacity) {
             amount = remainingCapacity;
@@ -851,11 +849,8 @@ contract PortalPoolImplementation is
         // Split drain to match reward formula exactly, rounding UP so drain >= rewards
         uint256 treasuryDrained = FullMath.mulDiv(elapsed, treasuryRatePerSec, RATE_PRECISION);
         uint256 activeStake = _getActiveStake();
-        uint256 providerDrained = FullMath.mulDivRoundingUp(
-            FullMath.mulDiv(activeStake, perStakeRateWad, 1),
-            elapsed,
-            ACC
-        );
+        uint256 providerDrained =
+            FullMath.mulDivRoundingUp(FullMath.mulDiv(activeStake, perStakeRateWad, 1), elapsed, ACC);
         uint256 drained = treasuryDrained + providerDrained;
 
         // apply drain: first reduce credit, then increase debt
