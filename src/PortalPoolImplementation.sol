@@ -377,7 +377,8 @@ contract PortalPoolImplementation is
     function topUpRewards(uint256 amount) external onlyOperator nonReentrant {
         if (totalDistributionRatePerSec == 0) revert PoolErrors.DistributionTurnedOff();
         if (amount == 0) revert PoolErrors.InvalidAmount();
-        if (getState() != PoolState.ACTIVE) revert PoolErrors.InvalidState();
+        PoolState currentState = getState();
+        if (currentState != PoolState.ACTIVE && currentState != PoolState.IDLE) revert PoolErrors.InvalidState();
 
         // measure actual received for fee-on-transfer token safety
         uint256 balanceBefore = _rewardToken.balanceOf(address(this));
