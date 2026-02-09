@@ -399,6 +399,7 @@ contract PortalPoolImplementation is
             debt = 0;
         }
         balanceTs = uint64(block.timestamp);
+        runwayPassed = 0;
 
         _accrueGlobal(block.timestamp, false);
 
@@ -761,6 +762,7 @@ contract PortalPoolImplementation is
     }
 
     function getRunway() public view returns (int256) {
+        if (runwayPassed > 0) return runwayPassed;
         uint256 drainRate = _totalDrainRate();
         if (drainRate == 0) return type(int256).max;
 
@@ -966,6 +968,21 @@ contract PortalPoolImplementation is
             credit = currentCredit;
             debt = currentDebt;
             balanceTs = uint64(timestamp);
+            _syncRunwayPassed(timestamp);
+        }
+    }
+
+    function _syncRunwayPassed(uint256 timestamp) internal {
+        if (debt == 0) {
+            runwayPassed = 0;
+            return;
+        }
+        if (runwayPassed > 0) return;
+        uint256 drainRate = _totalDrainRate();
+        if (drainRate == 0) return;
+        int256 runway = int256(uint256(balanceTs)) - int256(FullMath.mulDivRoundingUp(debt, RATE_PRECISION, drainRate));
+        if (runway > 0 && runway < int256(timestamp)) {
+            runwayPassed = runway;
         }
     }
 
