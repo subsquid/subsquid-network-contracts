@@ -758,12 +758,12 @@ contract PortalPoolImplementation is
 
     function getTotalDrainRate() external view returns (uint256) {
         // Returns the scaled drain rate (multiplied by RATE_PRECISION)
-        return _totalDrainRate();
+        return _totalDrainRate(true);
     }
 
     function getRunway() public view returns (int256) {
         if (runwayPassed > 0) return runwayPassed;
-        uint256 drainRate = _totalDrainRate();
+        uint256 drainRate = _totalDrainRate(debt == 0);
         if (drainRate == 0) return type(int256).max;
 
         // if already in debt, runway is in the past
@@ -843,7 +843,7 @@ contract PortalPoolImplementation is
 
     /// @notice get current credit and debt at a given timestamp (view helper)
     function _currentCreditDebt(uint256 timestamp) internal view returns (uint256 currentCredit, uint256 currentDebt) {
-        uint256 drainRate = _totalDrainRate();
+        uint256 drainRate = _totalDrainRate(true);
 
         // no drain rate = no changes
         if (drainRate == 0) {
@@ -894,7 +894,7 @@ contract PortalPoolImplementation is
         return rewardPerStakeStored;
     }
 
-    function _totalDrainRate() internal view returns (uint256) {
+    function _totalDrainRate(bool roundUp) internal view returns (uint256) {
         // no drain if pool was never activated
         if (!_poolInfo.firstActivated) return 0;
 
@@ -906,9 +906,9 @@ contract PortalPoolImplementation is
         // Note: rates are scaled by RATE_PRECISION, returned value is also scaled
         uint256 capacity = _poolInfo.capacity;
         if (capacity == 0) return 0;
-        // Return scaled drain rate (still multiplied by RATE_PRECISION)
-        // Round UP so drain >= actual rewards, preventing credit overestimation
-        uint256 providerDrain = FullMath.mulDivRoundingUp(providerRatePerSec, activeStake, capacity);
+        uint256 providerDrain = roundUp
+            ? FullMath.mulDivRoundingUp(providerRatePerSec, activeStake, capacity)
+            : FullMath.mulDiv(providerRatePerSec, activeStake, capacity);
         return treasuryRatePerSec + providerDrain;
     }
 
@@ -978,7 +978,7 @@ contract PortalPoolImplementation is
             return;
         }
         if (runwayPassed > 0) return;
-        uint256 drainRate = _totalDrainRate();
+        uint256 drainRate = _totalDrainRate(false);
         if (drainRate == 0) return;
         int256 runway = int256(uint256(balanceTs)) - int256(FullMath.mulDivRoundingUp(debt, RATE_PRECISION, drainRate));
         if (runway > 0 && runway < int256(timestamp)) {
