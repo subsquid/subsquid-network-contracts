@@ -121,4 +121,35 @@ contract RunwayAccountingRegressionTest is BaseTest {
         assertTrue(paidAfterDryAccrual >= paidAfterClaim, "totalRewardsPaid must keep monotonicity");
         assertLe(paidAfterDryAccrual, pool.credit(), "totalRewardsPaid must not exceed credit");
     }
+
+    function testTokenRateRoundedUp_DoesNotOverstateClaimable() public {
+        uint256 localRate = 1_501;
+        uint256 localInitialDeposit = localRate * 1 days / 1000;
+
+        IPortalFactory.CreatePortalPoolParams memory params = IPortalFactory.CreatePortalPoolParams({
+            operator: operator,
+            capacity: CAPACITY,
+            tokenSuffix: "ROUND",
+            distributionRatePerSecond: localRate,
+            initialDeposit: localInitialDeposit,
+            metadata: "",
+            rewardToken: address(usdc)
+        });
+        usdc.approve(address(factory), localInitialDeposit);
+        PortalPoolImplementation localPool = PortalPoolImplementation(factory.createPortalPool(params));
+
+        vm.prank(user1);
+        sqd.approve(address(localPool), type(uint256).max);
+        vm.prank(user1);
+        localPool.deposit(CAPACITY);
+
+        uint256 creditBefore = localPool.credit();
+        uint256 tokenRateFloor = localRate / 1000;
+        uint256 flooredMaxDt = creditBefore / tokenRateFloor;
+
+        skip(flooredMaxDt);
+
+        uint256 claimable = localPool.getClaimableRewards(user1);
+        assertLe(claimable, creditBefore, "claimable must not exceed credit");
+    }
 }

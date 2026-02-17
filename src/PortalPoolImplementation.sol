@@ -343,16 +343,23 @@ contract PortalPoolImplementation is
     }
 
     /**
-     * @dev allows operator to recover reward tokens from a FAILED pool.
-     * @notice Recover unused reward tokens when pool fails to activate.
+     * @dev allows operator to recover reward tokens from a FAILED or CLOSED pool.
+     * @notice In FAILED state recovers full token balance; in CLOSED state recovers only unused budget.
      * @return amount the amount of reward tokens recovered.
      */
     function recoverRewards() external onlyOperator nonReentrant returns (uint256) {
-        if (getState() != PoolState.FAILED) revert PoolErrors.InvalidState();
-
-        uint256 amount = _rewardToken.balanceOf(address(this));
+        PoolState currentState = getState();
+        uint256 amount;
+        if (currentState == PoolState.FAILED) {
+            amount = _rewardToken.balanceOf(address(this));
+        } else if (currentState == PoolState.CLOSED) {
+            amount = credit > totalRewardsPaid ? credit - totalRewardsPaid : 0;
+        } else {
+            revert PoolErrors.InvalidState();
+        }
         if (amount == 0) revert PoolErrors.NothingToClaim();
 
+        credit = totalRewardsPaid;
         _rewardToken.safeTransfer(msg.sender, amount);
 
         emit RewardsRecovered(msg.sender, amount);
@@ -745,7 +752,7 @@ contract PortalPoolImplementation is
         uint256 remaining = credit - totalRewardsPaid;
         uint256 activeStake = _getActiveStake();
         if (activeStake == 0 || perStakeRateWad == 0) return type(int256).max;
-        uint256 tokenRate = FullMath.mulDiv(perStakeRateWad, activeStake, ACC);
+        uint256 tokenRate = FullMath.mulDivRoundingUp(perStakeRateWad, activeStake, ACC);
         if (tokenRate == 0) return type(int256).max;
         return int256(uint256(lastEffectiveRewardTs)) + int256(remaining / tokenRate);
     }
@@ -874,7 +881,7 @@ contract PortalPoolImplementation is
         if (remaining == 0) return (newRPS, newEffectiveTs);
 
         uint256 dt = timestamp - uint256(newEffectiveTs);
-        uint256 tokenRate = FullMath.mulDiv(perStakeRateWad, activeStake, ACC);
+        uint256 tokenRate = FullMath.mulDivRoundingUp(perStakeRateWad, activeStake, ACC);
         if (tokenRate == 0) return (newRPS, uint64(timestamp));
 
         uint256 maxDt = remaining / tokenRate;
@@ -896,7 +903,7 @@ contract PortalPoolImplementation is
         uint256 rpsDelta = newRPS - rewardPerStakeStored;
         if (rpsDelta > 0) {
             uint256 activeStake = _getActiveStake();
-            totalRewardsPaid += FullMath.mulDiv(rpsDelta, activeStake, ACC);
+            totalRewardsPaid += FullMath.mulDivRoundingUp(rpsDelta, activeStake, ACC);
             if (totalRewardsPaid > credit) totalRewardsPaid = credit;
         }
 

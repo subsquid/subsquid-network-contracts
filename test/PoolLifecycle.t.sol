@@ -223,6 +223,46 @@ contract PoolLifecycleTest is BaseTest {
         pool.recoverRewards();
     }
 
+    function test_RecoverRewards_FromClosed_Success() public {
+        address portal = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "RecoverClosed");
+        PortalPoolImplementation pool = PortalPoolImplementation(portal);
+
+        uint256 topUpAmount = 1_000 * 1e6;
+        vm.startPrank(operator);
+        usdc.approve(portal, topUpAmount);
+        pool.topUpRewards(topUpAmount);
+        vm.stopPrank();
+
+        vm.warp(block.timestamp + 100);
+        uint256 claimableBeforeClose = pool.getClaimableRewards(user1);
+        assertTrue(claimableBeforeClose > 0, "should accrue before close");
+
+        pool.closePool();
+        assertEq(uint256(pool.getState()), uint256(IPortalPool.PoolState.CLOSED));
+
+        uint256 expectedRecover =
+            pool.credit() > pool.totalRewardsPaid() ? pool.credit() - pool.totalRewardsPaid() : 0;
+        assertTrue(expectedRecover > 0, "should have unused budget");
+
+        uint256 operatorBalBefore = usdc.balanceOf(operator);
+        vm.prank(operator);
+        uint256 recovered = pool.recoverRewards();
+
+        assertEq(recovered, expectedRecover);
+        assertEq(usdc.balanceOf(operator), operatorBalBefore + recovered);
+        assertEq(pool.credit(), pool.totalRewardsPaid(), "credit should equal spent after recovery");
+
+        uint256 userBalBefore = usdc.balanceOf(user1);
+        vm.prank(user1);
+        uint256 claimed = pool.claimRewardsFromClosed();
+        assertTrue(claimed > 0, "accrued rewards should remain claimable");
+        assertEq(usdc.balanceOf(user1), userBalBefore + claimed);
+
+        vm.prank(operator);
+        vm.expectRevert(PoolErrors.NothingToClaim.selector);
+        pool.recoverRewards();
+    }
+
     function test_RecoverRewards_RevertOnNotFailedOrClosed() public {
         address portal = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "NotFailed");
         PortalPoolImplementation pool = PortalPoolImplementation(portal);
