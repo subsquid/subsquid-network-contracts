@@ -95,10 +95,8 @@ contract PortalPoolImplementation is
         _poolInfo.paused = false;
         _poolInfo.firstActivated = false;
 
-        // Initialize runway model state (credit/debt pattern)
         credit = 0;
-        debt = 0;
-        balanceTs = uint64(block.timestamp);
+        totalRewardsPaid = 0;
         rewardPerStakeStored = 0;
         lastEffectiveRewardTs = uint64(block.timestamp);
 
@@ -143,6 +141,12 @@ contract PortalPoolImplementation is
         {
             revert PoolErrors.InvalidState();
         }
+        if (
+            currentState != PoolState.COLLECTING && totalDistributionRatePerSec > 0
+                && _stakes[msg.sender] == 0 && currentBalance(block.timestamp) <= 0
+        ) {
+            revert PoolErrors.PoolHasDebt();
+        }
 
         // Auto-cap deposit to remaining capacity to prevent dust frontrunning DoS
         uint256 remainingCapacity = _poolInfo.capacity > _getActiveStake() ? _poolInfo.capacity - _getActiveStake() : 0;
@@ -166,16 +170,15 @@ contract PortalPoolImplementation is
         uint256 actualNewTotal = _poolInfo.totalStaked + actualReceived;
 
         // Accrue global state and update user BEFORE changing stake
-        _accrueGlobal(block.timestamp, true);
+        _accrueGlobal(block.timestamp);
         _updateProvider(msg.sender);
 
         _stakes[msg.sender] = actualNewUserStake;
         _poolInfo.totalStaked = actualNewTotal;
 
-        // Update user's reward debt for new activeStake
-        // Use _checkpointRPS() to prevent inflated rewards when depositing during dry period (H-02/H-05)
+        // Update user's reward checkpoint for new activeStake
         uint256 activeStake = _getProviderActiveStake(msg.sender);
-        _rewardCheckpoint[msg.sender] = FullMath.mulDiv(activeStake, _checkpointRPS(), ACC);
+        _rewardCheckpoint[msg.sender] = FullMath.mulDiv(activeStake, rewardPerStakeStored, ACC);
 
         bool shouldActivate = !_poolInfo.firstActivated && _poolInfo.totalStaked >= _poolInfo.capacity;
 
@@ -236,7 +239,7 @@ contract PortalPoolImplementation is
         }
 
         // Accrue global state and update user BEFORE changing exit amounts
-        _accrueGlobal(block.timestamp, true);
+        _accrueGlobal(block.timestamp);
         _updateProvider(msg.sender);
 
         uint256 endPos = _exitQueue.enqueue(amount, _factory.exitUnlockRatePerSecond());
@@ -272,7 +275,7 @@ contract PortalPoolImplementation is
         uint256 unlockRate = _factory.exitUnlockRatePerSecond();
         if (!ExitQueueLib.isUnlocked(_exitQueue, ticket, unlockRate)) revert PoolErrors.StillInQueue();
 
-        _accrueGlobal(block.timestamp, true);
+        _accrueGlobal(block.timestamp);
 
         ticket.withdrawn = true;
 
@@ -311,20 +314,21 @@ contract PortalPoolImplementation is
         if (receiverNewStake > _factory.defaultMaxStakePerWallet()) revert PoolErrors.ExceedsWalletLimit();
 
         // Accrue global state and update both users BEFORE changing stakes
-        _accrueGlobal(block.timestamp, true);
+        _accrueGlobal(block.timestamp);
+        if (totalDistributionRatePerSec > 0 && _stakes[to] == 0 && currentBalance(block.timestamp) <= 0) {
+            revert PoolErrors.PoolHasDebt();
+        }
         _updateProvider(from);
         _updateProvider(to);
 
         _stakes[from] -= amount;
         _stakes[to] = receiverNewStake;
 
-        // Update reward debts for new activeStakes
-        // Sender uses rewardPerStakeStored (conservative: underpays slightly during dry period)
-        // Receiver uses _checkpointRPS() to prevent inflated rewards during dry period (H-02/H-05)
+        // Update reward checkpoints for new activeStakes
         uint256 fromActiveStake = _getProviderActiveStake(from);
         uint256 toActiveStake = _getProviderActiveStake(to);
         _rewardCheckpoint[from] = FullMath.mulDiv(fromActiveStake, rewardPerStakeStored, ACC);
-        _rewardCheckpoint[to] = FullMath.mulDiv(toActiveStake, _checkpointRPS(), ACC);
+        _rewardCheckpoint[to] = FullMath.mulDiv(toActiveStake, rewardPerStakeStored, ACC);
 
         emit StakeTransferred(from, to, amount);
     }
@@ -346,23 +350,16 @@ contract PortalPoolImplementation is
     }
 
     /**
-     * @dev allows operator to recover reward tokens from a FAILED or CLOSED pool.
-     * @notice In FAILED state recovers full token balance; in CLOSED state recovers unused credit.
+     * @dev allows operator to recover reward tokens from a FAILED pool.
+     * @notice Recover unused reward tokens when pool fails to activate.
      * @return amount the amount of reward tokens recovered.
      */
     function recoverRewards() external onlyOperator nonReentrant returns (uint256) {
-        PoolState currentState = getState();
-        uint256 amount;
-        if (currentState == PoolState.FAILED) {
-            amount = _rewardToken.balanceOf(address(this));
-        } else if (currentState == PoolState.CLOSED) {
-            amount = credit;
-        } else {
-            revert PoolErrors.InvalidState();
-        }
+        if (getState() != PoolState.FAILED) revert PoolErrors.InvalidState();
+
+        uint256 amount = _rewardToken.balanceOf(address(this));
         if (amount == 0) revert PoolErrors.NothingToClaim();
 
-        credit = 0;
         _rewardToken.safeTransfer(msg.sender, amount);
 
         emit RewardsRecovered(msg.sender, amount);
@@ -387,21 +384,12 @@ contract PortalPoolImplementation is
 
         (uint256 toProviders, uint256 toWorkerPool, uint256 toBurn) = _routeFees(received);
 
-        // Update credit/debt: checkpoint current state then add toProviders
-        (uint256 currentCredit, uint256 currentDebt) = _currentCreditDebt(block.timestamp);
-
-        // Apply topup: pay off debt first, remainder goes to credit
-        if (toProviders <= currentDebt) {
-            credit = currentCredit;
-            debt = currentDebt - toProviders;
-        } else {
-            credit = currentCredit + (toProviders - currentDebt);
-            debt = 0;
+        _accrueGlobal(block.timestamp);
+        bool wasDry = uint256(lastEffectiveRewardTs) < block.timestamp;
+        credit += toProviders;
+        if (wasDry && toProviders > 0) {
+            lastEffectiveRewardTs = uint64(block.timestamp);
         }
-        balanceTs = uint64(block.timestamp);
-        runwayPassed = 0;
-
-        _accrueGlobal(block.timestamp, false);
 
         emit RewardsToppedUp(msg.sender, received, toProviders, toWorkerPool, toBurn);
     }
@@ -412,12 +400,11 @@ contract PortalPoolImplementation is
      */
     function initializeCredit(uint256 amount) external {
         if (msg.sender != address(_factory)) revert PoolErrors.NotFactory();
-        if (credit > 0 || debt > 0) revert PoolErrors.AlreadyInitialized();
+        if (credit > 0) revert PoolErrors.AlreadyInitialized();
 
         (uint256 toProviders, uint256 toWorkerPool, uint256 toBurn) = _routeFees(amount);
 
         credit = toProviders;
-        balanceTs = uint64(block.timestamp);
 
         emit RewardsToppedUp(address(_factory), amount, toProviders, toWorkerPool, toBurn);
     }
@@ -445,7 +432,7 @@ contract PortalPoolImplementation is
     function claimRewards() external whenNotPaused nonReentrant returns (uint256) {
         // always allow claiming - users should be able to claim earned rewards
         // even if distribution is turned off
-        _accrueGlobal(block.timestamp, true);
+        _accrueGlobal(block.timestamp);
         _updateProvider(msg.sender);
 
         uint256 amount = _unclaimedRewards[msg.sender];
@@ -481,10 +468,9 @@ contract PortalPoolImplementation is
             }
         }
 
-        _accrueGlobal(block.timestamp, true);
+        _accrueGlobal(block.timestamp);
 
-        // Cannot change rate while pool has debt
-        if (debt > 0) revert PoolErrors.PoolHasDebt();
+        if (credit > 0 && totalRewardsPaid >= credit) revert PoolErrors.PoolHasDebt();
 
         _setDistributionRate(newRatePerSecond);
     }
@@ -508,10 +494,9 @@ contract PortalPoolImplementation is
             }
         }
 
-        _accrueGlobal(block.timestamp, true);
+        _accrueGlobal(block.timestamp);
 
-        // Cannot change capacity while pool has debt
-        if (debt > 0) revert PoolErrors.PoolHasDebt();
+        if (credit > 0 && totalRewardsPaid >= credit) revert PoolErrors.PoolHasDebt();
 
         uint256 oldCapacity = _poolInfo.capacity;
         _poolInfo.capacity = newCapacity;
@@ -706,23 +691,21 @@ contract PortalPoolImplementation is
         view
         returns (int256 balance, uint256 currentDebt, int256 runwayTimestamp, bool isDry)
     {
-        (uint256 currentCredit, uint256 cDebt) = _currentCreditDebt(block.timestamp);
-        balance = int256(currentCredit) - int256(cDebt);
-        currentDebt = cDebt;
+        balance = currentBalance(block.timestamp);
+        currentDebt = 0;
         runwayTimestamp = getRunway();
-        isDry = currentCredit == 0;
+        isDry = balance <= 0;
     }
 
-    /// @notice get current credit (available funds for distribution)
+    /// @notice get remaining reward budget
     function getCredit() external view returns (uint256) {
-        (uint256 currentCredit,) = _currentCreditDebt(block.timestamp);
-        return currentCredit;
+        int256 bal = currentBalance(block.timestamp);
+        return bal > 0 ? uint256(bal) : 0;
     }
 
-    /// @notice get current debt (owed but unpaid rewards)
+    /// @notice returns 0 (debt concept removed, kept for interface compat)
     function getDebt() external view returns (uint256) {
-        (, uint256 currentDebt) = _currentCreditDebt(block.timestamp);
-        return currentDebt;
+        return 0;
     }
 
     /// @notice get consolidated pool status with provider rewards
@@ -739,10 +722,11 @@ contract PortalPoolImplementation is
             uint256 providerStake
         )
     {
-        (poolCredit, poolDebt) = _currentCreditDebt(block.timestamp);
-        poolBalance = int256(poolCredit) - int256(poolDebt);
+        poolBalance = currentBalance(block.timestamp);
+        poolCredit = poolBalance > 0 ? uint256(poolBalance) : 0;
+        poolDebt = 0;
         runway = getRunway();
-        outOfMoney = poolCredit == 0;
+        outOfMoney = poolBalance <= 0;
 
         providerStake = _getProviderActiveStake(provider);
         if (providerStake == 0) {
@@ -758,24 +742,19 @@ contract PortalPoolImplementation is
 
     function getTotalDrainRate() external view returns (uint256) {
         // Returns the scaled drain rate (multiplied by RATE_PRECISION)
-        return _totalDrainRate(true);
+        return _totalDrainRate();
     }
 
     function getRunway() public view returns (int256) {
-        if (runwayPassed > 0) return runwayPassed;
-        uint256 drainRate = _totalDrainRate(debt == 0);
-        if (drainRate == 0) return type(int256).max;
-
-        // if already in debt, runway is in the past
-        // drainRate is scaled by RATE_PRECISION, so multiply credit/debt by RATE_PRECISION before dividing
-        if (debt > 0) {
-            // time when credit ran out: balanceTs - (debt * RATE_PRECISION / drainRate)
-            // Round UP so runway appears earlier (conservative)
-            return int256(uint256(balanceTs)) - int256(FullMath.mulDivRoundingUp(debt, RATE_PRECISION, drainRate));
+        if (totalRewardsPaid >= credit) {
+            return int256(uint256(lastEffectiveRewardTs));
         }
-
-        // runway = balanceTs + credit * RATE_PRECISION / drainRate
-        return int256(uint256(balanceTs)) + int256(FullMath.mulDiv(credit, RATE_PRECISION, drainRate));
+        uint256 remaining = credit - totalRewardsPaid;
+        uint256 activeStake = _getActiveStake();
+        if (activeStake == 0 || perStakeRateWad == 0) return type(int256).max;
+        uint256 tokenRate = FullMath.mulDiv(perStakeRateWad, activeStake, ACC);
+        if (tokenRate == 0) return type(int256).max;
+        return int256(uint256(lastEffectiveRewardTs)) + int256(remaining / tokenRate);
     }
 
     function getActiveStake() external view returns (uint256) {
@@ -837,41 +816,15 @@ contract PortalPoolImplementation is
     }
 
     function currentBalance(uint256 timestamp) public view returns (int256) {
-        (uint256 currentCredit, uint256 currentDebt) = _currentCreditDebt(timestamp);
-        return int256(currentCredit) - int256(currentDebt);
-    }
-
-    /// @notice get current credit and debt at a given timestamp (view helper)
-    function _currentCreditDebt(uint256 timestamp) internal view returns (uint256 currentCredit, uint256 currentDebt) {
-        uint256 drainRate = _totalDrainRate(true);
-
-        // no drain rate = no changes
-        if (drainRate == 0) {
-            return (credit, debt);
+        (uint256 newRPS,) = _simulateGlobalAccrual(timestamp);
+        uint256 rpsDelta = newRPS - rewardPerStakeStored;
+        uint256 simulatedPaid = totalRewardsPaid;
+        if (rpsDelta > 0) {
+            uint256 activeStake = _getActiveStake();
+            simulatedPaid += FullMath.mulDiv(rpsDelta, activeStake, ACC);
+            if (simulatedPaid > credit) simulatedPaid = credit;
         }
-
-        // handle case where timestamp might be before balanceTs
-        if (timestamp < uint256(balanceTs)) {
-            return (credit, debt);
-        }
-
-        uint256 elapsed = timestamp - uint256(balanceTs);
-        // Split drain to match reward formula exactly, rounding UP so drain >= rewards
-        uint256 treasuryDrained = FullMath.mulDiv(elapsed, treasuryRatePerSec, RATE_PRECISION);
-        uint256 activeStake = _getActiveStake();
-        uint256 providerDrained =
-            FullMath.mulDivRoundingUp(FullMath.mulDiv(activeStake, perStakeRateWad, 1), elapsed, ACC);
-        uint256 drained = treasuryDrained + providerDrained;
-
-        // apply drain: first reduce credit, then increase debt
-        if (drained <= credit) {
-            currentCredit = credit - drained;
-            currentDebt = debt;
-        } else {
-            // credit exhausted, remainder goes to debt
-            currentCredit = 0;
-            currentDebt = debt + (drained - credit);
-        }
+        return int256(credit) - int256(simulatedPaid);
     }
 
     function _getProviderActiveStake(address provider) internal view returns (uint256) {
@@ -884,31 +837,15 @@ contract PortalPoolImplementation is
         return _poolInfo.totalStaked > _totalExitAmounts ? _poolInfo.totalStaked - _totalExitAmounts : 0;
     }
 
-    /// @dev Returns the "virtual" RPS during dry periods 
-    /// used for checkpointing new depositors / LPT receivers so they don't earn rewards for time before entry
-    function _checkpointRPS() internal view returns (uint256) {
-        if (perStakeRateWad > 0 && uint256(lastEffectiveRewardTs) < block.timestamp) {
-            uint256 frozenDelta = block.timestamp - uint256(lastEffectiveRewardTs);
-            return rewardPerStakeStored + FullMath.mulDiv(perStakeRateWad, frozenDelta, 1);
-        }
-        return rewardPerStakeStored;
-    }
-
-    function _totalDrainRate(bool roundUp) internal view returns (uint256) {
-        // no drain if pool was never activated
+    function _totalDrainRate() internal view returns (uint256) {
         if (!_poolInfo.firstActivated) return 0;
-
         uint256 activeStake = _getActiveStake();
         uint256 minStake = _factory.minStakeThreshold();
         if (_poolInfo.totalStaked < minStake) return 0;
         if (activeStake == 0) return 0;
-        // treasuryRate + (providerRate * activeStake / capacity)
-        // Note: rates are scaled by RATE_PRECISION, returned value is also scaled
         uint256 capacity = _poolInfo.capacity;
         if (capacity == 0) return 0;
-        uint256 providerDrain = roundUp
-            ? FullMath.mulDivRoundingUp(providerRatePerSec, activeStake, capacity)
-            : FullMath.mulDiv(providerRatePerSec, activeStake, capacity);
+        uint256 providerDrain = FullMath.mulDiv(providerRatePerSec, activeStake, capacity);
         return treasuryRatePerSec + providerDrain;
     }
 
@@ -934,56 +871,44 @@ contract PortalPoolImplementation is
 
         uint256 activeStake = _getActiveStake();
         uint256 minStake = _factory.minStakeThreshold();
-        // no accrual simulation if pool was never activated
         if (!_poolInfo.firstActivated || _poolInfo.totalStaked < minStake || activeStake == 0 || perStakeRateWad == 0) {
             return (newRPS, uint64(timestamp));
         }
 
-        // Calculate runway from current state
-        int256 runway = getRunway();
+        if (timestamp <= uint256(newEffectiveTs)) return (newRPS, newEffectiveTs);
 
-        if (runway >= int256(timestamp)) {
-            if (timestamp > uint256(newEffectiveTs)) {
-                uint256 delta = timestamp - uint256(newEffectiveTs);
-                newRPS += FullMath.mulDiv(perStakeRateWad, delta, 1);
-                newEffectiveTs = uint64(timestamp);
-            }
-        } else if (runway > int256(uint256(newEffectiveTs))) {
-            uint256 delta = uint256(runway) - uint256(newEffectiveTs);
-            newRPS += FullMath.mulDiv(perStakeRateWad, delta, 1);
-            newEffectiveTs = uint64(uint256(runway));
+        uint256 remaining = credit > totalRewardsPaid ? credit - totalRewardsPaid : 0;
+        if (remaining == 0) return (newRPS, newEffectiveTs);
+
+        uint256 dt = timestamp - uint256(newEffectiveTs);
+        uint256 tokenRate = FullMath.mulDiv(perStakeRateWad, activeStake, ACC);
+        if (tokenRate == 0) return (newRPS, uint64(timestamp));
+
+        uint256 maxDt = remaining / tokenRate;
+
+        if (dt <= maxDt) {
+            newRPS += FullMath.mulDiv(perStakeRateWad, dt, 1);
+            newEffectiveTs = uint64(timestamp);
+        } else {
+            newRPS += FullMath.mulDiv(remaining, ACC, activeStake);
+            newEffectiveTs = uint64(uint256(newEffectiveTs) + maxDt);
         }
-        // If runway <= newEffectiveTs, no additional accrual (we're dry and checkpointed)
 
         return (newRPS, newEffectiveTs);
     }
 
-    function _accrueGlobal(uint256 timestamp, bool updateBalance) internal {
+    function _accrueGlobal(uint256 timestamp) internal {
         (uint256 newRPS, uint64 newEffectiveTs) = _simulateGlobalAccrual(timestamp);
+
+        uint256 rpsDelta = newRPS - rewardPerStakeStored;
+        if (rpsDelta > 0) {
+            uint256 activeStake = _getActiveStake();
+            totalRewardsPaid += FullMath.mulDiv(rpsDelta, activeStake, ACC);
+            if (totalRewardsPaid > credit) totalRewardsPaid = credit;
+        }
+
         rewardPerStakeStored = newRPS;
         lastEffectiveRewardTs = newEffectiveTs;
-
-        if (updateBalance) {
-            (uint256 currentCredit, uint256 currentDebt) = _currentCreditDebt(timestamp);
-            credit = currentCredit;
-            debt = currentDebt;
-            balanceTs = uint64(timestamp);
-            _syncRunwayPassed(timestamp);
-        }
-    }
-
-    function _syncRunwayPassed(uint256 timestamp) internal {
-        if (debt == 0) {
-            runwayPassed = 0;
-            return;
-        }
-        if (runwayPassed > 0) return;
-        uint256 drainRate = _totalDrainRate(false);
-        if (drainRate == 0) return;
-        int256 runway = int256(uint256(balanceTs)) - int256(FullMath.mulDivRoundingUp(debt, RATE_PRECISION, drainRate));
-        if (runway > 0 && runway < int256(timestamp)) {
-            runwayPassed = runway;
-        }
     }
 
     function _updateProvider(address provider) internal {
@@ -1040,7 +965,7 @@ contract PortalPoolImplementation is
         if (currentState == PoolState.FAILED) revert PoolErrors.InvalidState();
 
         // Checkpoint current reward state before stopping accrual
-        _accrueGlobal(block.timestamp, true);
+        _accrueGlobal(block.timestamp);
 
         // Store previous state for event
         PoolState previousState = _poolInfo.state;

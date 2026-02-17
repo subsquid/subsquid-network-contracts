@@ -218,13 +218,11 @@ contract PortalPoolRunwayModelTest is Test {
 
         vm.warp(block.timestamp + runwayDuration + 1000);
 
-        int256 balance = int256(pool.getCredit()) - int256(pool.getDebt());
-        uint256 debt = pool.getDebt();
-        bool isDry = pool.getCredit() == 0;
+        uint256 remainingCredit = pool.getCredit();
+        bool isDry = remainingCredit == 0;
 
         assertTrue(isDry, "Should be dry");
-        assertTrue(balance <= 0, "Balance should be <= 0");
-        assertTrue(debt > 0, "Should have debt");
+        assertEq(pool.getDebt(), 0, "Debt always 0");
     }
 
     function test_DryPeriod_ClaimableStaysConstant() public {
@@ -253,15 +251,13 @@ contract PortalPoolRunwayModelTest is Test {
         uint256 initialCredit = RATE_PER_SEC * 86400 / 1000;
         uint256 initialRunway = (initialCredit * 1000) / drainRate;
 
-        // Warp past initial runway to create debt
         vm.warp(START_TIME + initialRunway + 1500);
 
         uint256 rewardsDuringDry = pool.getClaimableRewards(alice);
 
-        uint256 debtBefore = pool.getDebt();
-        assertTrue(debtBefore > 0, "Should have debt");
+        assertEq(pool.getCredit(), 0, "Should be dry");
 
-        uint256 largeTopUp = debtBefore + drainRate * 2;
+        uint256 largeTopUp = drainRate * 5;
         vm.startPrank(operator);
         usdc.approve(address(pool), largeTopUp);
         pool.topUpRewards(largeTopUp);
@@ -271,7 +267,11 @@ contract PortalPoolRunwayModelTest is Test {
         assertTrue(runwayAfter > int256(block.timestamp), "Runway should be in future after top-up");
 
         uint256 rewardsAfterTopUp = pool.getClaimableRewards(alice);
-        assertTrue(rewardsAfterTopUp > rewardsDuringDry, "Should have catch-up rewards");
+        assertEq(rewardsAfterTopUp, rewardsDuringDry, "Top-up must not retroactively increase rewards");
+
+        vm.warp(block.timestamp + 1000);
+        uint256 rewardsAfterResume = pool.getClaimableRewards(alice);
+        assertTrue(rewardsAfterResume > rewardsAfterTopUp, "Rewards should resume only after top-up");
     }
 
     function test_CatchUp_TopUpRestoresRewards() public {
@@ -300,7 +300,11 @@ contract PortalPoolRunwayModelTest is Test {
         assertFalse(isDryAfter, "Should not be dry after top-up");
 
         uint256 claimableAfterTopUp = pool.getClaimableRewards(alice);
-        assertTrue(claimableAfterTopUp > claimableWhileDry, "Should have retroactive compensation");
+        assertEq(claimableAfterTopUp, claimableWhileDry, "Top-up must not pay retroactive compensation");
+
+        vm.warp(block.timestamp + 1000);
+        uint256 claimableAfterResume = pool.getClaimableRewards(alice);
+        assertTrue(claimableAfterResume > claimableAfterTopUp, "Rewards should accrue forward after top-up");
     }
 
     function test_Claim_ResetsPending() public {
@@ -440,12 +444,11 @@ contract PortalPoolRunwayModelTest is Test {
 
         vm.warp(block.timestamp + 100000);
 
-        uint256 debt = pool.getDebt();
-        assertTrue(debt > 0, "Should have debt when dry");
+        assertEq(pool.getDebt(), 0, "Debt always 0");
 
         (int256 balance,,, bool isDry) = pool.getRewardStatus();
         assertTrue(isDry, "Should be dry");
-        assertTrue(balance < 0, "Balance should be negative");
+        assertEq(balance, 0, "Balance should be zero when dry");
     }
 
     function test_GetTotalDrainRate() public view {

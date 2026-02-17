@@ -4,13 +4,14 @@ pragma solidity 0.8.28;
 import {BaseTest} from "./BaseTest.sol";
 import {PortalPoolImplementation} from "../src/PortalPoolImplementation.sol";
 import {IPortalFactory} from "../src/interfaces/IPortalFactory.sol";
+import {PoolErrors} from "../src/libs/PoolErrors.sol";
 
-contract RunwayCacheLockPoC is BaseTest {
+contract RunwayAccountingRegressionTest is BaseTest {
     PortalPoolImplementation public pool;
 
     uint256 public constant CAPACITY = 100_000 ether;
-    uint256 public constant DIST_RATE = 1_000;
-    uint256 public constant INITIAL_CREDIT = 86_400;
+    uint256 public constant DIST_RATE = 10_000;
+    uint256 public constant INITIAL_CREDIT = 864_000;
 
     function setUp() public override {
         super.setUp();
@@ -30,132 +31,94 @@ contract RunwayCacheLockPoC is BaseTest {
 
         vm.prank(user1);
         sqd.approve(address(pool), type(uint256).max);
+        vm.prank(user2);
+        sqd.approve(address(pool), type(uint256).max);
     }
 
-    function testPermanentCacheLockAfterTopUp() public {
+    function _activatePool() internal {
         vm.prank(user1);
         pool.deposit(CAPACITY);
+    }
 
-        vm.prank(user1);
-        pool.requestExit(50_000 ether);
+    function _topUp(uint256 amount) internal {
+        vm.startPrank(operator);
+        usdc.approve(address(pool), amount);
+        pool.topUpRewards(amount);
+        vm.stopPrank();
+    }
+
+    function test_TopUpAfterDry_MovesRunwayForward() public {
+        _activatePool();
 
         skip(200_000);
 
         vm.prank(user1);
         pool.claimRewards();
 
-        int256 cachedRunway = pool.runwayPassed();
-        assertTrue(cachedRunway > 0);
-        assertTrue(cachedRunway < int256(block.timestamp));
-        emit log_named_int("cached_runway_before_topup", cachedRunway);
+        assertEq(pool.getCredit(), 0, "pool should be dry");
 
-        uint256 topupAmount = 1_000_000;
-        vm.prank(operator);
-        usdc.approve(address(pool), topupAmount);
-        vm.prank(operator);
-        pool.topUpRewards(topupAmount);
+        _topUp(1_000_000);
 
-        int256 runwayAfterTopup = pool.runwayPassed();
-        emit log_named_int("cached_runway_after_topup", runwayAfterTopup);
-        emit log_named_int("current_timestamp", int256(block.timestamp));
-
-        assertEq(runwayAfterTopup, cachedRunway);
-
-        uint256 currentDebt = pool.debt();
-        uint256 currentCredit = pool.credit();
-        emit log_named_uint("debt_after_topup", currentDebt);
-        emit log_named_uint("credit_after_topup", currentCredit);
-        assertEq(currentDebt, 0);
-        assertTrue(currentCredit > 0);
-
-        int256 runway = pool.getRunway();
-        emit log_named_int("getRunway_returns", runway);
-        assertTrue(runway < int256(block.timestamp));
-
-        skip(1000);
-
-        vm.prank(user1);
-        try pool.claimRewards() returns (uint256 claimed) {
-            emit log_named_uint("claimed_after_topup_and_wait", claimed);
-            fail();
-        } catch {
-            emit log_named_uint("pool_usdc_balance", usdc.balanceOf(address(pool)));
-            assertTrue(usdc.balanceOf(address(pool)) > 0);
-        }
+        assertTrue(pool.getCredit() > 0, "topup should add credit");
+        assertTrue(pool.getRunway() > int256(block.timestamp), "runway should move into future");
     }
 
-    function testCircularDependencyNeverClears() public {
-        vm.prank(user1);
-        pool.deposit(CAPACITY);
-
-        vm.prank(user1);
-        pool.requestExit(50_000 ether);
+    function test_TopUpAfterDry_NoRetroactiveRewards() public {
+        _activatePool();
 
         skip(200_000);
+        uint256 claimableBeforeTopUp = pool.getClaimableRewards(user1);
+
+        _topUp(1_000_000);
+
+        uint256 claimableAfterTopUp = pool.getClaimableRewards(user1);
+        assertEq(claimableAfterTopUp, claimableBeforeTopUp, "topup must not backfill dry period");
+
+        skip(1_000);
+        uint256 claimableAfterResume = pool.getClaimableRewards(user1);
+        assertTrue(claimableAfterResume > claimableAfterTopUp, "rewards should resume after topup");
+    }
+
+    function test_JoinDuringDryThenTopUp_BlockedUntilFunded() public {
+        _activatePool();
+
+        vm.prank(user1);
+        pool.requestExit(CAPACITY / 2);
+
+        skip(400_000);
+        assertEq(pool.getCredit(), 0, "pool should be dry");
+
+        vm.prank(user2);
+        vm.expectRevert(PoolErrors.PoolHasDebt.selector);
+        pool.deposit(10_000 ether);
+
+        _topUp(1_000_000);
+
+        vm.prank(user2);
+        pool.deposit(10_000 ether);
+
+        uint256 claimableAtJoin = pool.getClaimableRewards(user2);
+        assertEq(claimableAtJoin, 0, "new depositor should not receive historical rewards");
+    }
+
+    function test_TotalRewardsPaid_MonotonicAndCapped() public {
+        _activatePool();
+
+        uint256 paidBefore = pool.totalRewardsPaid();
+
+        skip(7200);
         vm.prank(user1);
         pool.claimRewards();
 
-        int256 stuckValue = pool.runwayPassed();
-        assertTrue(stuckValue > 0);
+        uint256 paidAfterClaim = pool.totalRewardsPaid();
+        assertTrue(paidAfterClaim >= paidBefore, "totalRewardsPaid must be monotonic");
 
-        vm.prank(operator);
-        usdc.approve(address(pool), 10_000_000);
-        vm.prank(operator);
-        pool.topUpRewards(10_000_000);
-
+        skip(300_000);
         vm.prank(user1);
-        pool.deposit(1);
-        assertEq(pool.runwayPassed(), stuckValue);
+        pool.requestExit(1 ether);
 
-        vm.prank(user1);
-        pool.requestExit(1);
-        assertEq(pool.runwayPassed(), stuckValue);
-
-        skip(10_000);
-
-        assertEq(pool.runwayPassed(), stuckValue);
-
-        int256 runway = pool.getRunway();
-        uint256 credit = pool.credit();
-        emit log_named_int("getRunway (stuck in past)", runway);
-        emit log_named_uint("actual credit available", credit);
-        emit log_named_int("current time", int256(block.timestamp));
-
-        assertTrue(credit > 0);
-        assertTrue(runway < int256(block.timestamp));
-    }
-
-    function testMultipleTopUpsCantFixIt() public {
-        vm.prank(user1);
-        pool.deposit(CAPACITY);
-        vm.prank(user1);
-        pool.requestExit(50_000 ether);
-        skip(200_000);
-        vm.prank(user1);
-        pool.claimRewards();
-
-        int256 stuckValue = pool.runwayPassed();
-
-        vm.prank(operator);
-        usdc.approve(address(pool), 5_000_000);
-        vm.prank(operator);
-        pool.topUpRewards(5_000_000);
-        assertEq(pool.runwayPassed(), stuckValue);
-
-        vm.prank(operator);
-        usdc.approve(address(pool), 5_000_000);
-        vm.prank(operator);
-        pool.topUpRewards(5_000_000);
-        assertEq(pool.runwayPassed(), stuckValue);
-
-        vm.prank(operator);
-        usdc.approve(address(pool), 5_000_000);
-        vm.prank(operator);
-        pool.topUpRewards(5_000_000);
-        assertEq(pool.runwayPassed(), stuckValue);
-
-        emit log_named_uint("total_credit", pool.credit());
-        emit log_named_int("stuck_runway", pool.getRunway());
-        assertTrue(pool.credit() > 0 && pool.getRunway() < int256(block.timestamp));
+        uint256 paidAfterDryAccrual = pool.totalRewardsPaid();
+        assertTrue(paidAfterDryAccrual >= paidAfterClaim, "totalRewardsPaid must keep monotonicity");
+        assertLe(paidAfterDryAccrual, pool.credit(), "totalRewardsPaid must not exceed credit");
     }
 }

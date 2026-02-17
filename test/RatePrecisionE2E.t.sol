@@ -342,11 +342,12 @@ contract RatePrecisionE2ETest is Test {
         assertEq(balance, 0, "Balance should be exactly 0");
         assertEq(poolDebt, 0, "Debt should be exactly 0 at boundary");
 
-        // Advance 1 more second
+        // Advance 1 more second - pool stays at 0 balance (no debt in new model)
         vm.warp(block.timestamp + 1);
 
-        (, uint256 debtAfter,,) = pool.getRewardStatus();
-        assertEq(debtAfter, 10, "Debt should be exactly 10 (1 sec * 10 rate)");
+        (int256 balanceAfterDry, uint256 debtAfter,,) = pool.getRewardStatus();
+        assertEq(debtAfter, 0, "Debt always 0 in new model");
+        assertEq(balanceAfterDry, 0, "Balance stays at 0 when dry");
     }
 
     function test_E2E_Overflow_LargeStakeLargeTime() public {

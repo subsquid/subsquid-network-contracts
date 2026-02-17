@@ -985,7 +985,7 @@ contract PortalPoolImplementationTest is BaseTest {
         vm.warp(block.timestamp + 365 days);
 
         int256 balance = pool.getCurrentRewardBalance();
-        assertLe(balance, int256(0)); // Balance can be 0 or negative (debt)
+        assertEq(balance, int256(0));
     }
 
     function test_SetDistributionRate_ToZero() public {

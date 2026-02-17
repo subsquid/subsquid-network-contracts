@@ -539,8 +539,8 @@ contract ActiveStakeCapacityE2ETest is Test {
 
         (int256 balance2, uint256 debt2,, bool isDry2) = pool.getRewardStatus();
         assertTrue(isDry2, "Pool should be dry");
-        assertTrue(balance2 < 0, "Balance should be negative (debt)");
-        assertTrue(debt2 > 0, "Debt should be positive");
+        assertEq(balance2, 0, "Balance should be zero when dry");
+        assertEq(debt2, 0, "Debt should be zero in new model");
 
         _topUpRewards(50_000 * USDC_UNIT);
 

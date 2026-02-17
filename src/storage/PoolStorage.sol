@@ -35,8 +35,6 @@ abstract contract PoolStorage {
     uint256 public credit;
     /// @notice pool's accumulated debt (owed but unpaid rewards)
     uint256 public debt;
-    /// @notice cached runway timestamp when pool entered debt (prevents drift on drainRate change)
-    int256 public runwayPassed;
     /// @notice timestamp of last balance checkpoint
     uint64 public balanceTs;
     /// @notice global reward per stake accumulator (scaled by ACC)
@@ -82,5 +80,8 @@ abstract contract PoolStorage {
     /// @dev Example USDC rates: $1/mo=385, $100/mo=38580, $1000/mo=385802, $10000/mo=3858024
     uint256 internal _rewardTokenDecimalScale;
 
-    uint256[50] private __gap;
+    /// @notice cumulative rewards paid to providers, capped by credit
+    uint256 public totalRewardsPaid;
+
+    uint256[49] private __gap;
 }

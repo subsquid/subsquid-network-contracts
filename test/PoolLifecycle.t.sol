@@ -298,6 +298,11 @@ contract PoolLifecycleTest is BaseTest {
         // Now pool should be IDLE (below min threshold)
         assertEq(uint256(pool.getState()), uint256(IPortalPool.PoolState.IDLE));
 
+        vm.startPrank(operator);
+        usdc.approve(portal, 1_000_000);
+        pool.topUpRewards(1_000_000);
+        vm.stopPrank();
+
         // User2 deposits enough to recover above threshold
         uint256 recoveryAmount = MIN_STAKE_THRESHOLD;
 
