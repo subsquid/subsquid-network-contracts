@@ -646,6 +646,7 @@ contract PortalPoolImplementation is
     function getPoolInfo() external view returns (PoolInfo memory) {
         PoolInfo memory info = _poolInfo;
         info.state = getState();
+        info.paused = paused();
         return info;
     }
 

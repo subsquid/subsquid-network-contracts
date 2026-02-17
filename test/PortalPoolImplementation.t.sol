@@ -497,6 +497,19 @@ contract PortalPoolImplementationTest is BaseTest {
         assertEq(uint8(info.state), uint8(IPortalPool.PoolState.COLLECTING));
     }
 
+    function test_GetPoolInfo_PausedReflectsRuntimeState() public {
+        IPortalPool.PoolInfo memory info = pool.getPoolInfo();
+        assertFalse(info.paused);
+
+        pool.pause();
+        info = pool.getPoolInfo();
+        assertTrue(info.paused);
+
+        pool.unpause();
+        info = pool.getPoolInfo();
+        assertFalse(info.paused);
+    }
+
     function test_GetActiveStake() public {
         portal = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "ActiveStakePortal");
         pool = PortalPoolImplementation(portal);
