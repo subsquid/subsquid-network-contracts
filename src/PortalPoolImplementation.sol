@@ -141,13 +141,6 @@ contract PortalPoolImplementation is
         {
             revert PoolErrors.InvalidState();
         }
-        if (
-            currentState != PoolState.COLLECTING && totalDistributionRatePerSec > 0
-                && _stakes[msg.sender] == 0 && currentBalance(block.timestamp) <= 0
-        ) {
-            revert PoolErrors.PoolHasDebt();
-        }
-
         // Auto-cap deposit to remaining capacity to prevent dust frontrunning DoS
         uint256 remainingCapacity = _poolInfo.capacity > _getActiveStake() ? _poolInfo.capacity - _getActiveStake() : 0;
         if (remainingCapacity == 0) revert PoolErrors.CapacityExceeded();
