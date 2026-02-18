@@ -467,7 +467,9 @@ contract PortalPoolImplementation is
 
         _accrueGlobal(block.timestamp);
 
-        if (credit > 0 && totalRewardsPaid >= credit) revert PoolErrors.PoolHasDebt();
+        if (credit > 0 && (totalRewardsPaid >= credit || uint256(lastEffectiveRewardTs) < block.timestamp)) {
+            revert PoolErrors.PoolHasDebt();
+        }
 
         _setDistributionRate(newRatePerSecond);
     }
@@ -493,7 +495,9 @@ contract PortalPoolImplementation is
 
         _accrueGlobal(block.timestamp);
 
-        if (credit > 0 && totalRewardsPaid >= credit) revert PoolErrors.PoolHasDebt();
+        if (credit > 0 && (totalRewardsPaid >= credit || uint256(lastEffectiveRewardTs) < block.timestamp)) {
+            revert PoolErrors.PoolHasDebt();
+        }
 
         uint256 oldCapacity = _poolInfo.capacity;
         _poolInfo.capacity = newCapacity;
@@ -814,15 +818,18 @@ contract PortalPoolImplementation is
     }
 
     function currentBalance(uint256 timestamp) public view returns (int256) {
-        (uint256 newRPS,) = _simulateGlobalAccrual(timestamp);
+        (uint256 newRPS, uint64 newEffectiveTs) = _simulateGlobalAccrual(timestamp);
         uint256 rpsDelta = newRPS - rewardPerStakeStored;
         uint256 simulatedPaid = totalRewardsPaid;
         if (rpsDelta > 0) {
             uint256 activeStake = _getActiveStake();
-            simulatedPaid += FullMath.mulDiv(rpsDelta, activeStake, ACC);
+            simulatedPaid += FullMath.mulDivRoundingUp(rpsDelta, activeStake, ACC);
             if (simulatedPaid > credit) simulatedPaid = credit;
         }
-        return int256(credit) - int256(simulatedPaid);
+
+        if (simulatedPaid >= credit) return 0;
+        if (uint256(newEffectiveTs) < timestamp) return 0;
+        return int256(credit - simulatedPaid);
     }
 
     function _getProviderActiveStake(address provider) internal view returns (uint256) {
