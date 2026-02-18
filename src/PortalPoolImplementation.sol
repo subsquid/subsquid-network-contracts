@@ -171,7 +171,7 @@ contract PortalPoolImplementation is
 
         // Update user's reward checkpoint for new activeStake
         uint256 activeStake = _getProviderActiveStake(msg.sender);
-        _rewardCheckpoint[msg.sender] = FullMath.mulDiv(activeStake, rewardPerStakeStored, ACC);
+        _rewardCheckpoint[msg.sender] = FullMath.mulDivRoundingUp(activeStake, rewardPerStakeStored, ACC);
 
         bool shouldActivate = !_poolInfo.firstActivated && _poolInfo.totalStaked >= _poolInfo.capacity;
 
@@ -247,7 +247,7 @@ contract PortalPoolImplementation is
 
         // Update user's reward debt for new activeStake
         uint256 activeStake = _getProviderActiveStake(msg.sender);
-        _rewardCheckpoint[msg.sender] = FullMath.mulDiv(activeStake, rewardPerStakeStored, ACC);
+        _rewardCheckpoint[msg.sender] = FullMath.mulDivRoundingUp(activeStake, rewardPerStakeStored, ACC);
 
         lptToken.burn(msg.sender, amount);
 
@@ -308,9 +308,6 @@ contract PortalPoolImplementation is
 
         // Accrue global state and update both users BEFORE changing stakes
         _accrueGlobal(block.timestamp);
-        if (totalDistributionRatePerSec > 0 && _stakes[to] == 0 && currentBalance(block.timestamp) <= 0) {
-            revert PoolErrors.PoolHasDebt();
-        }
         _updateProvider(from);
         _updateProvider(to);
 
@@ -320,8 +317,8 @@ contract PortalPoolImplementation is
         // Update reward checkpoints for new activeStakes
         uint256 fromActiveStake = _getProviderActiveStake(from);
         uint256 toActiveStake = _getProviderActiveStake(to);
-        _rewardCheckpoint[from] = FullMath.mulDiv(fromActiveStake, rewardPerStakeStored, ACC);
-        _rewardCheckpoint[to] = FullMath.mulDiv(toActiveStake, rewardPerStakeStored, ACC);
+        _rewardCheckpoint[from] = FullMath.mulDivRoundingUp(fromActiveStake, rewardPerStakeStored, ACC);
+        _rewardCheckpoint[to] = FullMath.mulDivRoundingUp(toActiveStake, rewardPerStakeStored, ACC);
 
         emit StakeTransferred(from, to, amount);
     }
@@ -919,7 +916,8 @@ contract PortalPoolImplementation is
             uint256 checkpoint = _rewardCheckpoint[provider];
             uint256 pending = accumulated > checkpoint ? accumulated - checkpoint : 0;
             _unclaimedRewards[provider] += pending;
-            _rewardCheckpoint[provider] = accumulated;
+            uint256 accumulatedUp = FullMath.mulDivRoundingUp(activeStake, rewardPerStakeStored, ACC);
+            _rewardCheckpoint[provider] = accumulatedUp;
         } else if (_stakes[provider] > 0) {
             _rewardCheckpoint[provider] = 0;
         }
