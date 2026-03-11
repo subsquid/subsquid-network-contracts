@@ -1,6 +1,6 @@
 {
   "name": "sqd-portal-contracts",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "**Foundry is a blazing fast, portable and modular toolkit for Ethereum application development written in Rust.**",
   "main": "index.js",
   "directories": {
