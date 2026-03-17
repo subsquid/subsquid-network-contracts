@@ -1,6 +1,5 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Web3Service } from '../../blockchain/web3.service';
 import { ContractService } from '../../blockchain/contract.service';
 import { Context } from '../../common';
 
@@ -24,12 +23,11 @@ export interface RewardMetrics {
 export class EpochMetricsService {
   constructor(
     private configService: ConfigService,
-    private web3Service: Web3Service,
     private contractService: ContractService,
   ) {}
 
   async collectNetworkMetrics(ctx: Context): Promise<NetworkMetrics> {
-    const activeWorkerCount = await this.web3Service.getActiveWorkerCount(ctx);
+    const activeWorkerCount = await this.contractService.getActiveWorkerCount(ctx);
     const networkCapacity = await this.contractService.getTargetCapacity();
 
     // get storage per worker with fallback (exact same pattern as original)

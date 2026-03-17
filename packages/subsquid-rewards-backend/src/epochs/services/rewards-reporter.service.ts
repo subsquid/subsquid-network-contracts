@@ -1,6 +1,5 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Web3Service } from '../../blockchain/web3.service';
 import { ContractService } from '../../blockchain/contract.service';
 import { Context } from '../../common';
 import { NetworkMetrics, RewardMetrics } from './epoch-metrics.service';
@@ -20,7 +19,6 @@ export interface RewardsReportParams {
 export class RewardsReporterService {
   constructor(
     private configService: ConfigService,
-    private web3Service: Web3Service,
     private contractService: ContractService,
   ) {}
 
@@ -144,7 +142,7 @@ export class RewardsReporterService {
     // log failed distribution in old backend format (exact same logic as original)
     try {
       const activeWorkerCount =
-        await this.web3Service.getActiveWorkerCount(ctx);
+        await this.contractService.getActiveWorkerCount(ctx);
       const networkCapacity = await this.contractService.getTargetCapacity();
 
       let storagePerWorker = 200;

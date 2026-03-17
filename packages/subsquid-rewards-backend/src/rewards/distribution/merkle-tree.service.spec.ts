@@ -1,4 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { ConfigService } from '@nestjs/config';
 import { MerkleTreeService } from './merkle-tree.service';
 
 describe('MerkleTreeService', () => {
@@ -6,7 +7,20 @@ describe('MerkleTreeService', () => {
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
-      providers: [MerkleTreeService],
+      providers: [
+        MerkleTreeService,
+        {
+          provide: ConfigService,
+          useValue: {
+            get: (key: string, defaultValue?: any) => {
+              const config: Record<string, any> = {
+                'rewards.maxBatchSize': 100,
+              };
+              return config[key] ?? defaultValue;
+            },
+          },
+        },
+      ],
     }).compile();
 
     service = module.get<MerkleTreeService>(MerkleTreeService);

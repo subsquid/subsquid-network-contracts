@@ -14,7 +14,7 @@ import {
   DistributionService,
   DistributionStatus,
 } from '../../rewards/distribution/distribution.service';
-import { Web3Service } from '../../blockchain/web3.service';
+import { ContractService } from '../../blockchain/contract.service';
 import { BlockSchedulerService } from '../../epochs/block-scheduler.service';
 import { TaskContext } from '../../common';
 // todo: add protection for admin endpoints
@@ -33,7 +33,7 @@ export class AdminController {
   constructor(
     private rewardsCalculatorService: RewardsCalculatorService,
     private distributionService: DistributionService,
-    private web3Service: Web3Service,
+    private contractService: ContractService,
     private blockSchedulerService: BlockSchedulerService,
     private configService: ConfigService,
   ) {}
@@ -304,11 +304,9 @@ export class AdminController {
     const ctx = new TaskContext('admin:worker-registration-status');
     try {
       const bondAmount =
-        await this.rewardsCalculatorService['web3Service'].getBondAmount(ctx);
+        await this.contractService.getBondAmount(ctx);
       const activeWorkerCount =
-        await this.rewardsCalculatorService['web3Service'].getActiveWorkerCount(
-          ctx,
-        );
+        await this.contractService.getActiveWorkerCount(ctx);
 
       return {
         success: true,
@@ -462,11 +460,9 @@ export class AdminController {
     try {
       const status = this.blockSchedulerService.getStatus();
       const ctx = new TaskContext('admin:get-scheduler-status');
-      const currentBlock = await this.web3Service.getL1BlockNumber(ctx);
+      const currentBlock = await this.contractService.getL1BlockNumber(ctx);
       const lastRewardedBlock =
-        await this.rewardsCalculatorService[
-          'contractService'
-        ].getLastRewardedBlock(ctx);
+        await this.contractService.getLastBlockRewarded(ctx);
 
       return {
         success: true,
@@ -656,8 +652,8 @@ export class AdminController {
 
       // get network capacity metrics
       const activeWorkerCount =
-        await this.web3Service.getActiveWorkerCount(ctx);
-      const bondAmount = await this.web3Service.getBondAmount(ctx);
+        await this.contractService.getActiveWorkerCount(ctx);
+      const bondAmount = await this.contractService.getBondAmount(ctx);
 
       // calc network capacity
       const WORKER_CAPACITY_TB = 1;

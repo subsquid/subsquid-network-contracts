@@ -7,7 +7,6 @@ import {
 } from '@nestjs/common';
 import { RewardsCalculatorService } from '../../rewards/calculation/rewards-calculator.service';
 import { ContractService } from '../../blockchain/contract.service';
-import { Web3Service } from '../../blockchain/web3.service';
 import { TaskContext } from '../../common';
 
 @Controller()
@@ -15,7 +14,6 @@ export class PublicController {
   constructor(
     private rewardsCalculatorService: RewardsCalculatorService,
     private contractService: ContractService,
-    private web3Service: Web3Service,
   ) {}
 
   /**
@@ -63,11 +61,11 @@ export class PublicController {
         );
 
       // Get duration for APR calculation
-      const fromBlockInfo = await this.web3Service.getL1Block(
+      const fromBlockInfo = await this.contractService.getL1Block(
         ctx,
         BigInt(fromBlockNum),
       );
-      const toBlockInfo = await this.web3Service.getL1Block(
+      const toBlockInfo = await this.contractService.getL1Block(
         ctx,
         BigInt(toBlockNum),
       );
@@ -128,14 +126,14 @@ export class PublicController {
 
       if (!atBlock || !this.isInteger(atBlock)) {
         // get latest block
-        const block = await this.web3Service.getBlock(ctx);
+        const block = await this.contractService.getBlock(ctx);
         blockNumber = block.number;
         l1BlockNumber = BigInt((block as any).l1BlockNumber);
       } else {
         l1BlockNumber = BigInt(atBlock);
         // get first L2 block for this L1 block
         blockNumber =
-          await this.web3Service.getFirstBlockForL1Block(l1BlockNumber);
+          await this.contractService.getFirstBlockForL1Block(l1BlockNumber);
       }
 
       // calculate current APY
@@ -144,7 +142,7 @@ export class PublicController {
       return {
         blockNumber: blockNumber.toString(),
         l1BlockNumber: l1BlockNumber.toString(),
-        apy: apy,
+        apy: apy.toString(),
       };
     } catch (error: any) {
       ctx.logger.error({ error }, `Failed to get current APY`);
@@ -169,7 +167,7 @@ export class PublicController {
     }
 
     try {
-      const lastBlock = await this.web3Service.getL1BlockNumber(ctx);
+      const lastBlock = await this.contractService.getL1BlockNumber(ctx);
       const fromBlock = lastBlock - Number(lastNBlocks);
 
       return this.calculateRewards(fromBlock.toString(), lastBlock.toString());

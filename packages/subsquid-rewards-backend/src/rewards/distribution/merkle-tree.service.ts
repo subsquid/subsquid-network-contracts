@@ -1,8 +1,6 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { keccak256, encodeAbiParameters, parseAbiParameters } from 'viem';
-import { Context } from '../../common';
-import { TaskContext } from '../../common/task-context';
 
 export interface MerkleLeaf {
   recipients: bigint[];
@@ -20,6 +18,8 @@ export interface MerkleTreeResult {
 
 @Injectable()
 export class MerkleTreeService {
+  private readonly logger = new Logger(MerkleTreeService.name);
+
   constructor(private configService: ConfigService) {}
 
   async generateMerkleTree(
@@ -35,28 +35,13 @@ export class MerkleTreeService {
       100,
     );
     const effectiveBatchSize = batchSize ?? maxBatchSize;
-    let ctx: any = null;
-    try {
-      ctx = new TaskContext('merkle-tree:generate');
-      ctx?.logger?.debug(
-        `Generating Merkle tree for ${workers.length} workers with batch size ${effectiveBatchSize}`,
-      );
-    } catch {}
 
-    // CRITICAL: Sort workers deterministically by workerId to ensure consistent merkle tree
+    // Sort workers deterministically by workerId to ensure consistent merkle tree
     const sortedWorkers = [...workers].sort((a, b) => {
       if (a.workerId < b.workerId) return -1;
       if (a.workerId > b.workerId) return 1;
       return 0;
     });
-
-    try {
-      ctx?.logger?.debug(
-        `Sorted ${sortedWorkers.length} workers deterministically by workerId`,
-      );
-    } catch {
-      // ignore logging for now
-    }
 
     const batches: MerkleLeaf[] = [];
     const leafHashes: string[] = [];
@@ -83,34 +68,13 @@ export class MerkleTreeService {
       });
 
       leafHashes.push(leafHash);
-
-      try {
-        ctx?.logger?.debug(
-          `Batch ${batches.length - 1}: ${batch.length} workers, hash: ${leafHash}`,
-        );
-      } catch {
-        // ignore logging for now
-      }
     }
 
-    try {
-      ctx?.logger?.debug(
-        `Created ${batches.length} batches from ${sortedWorkers.length} workers`,
-      );
-    } catch {
-      // ignore logging for now
-    }
-
-    // build Merkle tree
     const { root, proofs } = this.buildMerkleTree(leafHashes);
 
-    try {
-      ctx?.logger?.info(
-        `✅ Merkle tree generated: root=${root}, ${batches.length} leaves`,
-      );
-    } catch {
-      // ignore logging for now
-    }
+    this.logger.log(
+      `Merkle tree generated: root=${root}, ${batches.length} leaves, ${sortedWorkers.length} workers`,
+    );
 
     return {
       root,
@@ -120,7 +84,6 @@ export class MerkleTreeService {
     };
   }
 
-  // build Merkle tree from leaf hashes
   private buildMerkleTree(leaves: string[]): {
     root: string;
     proofs: string[][];
@@ -129,21 +92,17 @@ export class MerkleTreeService {
       throw new Error('Cannot build Merkle tree with no leaves');
     }
 
-    // store all levels of the tree for proof generation
     const levels: string[][] = [leaves];
     let currentLevel = leaves;
 
-    // build tree bottom-up
     while (currentLevel.length > 1) {
       const nextLevel: string[] = [];
 
       for (let i = 0; i < currentLevel.length; i += 2) {
         if (i + 1 < currentLevel.length) {
-          // Process pair of nodes
           const left = currentLevel[i] as `0x${string}`;
           const right = currentLevel[i + 1] as `0x${string}`;
 
-          // sort hashes using strict comparison to match OpenZeppelin
           const [sortedLeft, sortedRight] =
             left < right ? [left, right] : [right, left];
 
@@ -155,7 +114,6 @@ export class MerkleTreeService {
           );
           nextLevel.push(combined);
         } else {
-          // Odd number of nodes, promote the last one unchanged (OpenZeppelin standard)
           nextLevel.push(currentLevel[i]);
         }
       }
@@ -166,7 +124,6 @@ export class MerkleTreeService {
 
     const root = currentLevel[0];
 
-    // generate proofs for each leaf
     const proofs: string[][] = [];
     for (let leafIndex = 0; leafIndex < leaves.length; leafIndex++) {
       const proof = this.generateProof(levels, leafIndex);
@@ -176,12 +133,10 @@ export class MerkleTreeService {
     return { root, proofs };
   }
 
-  // generate Merkle proof for a specific leaf
   private generateProof(levels: string[][], leafIndex: number): string[] {
     const proof: string[] = [];
     let currentIndex = leafIndex;
 
-    // traverse up the tree, collecting sibling hashes
     for (let levelIndex = 0; levelIndex < levels.length - 1; levelIndex++) {
       const level = levels[levelIndex];
       const isRightNode = currentIndex % 2 === 1;
@@ -197,12 +152,10 @@ export class MerkleTreeService {
     return proof;
   }
 
-  // verify a Merkle proof
   verifyProof(leaf: string, proof: string[], root: string): boolean {
     let computedHash = leaf;
 
     for (const proofElement of proof) {
-      // sort hashes using strict comparison to match OpenZeppelin
       const [left, right] =
         computedHash < proofElement
           ? [computedHash, proofElement]
@@ -219,7 +172,6 @@ export class MerkleTreeService {
     return computedHash === root;
   }
 
-  // get total rewards from Merkle tree
   getTotalRewards(leaves: MerkleLeaf[]): {
     totalWorkerRewards: bigint;
     totalStakerRewards: bigint;

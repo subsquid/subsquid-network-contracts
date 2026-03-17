@@ -128,8 +128,6 @@ export class S3Service implements OnModuleInit {
   private s3Client: S3Client | null = null;
   private readonly enabled: boolean;
   private readonly config: S3Config;
-  private healthStatus = false;
-  private lastHealthCheck: Date | null = null;
 
   constructor(private readonly configService: ConfigService) {
     this.config = this.configService.get<S3Config>('s3')!;
@@ -147,68 +145,45 @@ export class S3Service implements OnModuleInit {
   }
 
   async onModuleInit() {
-    this.logger.log(`🔍 S3 Service module init - enabled: ${this.enabled}`);
+    this.logger.log(`S3 Service module init - enabled: ${this.enabled}`);
 
     const pathPrefix = this.config.pathPrefix || 'unknown';
-    this.logger.log(`📁 S3 Path Configuration:`);
-    this.logger.log(`   - Path prefix: ${pathPrefix}`);
-    this.logger.log(`   - Save location: rewards/${pathPrefix}/distributions/`);
-    this.logger.log(
-      `   - Recovery location: rewards/${pathPrefix}/distributions/`,
-    );
-    this.logger.log(
-      `   - Duplicates: rewards/${pathPrefix}/distributions/duplicates/`,
-    );
+    this.logger.log(`S3 path prefix: ${pathPrefix}`);
+    this.logger.log(`S3 save location: rewards/${pathPrefix}/distributions/`);
 
     if (this.enabled) {
       await this.initialize();
     } else {
       this.logger.warn(
-        '⚠️  S3 service is DISABLED - files will not be uploaded/downloaded',
-      );
-      this.logger.warn(
-        '   To enable S3, set S3_ENABLED=true and configure credentials',
+        'S3 service is DISABLED - files will not be uploaded/downloaded',
       );
     }
   }
 
   private async initialize(): Promise<void> {
     try {
-      this.logger.log('🚀 Starting S3 service initialization...');
-
       this.validateConfiguration();
-      this.logger.log('✅ S3 configuration validated');
-
       this.initializeS3Client();
-      this.logger.log('✅ S3 client created');
 
       const isHealthy = await this.checkHealth();
       if (!isHealthy) {
         this.logger.warn(
-          '⚠️ Initial S3 health check failed - will retry on first upload',
+          'Initial S3 health check failed - will retry on first upload',
         );
-        this.healthStatus = false;
-      } else {
-        this.healthStatus = true;
-        this.logger.log('✅ S3 health check passed');
       }
 
-      this.logger.log('✅ S3 service initialized successfully');
-      this.logger.log(`📦 Using bucket: ${this.config.bucket}`);
       this.logger.log(
-        `🌐 Endpoint: ${this.config.endpoint.substring(0, 50)}...`,
+        `S3 service initialized - bucket: ${this.config.bucket}`,
       );
     } catch (error) {
-      this.logger.error('❌ Failed to initialize S3 service', error);
-      this.logger.error(`Error details: ${JSON.stringify(error)}`);
+      this.logger.error('Failed to initialize S3 service', error);
 
       if (!this.s3Client) {
         this.s3Client = null;
       }
-      this.healthStatus = false;
 
       this.logger.error(
-        '⚠️ S3 service initialization had errors but will continue',
+        'S3 service initialization had errors but will continue',
       );
     }
   }
@@ -267,7 +242,7 @@ export class S3Service implements OnModuleInit {
       clientConfig.forcePathStyle = true;
       clientConfig.signatureVersion = 'v4';
       this.logger.log(
-        '🔧 Detected Cloudflare R2, applying compatibility settings',
+        'Detected Cloudflare R2, applying compatibility settings',
       );
     } else if (this.config.forcePathStyle) {
       clientConfig.forcePathStyle = true;
@@ -276,9 +251,8 @@ export class S3Service implements OnModuleInit {
     this.s3Client = new S3Client(clientConfig);
   }
 
-  async checkHealth(): Promise<boolean> {
+  private async checkHealth(): Promise<boolean> {
     if (!this.s3Client) {
-      this.healthStatus = false;
       return false;
     }
 
@@ -289,26 +263,20 @@ export class S3Service implements OnModuleInit {
 
       await this.s3Client.send(command);
 
-      this.healthStatus = true;
-      this.lastHealthCheck = new Date();
-
       if (this.config.debugMode) {
         this.logger.debug(
-          `✅ S3 health check passed for bucket: ${this.config.bucket}`,
+          `S3 health check passed for bucket: ${this.config.bucket}`,
         );
       }
 
       return true;
     } catch (error) {
-      this.healthStatus = false;
-      this.lastHealthCheck = new Date();
-
       if (error instanceof NoSuchBucket) {
-        this.logger.error(`❌ S3 bucket does not exist: ${this.config.bucket}`);
+        this.logger.error(`S3 bucket does not exist: ${this.config.bucket}`);
       } else if (error instanceof S3ServiceException) {
-        this.logger.error(`❌ S3 service error: ${error.message}`);
+        this.logger.error(`S3 service error: ${error.message}`);
       } else {
-        this.logger.error('❌ S3 health check failed', error);
+        this.logger.error('S3 health check failed', error);
       }
 
       return false;
@@ -325,7 +293,7 @@ export class S3Service implements OnModuleInit {
     try {
       if (this.config.debugMode && attempt > 1) {
         this.logger.debug(
-          `🔄 S3 upload retry ${attempt}/${maxAttempts} for ${metadata.key}`,
+          `S3 upload retry ${attempt}/${maxAttempts} for ${metadata.key}`,
         );
       }
 
@@ -333,7 +301,7 @@ export class S3Service implements OnModuleInit {
 
       if (this.config.debugMode) {
         this.logger.debug(
-          `✅ S3 upload successful on attempt ${attempt} for ${metadata.key}`,
+          `S3 upload successful on attempt ${attempt} for ${metadata.key}`,
         );
       }
 
@@ -345,7 +313,7 @@ export class S3Service implements OnModuleInit {
         const delay = this.calculateRetryDelay(attempt);
 
         this.logger.warn(
-          `⚠️ S3 upload attempt ${attempt} failed for ${metadata.key}, retrying in ${delay}ms...`,
+          `S3 upload attempt ${attempt} failed for ${metadata.key}, retrying in ${delay}ms...`,
           { error: error.message },
         );
 
@@ -432,10 +400,10 @@ export class S3Service implements OnModuleInit {
           await this.getNextDuplicateIteration(duplicatesPrefix);
         targetKey = `${duplicatesPrefix}${nextIteration}-${timestamp}.json`;
         this.logger.log(
-          `🟡 Canonical epoch file exists, writing duplicate as: ${targetKey}`,
+          `Canonical epoch file exists, writing duplicate as: ${targetKey}`,
         );
       } else {
-        this.logger.log(`📤 Uploading epoch rewards to S3: ${key}`);
+        this.logger.log(`Uploading epoch rewards to S3: ${key}`);
       }
 
       const jsonData = JSON.stringify(epochData, null, 2);
@@ -467,7 +435,7 @@ export class S3Service implements OnModuleInit {
       const url = this.generatePublicUrl(targetKey);
 
       this.logger.log(
-        `✅ Epoch rewards uploaded successfully: ${targetKey} (${buffer.length} bytes)`,
+        `Epoch rewards uploaded successfully: ${targetKey} (${buffer.length} bytes)`,
       );
 
       return {
@@ -486,58 +454,6 @@ export class S3Service implements OnModuleInit {
     }
   }
 
-  async uploadJson(
-    data: any,
-    key: string,
-    metadata?: Record<string, string>,
-  ): Promise<S3UploadResult> {
-    if (!this.enabled) {
-      throw new S3ConfigurationError('S3 service is disabled');
-    }
-
-    if (!this.s3Client) {
-      throw new S3ConfigurationError('S3 client not initialized');
-    }
-
-    try {
-      const jsonData = JSON.stringify(data, null, 2);
-      const buffer = Buffer.from(jsonData, 'utf8');
-
-      const command = new PutObjectCommand({
-        Bucket: this.config.bucket,
-        Key: key,
-        Body: buffer,
-        ContentType: 'application/json',
-        Metadata: {
-          'uploaded-at': new Date().toISOString(),
-          ...metadata,
-        },
-      });
-
-      const response = await this.uploadWithRetry(command, { key });
-
-      const url = this.generatePublicUrl(key);
-
-      this.logger.log(
-        `✅ JSON data uploaded to S3: ${key} (${buffer.length} bytes)`,
-      );
-
-      return {
-        key,
-        url,
-        size: buffer.length,
-        bucket: this.config.bucket,
-        etag: response.ETag,
-        versionId: response.VersionId,
-      };
-    } catch (error) {
-      const errorMessage = `Failed to upload JSON to S3: ${error.message}`;
-      this.logger.error(errorMessage, error);
-
-      throw new S3UploadError(errorMessage, key, error);
-    }
-  }
-
   async downloadJson(key: string): Promise<any> {
     if (!this.enabled) {
       throw new S3ConfigurationError('S3 service is disabled');
@@ -548,7 +464,7 @@ export class S3Service implements OnModuleInit {
     }
 
     try {
-      this.logger.log(`📥 Downloading data from S3: ${key}`);
+      this.logger.log(`Downloading data from S3: ${key}`);
 
       const command = new GetObjectCommand({
         Bucket: this.config.bucket,
@@ -571,7 +487,7 @@ export class S3Service implements OnModuleInit {
       const data = JSON.parse(jsonData);
 
       this.logger.log(
-        `✅ Downloaded data from S3: ${key} (${buffer.length} bytes)`,
+        `Downloaded data from S3: ${key} (${buffer.length} bytes)`,
       );
 
       return data;
@@ -585,15 +501,6 @@ export class S3Service implements OnModuleInit {
       this.logger.error(errorMessage, error);
       throw new Error(errorMessage);
     }
-  }
-
-  async getEpochRewardsJson(
-    network: string,
-    fromBlock: number,
-    toBlock: number,
-  ): Promise<EpochRewardsData | null> {
-    const key = this.generateS3Key(network, fromBlock, toBlock);
-    return this.downloadJson(key);
   }
 
   async checkFileExists(key: string): Promise<boolean> {
@@ -639,30 +546,22 @@ export class S3Service implements OnModuleInit {
     }
   }
 
-  async getFileMetadata(key: string): Promise<Record<string, string> | null> {
-    if (!this.enabled || !this.s3Client) {
-      return null;
-    }
-
-    try {
-      const command = new HeadObjectCommand({
-        Bucket: this.config.bucket,
-        Key: key,
-      });
-
-      const response = await this.s3Client.send(command);
-      return response.Metadata || {};
-    } catch (error) {
-      if (error instanceof NoSuchKey) {
-        this.logger.warn(`File not found in S3: ${key}`);
-      } else {
-        this.logger.error(`Failed to get file metadata from S3: ${key}`, error);
-      }
-      return null;
-    }
+  generateS3Key(network: string, fromBlock: number, toBlock: number): string {
+    const pathPrefix = this.config.pathPrefix || network || 'unknown';
+    return `rewards/${pathPrefix}/distributions/${fromBlock}-${toBlock}.json`;
   }
 
-  async listFiles(prefix: string, maxKeys = 100): Promise<string[]> {
+  isEnabled(): boolean {
+    const result = this.enabled && this.s3Client !== null;
+    if (this.enabled && !result) {
+      this.logger.warn(
+        'S3 is enabled in config but client is not initialized',
+      );
+    }
+    return result;
+  }
+
+  private async listFiles(prefix: string, maxKeys = 100): Promise<string[]> {
     if (!this.enabled || !this.s3Client) {
       return [];
     }
@@ -690,11 +589,6 @@ export class S3Service implements OnModuleInit {
       );
       return [];
     }
-  }
-
-  generateS3Key(network: string, fromBlock: number, toBlock: number): string {
-    const pathPrefix = this.config.pathPrefix || network || 'unknown';
-    return `rewards/${pathPrefix}/distributions/${fromBlock}-${toBlock}.json`;
   }
 
   private async getNextDuplicateIteration(prefix: string): Promise<number> {
@@ -735,64 +629,5 @@ export class S3Service implements OnModuleInit {
     }
 
     return `${this.config.endpoint}/${this.config.bucket}/${key}`;
-  }
-
-  isEnabled(): boolean {
-    const result = this.enabled && this.s3Client !== null;
-    if (this.enabled && !result) {
-      this.logger.warn(
-        '⚠️ S3 is enabled in config but client is not initialized',
-      );
-      this.logger.warn('⚠️ Check the initialization logs above for errors');
-    }
-    return result;
-  }
-
-  isHealthy(): boolean {
-    return this.healthStatus;
-  }
-
-  getPathPrefix(): string {
-    return this.config.pathPrefix || 'unknown';
-  }
-
-  getLastHealthCheck(): Date | null {
-    return this.lastHealthCheck;
-  }
-
-  getConfig() {
-    return {
-      enabled: this.enabled,
-      endpoint: this.config?.endpoint,
-      bucket: this.config?.bucket,
-      region: this.config?.region,
-      healthy: this.healthStatus,
-      lastHealthCheck: this.lastHealthCheck,
-    };
-  }
-
-  async testConnection(): Promise<{ success: boolean; error?: string }> {
-    try {
-      const testKey = `test/connection-test-${Date.now()}.json`;
-      const testData = {
-        timestamp: new Date().toISOString(),
-        test: true,
-      };
-
-      await this.uploadJson(testData, testKey);
-
-      const downloaded = await this.downloadJson(testKey);
-
-      if (downloaded.timestamp !== testData.timestamp) {
-        throw new Error('Downloaded data does not match uploaded data');
-      }
-
-      this.logger.log('✅ S3 connection test successful');
-      return { success: true };
-    } catch (error) {
-      const errorMessage = `S3 connection test failed: ${error.message}`;
-      this.logger.error(errorMessage);
-      return { success: false, error: errorMessage };
-    }
   }
 }

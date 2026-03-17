@@ -1,19 +1,16 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Web3Service } from './web3.service';
-import { FordefiService } from './fordefi/fordefi.service';
-import { ErrorDecoderService } from './error-decoder.service';
-import { ClickHouseService } from '../database/clickhouse.service';
 import { Context, TaskContext, CommitmentKeyService } from '../common';
 import {
   Address,
   Hex,
+  PublicClient,
   getContract,
   parseAbiItem,
-  encodeFunctionData,
-  BaseError,
+  createPublicClient,
   createWalletClient,
   http,
+  defineChain,
 } from 'viem';
 import {
   DistributedRewardsDistributionABI,
@@ -24,8 +21,8 @@ import {
   CapedStakingABI,
 } from './contracts/abis';
 import { privateKeyToAccount } from 'viem/accounts';
-import { arbitrum } from 'viem/chains';
-import { defineChain } from 'viem';
+import { arbitrum, arbitrumSepolia, mainnet, sepolia } from 'viem/chains';
+const bs58 = require('bs58');
 
 export interface MulticallResult<T> {
   error?: Error;
@@ -46,423 +43,324 @@ export interface CommitmentInfo {
 
 @Injectable()
 export class ContractService {
+  private publicClient: PublicClient;
+  private l1Client: PublicClient;
+  private lastKnownBlockPair: { l1Block: bigint; l2Block: bigint } | undefined;
+
   constructor(
     private configService: ConfigService,
-    private web3Service: Web3Service,
-    private fordefiService: FordefiService,
-    private clickHouseService: ClickHouseService,
-    private errorDecoder: ErrorDecoderService,
     private commitmentKeyService: CommitmentKeyService,
-  ) {}
+  ) {
+    this.initializeClients();
+  }
+
+  private initializeClients() {
+    const networkName = this.configService.get('blockchain.network.networkName');
+    const isTestnet = networkName === 'testnet' || networkName === 'sepolia';
+    const l2RpcUrl = this.configService.get('blockchain.network.l2RpcUrl');
+
+    this.publicClient = createPublicClient({
+      chain: isTestnet ? arbitrumSepolia : arbitrum,
+      transport: http(l2RpcUrl, { retryCount: 3, timeout: 30000 }),
+      cacheTime: 0,
+      batch: { multicall: { batchSize: 2 ** 16 } },
+    });
+
+    this.l1Client = createPublicClient({
+      chain: isTestnet ? sepolia : mainnet,
+      transport: http(this.configService.get('blockchain.network.l1RpcUrl')),
+      batch: { multicall: true },
+    });
+  }
+
+  // ---------------------------------------------------------------------------
+  // RPC client accessors
+  // ---------------------------------------------------------------------------
+
+  get client(): PublicClient {
+    return this.publicClient;
+  }
+
+  get l1(): PublicClient {
+    return this.l1Client;
+  }
+
+  // ---------------------------------------------------------------------------
+  // L1/L2 block helpers
+  // ---------------------------------------------------------------------------
+
+  async getL1BlockNumber(ctx: Context): Promise<number> {
+    try {
+      return Number(await this.l1Client.getBlockNumber());
+    } catch (error) {
+      ctx.logger.error({ error }, 'Failed to get L1 block number');
+      return Number(await this.publicClient.getBlockNumber());
+    }
+  }
+
+  async getBlockTimestamp(ctx: Context, blockNumber: number): Promise<Date> {
+    const block = await this.l1Client.getBlock({ blockNumber: BigInt(blockNumber) });
+    return new Date(Number(block.timestamp) * 1000);
+  }
+
+  async getLatestL2Block(): Promise<bigint> {
+    return await this.publicClient.getBlockNumber();
+  }
+
+  async getL1Block(
+    ctx: Context,
+    blockNumber: bigint,
+  ): Promise<{ timestamp: bigint; number: bigint }> {
+    const block = await this.l1Client.getBlock({ blockNumber });
+    return { timestamp: block.timestamp, number: block.number };
+  }
+
+  async getBlock(ctx: Context): Promise<{ number: bigint; l1BlockNumber: bigint }> {
+    const block = await this.publicClient.getBlock();
+    return {
+      number: block.number,
+      l1BlockNumber: BigInt((block as any).l1BlockNumber),
+    };
+  }
+
+  async getFirstBlockForL1Block(targetL1Block: number | bigint): Promise<bigint> {
+    targetL1Block = BigInt(targetL1Block);
+
+    let start: bigint;
+    if (!this.lastKnownBlockPair || this.lastKnownBlockPair.l1Block > targetL1Block) {
+      const chainId = await this.publicClient.getChainId();
+      start = chainId === 42161 ? 15447158n : 0n;
+      if (targetL1Block < start) {
+        throw new Error(`Target L1 block ${targetL1Block} is before Nitro genesis ${start}`);
+      }
+    } else if (this.lastKnownBlockPair.l1Block < targetL1Block) {
+      start = this.lastKnownBlockPair.l2Block;
+    } else {
+      return this.lastKnownBlockPair.l2Block;
+    }
+
+    let end = await this.publicClient.getBlock().then((b) => b.number);
+    let targetL2Block: bigint | undefined;
+
+    while (start <= end) {
+      const mid = start + (end - start) / 2n;
+      const l1Block = await this.publicClient
+        .getBlock({ blockNumber: mid })
+        .then((b) => BigInt((b as any).l1BlockNumber));
+
+      if (l1Block >= targetL1Block) end = mid - 1n;
+      else start = mid + 1n;
+
+      if (l1Block === targetL1Block) targetL2Block = mid;
+    }
+
+    if (targetL2Block == null) {
+      throw new Error(`Unable to find l2 block for l1 block ${targetL1Block}`);
+    }
+
+    this.lastKnownBlockPair = { l1Block: targetL1Block, l2Block: targetL2Block };
+    return targetL2Block;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Worker registration helpers
+  // ---------------------------------------------------------------------------
+
+  async preloadWorkerIds(
+    ctx: Context,
+    workers: string[],
+    blockNumber?: bigint,
+  ): Promise<Record<string, bigint>> {
+    const workerRegistrationAddress = this.configService.get(
+      'blockchain.contracts.workerRegistration',
+    ) as Address;
+    const workerIds: Record<string, bigint> = {};
+
+    try {
+      const contracts = workers.map((workerId) => ({
+        address: workerRegistrationAddress,
+        abi: WorkerRegistrationABI,
+        functionName: 'workerIds' as const,
+        args: [this.fromBase58(ctx, workerId)] as const,
+      }));
+
+      const results = await this.publicClient.multicall({
+        contracts,
+        blockNumber,
+        batchSize: 2 ** 16,
+      });
+
+      let successCount = 0;
+      let errorCount = 0;
+
+      workers.forEach((workerId, i) => {
+        if (results[i].status === 'success' && results[i].result) {
+          workerIds[workerId] = results[i].result;
+          if (results[i].result > 0n) successCount++;
+        } else {
+          errorCount++;
+          if (errorCount <= 3) {
+            ctx.logger.warn(
+              `Failed to get workerId for peer ${workerId.slice(0, 20)}...: ${results[i].error?.message || 'Unknown error'}`,
+            );
+          }
+          workerIds[workerId] = 0n;
+        }
+      });
+
+      ctx.logger.debug(
+        `Worker ID mapping: ${successCount} found, ${errorCount} errors (total: ${workers.length})`,
+      );
+      return workerIds;
+    } catch (error) {
+      ctx.logger.error({ error }, 'Failed to preload worker IDs');
+      return {};
+    }
+  }
+
+  private fromBase58(ctx: Context, value: string): Hex {
+    try {
+      return `0x${Buffer.from(bs58.decode(value)).toString('hex')}` as Hex;
+    } catch (error) {
+      ctx.logger.error({ error }, `Failed to convert peer ID ${value} from base58`);
+      return `0x${Buffer.from(value, 'utf8').toString('hex')}` as Hex;
+    }
+  }
+
+  async getBondAmount(ctx: Context, blockNumber?: bigint): Promise<bigint> {
+    const address = this.configService.get('blockchain.contracts.workerRegistration') as Address;
+    const bondAmount = await this.publicClient.readContract({
+      address,
+      abi: WorkerRegistrationABI,
+      functionName: 'bondAmount',
+      blockNumber,
+    });
+    ctx.logger.debug(`Bond amount: ${Number(bondAmount) / 1e18} SQD`);
+    return bondAmount;
+  }
+
+  async getActiveWorkerCount(ctx: Context, blockNumber?: bigint): Promise<bigint> {
+    const address = this.configService.get('blockchain.contracts.workerRegistration') as Address;
+    return await this.publicClient.readContract({
+      address,
+      abi: WorkerRegistrationABI,
+      functionName: 'getActiveWorkerCount',
+      blockNumber,
+    });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Contract read methods
+  // ---------------------------------------------------------------------------
 
   async getEffectiveTVL(ctx: Context, blockNumber?: bigint): Promise<bigint> {
-    try {
-      const rewardCalculationAddress = this.configService.get(
-        'blockchain.contracts.rewardCalculation',
-      ) as Address;
-
-      if (!rewardCalculationAddress) {
-        throw new Error('RewardCalculation contract address not configured');
-      }
-
-      const contract = getContract({
-        address: rewardCalculationAddress,
-        abi: RewardCalculationABI,
-        client: this.web3Service.client,
-      });
-
-      return await contract.read.effectiveTVL({ blockNumber });
-    } catch (error) {
-      ctx.logger.error({ error }, `Failed to get effective TVL from contract`);
-      throw error;
-    }
+    const address = this.configService.get('blockchain.contracts.rewardCalculation') as Address;
+    const contract = getContract({ address, abi: RewardCalculationABI, client: this.publicClient });
+    return await contract.read.effectiveTVL({ blockNumber });
   }
 
-  async getInitialRewardPoolSize(
-    ctx: Context,
-    blockNumber?: bigint,
-  ): Promise<bigint> {
-    try {
-      const rewardCalculationAddress = this.configService.get(
-        'blockchain.contracts.rewardCalculation',
-      ) as Address;
-
-      if (!rewardCalculationAddress) {
-        throw new Error('RewardCalculation contract address not configured');
-      }
-
-      const contract = getContract({
-        address: rewardCalculationAddress,
-        abi: RewardCalculationABI,
-        client: this.web3Service.client,
-      });
-
-      return await contract.read.INITIAL_REWARD_POOL_SIZE({ blockNumber });
-    } catch (error) {
-      ctx.logger.error(
-        { error },
-        `Failed to get initial reward pool size from contract`,
-      );
-      throw error;
-    }
+  async getInitialRewardPoolSize(ctx: Context, blockNumber?: bigint): Promise<bigint> {
+    const address = this.configService.get('blockchain.contracts.rewardCalculation') as Address;
+    const contract = getContract({ address, abi: RewardCalculationABI, client: this.publicClient });
+    return await contract.read.INITIAL_REWARD_POOL_SIZE({ blockNumber });
   }
 
-  async getYearlyRewardCapCoefficient(
-    ctx: Context,
-    blockNumber?: bigint,
-  ): Promise<bigint> {
-    try {
-      const networkControllerAddress = this.configService.get(
-        'blockchain.contracts.networkController',
-      ) as Address;
-
-      if (!networkControllerAddress) {
-        throw new Error('NetworkController contract address not configured');
-      }
-
-      const contract = getContract({
-        address: networkControllerAddress,
-        abi: NetworkControllerABI,
-        client: this.web3Service.client,
-      });
-
-      return await contract.read.yearlyRewardCapCoefficient({ blockNumber });
-    } catch (error) {
-      ctx.logger.error(
-        { error },
-        `Failed to get yearly reward cap coefficient from contract`,
-      );
-      throw error;
-    }
-  }
-
-  async getBoostFactor(ctx: Context, duration: bigint): Promise<bigint> {
-    try {
-      const rewardCalculationAddress = this.configService.get(
-        'blockchain.contracts.rewardCalculation',
-      ) as Address;
-
-      if (!rewardCalculationAddress) {
-        throw new Error('RewardCalculation contract address not configured');
-      }
-
-      const contract = getContract({
-        address: rewardCalculationAddress,
-        abi: RewardCalculationABI,
-        client: this.web3Service.client,
-      });
-
-      const boostFactor = await contract.read.boostFactor([duration]);
-      ctx.logger.debug(
-        `Retrieved boost factor from contract: ${boostFactor} basis points for duration ${duration}`,
-      );
-      return boostFactor;
-    } catch (error) {
-      ctx.logger.error({ error }, `Failed to get boost factor from contract`);
-      return 10000n;
-    }
+  async getYearlyRewardCapCoefficient(ctx: Context, blockNumber?: bigint): Promise<bigint> {
+    const address = this.configService.get('blockchain.contracts.networkController') as Address;
+    const contract = getContract({ address, abi: NetworkControllerABI, client: this.publicClient });
+    return await contract.read.yearlyRewardCapCoefficient({ blockNumber });
   }
 
   async getCurrentApy(ctx: Context, blockNumber?: bigint): Promise<bigint> {
     try {
-      try {
-        const tvl = await this.getEffectiveTVL(ctx, blockNumber);
-        ctx.logger.debug(`TVL: ${tvl.toString()}`);
+      const tvl = await this.getEffectiveTVL(ctx, blockNumber);
+      if (tvl === 0n) return 2000n;
 
-        if (tvl === 0n) {
-          return 2000n;
-        }
-
-        const initialRewardPoolSize = await this.getInitialRewardPoolSize(
-          ctx,
-          blockNumber,
-        );
-        ctx.logger.debug(
-          `Initial Reward Pool Size: ${initialRewardPoolSize.toString()}`,
-        );
-
-        const yearlyRewardCapCoefficient =
-          await this.getYearlyRewardCapCoefficient(ctx, blockNumber);
-        ctx.logger.debug(
-          `Yearly Reward Cap Coefficient: ${yearlyRewardCapCoefficient.toString()}`,
-        );
-
-        const apyCap =
-          (yearlyRewardCapCoefficient * initialRewardPoolSize) / tvl;
-        ctx.logger.debug(`APY Cap: ${apyCap.toString()}`);
-
-        const finalApr = 2000n > apyCap ? apyCap : 2000n;
-        ctx.logger.debug(`Final APR: ${finalApr} basis points`);
-        return finalApr;
-      } catch (error) {
-        ctx.logger.warn({ error }, `Failed to calculate APY from contract`);
-      }
-
-      // Default: return 20% APY (2000 basis points)
-      const defaultApy = BigInt('2000');
-      ctx.logger.debug('Using default APY (20%)');
-      return defaultApy;
+      const initialPool = await this.getInitialRewardPoolSize(ctx, blockNumber);
+      const capCoeff = await this.getYearlyRewardCapCoefficient(ctx, blockNumber);
+      const apyCap = (capCoeff * initialPool) / tvl;
+      return 2000n > apyCap ? apyCap : 2000n;
     } catch (error) {
-      ctx.logger.error({ error }, `Failed to get current APY`);
-      throw error;
+      ctx.logger.warn({ error }, 'Failed to calculate APY, using default 20%');
+      return 2000n;
     }
   }
 
   async getEpochLength(ctx: Context, blockNumber?: bigint): Promise<number> {
-    const configuredLength = this.configService.get(
-      'blockchain.rewardEpochLength',
-    );
-    if (configuredLength) {
-      ctx.logger.debug(
-        `📏 Using configured epoch length: ${configuredLength} blocks`,
-      );
-      return configuredLength;
-    }
+    const configuredLength = this.configService.get('blockchain.rewardEpochLength');
+    if (configuredLength) return configuredLength;
 
     try {
-      const workerRegistrationAddress = this.configService.get(
-        'blockchain.contracts.workerRegistration',
-      ) as Address;
-
-      const contract = getContract({
-        address: workerRegistrationAddress,
-        abi: WorkerRegistrationABI,
-        client: this.web3Service.client,
-      });
-
-      const contractEpochLength = Number(
-        await contract.read.epochLength({ blockNumber }),
-      );
-      ctx.logger.debug(
-        `📏 Retrieved epoch length from contract: ${contractEpochLength} blocks`,
-      );
-      return contractEpochLength;
+      const address = this.configService.get('blockchain.contracts.workerRegistration') as Address;
+      const contract = getContract({ address, abi: WorkerRegistrationABI, client: this.publicClient });
+      return Number(await contract.read.epochLength({ blockNumber }));
     } catch (error) {
-      ctx.logger.error({ error }, `Failed to get epoch length from contract`);
-      ctx.logger.debug(`📏 Using default epoch length: 7000 blocks`);
-      return 7000; // Default
+      ctx.logger.error({ error }, 'Failed to get epoch length, using default 7000');
+      return 7000;
     }
   }
 
-  async getNextEpoch(blockNumber?: bigint): Promise<number> {
+  async getLastBlockRewarded(ctx: Context): Promise<number> {
     try {
-      const networkControllerAddress = this.configService.get(
-        'blockchain.contracts.networkController',
-      ) as Address;
-
-      const contract = getContract({
-        address: networkControllerAddress,
-        abi: NetworkControllerABI,
-        client: this.web3Service.client,
-      });
-
-      return Number(await contract.read.nextEpoch({ blockNumber }));
-    } catch (error) {
-      new TaskContext('error-handling').logger.error(
-        `Failed to get next epoch: ${error.message}`,
-      );
-      return 1;
-    }
-  }
-
-  async getBondAmount(): Promise<bigint> {
-    const ctx = new TaskContext('contract-service:get-bond-amount');
-
-    try {
-      const workerRegistrationAddress = this.configService.get(
-        'blockchain.contracts.workerRegistration',
-      ) as Address;
-
-      if (!workerRegistrationAddress) {
-        throw new Error('WorkerRegistration contract address not configured');
-      }
-
-      const contract = getContract({
-        address: workerRegistrationAddress,
-        abi: WorkerRegistrationABI,
-        client: this.web3Service.client,
-      });
-
-      const bondAmount = await contract.read.bondAmount();
-      ctx.logger.debug(
-        `✅ Retrieved bond amount from WorkerRegistration contract: ${Number(bondAmount) / 1e18} SQD (${bondAmount} wei)`,
-      );
-      return bondAmount;
-    } catch (error) {
-      ctx.logger.error(
-        { error },
-        `Failed to get bond amount from WorkerRegistration contract`,
-      );
-      throw error;
-    }
-  }
-
-  async getLastRewardedBlock(ctx: Context): Promise<number> {
-    try {
-      const rewardsDistributionAddress = this.configService.get(
-        'blockchain.contracts.rewardsDistribution',
-      ) as Address;
-
-      ctx.logger.debug(
-        `Getting lastBlockRewarded from contract at ${rewardsDistributionAddress}`,
-      );
+      const address = this.configService.get('blockchain.contracts.rewardsDistribution') as Address;
 
       try {
-        const lastBlock = await this.web3Service.client.readContract({
-          address: rewardsDistributionAddress,
+        const lastBlock = await this.publicClient.readContract({
+          address,
           abi: DistributedRewardsDistributionABI,
           functionName: 'lastBlockRewarded',
         });
 
         const lastBlockNum = Number(lastBlock);
-        ctx.logger.debug(`lastBlockRewarded value: ${lastBlockNum}`);
-
-        // if lastBlockRewarded is 0, use the configured starting block
         if (lastBlockNum === 0) {
-          const startingBlock =
-            this.configService.get('rewards.distributionStartingBlock') || 0;
+          const startingBlock = this.configService.get('rewards.distributionStartingBlock') || 0;
           if (startingBlock > 0) {
-            ctx.logger.info(
-              `Using configured starting block: ${startingBlock} (lastBlockRewarded = 0)`,
-            );
-            // return startingBlock - 1 so the first distribution starts at startingBlock
+            ctx.logger.info(`Using configured starting block: ${startingBlock} (lastBlockRewarded = 0)`);
             return startingBlock - 1;
           }
         }
-
         return lastBlockNum;
       } catch (contractError: any) {
         if (contractError.message?.includes('returned no data')) {
-          ctx.logger.debug(
-            'Contract returned no data for lastBlockRewarded - using starting block',
-          );
-          const startingBlock =
-            this.configService.get('rewards.distributionStartingBlock') || 0;
-          if (startingBlock > 0) {
-            ctx.logger.info(
-              `Using configured starting block: ${startingBlock}`,
-            );
-            return startingBlock - 1;
-          }
-          return 0;
+          const startingBlock = this.configService.get('rewards.distributionStartingBlock') || 0;
+          return startingBlock > 0 ? startingBlock - 1 : 0;
         }
-
-        ctx.logger.error(
-          `Contract call failed: ${contractError.shortMessage || contractError.message}`,
-        );
         throw contractError;
       }
     } catch (error: any) {
-      if (typeof error === 'number') {
-        return error;
-      }
-
-      ctx.logger.error(
-        `Unexpected error getting last rewarded block: ${error.message}`,
-      );
+      if (typeof error === 'number') return error;
+      ctx.logger.error(`Unexpected error getting last rewarded block: ${error.message}`);
       return 0;
     }
   }
 
-  async isCommitted(fromBlock: number, toBlock: number): Promise<boolean> {
-    try {
-      const rewardsDistributionAddress = this.configService.get(
-        'blockchain.contracts.rewardsDistribution',
-      ) as Address;
-
-      const ctx = new TaskContext('contract:isCommitted');
-      ctx.logger.debug(
-        `Checking if committed: ${fromBlock}-${toBlock} at contract ${rewardsDistributionAddress}`,
-      );
-
-      // create the commitment key using abi.encode to match contract
-      const commitmentKey = this.commitmentKeyService.generateKey(
-        fromBlock,
-        toBlock,
-      );
-
-      ctx.logger.debug(`Commitment key: ${commitmentKey}`);
-
-      try {
-        // try direct readContract call for better error handling
-        const commitment = await this.web3Service.client.readContract({
-          address: rewardsDistributionAddress,
-          abi: DistributedRewardsDistributionABI,
-          functionName: 'commitments',
-          args: [commitmentKey],
-        });
-
-        ctx.logger.debug(`Commitment result: ${JSON.stringify(commitment)}`);
-        // New struct has status as first field, check if not NONEXISTENT (0)
-        return Number(commitment[0]) !== 0;
-      } catch (readError: any) {
-        ctx.logger.error(
-          {
-            error: readError,
-            errorMessage: readError.message,
-            shortMessage: readError.shortMessage,
-            commitmentKey,
-            fromBlock,
-            toBlock,
-          },
-          'Failed to read commitment from contract',
-        );
-        throw readError;
-      }
-    } catch (error: any) {
-      new TaskContext('error-handling').logger.error(
-        `Failed to check if committed: ${error.message}`,
-      );
-      return false;
-    }
-  }
-
   async canCommit(address: Hex): Promise<boolean> {
+    const ctx = new TaskContext('contract-service:can-commit');
     try {
-      const rewardsDistributionAddress = this.configService.get(
-        'blockchain.contracts.rewardsDistribution',
-      ) as Address;
-
+      const contractAddr = this.configService.get('blockchain.contracts.rewardsDistribution') as Address;
       const contract = getContract({
-        address: rewardsDistributionAddress,
+        address: contractAddr,
         abi: DistributedRewardsDistributionABI,
-        client: this.web3Service.client,
+        client: this.publicClient,
       });
-
       return await contract.read.canCommit([address]);
     } catch (error: any) {
       if (error.message?.includes('returned no data')) {
-        new TaskContext('contract-service:canCommit').logger.debug(
-          'Contract returned no data for canCommit - returning false',
-        );
+        ctx.logger.debug(`canCommit returned no data for ${address}`);
         return false;
       }
-
-      new TaskContext('contract-service:canCommit').logger.warn(
-        `Failed to check if can commit: ${error.shortMessage || error.message}`,
-      );
+      ctx.logger.error({ error }, `canCommit failed for ${address}`);
       return false;
     }
   }
 
   async getTargetCapacity(blockNumber?: bigint): Promise<bigint> {
     try {
-      const networkControllerAddress = this.configService.get(
-        'blockchain.contracts.networkController',
-      ) as Address;
-
-      const contract = getContract({
-        address: networkControllerAddress,
-        abi: NetworkControllerABI,
-        client: this.web3Service.client,
-      });
-
+      const address = this.configService.get('blockchain.contracts.networkController') as Address;
+      const contract = getContract({ address, abi: NetworkControllerABI, client: this.publicClient });
       const capacityGb = await contract.read.targetCapacityGb({ blockNumber });
       return BigInt(capacityGb) * BigInt(1e9);
     } catch (error) {
-      new TaskContext('error-handling').logger.error(
-        `Failed to get target capacity: ${error.message}`,
-      );
       const configValue = this.configService.get('rewards.targetCapacityGB');
       return BigInt(configValue || 30000) * BigInt(1e9);
     }
@@ -470,496 +368,82 @@ export class ContractService {
 
   async getStoragePerWorkerInGb(blockNumber?: bigint): Promise<number> {
     try {
-      const networkControllerAddress = this.configService.get(
-        'blockchain.contracts.networkController',
-      ) as Address;
-
-      const contract = getContract({
-        address: networkControllerAddress,
-        abi: NetworkControllerABI,
-        client: this.web3Service.client,
-      });
-
+      const address = this.configService.get('blockchain.contracts.networkController') as Address;
+      const contract = getContract({ address, abi: NetworkControllerABI, client: this.publicClient });
       return Number(await contract.read.storagePerWorkerInGb({ blockNumber }));
-    } catch (error) {
-      new TaskContext('error-handling').logger.error(
-        `Failed to get storage per worker: ${error.message}`,
-      );
-      return 200; // default 200GB
-    }
-  }
-
-  async getRegisteredWorkersCount(blockNumber?: bigint): Promise<number> {
-    try {
-      const workerRegistrationAddress = this.configService.get(
-        'blockchain.contracts.workerRegistration',
-      ) as Address;
-
-      const contract = getContract({
-        address: workerRegistrationAddress,
-        abi: WorkerRegistrationABI,
-        client: this.web3Service.client,
-      });
-
-      return Number(
-        await contract.read.registeredWorkersCount({ blockNumber }),
-      );
-    } catch (error) {
-      new TaskContext('error-handling').logger.error(
-        `Failed to get registered workers count: ${error.message}`,
-      );
-      return 0;
-    }
-  }
-
-  async getLatestCommitment(): Promise<CommitmentInfo | undefined> {
-    try {
-      const rewardsDistributionAddress = this.configService.get(
-        'blockchain.contracts.rewardsDistribution',
-      ) as Address;
-
-      const contract = getContract({
-        address: rewardsDistributionAddress,
-        abi: DistributedRewardsDistributionABI,
-        client: this.web3Service.client,
-      });
-
-      const lastCommitmentKey = await contract.read.lastCommitmentKey();
-
-      if (
-        !lastCommitmentKey ||
-        lastCommitmentKey ===
-          '0x0000000000000000000000000000000000000000000000000000000000000000'
-      ) {
-        new TaskContext('contract-service:getLatestCommitment').logger.debug(
-          'No commitment key found',
-        );
-        return undefined;
-      }
-
-      const commitment = await contract.read.commitments([lastCommitmentKey]);
-      const [
-        status,
-        fromBlock,
-        toBlock,
-        merkleRoot,
-        totalBatches,
-        processedBatches,
-        approvalCount,
-        ipfsLink,
-      ] = commitment;
-
-      return {
-        fromBlock: fromBlock,
-        toBlock: toBlock,
-        merkleRoot: merkleRoot,
-        totalBatches: Number(totalBatches),
-        processedBatches: Number(processedBatches),
-        approvalCount: BigInt(approvalCount),
-        ipfsLink: ipfsLink,
-        exists: status !== 0,
-      };
-    } catch (error) {
-      new TaskContext('error-handling').logger.error(
-        `Failed to get latest commitment: ${error.message}`,
-      );
-      return undefined;
+    } catch {
+      return 200;
     }
   }
 
   async getStakes(
     workerIds: string[],
+    blockNumber?: bigint,
   ): Promise<[MulticallResult<bigint>[], MulticallResult<bigint>[]]> {
-    try {
-      const stakingAddress = this.configService.get(
-        'blockchain.contracts.staking',
-      ) as Address;
-      const capedStakingAddress = this.configService.get(
-        'blockchain.contracts.capedStaking',
-      ) as Address;
+    const stakingAddress = this.configService.get('blockchain.contracts.staking') as Address;
+    const capedStakingAddress = this.configService.get('blockchain.contracts.capedStaking') as Address;
 
-      new TaskContext('method-call').logger.debug(
-        `🔍 Fetching stakes for ${workerIds.length} workers from contracts...`,
-      );
-      new TaskContext('method-call').logger.debug(
-        `📍 Staking address: ${stakingAddress}`,
-      );
-      new TaskContext('method-call').logger.debug(
-        `📍 CapedStaking address: ${capedStakingAddress}`,
-      );
+    if (!stakingAddress || !capedStakingAddress) {
+      throw new Error('Staking contract addresses not configured');
+    }
 
-      if (!stakingAddress) {
-        throw new Error('STAKING_ADDRESS not configured in environment');
-      }
+    const ctx = new TaskContext('contract-service:get-stakes');
+    const workerIdMapping = await this.preloadWorkerIds(ctx, workerIds);
 
-      if (!capedStakingAddress) {
-        throw new Error('CAPED_STAKING_ADDRESS not configured in environment');
-      }
+    const validWorkers = workerIds
+      .map((peerId) => ({ peerId, contractId: workerIdMapping[peerId] }))
+      .filter(({ contractId }) => contractId && contractId !== 0n);
 
-      // get worker contract IDs first
-      const ctx = new TaskContext('contract-service:get-stakes');
-      const workerIdMapping = await this.web3Service.preloadWorkerIds(
-        ctx,
-        workerIds,
-      );
-
-      // create a list of valid workers that are registered on-chain
-      const validWorkers = workerIds
-        .map((peerId) => ({ peerId, contractId: workerIdMapping[peerId] }))
-        .filter(({ contractId }) => contractId && contractId !== 0n);
-
-      if (validWorkers.length === 0) {
-        new TaskContext('warning').logger.warn(
-          'No registered workers found among the provided peer IDs.',
-        );
-        // Return zero stakes for all workers
-        const emptyResults: MulticallResult<bigint>[] = workerIds.map(() => ({
-          status: 'success' as const,
-          result: 0n,
-        }));
-        return [emptyResults, emptyResults];
-      }
-
-      new TaskContext('method-call').logger.debug(
-        `🎯 Found ${validWorkers.length} registered workers to query for stakes.`,
-      );
-
-      // prepare multicalls ONLY for valid, registered workers
-      const capedStakeCalls = validWorkers.map(({ contractId }) => ({
-        address: capedStakingAddress,
-        abi: CapedStakingABI,
-        functionName: 'capedStake' as const,
-        args: [contractId] as const,
+    if (validWorkers.length === 0) {
+      const empty: MulticallResult<bigint>[] = workerIds.map(() => ({
+        status: 'success' as const,
+        result: 0n,
       }));
-
-      const totalStakeCalls = validWorkers.map(({ contractId }) => ({
-        address: stakingAddress,
-        abi: StakingABI,
-        functionName: 'delegated' as const,
-        args: [contractId] as const,
-      }));
-
-      // execute the multicalls
-      new TaskContext('method-call').logger.debug(
-        `📞 Executing multicalls for stakes...`,
-      );
-      const [capedStakesResults, totalStakesResults] = await Promise.all([
-        this.web3Service.client.multicall({
-          contracts: capedStakeCalls,
-          allowFailure: true,
-        }),
-        this.web3Service.client.multicall({
-          contracts: totalStakeCalls,
-          allowFailure: true,
-        }),
-      ]);
-
-      // map the results back to the original list of workerIds
-      const capedStakesMap = new Map<string, MulticallResult<bigint>>();
-      validWorkers.forEach((worker, i) => {
-        capedStakesMap.set(worker.peerId, capedStakesResults[i]);
-      });
-
-      const totalStakesMap = new Map<string, MulticallResult<bigint>>();
-      validWorkers.forEach((worker, i) => {
-        totalStakesMap.set(worker.peerId, totalStakesResults[i]);
-      });
-
-      const finalCapedStakes: MulticallResult<bigint>[] = workerIds.map(
-        (peerId) =>
-          capedStakesMap.get(peerId) || {
-            status: 'success' as const,
-            result: 0n,
-          },
-      );
-      const finalTotalStakes: MulticallResult<bigint>[] = workerIds.map(
-        (peerId) =>
-          totalStakesMap.get(peerId) || {
-            status: 'success' as const,
-            result: 0n,
-          },
-      );
-
-      // log successful stakes
-      const successfulCaped = finalCapedStakes.filter(
-        (s) => s.status === 'success' && s.result && s.result > 0n,
-      ).length;
-      const successfulTotal = finalTotalStakes.filter(
-        (s) => s.status === 'success' && s.result && s.result > 0n,
-      ).length;
-
-      new TaskContext('method-call').logger.debug(
-        `✅ Successfully mapped stakes for workers:`,
-      );
-      new TaskContext('method-call').logger.debug(
-        `   - Caped stakes: ${successfulCaped}/${workerIds.length} workers with stakes > 0`,
-      );
-      new TaskContext('method-call').logger.debug(
-        `   - Total stakes: ${successfulTotal}/${workerIds.length} workers with stakes > 0`,
-      );
-
-      return [finalCapedStakes, finalTotalStakes];
-    } catch (error) {
-      new TaskContext('error-handling').logger.error(
-        `❌ Failed to get stakes from contracts: ${error.message}`,
-      );
-      new TaskContext('error-handling').logger.error(
-        `Stack trace: ${error.stack}`,
-      );
-
-      throw new Error(`Contract stake fetching failed: ${error.message}`);
+      return [empty, empty];
     }
+
+    const multicallOpts = blockNumber ? { blockNumber } : {};
+    const [capedResults, totalResults] = await Promise.all([
+      this.publicClient.multicall({
+        contracts: validWorkers.map(({ contractId }) => ({
+          address: capedStakingAddress,
+          abi: CapedStakingABI,
+          functionName: 'capedStake' as const,
+          args: [contractId] as const,
+        })),
+        allowFailure: true,
+        ...multicallOpts,
+      }),
+      this.publicClient.multicall({
+        contracts: validWorkers.map(({ contractId }) => ({
+          address: stakingAddress,
+          abi: StakingABI,
+          functionName: 'delegated' as const,
+          args: [contractId] as const,
+        })),
+        allowFailure: true,
+        ...multicallOpts,
+      }),
+    ]);
+
+    const capedMap = new Map<string, MulticallResult<bigint>>();
+    const totalMap = new Map<string, MulticallResult<bigint>>();
+    validWorkers.forEach((w, i) => {
+      capedMap.set(w.peerId, capedResults[i]);
+      totalMap.set(w.peerId, totalResults[i]);
+    });
+
+    const defaultResult: MulticallResult<bigint> = { status: 'success', result: 0n };
+    return [
+      workerIds.map((id) => capedMap.get(id) || defaultResult),
+      workerIds.map((id) => totalMap.get(id) || defaultResult),
+    ];
   }
 
-  private async getStakesFromClickHouse(
-    workerIds: string[],
-    networkName: string,
-  ): Promise<[any[], any[]]> {
-    try {
-      const workerIdList = workerIds.map((id) => `'${id}'`).join(',');
-      const query = `
-        SELECT 
-          worker_id,
-          stake,
-          staker_reward
-        FROM ${networkName}.worker_stats
-        WHERE worker_id IN (${workerIdList})
-          AND time >= NOW() - INTERVAL 1 HOUR
-        ORDER BY time DESC
-        LIMIT ${workerIds.length}
-      `;
+  // ---------------------------------------------------------------------------
+  // Commitment read methods
+  // ---------------------------------------------------------------------------
 
-      // use the properly injected ClickHouse service
-      const client = (this.clickHouseService as any).client;
-      if (!client) {
-        throw new Error('ClickHouse client not available');
-      }
-
-      const resultSet = await client.query({
-        query,
-        format: 'JSONEachRow',
-      });
-
-      const results = await resultSet.json();
-      const resultArray = Array.isArray(results) ? results : [results];
-
-      // map results back to worker order
-      const stakeMap = new Map<string, bigint>();
-      for (const row of resultArray) {
-        stakeMap.set(row.worker_id, BigInt(row.stake || 0));
-      }
-
-      const capedStakes = workerIds.map((id) => ({
-        result: stakeMap.get(id) || BigInt('10000000000000000000'), // Default 10 SQD
-        status: 'success',
-      }));
-
-      const totalStakes = capedStakes; // For now, same as caped stakes
-
-      new TaskContext('method-call').logger.debug(
-        `Retrieved stakes from ClickHouse for ${resultArray.length} workers`,
-      );
-      return [capedStakes, totalStakes];
-    } catch (error) {
-      new TaskContext('warning').logger.warn(
-        `Failed to get stakes from ClickHouse: ${error.message}`,
-      );
-      throw error;
-    }
-  }
-
-  // updated Merkle tree distribution methods with Fordefi integration
-  async commitRoot(
-    fromBlock: number,
-    toBlock: number,
-    merkleRoot: Hex,
-    totalBatches: number,
-    ipfsLink: string = '',
-  ): Promise<Hex | undefined> {
-    try {
-      const rewardsDistributionAddress = this.configService.get(
-        'blockchain.contracts.rewardsDistribution',
-      ) as Address;
-
-      if (!this.fordefiService.isConfigured()) {
-        new TaskContext('error-handling').logger.error(
-          'Fordefi is not properly configured',
-        );
-        return undefined;
-      }
-
-      // encode the function call
-      const data = encodeFunctionData({
-        abi: DistributedRewardsDistributionABI,
-        functionName: 'commitRoot',
-        args: [
-          [BigInt(fromBlock), BigInt(toBlock)],
-          merkleRoot,
-          totalBatches,
-          ipfsLink,
-        ],
-      });
-
-      // send transaction through Fordefi
-      const txHash = await this.fordefiService.sendTransaction(
-        rewardsDistributionAddress,
-        data,
-        `Commit Merkle root for blocks ${fromBlock}-${toBlock}`,
-        { priority_level: 'high' },
-      );
-
-      new TaskContext('method-call').logger.debug(
-        `Root committed successfully: ${txHash}`,
-      );
-      return txHash;
-    } catch (error) {
-      const errorCtx = new TaskContext('error-handling');
-      if (error instanceof BaseError) {
-        const errorMessage = this.errorDecoder.formatError(error, errorCtx);
-        const errorContext = this.errorDecoder.getErrorContext(error, errorCtx);
-        errorCtx.logger.error(
-          { errorContext },
-          `Failed to commit root: ${errorMessage}`,
-        );
-      } else {
-        errorCtx.logger.error(
-          `Failed to commit root: ${error?.message || error}`,
-        );
-      }
-      return undefined;
-    }
-  }
-
-  async approveRoot(
-    fromBlock: number,
-    toBlock: number,
-  ): Promise<Hex | undefined> {
-    try {
-      const rewardsDistributionAddress = this.configService.get(
-        'blockchain.contracts.rewardsDistribution',
-      ) as Address;
-
-      if (!this.fordefiService.isConfigured()) {
-        new TaskContext('error-handling').logger.error(
-          'Fordefi is not properly configured',
-        );
-        return undefined;
-      }
-
-      // encode the function call
-      const data = encodeFunctionData({
-        abi: DistributedRewardsDistributionABI,
-        functionName: 'approveRoot',
-        args: [[BigInt(fromBlock), BigInt(toBlock)]],
-      });
-
-      // send transaction through Fordefi
-      const txHash = await this.fordefiService.sendTransaction(
-        rewardsDistributionAddress,
-        data,
-        `Approve root for blocks ${fromBlock}-${toBlock}`,
-        { priority_level: 'high' },
-      );
-
-      new TaskContext('method-call').logger.debug(
-        `Root approved successfully: ${txHash}`,
-      );
-      return txHash;
-    } catch (error) {
-      new TaskContext('error-handling').logger.error(
-        `Failed to approve root: ${error.message}`,
-      );
-      return undefined;
-    }
-  }
-
-  async distributeBatch(
-    fromBlock: number,
-    toBlock: number,
-    recipients: number[],
-    workerRewards: bigint[],
-    stakerRewards: bigint[],
-    merkleProof: Hex[],
-  ): Promise<Hex | undefined> {
-    try {
-      const rewardsDistributionAddress = this.configService.get(
-        'blockchain.contracts.rewardsDistribution',
-      ) as Address;
-
-      if (!this.fordefiService.isConfigured()) {
-        new TaskContext('error-handling').logger.error(
-          'Fordefi is not properly configured',
-        );
-        return undefined;
-      }
-
-      // encode the function call
-      const data = encodeFunctionData({
-        abi: DistributedRewardsDistributionABI,
-        functionName: 'distribute',
-        args: [
-          [BigInt(fromBlock), BigInt(toBlock)],
-          recipients.map((r) => BigInt(r)),
-          workerRewards,
-          stakerRewards,
-          merkleProof,
-        ],
-      });
-
-      // send transaction through Fordefi
-      const txHash = await this.fordefiService.sendTransaction(
-        rewardsDistributionAddress,
-        data,
-        `Distribute batch ${recipients.length} workers (blocks ${fromBlock}-${toBlock})`,
-        { priority_level: 'medium' },
-      );
-
-      new TaskContext('method-call').logger.debug(
-        `Batch distributed successfully: ${txHash}`,
-      );
-      return txHash;
-    } catch (error) {
-      new TaskContext('error-handling').logger.error(
-        `Failed to distribute batch: ${error.message}`,
-      );
-      return undefined;
-    }
-  }
-
-  async isBatchProcessed(
-    fromBlock: number,
-    toBlock: number,
-    leafHash: Hex,
-  ): Promise<boolean> {
-    try {
-      const rewardsDistributionAddress = this.configService.get(
-        'blockchain.contracts.rewardsDistribution',
-      ) as Address;
-
-      const contract = getContract({
-        address: rewardsDistributionAddress,
-        abi: DistributedRewardsDistributionABI,
-        client: this.web3Service.client,
-      });
-
-      // create the commitment key using abi.encode to match contract
-      const commitmentKey = this.commitmentKeyService.generateKey(
-        fromBlock,
-        toBlock,
-      );
-
-      return await contract.read.processed([commitmentKey, leafHash]);
-    } catch (error) {
-      new TaskContext('error-handling').logger.error(
-        `Failed to check if batch is processed: ${error.message}`,
-      );
-      return false;
-    }
-  }
-
-  /**
-   * get commitment info for a block range from the contract
-   */
   async getCommitment(
     ctx: Context,
     fromBlock: number,
@@ -972,313 +456,39 @@ export class ContractService {
     approvalCount: number;
     ipfsLink: string;
   }> {
+    const address = this.configService.get('blockchain.contracts.rewardsDistribution') as Address;
+    const commitmentKey = this.commitmentKeyService.generateKey(fromBlock, toBlock);
+    const emptyResult = {
+      exists: false,
+      merkleRoot: '0x0000000000000000000000000000000000000000000000000000000000000000',
+      totalBatches: 0,
+      processedBatches: 0,
+      approvalCount: 0,
+      ipfsLink: '',
+    };
+
     try {
-      const rewardsDistributionAddress = this.configService.get(
-        'blockchain.contracts.rewardsDistribution',
-      ) as Address;
+      const commitment = await this.publicClient.readContract({
+        address,
+        abi: DistributedRewardsDistributionABI,
+        functionName: 'commitments',
+        args: [commitmentKey],
+      });
 
-      if (!rewardsDistributionAddress) {
-        throw new Error('Rewards distribution contract address not configured');
-      }
-
-      const commitmentKey = this.commitmentKeyService.generateKey(
-        fromBlock,
-        toBlock,
-      );
-
-      ctx.logger.debug(
-        `Getting commitment for blocks ${fromBlock}-${toBlock}, key: ${commitmentKey}, contract: ${rewardsDistributionAddress}`,
-      );
-
-      try {
-        const commitment = await this.web3Service.client.readContract({
-          address: rewardsDistributionAddress,
-          abi: DistributedRewardsDistributionABI,
-          functionName: 'commitments',
-          args: [commitmentKey],
-        });
-
-        const commitmentForLogging = commitment
-          ? {
-              status: commitment[0]?.toString(),
-              fromBlock: commitment[1]?.toString(),
-              toBlock: commitment[2]?.toString(),
-              merkleRoot: commitment[3],
-              totalBatches: commitment[4]?.toString(),
-              processedBatches: commitment[5]?.toString(),
-              approvalCount: commitment[6]?.toString(),
-              ipfsLink: commitment[7],
-            }
-          : null;
-
-        ctx.logger.debug(
-          `Raw commitment response: ${JSON.stringify(commitmentForLogging)}`,
-        );
-
-        if (!commitment) {
-          ctx.logger.debug('No commitment found (null/undefined response)');
-          return {
-            exists: false,
-            merkleRoot:
-              '0x0000000000000000000000000000000000000000000000000000000000000000',
-            totalBatches: 0,
-            processedBatches: 0,
-            approvalCount: 0,
-            ipfsLink: '',
-          };
-        }
-
-        const status = Number(commitment[0]);
-        return {
-          exists: status !== 0, // NONEXISTENT = 0
-          merkleRoot: (commitment[3] ||
-            '0x0000000000000000000000000000000000000000000000000000000000000000') as string,
-          totalBatches: Number(commitment[4] || 0),
-          processedBatches: Number(commitment[5] || 0),
-          approvalCount: Number(commitment[6] || 0),
-          ipfsLink: commitment[7] || '',
-        };
-      } catch (contractError: any) {
-        if (contractError.message?.includes('returned no data')) {
-          ctx.logger.debug(
-            'Contract returned no data - this likely means no commitment exists yet',
-          );
-          return {
-            exists: false,
-            merkleRoot:
-              '0x0000000000000000000000000000000000000000000000000000000000000000',
-            totalBatches: 0,
-            processedBatches: 0,
-            approvalCount: 0,
-            ipfsLink: '',
-          };
-        }
-        throw contractError;
-      }
-    } catch (error) {
-      ctx.logger.error(
-        {
-          error,
-          fromBlock,
-          toBlock,
-          contractAddress: this.configService.get(
-            'blockchain.contracts.rewardsDistribution',
-          ),
-        },
-        `Failed to get commitment for blocks ${fromBlock}-${toBlock}`,
-      );
-      throw error;
-    }
-  }
-
-  /**
-   * get the last block that completed reward distribution
-   * (alias for getLastRewardedBlock to maintain compatibility)
-   */
-  async getLastBlockRewarded(ctx: Context): Promise<number> {
-    return this.getLastRewardedBlock(ctx);
-  }
-
-  /**
-   * Check which batches have been processed for a commitment
-   */
-  async getProcessedBatches(
-    ctx: Context,
-    fromBlock: number,
-    toBlock: number,
-    leafHashes: string[],
-  ): Promise<boolean[]> {
-    try {
-      const results = await Promise.all(
-        leafHashes.map((leafHash) =>
-          this.isBatchProcessed(fromBlock, toBlock, leafHash as Hex),
-        ),
-      );
-
-      ctx.logger.debug(
-        `Checked ${leafHashes.length} batches: ${results.filter((r) => r).length} processed`,
-      );
-
-      return results;
-    } catch (error) {
-      ctx.logger.error(
-        { error },
-        `Failed to check processed batches for blocks ${fromBlock}-${toBlock}`,
-      );
-      throw error;
-    }
-  }
-
-  // legacy methods for backward compatibility
-  async commitRewards(
-    fromBlock: number,
-    toBlock: number,
-    workerIds: bigint[],
-    workerRewards: bigint[],
-    stakerRewards: bigint[],
-  ): Promise<Hex | undefined> {
-    new TaskContext('warning').logger.warn(
-      'commitRewards (legacy) not implemented - use commitRoot instead',
-    );
-    return undefined;
-  }
-
-  async approveRewards(
-    fromBlock: number,
-    toBlock: number,
-    workerIds: bigint[],
-    workerRewards: bigint[],
-    stakerRewards: bigint[],
-  ): Promise<Hex | undefined> {
-    new TaskContext('warning').logger.warn(
-      'approveRewards (legacy) not implemented - use approveRoot instead',
-    );
-    return undefined;
-  }
-
-  async getDistributionStatus(ctx: Context): Promise<{
-    nextFromBlock: number;
-    nextToBlock: number;
-    isReadyForDistribution: boolean;
-    needsConfirmation: boolean;
-    hasExistingCommitment: boolean;
-    blocksUntilNextDistribution: number;
-    confirmationBlocksNeeded: number;
-  }> {
-    try {
-      const currentBlock = await this.web3Service.getL1BlockNumber(ctx);
-      const lastRewardedBlock = await this.getLastRewardedBlock(ctx);
-      const blockInterval =
-        this.configService.get('rewards.distributionBlockInterval') || 520;
-      const confirmationBlocks =
-        this.configService.get('blockchain.epochConfirmationBlocks') || 1000;
-      const startingBlock =
-        this.configService.get('rewards.distributionStartingBlock') || 0;
-      const rewardsDistributionAddress = this.configService.get(
-        'blockchain.contracts.rewardsDistribution',
-      ) as Address;
-
-      let lastCommitmentKey: string;
-      try {
-        lastCommitmentKey = await this.getLastCommitmentKey(ctx);
-      } catch (error) {
-        ctx.logger.debug(
-          'Could not fetch lastCommitmentKey - might be using older contract',
-        );
-        lastCommitmentKey =
-          '0x0000000000000000000000000000000000000000000000000000000000000000';
-      }
-
-      let nextFromBlock: number = 0;
-      let nextToBlock: number = 0;
-
-      if (
-        lastCommitmentKey !==
-        '0x0000000000000000000000000000000000000000000000000000000000000000'
-      ) {
-        ctx.logger.info(`Found lastCommitmentKey: ${lastCommitmentKey}`);
-
-        try {
-          const commitment = await this.web3Service.client.readContract({
-            address: rewardsDistributionAddress,
-            abi: DistributedRewardsDistributionABI,
-            functionName: 'commitments',
-            args: [lastCommitmentKey as `0x${string}`],
-          });
-
-          const commitmentStatus = Number(commitment[0]);
-          const commitmentFromBlock = Number(commitment[1]);
-          const commitmentToBlock = Number(commitment[2]);
-
-          ctx.logger.info(
-            `Last commitment status: ${commitmentStatus}, blocks: ${commitmentFromBlock}-${commitmentToBlock}`,
-          );
-
-          if (commitmentStatus === 1) {
-            // ACTIVE - not fully processed
-            // need to recover this distribution
-            nextFromBlock = commitmentFromBlock;
-            nextToBlock = commitmentToBlock;
-            ctx.logger.info(
-              `Found ACTIVE commitment that needs recovery for blocks ${nextFromBlock}-${nextToBlock}`,
-            );
-          } else if (commitmentStatus === 2) {
-            // COMPLETED
-            // skip and go to lastBlockRewarded + 1
-            nextFromBlock = lastRewardedBlock + 1;
-            nextToBlock = nextFromBlock + blockInterval - 1;
-            ctx.logger.info(
-              `Last commitment COMPLETED, continuing from block ${nextFromBlock}`,
-            );
-          } else {
-            // status is NONEXISTENT (0)
-            ctx.logger.warn(
-              'Last commitment key exists but status is NONEXISTENT',
-            );
-            nextFromBlock = lastRewardedBlock + 1;
-            nextToBlock = nextFromBlock + blockInterval - 1;
-          }
-        } catch (error) {
-          ctx.logger.error('Failed to read commitment from contract', error);
-          // fallback to lastRewardedBlock
-          nextFromBlock = lastRewardedBlock + 1;
-          nextToBlock = nextFromBlock + blockInterval - 1;
-        }
-      } else {
-        // no lastCommitmentKey
-        if (lastRewardedBlock === 0) {
-          // fresh start - use starting block
-          nextFromBlock = startingBlock;
-          nextToBlock = nextFromBlock + blockInterval - 1;
-          ctx.logger.info(
-            `Fresh start: Using configured starting block: ${startingBlock}`,
-          );
-        } else {
-          // continue from lastRewardedBlock
-          nextFromBlock = lastRewardedBlock + 1;
-          nextToBlock = nextFromBlock + blockInterval - 1;
-          ctx.logger.info(
-            `Continuing from lastRewardedBlock + 1: ${nextFromBlock}`,
-          );
-        }
-      }
-
-      // calculate blocks until distribution
-      const blocksUntilNextDistribution = Math.max(
-        0,
-        nextToBlock - currentBlock,
-      );
-
-      // check if needs confirmation
-      const lastConfirmedBlock = currentBlock - confirmationBlocks;
-      const needsConfirmation = nextToBlock > lastConfirmedBlock;
-      const confirmationBlocksNeeded = needsConfirmation
-        ? nextToBlock - lastConfirmedBlock
-        : 0;
-
-      // check for existing commitment
-      const commitment = await this.getCommitment(
-        ctx,
-        nextFromBlock,
-        nextToBlock,
-      );
-
-      // determine if ready for distribution
-      const isReadyForDistribution =
-        currentBlock >= nextToBlock && !needsConfirmation && !commitment.exists;
+      if (!commitment) return emptyResult;
 
       return {
-        nextFromBlock,
-        nextToBlock,
-        isReadyForDistribution,
-        needsConfirmation,
-        hasExistingCommitment: commitment.exists,
-        blocksUntilNextDistribution,
-        confirmationBlocksNeeded,
+        exists: Number(commitment[0]) !== 0,
+        merkleRoot: (commitment[3] || emptyResult.merkleRoot) as string,
+        totalBatches: Number(commitment[4] || 0),
+        processedBatches: Number(commitment[5] || 0),
+        approvalCount: Number(commitment[6] || 0),
+        ipfsLink: commitment[7] || '',
       };
-    } catch (error) {
-      ctx.logger.error({ error }, 'Failed to get distribution status');
-      throw error;
+    } catch (contractError: any) {
+      if (contractError.message?.includes('returned no data')) return emptyResult;
+      ctx.logger.error({ error: contractError, fromBlock, toBlock }, 'Failed to get commitment');
+      throw contractError;
     }
   }
 
@@ -1287,386 +497,71 @@ export class ContractService {
     fromBlock: number,
     toBlock: number,
   ): Promise<{
-    status: number; // 0=NONEXISTENT, 1=ACTIVE, 2=COMPLETED
+    status: number;
     merkleRoot: string;
     totalBatches: number;
     processedBatches: number;
     approvalCount: number;
     ipfsLink: string;
   }> {
-    try {
-      const rewardsDistributionAddress = this.configService.get(
-        'blockchain.contracts.rewardsDistribution',
-      ) as Address;
+    const address = this.configService.get('blockchain.contracts.rewardsDistribution') as Address;
+    const result = await this.publicClient.readContract({
+      address,
+      abi: DistributedRewardsDistributionABI,
+      functionName: 'getCommitment',
+      args: [[BigInt(fromBlock), BigInt(toBlock)]],
+    });
 
-      if (!rewardsDistributionAddress) {
-        throw new Error('Rewards distribution contract address not configured');
-      }
-
-      const result = await this.web3Service.client.readContract({
-        address: rewardsDistributionAddress,
-        abi: DistributedRewardsDistributionABI,
-        functionName: 'getCommitment',
-        args: [[BigInt(fromBlock), BigInt(toBlock)]],
-      });
-
-      return {
-        status: Number(result[0]),
-        merkleRoot: result[1] as string,
-        totalBatches: Number(result[2]),
-        processedBatches: Number(result[3]),
-        approvalCount: Number(result[4]),
-        ipfsLink: result[5],
-      };
-    } catch (error) {
-      ctx.logger.error(
-        { error, fromBlock, toBlock },
-        'Failed to get commitment V2',
-      );
-      throw error;
-    }
+    return {
+      status: Number(result[0]),
+      merkleRoot: result[1] as string,
+      totalBatches: Number(result[2]),
+      processedBatches: Number(result[3]),
+      approvalCount: Number(result[4]),
+      ipfsLink: result[5],
+    };
   }
 
-  async isCommitmentComplete(
+  async getProcessedBatches(
     ctx: Context,
     fromBlock: number,
     toBlock: number,
-  ): Promise<boolean> {
-    try {
-      const rewardsDistributionAddress = this.configService.get(
-        'blockchain.contracts.rewardsDistribution',
-      ) as Address;
+    leafHashes: string[],
+  ): Promise<boolean[]> {
+    const address = this.configService.get('blockchain.contracts.rewardsDistribution') as Address;
+    const contract = getContract({
+      address,
+      abi: DistributedRewardsDistributionABI,
+      client: this.publicClient,
+    });
+    const commitmentKey = this.commitmentKeyService.generateKey(fromBlock, toBlock);
 
-      if (!rewardsDistributionAddress) {
-        throw new Error('Rewards distribution contract address not configured');
-      }
+    const results = await Promise.all(
+      leafHashes.map(async (leafHash) => {
+        try {
+          return await contract.read.processed([commitmentKey, leafHash as Hex]);
+        } catch {
+          return false;
+        }
+      }),
+    );
 
-      const isComplete = await this.web3Service.client.readContract({
-        address: rewardsDistributionAddress,
-        abi: DistributedRewardsDistributionABI,
-        functionName: 'isCommitmentComplete',
-        args: [[BigInt(fromBlock), BigInt(toBlock)]],
-      });
-
-      return isComplete;
-    } catch (error) {
-      ctx.logger.error(
-        { error, fromBlock, toBlock },
-        'Failed to check if commitment is complete',
-      );
-      throw error;
-    }
+    ctx.logger.debug(
+      `Checked ${leafHashes.length} batches: ${results.filter(Boolean).length} processed`,
+    );
+    return results;
   }
 
   async getLastCommitmentKey(ctx: Context): Promise<string> {
-    try {
-      const rewardsDistributionAddress = this.configService.get(
-        'blockchain.contracts.rewardsDistribution',
-      ) as Address;
-
-      if (!rewardsDistributionAddress) {
-        throw new Error('Rewards distribution contract address not configured');
-      }
-
-      const key = await this.web3Service.client.readContract({
-        address: rewardsDistributionAddress,
-        abi: DistributedRewardsDistributionABI,
-        functionName: 'lastCommitmentKey',
-        args: [],
-      });
-
-      return key as string;
-    } catch (error) {
-      ctx.logger.error({ error }, 'Failed to get last commitment key');
-      throw error;
-    }
+    const address = this.configService.get('blockchain.contracts.rewardsDistribution') as Address;
+    return (await this.publicClient.readContract({
+      address,
+      abi: DistributedRewardsDistributionABI,
+      functionName: 'lastCommitmentKey',
+      args: [],
+    })) as string;
   }
 
-  async isNextDistributionReady(ctx: Context): Promise<{
-    isReady: boolean;
-    nextFromBlock: number;
-    nextToBlock: number;
-    blocksUntilReady: number;
-    needsConfirmation: boolean;
-    confirmationBlocksNeeded: number;
-  }> {
-    try {
-      const currentBlock = await this.web3Service.getL1BlockNumber(ctx);
-      const lastRewardedBlock = await this.getLastRewardedBlock(ctx);
-      const blockInterval =
-        this.configService.get('rewards.distributionBlockInterval') || 520;
-      const confirmationBlocks =
-        this.configService.get('blockchain.epochConfirmationBlocks') || 150;
-
-      const nextFromBlock = lastRewardedBlock + 1;
-      const nextToBlock = nextFromBlock + blockInterval - 1;
-
-      const blocksUntilReady =
-        nextToBlock > currentBlock ? nextToBlock - currentBlock : 0;
-
-      const lastConfirmedBlock = currentBlock - confirmationBlocks;
-      const needsConfirmation = nextToBlock > lastConfirmedBlock;
-      const confirmationBlocksNeeded = needsConfirmation
-        ? nextToBlock - lastConfirmedBlock
-        : 0;
-
-      // ready if: end block reached + confirmed + no existing commitment
-      const isReady = currentBlock >= nextToBlock && !needsConfirmation;
-
-      ctx.logger.debug(
-        `📊 Distribution check: current=${currentBlock}, target=${nextToBlock}, ready=${isReady}, confirmations=${confirmationBlocks}, blocksToWait=${confirmationBlocksNeeded}`,
-      );
-
-      return {
-        isReady,
-        nextFromBlock,
-        nextToBlock,
-        blocksUntilReady,
-        needsConfirmation,
-        confirmationBlocksNeeded,
-      };
-    } catch (error) {
-      ctx.logger.error(
-        { error },
-        'Failed to check if next distribution is ready',
-      );
-      throw error;
-    }
-  }
-
-  /**
-   * get recent distribution events for activity detection
-   */
-  async getRecentDistributionEvents(blockWindow: number = 50): Promise<any[]> {
-    const ctx = new TaskContext(
-      'contract-service:get-recent-distribution-events',
-    );
-
-    try {
-      const rewardsDistributionAddress = this.configService.get(
-        'blockchain.contracts.rewardsDistribution',
-      ) as Address;
-
-      const currentBlock = await this.web3Service.client.getBlockNumber();
-      const fromBlock = currentBlock - BigInt(blockWindow);
-
-      // get BatchDistributed events from recent blocks
-      const distributionLogs = await this.web3Service.client.getLogs({
-        address: rewardsDistributionAddress,
-        event: parseAbiItem(
-          `event BatchDistributed(uint256 fromBlock, uint256 toBlock, uint64 batchId, uint256[] recipients, uint256[] workerRewards, uint256[] stakerRewards)`,
-        ),
-        fromBlock,
-      });
-
-      // get block timestamps for timing analysis
-      const eventsWithTimestamps = await Promise.all(
-        distributionLogs.map(async (log) => {
-          const block = await this.web3Service.client.getBlock({
-            blockNumber: log.blockNumber,
-          });
-
-          return {
-            ...log.args,
-            blockNumber: log.blockNumber,
-            blockTimestamp: Number(block.timestamp),
-            transactionHash: log.transactionHash,
-            batchIndex: Number(log.args?.batchId || 0),
-            totalBatches: null, // will be populated if needed
-          };
-        }),
-      );
-
-      ctx.logger.debug(
-        `found ${eventsWithTimestamps.length} recent distribution events`,
-      );
-      return eventsWithTimestamps;
-    } catch (error) {
-      ctx.logger.error({ error }, 'failed to get recent distribution events');
-      return [];
-    }
-  }
-
-  /**
-   * get commitments that are approved but not fully distributed
-   */
-  async getPendingCommitments(): Promise<
-    Array<{
-      fromBlock: number;
-      toBlock: number;
-      merkleRoot: string;
-      totalBatches: number;
-      processedBatches: number;
-      status: string;
-    }>
-  > {
-    const ctx = new TaskContext('contract-service:get-pending-commitments');
-
-    try {
-      const rewardsDistributionAddress = this.configService.get(
-        'blockchain.contracts.rewardsDistribution',
-      ) as Address;
-
-      const contract = getContract({
-        address: rewardsDistributionAddress,
-        abi: DistributedRewardsDistributionABI,
-        client: this.web3Service.client,
-      });
-
-      const lastCommitmentKey = await contract.read.lastCommitmentKey();
-
-      if (
-        !lastCommitmentKey ||
-        lastCommitmentKey ===
-          '0x0000000000000000000000000000000000000000000000000000000000000000'
-      ) {
-        ctx.logger.debug('No commitment key found');
-        return [];
-      }
-
-      const commitment = await contract.read.commitments([lastCommitmentKey]);
-      const [
-        status,
-        fromBlock,
-        toBlock,
-        merkleRoot,
-        totalBatches,
-        processedBatches,
-        approvalCount,
-        ipfsLink,
-      ] = commitment;
-
-      const pendingCommitments: Array<{
-        fromBlock: number;
-        toBlock: number;
-        merkleRoot: string;
-        totalBatches: number;
-        processedBatches: number;
-        status: string;
-      }> = [];
-
-      if (
-        status === 1 && // ACTIVE status
-        approvalCount > 0n &&
-        processedBatches < totalBatches
-      ) {
-        pendingCommitments.push({
-          fromBlock: Number(fromBlock),
-          toBlock: Number(toBlock),
-          merkleRoot: merkleRoot as string,
-          totalBatches: Number(totalBatches),
-          processedBatches: Number(processedBatches),
-          status: 'pending_distribution',
-        });
-      }
-
-      ctx.logger.debug(
-        `found ${pendingCommitments.length} pending commitments`,
-      );
-      return pendingCommitments;
-    } catch (error) {
-      ctx.logger.error({ error }, 'failed to get pending commitments');
-      return [];
-    }
-  }
-
-  async getRequiredApprovals(): Promise<number> {
-    const ctx = new TaskContext('contract-service:get-required-approvals');
-
-    try {
-      const rewardsDistributionAddress = this.configService.get(
-        'blockchain.contracts.rewardsDistribution',
-      ) as Address;
-
-      const contract = getContract({
-        address: rewardsDistributionAddress,
-        abi: DistributedRewardsDistributionABI,
-        client: this.web3Service.client,
-      });
-
-      const requiredApprovals = await contract.read.requiredApproves();
-
-      ctx.logger.debug(`Required approvals: ${requiredApprovals}`);
-      return Number(requiredApprovals);
-    } catch (error) {
-      ctx.logger.error({ error }, 'Failed to get required approvals count');
-      return 1; // Default fallback
-    }
-  }
-
-  async getCommitmentsNeedingApproval(): Promise<
-    Array<{
-      fromBlock: number;
-      toBlock: number;
-      merkleRoot: string;
-    }>
-  > {
-    const ctx = new TaskContext(
-      'contract-service:get-commitments-needing-approval',
-    );
-
-    try {
-      const rewardsDistributionAddress = this.configService.get(
-        'blockchain.contracts.rewardsDistribution',
-      ) as Address;
-
-      const contract = getContract({
-        address: rewardsDistributionAddress,
-        abi: DistributedRewardsDistributionABI,
-        client: this.web3Service.client,
-      });
-
-      const lastCommitmentKey = await contract.read.lastCommitmentKey();
-
-      if (
-        lastCommitmentKey ===
-        '0x0000000000000000000000000000000000000000000000000000000000000000'
-      ) {
-        ctx.logger.debug('no commitments found (lastCommitmentKey is zero)');
-        return [];
-      }
-
-      const commitment = await contract.read.commitments([lastCommitmentKey]);
-
-      const [status, fromBlock, toBlock, merkleRoot, , , approvalCount] =
-        commitment;
-
-      const requiredApproves = await contract.read.requiredApproves();
-
-      ctx.logger.debug(
-        `latest commitment: blocks ${fromBlock}-${toBlock}, status: ${status}, approvals: ${approvalCount}/${requiredApproves}`,
-      );
-
-      // check if commitment needs more approvals
-      if (
-        status === 1 && // ACTIVE status (committed)
-        approvalCount < requiredApproves // needs more approvals
-      ) {
-        const needingApproval = [
-          {
-            fromBlock: Number(fromBlock),
-            toBlock: Number(toBlock),
-            merkleRoot: merkleRoot as string,
-          },
-        ];
-
-        ctx.logger.debug(
-          `found 1 commitment needing approval: ${fromBlock}-${toBlock} (${approvalCount}/${requiredApproves} approvals)`,
-        );
-        return needingApproval;
-      }
-
-      ctx.logger.debug('no commitments need approval');
-      return [];
-    } catch (error) {
-      ctx.logger.error({ error }, 'failed to get commitments needing approval');
-      return [];
-    }
-  }
-
-  /**
-   * get commitment info by key
-   */
   async getCommitmentInfo(commitmentKey: string): Promise<{
     status: number;
     fromBlock: number;
@@ -1677,33 +572,16 @@ export class ContractService {
     approvalCount: bigint;
     ipfsLink: string;
   } | null> {
-    const ctx = new TaskContext('contract-service:get-commitment-info');
-
     try {
-      const rewardsDistributionAddress = this.configService.get(
-        'blockchain.contracts.rewardsDistribution',
-      ) as Address;
-
+      const address = this.configService.get('blockchain.contracts.rewardsDistribution') as Address;
       const contract = getContract({
-        address: rewardsDistributionAddress,
+        address,
         abi: DistributedRewardsDistributionABI,
-        client: this.web3Service.client,
+        client: this.publicClient,
       });
 
-      const commitment = await contract.read.commitments([
-        commitmentKey as `0x${string}`,
-      ]);
-
-      const [
-        status,
-        fromBlock,
-        toBlock,
-        merkleRoot,
-        totalBatches,
-        processedBatches,
-        approvalCount,
-        ipfsLink,
-      ] = commitment;
+      const [status, fromBlock, toBlock, merkleRoot, totalBatches, processedBatches, approvalCount, ipfsLink] =
+        await contract.read.commitments([commitmentKey as `0x${string}`]);
 
       return {
         status: Number(status),
@@ -1713,243 +591,317 @@ export class ContractService {
         totalBatches: Number(totalBatches),
         processedBatches: Number(processedBatches),
         approvalCount,
-        ipfsLink: ipfsLink,
+        ipfsLink,
       };
     } catch (error) {
-      ctx.logger.debug(`failed to get commitment info: ${error.message}`);
+      const ctx = new TaskContext('contract-service:get-commitment-info');
+      ctx.logger.error({ error, commitmentKey }, 'Failed to get commitment info');
       return null;
     }
   }
 
-  /**
-   * check if specific address has approved a commitment
-   */
-  async hasApprovedCommitment(
-    fromBlock: number,
-    toBlock: number,
-    address: `0x${string}`,
-  ): Promise<boolean> {
-    const ctx = new TaskContext(
-      `contract-service:has-approved:${fromBlock}-${toBlock}`,
-    );
-
+  async getRequiredApprovals(): Promise<number> {
+    const ctx = new TaskContext('contract-service:get-required-approvals');
     try {
-      const rewardsDistributionAddress = this.configService.get(
-        'blockchain.contracts.rewardsDistribution',
-      ) as Address;
+      const address = this.configService.get('blockchain.contracts.rewardsDistribution') as Address;
+      const contract = getContract({
+        address,
+        abi: DistributedRewardsDistributionABI,
+        client: this.publicClient,
+      });
+      return Number(await contract.read.requiredApproves());
+    } catch (error) {
+      ctx.logger.error({ error }, 'CRITICAL: Failed to get requiredApprovals from contract, defaulting to 1 — this may cause premature distribution');
+      return 1;
+    }
+  }
 
-      const commitmentKey = this.commitmentKeyService.generateKey(
-        fromBlock,
-        toBlock,
-      );
+  async getCommitmentsNeedingApproval(): Promise<Array<{ fromBlock: number; toBlock: number; merkleRoot: string }>> {
+    try {
+      const address = this.configService.get('blockchain.contracts.rewardsDistribution') as Address;
+      const contract = getContract({
+        address,
+        abi: DistributedRewardsDistributionABI,
+        client: this.publicClient,
+      });
 
-      const hasApproved = await this.web3Service.client.readContract({
-        address: rewardsDistributionAddress,
-        abi: [
-          {
-            type: 'function',
-            name: 'approvedBy',
-            inputs: [
-              { name: '', type: 'bytes32', internalType: 'bytes32' },
-              { name: '', type: 'address', internalType: 'address' },
-            ],
-            outputs: [{ name: '', type: 'bool', internalType: 'bool' }],
-            stateMutability: 'view',
-          },
-        ],
+      const lastCommitmentKey = await contract.read.lastCommitmentKey();
+      if (lastCommitmentKey === '0x0000000000000000000000000000000000000000000000000000000000000000') {
+        return [];
+      }
+
+      const [status, fromBlock, toBlock, merkleRoot, , , approvalCount] =
+        await contract.read.commitments([lastCommitmentKey]);
+      const requiredApproves = await contract.read.requiredApproves();
+
+      if (status === 1 && approvalCount < requiredApproves) {
+        return [{ fromBlock: Number(fromBlock), toBlock: Number(toBlock), merkleRoot: merkleRoot as string }];
+      }
+      return [];
+    } catch (error) {
+      const ctx = new TaskContext('contract-service:commitments-needing-approval');
+      ctx.logger.error({ error }, 'Failed to get commitments needing approval');
+      return [];
+    }
+  }
+
+  async hasApprovedCommitment(fromBlock: number, toBlock: number, address: `0x${string}`): Promise<boolean> {
+    try {
+      const contractAddr = this.configService.get('blockchain.contracts.rewardsDistribution') as Address;
+      const commitmentKey = this.commitmentKeyService.generateKey(fromBlock, toBlock);
+      return await this.publicClient.readContract({
+        address: contractAddr,
+        abi: [{
+          type: 'function', name: 'approvedBy',
+          inputs: [{ name: '', type: 'bytes32', internalType: 'bytes32' }, { name: '', type: 'address', internalType: 'address' }],
+          outputs: [{ name: '', type: 'bool', internalType: 'bool' }],
+          stateMutability: 'view',
+        }],
         functionName: 'approvedBy',
         args: [commitmentKey, address],
       });
-
-      return hasApproved;
     } catch (error) {
-      ctx.logger.error({ error }, 'failed to check approval status');
+      const ctx = new TaskContext('contract-service:has-approved-commitment');
+      ctx.logger.error({ error, fromBlock, toBlock, address }, 'Failed to check approval status');
       return false;
     }
   }
 
-  /**
-   * approve a commitment
-   */
-  async approveCommitment(
-    fromBlock: number,
-    toBlock: number,
-  ): Promise<boolean> {
-    const ctx = new TaskContext(
-      `contract-service:approve-commitment:${fromBlock}-${toBlock}`,
-    );
+  async getPendingCommitments(): Promise<Array<{
+    fromBlock: number; toBlock: number; merkleRoot: string;
+    totalBatches: number; processedBatches: number; status: string;
+  }>> {
+    try {
+      const address = this.configService.get('blockchain.contracts.rewardsDistribution') as Address;
+      const contract = getContract({
+        address,
+        abi: DistributedRewardsDistributionABI,
+        client: this.publicClient,
+      });
+
+      const lastCommitmentKey = await contract.read.lastCommitmentKey();
+      if (!lastCommitmentKey || lastCommitmentKey === '0x0000000000000000000000000000000000000000000000000000000000000000') {
+        return [];
+      }
+
+      const [status, fromBlock, toBlock, merkleRoot, totalBatches, processedBatches, approvalCount] =
+        await contract.read.commitments([lastCommitmentKey]);
+
+      if (status === 1 && approvalCount > 0n && processedBatches < totalBatches) {
+        return [{
+          fromBlock: Number(fromBlock), toBlock: Number(toBlock), merkleRoot: merkleRoot as string,
+          totalBatches: Number(totalBatches), processedBatches: Number(processedBatches),
+          status: 'pending_distribution',
+        }];
+      }
+      return [];
+    } catch (error) {
+      const ctx = new TaskContext('contract-service:pending-commitments');
+      ctx.logger.error({ error }, 'Failed to get pending commitments');
+      return [];
+    }
+  }
+
+  async getRecentDistributionEvents(blockWindow: number = 50): Promise<any[]> {
+    try {
+      const address = this.configService.get('blockchain.contracts.rewardsDistribution') as Address;
+      const currentBlock = await this.publicClient.getBlockNumber();
+
+      const logs = await this.publicClient.getLogs({
+        address,
+        event: parseAbiItem(
+          'event BatchDistributed(uint256 fromBlock, uint256 toBlock, uint64 batchId, uint256[] recipients, uint256[] workerRewards, uint256[] stakerRewards)',
+        ),
+        fromBlock: currentBlock - BigInt(blockWindow),
+      });
+
+      return await Promise.all(
+        logs.map(async (log) => {
+          const block = await this.publicClient.getBlock({ blockNumber: log.blockNumber });
+          return {
+            ...log.args,
+            blockNumber: log.blockNumber,
+            blockTimestamp: Number(block.timestamp),
+            transactionHash: log.transactionHash,
+            batchIndex: Number(log.args?.batchId || 0),
+            totalBatches: null,
+          };
+        }),
+      );
+    } catch (error) {
+      const ctx = new TaskContext('contract-service:recent-distribution-events');
+      ctx.logger.error({ error }, 'Failed to get recent distribution events');
+      return [];
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Distribution status
+  // ---------------------------------------------------------------------------
+
+  async getDistributionStatus(ctx: Context): Promise<{
+    nextFromBlock: number;
+    nextToBlock: number;
+    isReadyForDistribution: boolean;
+    needsConfirmation: boolean;
+    hasExistingCommitment: boolean;
+    blocksUntilNextDistribution: number;
+    confirmationBlocksNeeded: number;
+  }> {
+    const currentBlock = await this.getL1BlockNumber(ctx);
+    const lastRewardedBlock = await this.getLastBlockRewarded(ctx);
+    const blockInterval = this.configService.get('rewards.distributionBlockInterval') || 520;
+    const confirmationBlocks = this.configService.get('blockchain.epochConfirmationBlocks') || 1000;
+    const startingBlock = this.configService.get('rewards.distributionStartingBlock') || 0;
+    const contractAddr = this.configService.get('blockchain.contracts.rewardsDistribution') as Address;
+
+    let lastCommitmentKey: string;
+    try {
+      lastCommitmentKey = await this.getLastCommitmentKey(ctx);
+    } catch {
+      lastCommitmentKey = '0x0000000000000000000000000000000000000000000000000000000000000000';
+    }
+
+    let nextFromBlock = 0;
+    let nextToBlock = 0;
+    const ZERO_KEY = '0x0000000000000000000000000000000000000000000000000000000000000000';
+
+    if (lastCommitmentKey !== ZERO_KEY) {
+      try {
+        const commitment = await this.publicClient.readContract({
+          address: contractAddr,
+          abi: DistributedRewardsDistributionABI,
+          functionName: 'commitments',
+          args: [lastCommitmentKey as `0x${string}`],
+        });
+
+        const commitmentStatus = Number(commitment[0]);
+        if (commitmentStatus === 1) {
+          nextFromBlock = Number(commitment[1]);
+          nextToBlock = Number(commitment[2]);
+        } else {
+          nextFromBlock = lastRewardedBlock + 1;
+          nextToBlock = nextFromBlock + blockInterval - 1;
+        }
+      } catch {
+        nextFromBlock = lastRewardedBlock + 1;
+        nextToBlock = nextFromBlock + blockInterval - 1;
+      }
+    } else if (lastRewardedBlock === 0) {
+      nextFromBlock = startingBlock;
+      nextToBlock = nextFromBlock + blockInterval - 1;
+    } else {
+      nextFromBlock = lastRewardedBlock + 1;
+      nextToBlock = nextFromBlock + blockInterval - 1;
+    }
+
+    const lastConfirmedBlock = currentBlock - confirmationBlocks;
+    const needsConfirmation = nextToBlock > lastConfirmedBlock;
+    const commitment = await this.getCommitment(ctx, nextFromBlock, nextToBlock);
+
+    return {
+      nextFromBlock,
+      nextToBlock,
+      isReadyForDistribution: currentBlock >= nextToBlock && !needsConfirmation && !commitment.exists,
+      needsConfirmation,
+      hasExistingCommitment: commitment.exists,
+      blocksUntilNextDistribution: Math.max(0, nextToBlock - currentBlock),
+      confirmationBlocksNeeded: needsConfirmation ? nextToBlock - lastConfirmedBlock : 0,
+    };
+  }
+
+  async isNextDistributionReady(ctx: Context): Promise<{
+    isReady: boolean;
+    nextFromBlock: number;
+    nextToBlock: number;
+    blocksUntilReady: number;
+    needsConfirmation: boolean;
+    confirmationBlocksNeeded: number;
+  }> {
+    const currentBlock = await this.getL1BlockNumber(ctx);
+    const lastRewardedBlock = await this.getLastBlockRewarded(ctx);
+    const blockInterval = this.configService.get('rewards.distributionBlockInterval') || 520;
+    const confirmationBlocks = this.configService.get('blockchain.epochConfirmationBlocks') || 150;
+
+    const nextFromBlock = lastRewardedBlock + 1;
+    const nextToBlock = nextFromBlock + blockInterval - 1;
+    const lastConfirmedBlock = currentBlock - confirmationBlocks;
+    const needsConfirmation = nextToBlock > lastConfirmedBlock;
+
+    return {
+      isReady: currentBlock >= nextToBlock && !needsConfirmation,
+      nextFromBlock,
+      nextToBlock,
+      blocksUntilReady: nextToBlock > currentBlock ? nextToBlock - currentBlock : 0,
+      needsConfirmation,
+      confirmationBlocksNeeded: needsConfirmation ? nextToBlock - lastConfirmedBlock : 0,
+    };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Approve commitment (direct wallet transaction)
+  // ---------------------------------------------------------------------------
+
+  async approveCommitment(fromBlock: number, toBlock: number): Promise<boolean> {
+    const ctx = new TaskContext(`contract-service:approve-commitment:${fromBlock}-${toBlock}`);
 
     try {
-      const rewardsDistributionAddress = this.configService.get(
-        'blockchain.contracts.rewardsDistribution',
-      ) as Address;
+      const contractAddr = this.configService.get('blockchain.contracts.rewardsDistribution') as Address;
+      const commitmentKey = this.commitmentKeyService.generateKey(fromBlock, toBlock);
 
-      const commitmentKey = this.commitmentKeyService.generateKey(
-        fromBlock,
-        toBlock,
-      );
-
-      ctx.logger.info(`📋 Approving commitment ${fromBlock}-${toBlock}`);
-      ctx.logger.info(`   Commitment key: ${commitmentKey}`);
-
-      const contract = getContract({
-        address: rewardsDistributionAddress,
-        abi: DistributedRewardsDistributionABI,
-        client: this.web3Service.client,
-      });
-
-      const privateKey = this.configService.get(
-        'blockchain.distributor.privateKey',
-      ) as `0x${string}`;
-
-      if (!privateKey) {
-        ctx.logger.error(
-          '❌ DISTRIBUTOR_PRIVATE_KEY environment variable is not set or empty',
-        );
-        throw new Error('Missing DISTRIBUTOR_PRIVATE_KEY environment variable');
-      }
+      const privateKey = this.configService.get('blockchain.distributor.privateKey') as `0x${string}`;
+      if (!privateKey) throw new Error('Missing DISTRIBUTOR_PRIVATE_KEY');
 
       const account = privateKeyToAccount(privateKey);
-      const botAddress = account.address;
-
-      ctx.logger.debug(`🔑 Using bot address: ${botAddress}`);
-
       const commitment = await this.getCommitmentInfo(commitmentKey);
-      if (!commitment) {
-        ctx.logger.warn(`❌ Commitment ${fromBlock}-${toBlock} not found`);
-        return false;
-      }
-
-      if (commitment.status !== 1) {
-        ctx.logger.warn(
-          `❌ Commitment ${fromBlock}-${toBlock} is not ACTIVE (status: ${commitment.status})`,
-        );
-        return false;
-      }
+      if (!commitment || commitment.status !== 1) return false;
 
       const requiredApprovals = await this.getRequiredApprovals();
-      ctx.logger.info(
-        `📊 Commitment status: ${commitment.approvalCount}/${requiredApprovals} approvals`,
-      );
+      if (commitment.approvalCount >= requiredApprovals) return true;
 
-      if (commitment.approvalCount >= requiredApprovals) {
-        ctx.logger.info(
-          `✅ Commitment ${fromBlock}-${toBlock} already has enough approvals (${commitment.approvalCount}/${requiredApprovals})`,
-        );
-        return true;
-      }
-
-      ctx.logger.info(
-        `🔄 Sending approval transaction for commitment ${fromBlock}-${toBlock}`,
-      );
       const rpcUrl = this.configService.get('blockchain.network.l2RpcUrl');
+      const chain = (rpcUrl.includes('localhost') || rpcUrl.includes('127.0.0.1'))
+        ? defineChain({
+            id: 42161, name: 'Anvil Local', network: 'anvil',
+            nativeCurrency: { decimals: 18, name: 'Ether', symbol: 'ETH' },
+            rpcUrls: { default: { http: [rpcUrl] }, public: { http: [rpcUrl] } },
+          })
+        : arbitrum;
 
-      let chain;
-      if (rpcUrl.includes('localhost') || rpcUrl.includes('127.0.0.1')) {
-        chain = defineChain({
-          id: 42161,
-          name: 'Anvil Local',
-          network: 'anvil',
-          nativeCurrency: {
-            decimals: 18,
-            name: 'Ether',
-            symbol: 'ETH',
-          },
-          rpcUrls: {
-            default: { http: [rpcUrl] },
-            public: { http: [rpcUrl] },
-          },
-        });
-      } else {
-        chain = arbitrum;
-      }
+      const walletClient = createWalletClient({ account, chain, transport: http(rpcUrl) });
 
-      const walletClient = createWalletClient({
-        account,
-        chain,
-        transport: http(rpcUrl),
-      });
-
-      const maxRetries = 3;
-      for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      for (let attempt = 1; attempt <= 3; attempt++) {
         try {
-          ctx.logger.info(`🔄 Approval attempt ${attempt}/${maxRetries}`);
-
-          const { request } = await this.web3Service.client.simulateContract({
+          const { request } = await this.publicClient.simulateContract({
             account,
-            address: rewardsDistributionAddress,
+            address: contractAddr,
             abi: DistributedRewardsDistributionABI,
             functionName: 'approveRoot',
             args: [[BigInt(fromBlock), BigInt(toBlock)]],
           });
 
           const txHash = await walletClient.writeContract(request);
-          ctx.logger.info(`📤 Approval transaction sent: ${txHash}`);
-
-          // Wait for confirmation
-          const receipt =
-            await this.web3Service.client.waitForTransactionReceipt({
-              hash: txHash,
-              confirmations: 2,
-              timeout: 120000, // 2 minutes
-            });
+          const receipt = await this.publicClient.waitForTransactionReceipt({
+            hash: txHash, confirmations: 2, timeout: 120000,
+          });
 
           if (receipt.status === 'success') {
-            ctx.logger.info(
-              `✅ Approval confirmed for ${fromBlock}-${toBlock} (tx: ${txHash})`,
-            );
-            return true;
-          } else {
-            ctx.logger.error(
-              `❌ Approval transaction failed for ${fromBlock}-${toBlock} (tx: ${txHash})`,
-            );
-            if (attempt === maxRetries) return false;
-          }
-        } catch (error) {
-          ctx.logger.error(
-            `❌ Approval attempt ${attempt}/${maxRetries} failed: ${error.message}`,
-          );
-
-          if (
-            error.message.includes('AlreadyApproved') ||
-            error.message.includes('0x101f817a')
-          ) {
-            ctx.logger.info(
-              `✅ Commitment ${fromBlock}-${toBlock} was already approved by this distributor`,
-            );
+            ctx.logger.info(`Approval confirmed for ${fromBlock}-${toBlock} (tx: ${txHash})`);
             return true;
           }
-
-          if (attempt === maxRetries) {
-            ctx.logger.error(
-              `❌ Failed to approve commitment ${fromBlock}-${toBlock} after ${maxRetries} attempts`,
-            );
-            return false;
+          if (attempt === 3) return false;
+        } catch (error: any) {
+          if (error.message?.includes('AlreadyApproved') || error.message?.includes('0x101f817a')) {
+            return true;
           }
-
+          if (attempt === 3) return false;
           await new Promise((resolve) => setTimeout(resolve, 2000 * attempt));
         }
       }
-
       return false;
     } catch (error) {
       ctx.logger.error({ error }, 'failed to approve commitment');
       return false;
-    }
-  }
-
-  /**
-   * get current block number
-   */
-  async getCurrentBlockNumber(): Promise<number> {
-    try {
-      const blockNumber = await this.web3Service.client.getBlockNumber();
-      return Number(blockNumber);
-    } catch (error) {
-      new TaskContext('error-handling').logger.error(
-        `Failed to get current block number: ${error.message}`,
-      );
-      throw error;
     }
   }
 }
