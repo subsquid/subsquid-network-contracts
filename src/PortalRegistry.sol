@@ -8,7 +8,6 @@ import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/U
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {IPortalRegistry} from "../src/interfaces/IPortalRegistry.sol";
-import {IPortalFactory} from "../src/interfaces/IPortalFactory.sol";
 import {IPortalPool} from "../src/interfaces/IPortalPool.sol";
 import {PortalRegistryErrors} from "../src/libs/PortalRegistryErrors.sol";
 import {FullMath} from "../src/libs/FullMath.sol";
@@ -367,16 +366,11 @@ contract PortalRegistry is
 
         if (!cluster.active) return 0;
 
-        uint256 epochLength = IPortalFactory(factory).workerEpochLength();
-        uint256 boostFactor = 30000;
-
         // Cap totalStaked at pool capacity to prevent inflation via deposit/exit cycling
         uint256 poolCapacity = IPortalPool(cluster.clusterAddress).getPoolInfo().capacity;
         uint256 effectiveStake = cluster.totalStaked > poolCapacity ? poolCapacity : cluster.totalStaked;
 
-        uint256 cus = FullMath.mulDiv(effectiveStake * epochLength, mana * boostFactor, 10000 * 1e18 * 1000);
-
-        return cus;
+        return FullMath.mulDiv(effectiveStake, mana, 10000 * 1e18);
     }
 
     /// @inheritdoc IPortalRegistry
