@@ -140,7 +140,7 @@ contract PortalPoolFactory is
         if (params.operator == address(0)) revert PoolErrors.InvalidAddress();
         if (params.rewardToken == address(0)) revert PoolErrors.InvalidAddress();
         if (!isAllowedPaymentToken[params.rewardToken]) revert PoolErrors.TokenNotAllowed();
-        if (params.capacity < minStakeThreshold) revert PoolErrors.BelowMinimum();
+        if (params.capacity < IPortalRegistry(portalRegistry).minStake()) revert PoolErrors.BelowMinimum();
         if (params.distributionRatePerSecond > maxDistributionRatePerSecond) {
             revert PoolErrors.RateExceedsMaximum();
         }
