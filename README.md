@@ -68,9 +68,37 @@ PortalPoolFactory (UUPS)
                     └── stakes SQD to PortalRegistry (UUPS)
 ```
 
-## Fee Routing
+## Fee Routing and Buyback
 
-Fees are split by a FeeRouter module. Today, the default configuration routes 100% to providers, but this can be adjusted over time. The FeeRouter is a separate module that can be swapped by the factory admin, allowing the split logic to evolve without changing pool implementations.
+When an operator tops up a pool with reward tokens (USDC, USDT, etc.), the funds don't all go to depositors. They pass through a FeeRouter that splits them three ways:
+
+- **Providers** — stays as stablecoins in the pool, building credit for depositor rewards
+- **Worker pool** — converted to SQD and sent to the network's worker reward pool
+- **Burn** — converted to SQD and sent to a dead address, permanently removed from supply
+
+The default split is 50% providers / 45% workers / 5% burn. The admin can change these numbers at any time — for example, `setFeeConfig(3000, 5000, 2000)` would set 30% providers / 50% workers / 20% burn. The three numbers must always add up to 10000 (100%).
+
+### How the Buyback Works
+
+The worker and burn portions need to be converted from stablecoins to SQD. This happens through an automatic buyback system built into the FeeRouterModuleV2.
+
+When the pool routes fees, the non-provider share flows to the FeeRouter contract. The router accumulates these stablecoins until the balance crosses a configurable threshold. Once it does, the auto-buyback kicks in — the stablecoins are swapped to SQD through PancakeSwap V3 in the same transaction. The purchased SQD is then split proportionally between the worker pool and burn based on the fee config ratios.
+
+For example, with a 50/45/5 split and a $1000 top-up:
+
+1. $500 stays as USDC → providers (pool credit)
+2. $500 goes to the FeeRouter → auto-buyback triggers
+3. it is swapped to SQD via PancakeSwap
+4. Of the SQD received: 90% (45/50) goes to the worker reward pool, 10% (5/50) gets burned
+
+If the reward token is already SQD (not a stablecoin), the router skips the swap entirely and just splits the SQD directly between workers and burn.
+
+### Slippage Protection
+
+Swapping on a DEX carries the risk of getting a bad price, especially from MEV sandwich attacks. The router protects against this using a TWAP (time-weighted average price) oracle from PancakeSwap V3. Before executing a swap, it checks what the average price has been over the last 30 minutes and sets a minimum acceptable output. If the current price is too far from the average (more than 3% by default), the swap reverts instead of executing at a bad rate.
+
+The admin can adjust the TWAP window (how far back the average looks). The operator can adjust the maximum allowed slippage while topping up rewards.
+
 
 ## Pool States
 
@@ -172,6 +200,9 @@ A pool enters **IDLE** state when the active stake drops too low.
 | Distribution rate | Rewards per second to all lockers |
 | Exit queue | Line of withdrawal requests waiting |
 | plSQD | Your receipt token for deposited SQD |
+| Fee split | How top-ups are divided (providers / workers / burn) |
+| Auto-buyback | Swap triggers automatically when enough stablecoins accumulate |
+| TWAP | Time-weighted average price used for slippage protection |
 
 ## Deploy
 
