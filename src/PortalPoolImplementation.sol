@@ -799,6 +799,7 @@ contract PortalPoolImplementation is
         return _exitQueue.totalProcessed(_factory.exitUnlockRatePerSecond());
     }
 
+    /// @dev Deprecated compatibility getter. New integrations should read PortalRegistry.minStake() instead.
     function getMinCapacity() external view returns (uint256) {
         return _portalRegistry.minStake();
     }

@@ -35,6 +35,8 @@ contract PortalPoolFactory is
     address public portalRegistry;
     address public feeRouter;
     address public sqd;
+    /// @dev Deprecated compatibility mirror for legacy reads and admin tooling. New threshold checks should use
+    /// PortalRegistry.minStake() as the source of truth.
     uint256 public minStakeThreshold;
     uint256 public workerEpochLength;
 
@@ -228,7 +230,7 @@ contract PortalPoolFactory is
     }
 
     /**
-     * @dev returns minimum stake threshold for pools.
+     * @dev Deprecated compatibility getter. New integrations should read PortalRegistry.minStake() instead.
      */
     function getMinCapacity() external view returns (uint256) {
         return minStakeThreshold;
@@ -330,6 +332,7 @@ contract PortalPoolFactory is
         emit MinDistributionRateUpdated(oldValue, ratePerSecond);
     }
 
+    /// @dev Deprecated compatibility setter. Keep this value aligned with PortalRegistry.minStake() for legacy reads.
     function setMinStakeThreshold(uint256 _minStakeThreshold) external onlyRole(DEFAULT_ADMIN_ROLE) {
         uint256 oldValue = minStakeThreshold;
         minStakeThreshold = _minStakeThreshold;
