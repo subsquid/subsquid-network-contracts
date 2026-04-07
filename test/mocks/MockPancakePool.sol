@@ -43,12 +43,7 @@ contract MockPancakePool is IPancakeV3Pool {
         secondsPerLiquidityCumulativeX128s[1] = 0;
     }
 
-    function slot0()
-        external
-        view
-        override
-        returns (uint160, int24, uint16, uint16, uint16, uint32, bool)
-    {
+    function slot0() external view override returns (uint160, int24, uint16, uint16, uint16, uint32, bool) {
         return (0, currentTick, 0, 100, 100, 0, true);
     }
 

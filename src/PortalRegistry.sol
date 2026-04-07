@@ -395,8 +395,7 @@ contract PortalRegistry is
         cluster.totalStaked += received;
 
         // auto-activate when stake threshold is met
-        uint256 minStakeThreshold = IPortalPool(msg.sender).getMinCapacity();
-        if (!cluster.active && cluster.totalStaked >= minStakeThreshold) {
+        if (!cluster.active && cluster.totalStaked >= minStake) {
             cluster.active = true;
             emit ClusterActivated(clusterId);
         }
@@ -418,8 +417,7 @@ contract PortalRegistry is
 
         cluster.totalStaked -= amount;
 
-        uint256 minStakeThreshold = IPortalPool(msg.sender).getMinCapacity();
-        if (cluster.active && cluster.totalStaked < minStakeThreshold) {
+        if (cluster.active && cluster.totalStaked < minStake) {
             cluster.active = false;
             emit ClusterDeactivated(clusterId);
         }

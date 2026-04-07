@@ -83,8 +83,7 @@ contract PortalPoolImplementation is
         if (rewardDecimals > 18) revert PoolErrors.InvalidDecimals();
         _rewardTokenDecimalScale = 10 ** rewardDecimals;
 
-        // read minStakeThreshold from factory (globally configurable)
-        if (params.capacity < _factory.minStakeThreshold()) revert PoolErrors.BelowMinimum();
+        if (params.capacity < _portalRegistry.minStake()) revert PoolErrors.BelowMinimum();
 
         _poolInfo.operator = params.operator;
         _poolInfo.capacity = params.capacity;
@@ -175,7 +174,7 @@ contract PortalPoolImplementation is
 
         bool shouldActivate = !_poolInfo.firstActivated && _poolInfo.totalStaked >= _poolInfo.capacity;
 
-        uint256 minStakeThreshold = _factory.minStakeThreshold();
+        uint256 minStakeThreshold = _portalRegistry.minStake();
         bool isRecoveringFromIdle = currentState == PoolState.IDLE && _poolInfo.totalStaked >= minStakeThreshold;
 
         if (shouldActivate) {
@@ -482,7 +481,7 @@ contract PortalPoolImplementation is
         if (getState() == PoolState.CLOSED) revert PoolErrors.PoolClosed();
         if (!_poolInfo.firstActivated) revert PoolErrors.NotActivated();
         if (newCapacity == _poolInfo.capacity) revert PoolErrors.NoChange();
-        uint256 minCapacity = _factory.minStakeThreshold();
+        uint256 minCapacity = _portalRegistry.minStake();
         if (newCapacity < minCapacity) revert PoolErrors.BelowMinimum();
         if (newCapacity < _poolInfo.totalStaked) revert PoolErrors.BelowCurrentStake();
 
@@ -634,7 +633,7 @@ contract PortalPoolImplementation is
         }
 
         if (info.firstActivated) {
-            uint256 minStake = _factory.minStakeThreshold();
+            uint256 minStake = _portalRegistry.minStake();
             if (info.totalStaked < minStake) {
                 return PoolState.IDLE;
             }
@@ -800,8 +799,9 @@ contract PortalPoolImplementation is
         return _exitQueue.totalProcessed(_factory.exitUnlockRatePerSecond());
     }
 
+    /// @dev Deprecated compatibility getter. New integrations should read PortalRegistry.minStake() instead.
     function getMinCapacity() external view returns (uint256) {
-        return _factory.minStakeThreshold();
+        return _portalRegistry.minStake();
     }
 
     function getWithdrawalWaitingTimestamp(uint256 amount) external view returns (uint256 unlockTimestamp) {
@@ -845,7 +845,7 @@ contract PortalPoolImplementation is
     function _totalDrainRate() internal view returns (uint256) {
         if (!_poolInfo.firstActivated) return 0;
         uint256 activeStake = _getActiveStake();
-        uint256 minStake = _factory.minStakeThreshold();
+        uint256 minStake = _portalRegistry.minStake();
         if (_poolInfo.totalStaked < minStake) return 0;
         if (activeStake == 0) return 0;
         uint256 capacity = _poolInfo.capacity;
@@ -875,7 +875,7 @@ contract PortalPoolImplementation is
         newEffectiveTs = lastEffectiveRewardTs;
 
         uint256 activeStake = _getActiveStake();
-        uint256 minStake = _factory.minStakeThreshold();
+        uint256 minStake = _portalRegistry.minStake();
         if (!_poolInfo.firstActivated || _poolInfo.totalStaked < minStake || activeStake == 0 || perStakeRateWad == 0) {
             return (newRPS, uint64(timestamp));
         }

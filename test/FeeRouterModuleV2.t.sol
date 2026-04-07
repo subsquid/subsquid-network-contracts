@@ -31,9 +31,7 @@ contract FeeRouterModuleV2Test is Test {
         pancakeRouter = new MockPancakeRouter();
 
         router = new FeeRouterModuleV2();
-        router.configureBuyback(
-            address(pancakeRouter), address(sqdToken), address(wethToken), 2500, 2500, 100 * 1e6
-        );
+        router.configureBuyback(address(pancakeRouter), address(sqdToken), address(wethToken), 2500, 2500, 100 * 1e6);
         router.setWorkerPoolAddress(workerPool);
         router.setAllowedRewardToken(address(usdc), true);
         router.setAllowedRewardToken(address(dai), true);
@@ -662,10 +660,10 @@ contract FeeRouterModuleV2Test is Test {
 
         router.configureSlippageProtection(
             address(factory),
-            500,    // oraclePoolFee for USDC/WETH
-            10000,  // oraclePoolFee2 for WETH/SQD
-            1800,   // 30 min twap window
-            300     // 3% max slippage
+            500, // oraclePoolFee for USDC/WETH
+            10000, // oraclePoolFee2 for WETH/SQD
+            1800, // 30 min twap window
+            300 // 3% max slippage
         );
 
         return (factory, pool1, pool2);

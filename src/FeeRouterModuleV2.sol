@@ -65,7 +65,9 @@ contract FeeRouterModuleV2 is AccessControl, Pausable, ReentrancyGuard, IFeeRout
     event MinBuybackThresholdChanged(uint256 threshold);
     event RewardTokenAllowed(address indexed token, bool allowed);
     event TokensAccumulated(address indexed rewardToken, uint256 amount, uint256 totalAccumulated);
-    event SlippageProtectionConfigured(address factory, uint24 oracleFee1, uint24 oracleFee2, uint32 window, uint16 slippage);
+    event SlippageProtectionConfigured(
+        address factory, uint24 oracleFee1, uint24 oracleFee2, uint32 window, uint16 slippage
+    );
     event MaxSlippageChanged(uint16 oldValue, uint16 newValue);
     event TwapWindowChanged(uint32 oldValue, uint32 newValue);
 
@@ -109,11 +111,7 @@ contract FeeRouterModuleV2 is AccessControl, Pausable, ReentrancyGuard, IFeeRout
             revert PoolErrors.InvalidFeeConfig();
         }
 
-        feeConfig = FeeConfig({
-            toProvidersBPS: toProvidersBPS,
-            toWorkerPoolBPS: toWorkerPoolBPS,
-            toBurnBPS: toBurnBPS
-        });
+        feeConfig = FeeConfig({toProvidersBPS: toProvidersBPS, toWorkerPoolBPS: toWorkerPoolBPS, toBurnBPS: toBurnBPS});
 
         emit FeeConfigUpdated(toProvidersBPS, toWorkerPoolBPS, toBurnBPS);
     }
@@ -345,7 +343,9 @@ contract FeeRouterModuleV2 is AccessControl, Pausable, ReentrancyGuard, IFeeRout
         twapWindow = _twapWindow;
         maxSlippageBPS = _maxSlippageBPS;
 
-        emit SlippageProtectionConfigured(_pancakeFactory, _oraclePoolFee, _oraclePoolFee2, _twapWindow, _maxSlippageBPS);
+        emit SlippageProtectionConfigured(
+            _pancakeFactory, _oraclePoolFee, _oraclePoolFee2, _twapWindow, _maxSlippageBPS
+        );
     }
 
     function setMaxSlippageBPS(uint16 _maxSlippageBPS) external onlyRole(DEFAULT_ADMIN_ROLE) {
@@ -402,9 +402,8 @@ contract FeeRouterModuleV2 is AccessControl, Pausable, ReentrancyGuard, IFeeRout
             return _splitAndDistribute(rewardToken, balance, sqdBought);
         }
 
-        if (
-            !buybackEnabled || address(pancakeRouter) == address(0) || address(sqd) == address(0) || weth == address(0)
-        ) {
+        if (!buybackEnabled || address(pancakeRouter) == address(0) || address(sqd) == address(0) || weth == address(0))
+        {
             IERC20(rewardToken).safeTransfer(sqdBurnAddress, balance);
             emit BuybackSkipped(balance, SKIP_DISABLED);
             return 0;
@@ -438,10 +437,7 @@ contract FeeRouterModuleV2 is AccessControl, Pausable, ReentrancyGuard, IFeeRout
     /**
      * @dev splits sqd between worker pool and burn per feeConfig ratio.
      */
-    function _splitAndDistribute(address rewardToken, uint256 amountIn, uint256 sqdAmount)
-        internal
-        returns (uint256)
-    {
+    function _splitAndDistribute(address rewardToken, uint256 amountIn, uint256 sqdAmount) internal returns (uint256) {
         FeeConfig memory cfg = feeConfig;
         uint256 protocolBPS = uint256(cfg.toWorkerPoolBPS) + cfg.toBurnBPS;
 
