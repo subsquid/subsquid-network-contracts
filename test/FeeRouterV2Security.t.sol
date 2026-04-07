@@ -28,9 +28,7 @@ contract FeeRouterV2SecurityTest is Test {
         pancakeRouter = new MockPancakeRouter();
 
         router = new FeeRouterModuleV2();
-        router.configureBuyback(
-            address(pancakeRouter), address(sqdToken), address(wethToken), 2500, 2500, 0
-        );
+        router.configureBuyback(address(pancakeRouter), address(sqdToken), address(wethToken), 2500, 2500, 0);
         router.setWorkerPoolAddress(workerPool);
         router.setAllowedRewardToken(address(usdc), true);
         router.setBuybackEnabled(true);
@@ -76,9 +74,7 @@ contract FeeRouterV2SecurityTest is Test {
         FeeRouterModuleV2 freshRouter = new FeeRouterModuleV2();
         freshRouter.setAllowedRewardToken(address(usdc), true);
         freshRouter.setBuybackEnabled(true);
-        freshRouter.configureBuyback(
-            address(pancakeRouter), address(sqdToken), address(wethToken), 2500, 2500, 0
-        );
+        freshRouter.configureBuyback(address(pancakeRouter), address(sqdToken), address(wethToken), 2500, 2500, 0);
         // workerPoolAddress is address(0)
 
         pancakeRouter.setRate(1, 1);
@@ -112,9 +108,7 @@ contract FeeRouterV2SecurityTest is Test {
         freshRouter.setAllowedRewardToken(address(usdc), true);
         freshRouter.setAllowedRewardToken(address(sqdToken), true);
         freshRouter.setBuybackEnabled(true);
-        freshRouter.configureBuyback(
-            address(pancakeRouter), address(sqdToken), address(wethToken), 2500, 2500, 0
-        );
+        freshRouter.configureBuyback(address(pancakeRouter), address(sqdToken), address(wethToken), 2500, 2500, 0);
 
         pancakeRouter.setRate(1, 1);
         usdc.approve(address(freshRouter), 1000 * 1e6);
@@ -273,7 +267,6 @@ contract FeeRouterV2SecurityTest is Test {
         // Got: 200 USDC * 0.1 = 20 SQD
         // Loss: 380 SQD (95%)
     }
-
 
     function test_EDGE_FeeConfigChangeDoesNotAffectPendingSplit() public {
         pancakeRouter.setRate(1, 1);

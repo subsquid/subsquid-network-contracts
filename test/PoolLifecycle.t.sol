@@ -240,8 +240,7 @@ contract PoolLifecycleTest is BaseTest {
         pool.closePool();
         assertEq(uint256(pool.getState()), uint256(IPortalPool.PoolState.CLOSED));
 
-        uint256 expectedRecover =
-            pool.credit() > pool.totalRewardsPaid() ? pool.credit() - pool.totalRewardsPaid() : 0;
+        uint256 expectedRecover = pool.credit() > pool.totalRewardsPaid() ? pool.credit() - pool.totalRewardsPaid() : 0;
         assertTrue(expectedRecover > 0, "should have unused budget");
 
         uint256 operatorBalBefore = usdc.balanceOf(operator);
