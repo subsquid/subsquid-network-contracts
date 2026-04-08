@@ -354,13 +354,67 @@ contract PortalPoolImplementationTest is BaseTest {
         assertEq(pool.getCurrentRewardBalance(), initialProviderCredit + int256(toProviders));
     }
 
-    function test_TopUpRewards_RevertOnNotActive() public {
-        vm.startPrank(operator);
-        usdc.approve(portal, 1000 * 1e6);
+    function test_TopUpRewards_AllowedInCollecting() public {
+        int256 initialProviderCredit = pool.getCurrentRewardBalance();
 
-        vm.expectRevert(PoolErrors.InvalidState.selector);
-        pool.topUpRewards(1000 * 1e6);
+        uint256 rewardAmount = 1000 * 1e6;
+        uint256 toProviders = rewardAmount / 2;
+        uint256 toWorkerPool = rewardAmount / 2;
+        uint256 workerPoolBalanceBefore = usdc.balanceOf(workerRewardPool);
+
+        vm.startPrank(operator);
+        usdc.approve(portal, rewardAmount);
+
+        vm.expectEmit(true, false, false, true);
+        emit IPortalPool.RewardsToppedUp(operator, rewardAmount, toProviders, toWorkerPool, 0);
+
+        pool.topUpRewards(rewardAmount);
         vm.stopPrank();
+
+        assertEq(pool.getCurrentRewardBalance(), initialProviderCredit + int256(toProviders));
+        assertEq(usdc.balanceOf(workerRewardPool), workerPoolBalanceBefore + toWorkerPool);
+    }
+
+    function test_GetClaimableRewards_ZeroAfterCollectingTopUp() public {
+        _approveAndDeposit(user1, portal, SMALL_STAKE);
+
+        uint256 rewardAmount = 1000 * 1e6;
+        vm.startPrank(operator);
+        usdc.approve(portal, rewardAmount);
+        pool.topUpRewards(rewardAmount);
+        vm.stopPrank();
+
+        vm.warp(block.timestamp + 3 days);
+
+        assertEq(pool.getClaimableRewards(user1), 0);
+    }
+
+    function test_CollectingTopUp_DoesNotAccrueBeforeActivation() public {
+        _approveAndDeposit(user1, portal, SMALL_STAKE);
+
+        uint256 rate = pool.totalDistributionRatePerSec();
+        uint256 topUpAmount = rate * 4 days / Constants.RATE_PRECISION;
+
+        vm.startPrank(operator);
+        usdc.approve(portal, topUpAmount);
+        pool.topUpRewards(topUpAmount);
+        vm.stopPrank();
+
+        vm.warp(block.timestamp + 3 days);
+        assertEq(pool.getClaimableRewards(user1), 0, "Rewards should not accrue before activation");
+
+        vm.startPrank(user1);
+        sqd.approve(portal, MIN_STAKE_THRESHOLD - SMALL_STAKE);
+        pool.deposit(MIN_STAKE_THRESHOLD - SMALL_STAKE);
+        vm.stopPrank();
+
+        assertEq(uint8(pool.getState()), uint8(IPortalPool.PoolState.ACTIVE));
+        assertEq(pool.getClaimableRewards(user1), 0, "Activation should not backfill rewards");
+
+        vm.warp(block.timestamp + 1 days);
+
+        uint256 expectedOneDayRewards = rate * 1 days / Constants.RATE_PRECISION;
+        assertEq(pool.getClaimableRewards(user1), expectedOneDayRewards);
     }
 
     function test_ClaimRewards_Success() public {

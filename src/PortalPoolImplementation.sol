@@ -371,7 +371,10 @@ contract PortalPoolImplementation is
         if (totalDistributionRatePerSec == 0) revert PoolErrors.DistributionTurnedOff();
         if (amount == 0) revert PoolErrors.InvalidAmount();
         PoolState currentState = getState();
-        if (currentState != PoolState.ACTIVE && currentState != PoolState.IDLE) revert PoolErrors.InvalidState();
+        if (currentState != PoolState.ACTIVE && currentState != PoolState.IDLE && currentState != PoolState.COLLECTING)
+        {
+            revert PoolErrors.InvalidState();
+        }
 
         // measure actual received for fee-on-transfer token safety
         uint256 balanceBefore = _rewardToken.balanceOf(address(this));
