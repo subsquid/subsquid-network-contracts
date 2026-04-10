@@ -3,13 +3,14 @@ src = "src"
 out = "artifacts"
 evm_version = "shanghai"
 libs = ["lib"]
-via_ir = true
+via_ir = false
 optimizer = true
 optimizer_runs = 200
 remappings = [
     "@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/",
     "openzeppelin-contracts/contracts=lib/openzeppelin-contracts/contracts/",
     "@prb/math=lib/prb-math/",
+    "openzeppelin-contracts-upgradeable/contracts/=lib/openzeppelin-contracts-upgradeable/contracts/",
 ]
 fs_permissions = [{ access = "read-write", path = "./"}]
 

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 pragma solidity 0.8.20;
 
 /**
@@ -48,4 +49,12 @@ library Errors {
   error RewardTransferFailed();
 
   error CommitmentAlreadyCompleted();
+  error CommitmentAlreadyProcessed();
+
+  // V2 errors
+  error BatchSizeTooLarge();
+  error NotWorkerOwner();
+  error NoActiveWorkers();
+  error InvalidStakeCap();
+  error StakeCapCallFailed();
 }
