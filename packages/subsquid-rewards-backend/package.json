@@ -1,7 +1,7 @@
 {
   "name": "subsquid-rewards-backend",
-  "version": "0.2.4",
-  "description": "",
+  "version": "0.3.0",
+  "description": "Subsquid Rewards Backend",
   "author": "",
   "private": true,
   "license": "UNLICENSED",
