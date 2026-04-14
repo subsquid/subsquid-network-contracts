@@ -238,7 +238,7 @@ beforeAll(async () => {
   // MerkleTreeService with real config
   merkleTreeService = new MerkleTreeService({
     get: (key: string) => {
-      if (key === 'rewards.maxBatchSize') return 100;
+      if (key === 'rewards.commitmentBatchSize') return 100;
       return undefined;
     },
   } as any);
@@ -357,7 +357,7 @@ describe('Full Pipeline E2E (real ClickHouse + real contracts)', () => {
 
     // Calculate liveness factors (same algorithm as rewards-calculator.service.ts)
     const totalPeriodSeconds = dayjs(endTime).diff(dayjs(startTime), 'second');
-    const workerOfflineThreshold = 600; // from the inlined networkStats function
+    const workerOfflineThreshold = 65; // matches WORKER_OFFLINE_THRESHOLD_SECONDS
 
     let highLivenessCount = 0;
     for (const [workerId, timestamps] of Object.entries(pings)) {

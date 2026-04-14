@@ -40,7 +40,7 @@ export class StatelessCoordinatorService {
       const botAddress = await this.getBotAddress();
       const isCommitter = await this.contractService.canCommit(botAddress);
 
-      ctx.logger.info(
+      ctx.logger.debug(
         `Committer check: window=${currentWindow}, isCommitter=${isCommitter}, blocksLeft=${blocksLeft}`,
       );
 
@@ -166,7 +166,7 @@ export class StatelessCoordinatorService {
       }
 
       if (notApproved.length > 0) {
-        ctx.logger.info(
+        ctx.logger.debug(
           `${notApproved.length} commitments need approval from this bot`,
         );
       }
@@ -221,7 +221,7 @@ export class StatelessCoordinatorService {
       }
 
       if (stuckCommitments.length > 0) {
-        ctx.logger.info(
+        ctx.logger.debug(
           `Recovery: ${stuckCommitments.length} stuck commitments, oldest ${maxBlocksSince} blocks`,
         );
       }
@@ -273,7 +273,7 @@ export class StatelessCoordinatorService {
       const isActive = timeSinceLastActivity < this.ACTIVITY_TIMEOUT_SECONDS;
 
       if (isActive) {
-        ctx.logger.info(
+        ctx.logger.debug(
           `Another bot is actively distributing blocks ${fromBlock}-${toBlock}`,
         );
       }
@@ -319,14 +319,14 @@ export class StatelessCoordinatorService {
         );
 
         if (activity.isActive) {
-          ctx.logger.info(
+          ctx.logger.debug(
             `Skipping recovery - another bot is handling ${stuckCommitment.fromBlock}-${stuckCommitment.toBlock}`,
           );
           return true;
         }
       }
 
-      ctx.logger.info('Recovery conditions met - proceeding');
+      ctx.logger.debug('Recovery conditions met - proceeding');
       return false;
     } catch (error) {
       ctx.logger.error({ error }, 'Failed to check skip-recovery, allowing recovery');

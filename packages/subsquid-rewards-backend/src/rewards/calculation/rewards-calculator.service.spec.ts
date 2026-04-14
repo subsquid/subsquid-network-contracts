@@ -736,7 +736,13 @@ describe('calculateLivenessFactor - happy path via mock ClickHouse', () => {
    */
   function createMockClickHouse(rows: any[]) {
     return {
-      configService: { get: () => 'testnet' },
+      configService: {
+        get: (key: string) => {
+          if (key === 'database.clickhouse.database') return 'testnet';
+          if (key === 'rewards.workerOfflineThreshold') return 65;
+          return undefined;
+        },
+      },
       client: {
         query: () => ({
           stream: async function* () {
@@ -768,13 +774,13 @@ describe('calculateLivenessFactor - happy path via mock ClickHouse', () => {
     const result = await calculateLivenessFactor(mock, start, end);
 
     expect(result['worker-a']).toBeDefined();
-    // All diffs are 60s, none exceed 600s threshold, so totalOffline = 0
+    // All diffs are 60s, none exceed the 65s threshold, so totalOffline = 0
     // livenessFactor = 1 - 0/600 = 1.0
     expect(result['worker-a'].livenessFactor).toBe(1);
     expect(result['worker-a'].totalTimeOffline).toBe(0);
   });
 
-  it('should detect offline time when a gap exceeds 600s threshold', async () => {
+  it('should detect offline time when gaps exceed the configured threshold', async () => {
     const start = new Date('2024-01-01T00:00:00Z');
     const end = new Date('2024-01-01T01:00:00Z'); // 3600 seconds
     const startUnix = Math.floor(start.getTime() / 1000);
@@ -790,10 +796,9 @@ describe('calculateLivenessFactor - happy path via mock ClickHouse', () => {
 
     expect(result['offline-worker']).toBeDefined();
     // Diffs: [100, 100, 800, 100, 2500]
-    // Offline: 800 + 2500 = 3300 (both > 600)
-    // livenessFactor = 1 - 3300/3600
-    expect(result['offline-worker'].totalTimeOffline).toBe(3300);
-    expect(result['offline-worker'].livenessFactor).toBeCloseTo(1 - 3300 / 3600, 10);
+    // With the 65s threshold, every gap is counted as offline.
+    expect(result['offline-worker'].totalTimeOffline).toBe(3600);
+    expect(result['offline-worker'].livenessFactor).toBeCloseTo(0, 10);
   });
 
   it('should handle multiple workers', async () => {
@@ -1311,15 +1316,49 @@ describe('RewardsCalculatorService', () => {
       expect(result.workers.length).toBe(1);
     });
 
-    it('should use 20% APR fallback when TVL is 0', async () => {
-      const { service } = createService({
-        tvl: 0n,
-      });
+    it('should use 20% APR fallback (2000 basis points) when TVL is 0', async () => {
+      // Regression guard for RWD-C-001:
+      // The zero-TVL fallback must return basis points (2000), not 0.2.
+      // If it returns 0.2 the downstream `rMax = baseApr * duration / YEAR / 10_000`
+      // evaluates to ~0 and every worker's reward is ~0 — a 10,000x underpayment.
+      const { service: zeroTvlService } = createService({ tvl: 0n });
+      const { service: contractErrService, mocks: contractErrMocks } =
+        createService();
+      contractErrMocks.contractService.getEffectiveTVL.mockRejectedValue(
+        new Error('RPC fail'),
+      );
 
-      const result = await service.calculateRewards(mockCtx, 1000, 2000, true);
+      const zeroTvlResult = await zeroTvlService.calculateRewards(
+        mockCtx,
+        1000,
+        2000,
+        true,
+      );
+      const contractErrResult = await contractErrService.calculateRewards(
+        mockCtx,
+        1000,
+        2000,
+        true,
+      );
 
-      // When TVL=0, getAPRFromContracts returns 0.2
-      expect(result).toBeDefined();
+      // 1. Zero-TVL epoch must produce at least one non-zero worker reward.
+      expect(zeroTvlResult.workers.length).toBeGreaterThan(0);
+      const totalWorkerReward = zeroTvlResult.workers.reduce(
+        (sum, w) => sum + BigInt(w.workerReward),
+        0n,
+      );
+      expect(totalWorkerReward).toBeGreaterThan(0n);
+
+      // 2. Zero-TVL fallback must yield the SAME rewards as the contract-error
+      //    fallback (both paths return 2000 bp).
+      expect(contractErrResult.workers.length).toBe(
+        zeroTvlResult.workers.length,
+      );
+      for (let i = 0; i < zeroTvlResult.workers.length; i++) {
+        expect(zeroTvlResult.workers[i].workerReward).toBe(
+          contractErrResult.workers[i].workerReward,
+        );
+      }
     });
 
     it('should use fallback APR when contract calls fail', async () => {

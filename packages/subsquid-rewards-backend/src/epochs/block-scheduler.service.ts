@@ -10,7 +10,19 @@ import { TaskContext } from '../common';
 export class BlockSchedulerService implements OnModuleInit {
   private isApprovalProcessing = false;
   private isDistributionProcessing = false;
+  // Serialize the actual distribution execution across normal and recovery
+  // cron paths. The cron checks themselves may run independently, but only
+  // one call into `processDistribution*()` may be active at a time.
+  private isDistributionExecutionProcessing = false;
+  // RWD-H-009: recovery gets its own lock so a long-running distribution
+  // cycle cannot perpetually starve the recovery cron. Previously both
+  // distribution and recovery shared `isDistributionProcessing`; on busy
+  // deployments the */17 recovery tick could repeatedly skip when it
+  // happened to align with an in-flight */5 distribution.
+  private isRecoveryProcessing = false;
   private readonly enableAutoDistribution: boolean;
+  private readonly isPrimaryScheduler: boolean;
+  private readonly schedulerIdentity: string;
 
   constructor(
     private configService: ConfigService,
@@ -23,18 +35,43 @@ export class BlockSchedulerService implements OnModuleInit {
       rawFlag === true ||
       (typeof rawFlag === 'string' &&
         ['true', '1', 'yes', 'on'].includes(rawFlag.toLowerCase()));
+    this.schedulerIdentity =
+      process.env.HOSTNAME || process.env.BOT_NAME || 'local';
+    this.isPrimaryScheduler = this.resolvePrimaryScheduler();
   }
 
   async onModuleInit() {
+    const ctx = new TaskContext('block-scheduler:init');
     if (this.enableAutoDistribution) {
-      const ctx = new TaskContext('block-scheduler:init');
-      ctx.logger.info('Auto distribution enabled');
+      if (this.isPrimaryScheduler) {
+        ctx.logger.info(
+          {
+            schedulerIdentity: this.schedulerIdentity,
+          },
+          'Auto distribution enabled on primary scheduler instance',
+        );
+      } else {
+        ctx.logger.warn(
+          {
+            schedulerIdentity: this.schedulerIdentity,
+          },
+          'Auto distribution is enabled, but this replica is follower-only and will skip cron work',
+        );
+      }
+    } else {
+      ctx.logger.info('Auto distribution disabled');
     }
   }
 
-  @Cron('*/2 * * * *')
+  @Cron(process.env.APPROVAL_CRON_SCHEDULE || '*/2 * * * *')
   async checkApprovalInterval() {
-    if (!this.enableAutoDistribution || this.isApprovalProcessing) return;
+    if (
+      !this.enableAutoDistribution ||
+      !this.isPrimaryScheduler ||
+      this.isApprovalProcessing
+    ) {
+      return;
+    }
     this.isApprovalProcessing = true;
     try {
       const ctx = new TaskContext('block-scheduler:approval');
@@ -50,9 +87,15 @@ export class BlockSchedulerService implements OnModuleInit {
     }
   }
 
-  @Cron('*/5 * * * *')
+  @Cron(process.env.DISTRIBUTION_CRON_SCHEDULE || '*/5 * * * *')
   async checkDistributionInterval() {
-    if (!this.enableAutoDistribution || this.isDistributionProcessing) return;
+    if (
+      !this.enableAutoDistribution ||
+      !this.isPrimaryScheduler ||
+      this.isDistributionProcessing
+    ) {
+      return;
+    }
     this.isDistributionProcessing = true;
     try {
       const ctx = new TaskContext('block-scheduler:distribution');
@@ -67,7 +110,7 @@ export class BlockSchedulerService implements OnModuleInit {
       }
 
       if (distributionCheck.needsConfirmation) {
-        ctx.logger.info(
+        ctx.logger.debug(
           `Waiting ${distributionCheck.confirmationBlocksNeeded} more blocks for ${distributionCheck.nextFromBlock}-${distributionCheck.nextToBlock} to have 150 confirmations`,
         );
         return;
@@ -81,25 +124,28 @@ export class BlockSchedulerService implements OnModuleInit {
         return;
       }
 
-      ctx.logger.info('Current committer - checking commitment and approval status');
+      ctx.logger.debug('Current committer - checking commitment and approval status');
 
       const commitmentStatus =
         await this.epochProcessor.checkCommitmentStatus();
 
       if (!commitmentStatus.exists) {
-        ctx.logger.info('No commitment exists - creating new commit');
+        ctx.logger.debug('No commitment exists - creating new commit');
         await this.epochProcessor.processNewCommitment();
       } else {
         const required = commitmentStatus.requiredApprovals;
         const current = commitmentStatus.currentApprovals;
 
         if (current >= required) {
-          ctx.logger.info(
+          ctx.logger.debug(
             `Enough approvals (${current}/${required}) - starting distribution`,
           );
-          await this.epochProcessor.processDistribution();
+          await this.runExclusiveDistributionExecution(
+            'block-scheduler:distribution',
+            () => this.epochProcessor.processDistribution(),
+          );
         } else {
-          ctx.logger.info(
+          ctx.logger.debug(
             `Waiting for approvals: ${current}/${required}`,
           );
         }
@@ -114,10 +160,19 @@ export class BlockSchedulerService implements OnModuleInit {
     }
   }
 
-  @Cron('*/17 * * * *')
+  @Cron(process.env.RECOVERY_CRON_SCHEDULE || '*/17 * * * *')
   async checkRecoveryInterval() {
-    if (!this.enableAutoDistribution || this.isDistributionProcessing) return;
-    this.isDistributionProcessing = true;
+    // RWD-H-009: recovery has its own lock (`isRecoveryProcessing`) so it is
+    // not starved by an in-flight distribution cycle. It still skips if
+    // another recovery cycle is already running.
+    if (
+      !this.enableAutoDistribution ||
+      !this.isPrimaryScheduler ||
+      this.isRecoveryProcessing
+    ) {
+      return;
+    }
+    this.isRecoveryProcessing = true;
     try {
       const ctx = new TaskContext('block-scheduler:recovery');
 
@@ -128,15 +183,18 @@ export class BlockSchedulerService implements OnModuleInit {
         return;
       }
 
-      ctx.logger.info('Recovery conditions met - attempting recovery distribution');
-      await this.epochProcessor.processDistribution();
+      ctx.logger.debug('Recovery conditions met - attempting recovery distribution');
+      await this.runExclusiveDistributionExecution(
+        'block-scheduler:recovery',
+        () => this.epochProcessor.processDistribution(),
+      );
     } catch (error) {
       new TaskContext('block-scheduler:recovery').logger.error(
         { error },
         'Recovery interval check failed, will retry next cycle',
       );
     } finally {
-      this.isDistributionProcessing = false;
+      this.isRecoveryProcessing = false;
     }
   }
 
@@ -179,9 +237,60 @@ export class BlockSchedulerService implements OnModuleInit {
     }
   }
 
+  /**
+   * RWD-H-005: validate the supplied range against the next schedulable
+   * epoch before acting. Previously this method logged the range and then
+   * silently triggered the next-scheduled epoch — an operator trap during
+   * incident response, because the HTTP response would imply the supplied
+   * range was used. Refuse with a descriptive error if the request does
+   * not match what the scheduler would actually do.
+   */
+  private async assertRangeMatchesNextSchedulable(
+    fromBlock: number,
+    toBlock: number,
+    ctxLabel: string,
+  ): Promise<{ ok: boolean; nextFromBlock: number; nextToBlock: number }> {
+    const ctx = new TaskContext(ctxLabel);
+    const status = await this.contractService.getDistributionStatus(ctx);
+    if (
+      status.nextFromBlock !== fromBlock ||
+      status.nextToBlock !== toBlock
+    ) {
+      ctx.logger.error(
+        {
+          requested: { fromBlock, toBlock },
+          nextSchedulable: {
+            fromBlock: status.nextFromBlock,
+            toBlock: status.nextToBlock,
+          },
+        },
+        'RWD-H-005: refused — supplied range does not match the next schedulable epoch. Retry with the exact range the scheduler would act on next.',
+      );
+      return {
+        ok: false,
+        nextFromBlock: status.nextFromBlock,
+        nextToBlock: status.nextToBlock,
+      };
+    }
+    return {
+      ok: true,
+      nextFromBlock: status.nextFromBlock,
+      nextToBlock: status.nextToBlock,
+    };
+  }
+
   async forceCommit(fromBlock: number, toBlock: number): Promise<boolean> {
     try {
-      return await this.epochProcessor.processApproval();
+      const guard = await this.assertRangeMatchesNextSchedulable(
+        fromBlock,
+        toBlock,
+        'block-scheduler:force-commit',
+      );
+      if (!guard.ok) return false;
+      return await this.epochProcessor.processApprovalForRange(
+        fromBlock,
+        toBlock,
+      );
     } catch (error) {
       new TaskContext('block-scheduler:force-commit').logger.error(
         { error, fromBlock, toBlock },
@@ -196,7 +305,20 @@ export class BlockSchedulerService implements OnModuleInit {
     toBlock: number,
   ): Promise<boolean> {
     try {
-      return await this.epochProcessor.processDistribution();
+      const guard = await this.assertRangeMatchesNextSchedulable(
+        fromBlock,
+        toBlock,
+        'block-scheduler:force-distribution',
+      );
+      if (!guard.ok) return false;
+      return await this.runExclusiveDistributionExecution(
+        'block-scheduler:force-distribution',
+        () =>
+          this.epochProcessor.processDistributionForRange(
+            fromBlock,
+            toBlock,
+          ),
+      );
     } catch (error) {
       new TaskContext('block-scheduler:force-distribution').logger.error(
         { error, fromBlock, toBlock },
@@ -209,8 +331,48 @@ export class BlockSchedulerService implements OnModuleInit {
   getStatus() {
     return {
       enabled: this.enableAutoDistribution,
+      isPrimaryScheduler: this.isPrimaryScheduler,
+      schedulerIdentity: this.schedulerIdentity,
       isApprovalProcessing: this.isApprovalProcessing,
       isDistributionProcessing: this.isDistributionProcessing,
+      isDistributionExecutionProcessing: this.isDistributionExecutionProcessing,
+      isRecoveryProcessing: this.isRecoveryProcessing,
     };
+  }
+
+  private async runExclusiveDistributionExecution<T>(
+    ctxLabel: string,
+    fn: () => Promise<T>,
+  ): Promise<T | false> {
+    if (this.isDistributionExecutionProcessing) {
+      new TaskContext(ctxLabel).logger.debug(
+        'Skipping distribution execution - another distribution is already in flight',
+      );
+      return false;
+    }
+
+    this.isDistributionExecutionProcessing = true;
+    try {
+      return await fn();
+    } finally {
+      this.isDistributionExecutionProcessing = false;
+    }
+  }
+
+  private resolvePrimaryScheduler(): boolean {
+    const override = process.env.SCHEDULER_PRIMARY;
+    if (override != null) {
+      return ['true', '1', 'yes', 'on'].includes(override.toLowerCase());
+    }
+
+    const hostname = process.env.HOSTNAME;
+    if (hostname) {
+      const statefulSetOrdinal = hostname.match(/-(\d+)$/);
+      if (statefulSetOrdinal) {
+        return statefulSetOrdinal[1] === '0';
+      }
+    }
+
+    return true;
   }
 }

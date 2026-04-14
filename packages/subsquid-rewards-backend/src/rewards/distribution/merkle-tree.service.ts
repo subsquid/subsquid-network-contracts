@@ -30,11 +30,11 @@ export class MerkleTreeService {
     }>,
     batchSize?: number,
   ): Promise<MerkleTreeResult> {
-    const maxBatchSize = this.configService.get<number>(
-      'rewards.maxBatchSize',
-      100,
+    const commitmentBatchSize = this.configService.get<number>(
+      'rewards.commitmentBatchSize',
+      75,
     );
-    const effectiveBatchSize = batchSize ?? maxBatchSize;
+    const effectiveBatchSize = batchSize ?? commitmentBatchSize;
 
     // Sort workers deterministically by workerId to ensure consistent merkle tree
     const sortedWorkers = [...workers].sort((a, b) => {

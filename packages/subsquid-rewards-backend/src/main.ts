@@ -18,7 +18,7 @@ async function bootstrap() {
   app.useLogger(nestJsLogger);
   app.use(contextMiddleware);
 
-  await app.listen(process.env.PORT ?? 3001);
+  await app.listen(process.env.PORT ?? process.env.APP_PORT ?? 3001);
 }
 
 bootstrap();

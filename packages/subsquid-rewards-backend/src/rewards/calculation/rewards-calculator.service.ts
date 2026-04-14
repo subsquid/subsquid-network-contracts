@@ -36,6 +36,8 @@ export interface WorkerReward {
 
 export interface RewardCalculationResult {
   workers: WorkerReward[];
+  // Historical v1 shape: this is the sum of worker-side rewards only.
+  // Staker rewards are carried per worker and added separately where needed.
   totalRewards: bigint;
   calculationTime: number;
   epochMetadata?: {
@@ -47,6 +49,8 @@ export interface RewardCalculationResult {
 }
 
 export interface FormattedRewardResult {
+  // Public/API shape: keep the legacy `totalRewards` field name, but always
+  // publish the explicit worker/staker breakdown to avoid ambiguity.
   totalRewards: {
     worker: string;
     staker: string;
@@ -228,15 +232,19 @@ function secondDiffs(dates: number[]) {
     .slice(1);
 }
 
-function totalOfflineSeconds(diffs: number[], workerOfflineThreshold = 600) {
+function totalOfflineSeconds(diffs: number[], workerOfflineThreshold: number) {
   return diffs
     .filter((diff) => diff > workerOfflineThreshold)
     .reduce((sum, diff) => sum + diff, 0);
 }
 
-function networkStats(pingTimestamps: number[], epochLength: number): NetworkStatsEntry {
+function networkStats(
+  pingTimestamps: number[],
+  epochLength: number,
+  workerOfflineThreshold: number,
+): NetworkStatsEntry {
   const diffs = secondDiffs(pingTimestamps);
-  const totalTimeOffline = totalOfflineSeconds(diffs);
+  const totalTimeOffline = totalOfflineSeconds(diffs, workerOfflineThreshold);
 
   return {
     totalPings: diffs.length - 1,
@@ -278,19 +286,30 @@ export async function calculateLivenessFactor(
     const totalPeriodSeconds = Math.floor(
       (endTime.getTime() - startTime.getTime()) / 1000,
     );
+    const workerOfflineThreshold =
+      clickHouseService.configService?.get('rewards.workerOfflineThreshold') ??
+      65;
 
     const res: Record<string, NetworkStatsEntry> = {};
 
     for (const ping of pings) {
       if (ping.worker_id && ping.timestamps) {
-        const stats = networkStats(ping.timestamps, totalPeriodSeconds);
+        const stats = networkStats(
+          ping.timestamps,
+          totalPeriodSeconds,
+          workerOfflineThreshold,
+        );
         res[ping.worker_id] = stats;
       }
     }
 
     return res;
   } catch (error) {
-    console.error('[calculateLivenessFactor] Failed to calculate liveness factors from ClickHouse:', error);
+    console.error(
+      `[calculateLivenessFactor] Failed to calculate liveness factors from ClickHouse: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
     return {};
   }
 }
@@ -358,6 +377,9 @@ async function historicalLiveness(
   const epochRangesTimestamps = sortedEpochRanges.map((date) =>
     dayjs(formatDateForClickHouse(date)).utc().unix(),
   );
+  const workerOfflineThreshold =
+    clickhouseService.configService?.get('rewards.workerOfflineThreshold') ??
+    65;
   const splittedPings = Object.entries(pings).map(([workerId, timestamps]) => {
     return [workerId, splitLogs(timestamps, epochRangesTimestamps)] as const;
   });
@@ -369,6 +391,7 @@ async function historicalLiveness(
           return networkStats(
             split,
             epochRangesTimestamps[i + 1] - epochRangesTimestamps[i],
+            workerOfflineThreshold,
           ).livenessFactor;
         }),
       ] as const,
@@ -632,13 +655,11 @@ export class RewardsCalculatorService {
       return this.createEmptyResult(fromBlock, toBlock, startTime, endTime);
     }
 
-    // Pin all contract reads to epoch end block for deterministic results
-    const epochEndBlockBigInt = BigInt(toBlock);
-
-    // Stakes
+    // Keep reward-side contract reads aligned with the original backend:
+    // these values come from the current contract state, not an L1 epoch block.
     const workerPeerIds = Object.keys(workers);
     const [capedStakes, totalStakes] =
-      await this.contractService.getStakes(workerPeerIds, epochEndBlockBigInt);
+      await this.contractService.getStakes(workerPeerIds);
 
     parseMulticallResult(
       workers,
@@ -661,7 +682,7 @@ export class RewardsCalculatorService {
     }
 
     // Bond
-    const bondAmount = await this.contractService.getBondAmount(ctx, epochEndBlockBigInt);
+    const bondAmount = await this.contractService.getBondAmount(ctx);
     const bondDecimal = new Decimal(bondAmount.toString());
     for (const w of Object.values(workers)) {
       w.bond = bondDecimal;
@@ -719,7 +740,7 @@ export class RewardsCalculatorService {
     }
 
     // Calculate rewards
-    const baseApr = await this.getAPRFromContracts(ctx, epochEndBlockBigInt);
+    const baseApr = await this.getAPRFromContracts(ctx);
     const duration = dayjs(endTime).diff(dayjs(adjustedStartTime), 'second');
     const rMax = new Decimal(baseApr).mul(duration).div(YEAR).div(10_000);
     for (const w of workerList) {
@@ -893,13 +914,11 @@ export class RewardsCalculatorService {
       return { totalRewards: { worker: '0', staker: '0' }, workers: [] };
     }
 
-    // Pin all contract reads to epoch end block for deterministic results
-    const epochEndBlockBigInt = BigInt(toBlock);
-
-    // Stakes
+    // Keep reward-side contract reads aligned with the original backend:
+    // these values come from the current contract state, not an L1 epoch block.
     const workerPeerIds = Object.keys(workers);
     const [capedStakes, totalStakes] =
-      await this.contractService.getStakes(workerPeerIds, epochEndBlockBigInt);
+      await this.contractService.getStakes(workerPeerIds);
 
     parseMulticallResult(
       workers,
@@ -922,7 +941,7 @@ export class RewardsCalculatorService {
     }
 
     // Bond
-    const bondAmount = await this.contractService.getBondAmount(ctx, epochEndBlockBigInt);
+    const bondAmount = await this.contractService.getBondAmount(ctx);
     const bondDecimal = new Decimal(bondAmount.toString());
     for (const w of Object.values(workers)) {
       w.bond = bondDecimal;
@@ -979,7 +998,7 @@ export class RewardsCalculatorService {
     }
 
     // Calculate rewards
-    const baseApr = await this.getAPRFromContracts(ctx, epochEndBlockBigInt);
+    const baseApr = await this.getAPRFromContracts(ctx);
     const durationSec = dayjs(endTime).diff(dayjs(adjustedStartTime), 'second');
     const rMax = new Decimal(baseApr).mul(durationSec).div(YEAR).div(10_000);
     for (const w of workerList) {
@@ -1097,8 +1116,11 @@ export class RewardsCalculatorService {
         );
 
         if (tvl === 0n) {
-          ctx.logger.debug('TVL is 0, returning 20% APR');
-          return 0.2;
+          // 20% APR expressed in basis points; downstream divides by 10_000
+          // (see `rMax = baseApr * duration / YEAR / 10_000`). Returning 0.2
+          // here would be ~0.002% APR — a silent 10,000x underpayment.
+          ctx.logger.debug('TVL is 0, returning 20% APR (2000 basis points)');
+          return 2000;
         }
 
         const initialRewardPoolSize =

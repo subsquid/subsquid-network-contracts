@@ -99,7 +99,7 @@ function createMockBlockSchedulerService() {
 function createMockConfigService() {
   return {
     get: jest.fn().mockImplementation((key: string, defaultValue?: any) => {
-      if (key === 'rewards.maxBatchSize') return defaultValue ?? 100;
+      if (key === 'rewards.commitmentBatchSize') return defaultValue ?? 75;
       return defaultValue;
     }),
   };
@@ -227,7 +227,7 @@ describe('AdminController', () => {
       expect(distributionService.distributeEpochRewards).toHaveBeenCalledWith(
         100,
         200,
-        100, // default batch size from configService
+        75, // default batch size from configService
       );
     });
 
@@ -731,6 +731,59 @@ describe('AdminController', () => {
       expect(result.success).toBe(true);
       expect((result as any).message).toBe('Cleaned up 0 old distributions');
       expect((result as any).remaining).toBe(1);
+    });
+
+    // --- RWD-M-005: scheduled cleanup ----------------------------------------
+    describe('scheduledCleanup (RWD-M-005)', () => {
+      it('should evict terminal distributions older than 24h without needing an operator action', async () => {
+        // 48h-old terminal distributions
+        const oldCompletedAt = new Date(Date.now() - 48 * 60 * 60 * 1000);
+        injectDistribution(
+          controller,
+          makeDistributionStatus({
+            epochId: '100-200',
+            status: 'completed',
+            completedAt: oldCompletedAt,
+          }),
+        );
+        injectDistribution(
+          controller,
+          makeDistributionStatus({
+            epochId: '200-300',
+            fromBlock: 200,
+            toBlock: 300,
+            status: 'failed',
+            completedAt: oldCompletedAt,
+          }),
+        );
+        // A fresh, in-flight one must survive
+        injectDistribution(
+          controller,
+          makeDistributionStatus({
+            epochId: '300-400',
+            fromBlock: 300,
+            toBlock: 400,
+            status: 'calculating',
+          }),
+        );
+
+        await controller.scheduledCleanup();
+
+        expect(
+          (controller as any).activeDistributions.has('100-200'),
+        ).toBe(false);
+        expect(
+          (controller as any).activeDistributions.has('200-300'),
+        ).toBe(false);
+        expect(
+          (controller as any).activeDistributions.has('300-400'),
+        ).toBe(true);
+      });
+
+      it('should be safe to run against an empty map', async () => {
+        clearDistributions(controller);
+        await expect(controller.scheduledCleanup()).resolves.toBeUndefined();
+      });
     });
   });
 

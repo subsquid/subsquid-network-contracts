@@ -418,10 +418,11 @@ describe('ContractService', () => {
       expect(result).toBe(999);
     });
 
-    it('should return 0 on unexpected error and log it', async () => {
+    it('should throw on unexpected error and log it', async () => {
       mockPublicClient.readContract.mockRejectedValue(new Error('unexpected!'));
-      const result = await service.getLastBlockRewarded(ctx);
-      expect(result).toBe(0);
+      await expect(service.getLastBlockRewarded(ctx)).rejects.toThrow(
+        'unexpected!',
+      );
       expect(ctx.logger.error).toHaveBeenCalled();
     });
   });
@@ -463,7 +464,7 @@ describe('ContractService', () => {
   describe('getCommitment', () => {
     it('should return parsed commitment data on success', async () => {
       mockPublicClient.readContract.mockResolvedValue([
-        1, 100n, 200n, '0xmerkle', 10, 5, 2n, 'ipfs://link',
+        1, '0xmerkle', 10, 5, 2n, 'ipfs://link',
       ]);
       const result = await service.getCommitment(ctx, 100, 200);
       expect(result).toEqual({
@@ -581,11 +582,18 @@ describe('ContractService', () => {
       expect(result).toBe(3);
     });
 
-    it('should return 1 and log CRITICAL error on failure', async () => {
+    it('RWD-H-004: should throw on contract read failure (fail-closed, not fallback to 1)', async () => {
+      // Regression guard: the previous silent fallback to `1` caused premature
+      // distribution because a fresh commitment already carries the committer's
+      // auto-approval (contract line 215), so a flaky RPC that returned `1`
+      // from this helper would make the scheduler believe quorum was met.
+      // The correct behaviour is to throw; the outer try/catch in the
+      // callers (`approveCommitment`, `checkCommitmentStatus`) converts the
+      // throw into "status unknown, retry next cycle" — fail-closed.
       mockContractRead.requiredApproves.mockRejectedValue(new Error('fail'));
-      const result = await service.getRequiredApprovals();
-      expect(result).toBe(1);
-      // The method internally creates a TaskContext and logs the CRITICAL error.
+      await expect(service.getRequiredApprovals()).rejects.toThrow(
+        /quorum unknown/i,
+      );
     });
   });
 
@@ -1242,7 +1250,7 @@ describe('ContractService', () => {
   // =========================================================================
 
   describe('getLastBlockRewarded - additional branches', () => {
-    it('should return 0 when lastBlockRewarded is 0 and no startingBlock configured', async () => {
+    it('should throw when lastBlockRewarded is 0 and no startingBlock configured', async () => {
       const originalGet = mockConfigService.get;
       mockConfigService.get = jest.fn((key: string, defaultValue?: any) => {
         if (key === 'rewards.distributionStartingBlock') return 0;
@@ -1250,13 +1258,14 @@ describe('ContractService', () => {
       });
 
       mockPublicClient.readContract.mockResolvedValue(0n);
-      const result = await service.getLastBlockRewarded(ctx);
-      expect(result).toBe(0);
+      await expect(service.getLastBlockRewarded(ctx)).rejects.toThrow(
+        'DISTRIBUTION_STARTING_BLOCK',
+      );
 
       mockConfigService.get = originalGet;
     });
 
-    it('should return 0 for "returned no data" when no startingBlock configured', async () => {
+    it('should throw for "returned no data" when no startingBlock configured', async () => {
       const originalGet = mockConfigService.get;
       mockConfigService.get = jest.fn((key: string, defaultValue?: any) => {
         if (key === 'rewards.distributionStartingBlock') return 0;
@@ -1266,8 +1275,9 @@ describe('ContractService', () => {
       mockPublicClient.readContract.mockRejectedValue(
         new Error('returned no data'),
       );
-      const result = await service.getLastBlockRewarded(ctx);
-      expect(result).toBe(0);
+      await expect(service.getLastBlockRewarded(ctx)).rejects.toThrow(
+        'DISTRIBUTION_STARTING_BLOCK',
+      );
 
       mockConfigService.get = originalGet;
     });

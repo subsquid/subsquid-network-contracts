@@ -82,7 +82,11 @@ export class ClickHouseService implements OnModuleInit {
       await this.ping();
       console.log('ClickHouse connection established');
     } catch (error) {
-      console.error('Failed to initialize ClickHouse connection', error);
+      console.error(
+        `Failed to initialize ClickHouse connection: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
       throw error;
     }
   }
@@ -92,7 +96,11 @@ export class ClickHouseService implements OnModuleInit {
       await this.client.query('SELECT 1').toPromise();
       return true;
     } catch (error) {
-      console.error('ClickHouse ping failed', error);
+      console.error(
+        `ClickHouse ping failed: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
       return false;
     }
   }
@@ -342,8 +350,9 @@ export class ClickHouseService implements OnModuleInit {
       }
     }
 
-    // Full validation logic would go here
-    throw new Error('Full signature validation not yet implemented');
+    throw new Error(
+      'Signature validation is intentionally disabled in this backend. Use skipSignatureValidation=true or set SKIP_SIGNATURE_VALIDATION=true.',
+    );
   }
 
   async getPings(

@@ -7,7 +7,9 @@ import {
   Param,
   HttpException,
   HttpStatus,
+  UseGuards,
 } from '@nestjs/common';
+import { Cron } from '@nestjs/schedule';
 import { ConfigService } from '@nestjs/config';
 import { RewardsCalculatorService } from '../../rewards/calculation/rewards-calculator.service';
 import {
@@ -17,7 +19,7 @@ import {
 import { ContractService } from '../../blockchain/contract.service';
 import { BlockSchedulerService } from '../../epochs/block-scheduler.service';
 import { TaskContext } from '../../common';
-// todo: add protection for admin endpoints
+import { AdminApiKeyGuard } from './admin-api-key.guard';
 
 export interface ManualDistributionRequest {
   fromBlock: number;
@@ -26,6 +28,7 @@ export interface ManualDistributionRequest {
 }
 
 @Controller('admin')
+@UseGuards(AdminApiKeyGuard)
 export class AdminController {
   // Store active distributions in memory for demo purposes
   private activeDistributions = new Map<string, DistributionStatus>();
@@ -89,8 +92,8 @@ export class AdminController {
   @Post('distribute')
   async startDistribution(@Body() body: ManualDistributionRequest) {
     const defaultBatchSize = this.configService.get<number>(
-      'rewards.maxBatchSize',
-      100,
+      'rewards.commitmentBatchSize',
+      75,
     );
     const { fromBlock, toBlock, batchSize = defaultBatchSize } = body;
     const epochId = `${fromBlock}-${toBlock}`;
@@ -356,27 +359,71 @@ export class AdminController {
   }
 
   /**
+   * Evict terminal (completed/failed) distributions older than `maxAgeHours`
+   * from the in-memory status map. Pure function on state — safe to call
+   * from HTTP and from the internal @Cron below.
+   */
+  private performCleanup(maxAgeHours: number): {
+    cleanedCount: number;
+    remaining: number;
+  } {
+    const maxAge = maxAgeHours * 60 * 60 * 1000;
+    const cutoff = new Date(Date.now() - maxAge);
+
+    let cleanedCount = 0;
+    for (const [epochId, status] of this.activeDistributions.entries()) {
+      const shouldClean =
+        status.completedAt &&
+        status.completedAt < cutoff &&
+        (status.status === 'completed' || status.status === 'failed');
+
+      if (shouldClean) {
+        this.activeDistributions.delete(epochId);
+        cleanedCount++;
+      }
+    }
+
+    return { cleanedCount, remaining: this.activeDistributions.size };
+  }
+
+  /**
+   * RWD-M-005 — scheduled auto-cleanup of the in-memory distribution status
+   * map. The map is not "unbounded" (the /admin/cleanup endpoint exists and
+   * works), but it used to require a manual operator action. On a long-running
+   * pod this grows with every manual distribution. Run a conservative cleanup
+   * every 6 hours so no operator intervention is required. The map remains
+   * non-durable across restart by design — that's a separate persistence
+   * concern covered by the S3 artefact (see fixes-to-apply.md §11).
+   */
+  @Cron('0 */6 * * *')
+  async scheduledCleanup(): Promise<void> {
+    const ctx = new TaskContext('admin:scheduled-cleanup');
+    try {
+      const result = this.performCleanup(24);
+      if (result.cleanedCount > 0) {
+        ctx.logger.info(
+          { cleanedCount: result.cleanedCount, remaining: result.remaining },
+          `Scheduled cleanup evicted ${result.cleanedCount} terminal distributions`,
+        );
+      } else {
+        ctx.logger.debug(
+          { remaining: result.remaining },
+          'Scheduled cleanup ran, nothing to evict',
+        );
+      }
+    } catch (error) {
+      ctx.logger.error({ error }, 'Scheduled cleanup failed');
+    }
+  }
+
+  /**
    * Clean up old completed/failed distributions
    */
   @Post('cleanup')
   async cleanup(@Body() body: { maxAgeHours?: number }) {
     try {
       const maxAgeHours = body.maxAgeHours || 24; // 24 hours default
-      const maxAge = maxAgeHours * 60 * 60 * 1000;
-      const cutoff = new Date(Date.now() - maxAge);
-
-      let cleanedCount = 0;
-      for (const [epochId, status] of this.activeDistributions.entries()) {
-        const shouldClean =
-          status.completedAt &&
-          status.completedAt < cutoff &&
-          (status.status === 'completed' || status.status === 'failed');
-
-        if (shouldClean) {
-          this.activeDistributions.delete(epochId);
-          cleanedCount++;
-        }
-      }
+      const { cleanedCount, remaining } = this.performCleanup(maxAgeHours);
 
       new TaskContext('method-call').logger.debug(
         `Cleaned up ${cleanedCount} old distributions`,
@@ -385,7 +432,7 @@ export class AdminController {
       return {
         success: true,
         message: `Cleaned up ${cleanedCount} old distributions`,
-        remaining: this.activeDistributions.size,
+        remaining,
         cutoffAge: `${maxAgeHours} hours`,
       };
     } catch (error) {

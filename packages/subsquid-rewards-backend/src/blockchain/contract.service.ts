@@ -6,7 +6,6 @@ import {
   Hex,
   PublicClient,
   getContract,
-  parseAbiItem,
   createPublicClient,
   createWalletClient,
   http,
@@ -68,7 +67,12 @@ export class ContractService {
 
     this.l1Client = createPublicClient({
       chain: isTestnet ? sepolia : mainnet,
-      transport: http(this.configService.get('blockchain.network.l1RpcUrl')),
+      // RWD-H-008: bound L1 RPC calls so a dead node cannot stall the cron.
+      transport: http(this.configService.get('blockchain.network.l1RpcUrl'), {
+        retryCount: 3,
+        retryDelay: 1_000,
+        timeout: 30_000,
+      }),
       batch: { multicall: true },
     });
   }
@@ -318,19 +322,30 @@ export class ContractService {
             ctx.logger.info(`Using configured starting block: ${startingBlock} (lastBlockRewarded = 0)`);
             return startingBlock - 1;
           }
+          throw new Error(
+            'Fresh rewards-distribution contract detected (lastBlockRewarded = 0) but DISTRIBUTION_STARTING_BLOCK is not configured.',
+          );
         }
         return lastBlockNum;
       } catch (contractError: any) {
         if (contractError.message?.includes('returned no data')) {
           const startingBlock = this.configService.get('rewards.distributionStartingBlock') || 0;
-          return startingBlock > 0 ? startingBlock - 1 : 0;
+          if (startingBlock > 0) {
+            return startingBlock - 1;
+          }
+          throw new Error(
+            'Rewards distribution contract has no lastBlockRewarded data and DISTRIBUTION_STARTING_BLOCK is not configured.',
+          );
         }
         throw contractError;
       }
     } catch (error: any) {
       if (typeof error === 'number') return error;
-      ctx.logger.error(`Unexpected error getting last rewarded block: ${error.message}`);
-      return 0;
+      ctx.logger.error(
+        { error },
+        'Unexpected error getting last rewarded block',
+      );
+      throw error;
     }
   }
 
@@ -471,19 +486,19 @@ export class ContractService {
       const commitment = await this.publicClient.readContract({
         address,
         abi: DistributedRewardsDistributionABI,
-        functionName: 'commitments',
-        args: [commitmentKey],
+        functionName: 'getCommitment',
+        args: [[BigInt(fromBlock), BigInt(toBlock)]],
       });
 
       if (!commitment) return emptyResult;
 
       return {
         exists: Number(commitment[0]) !== 0,
-        merkleRoot: (commitment[3] || emptyResult.merkleRoot) as string,
-        totalBatches: Number(commitment[4] || 0),
-        processedBatches: Number(commitment[5] || 0),
-        approvalCount: Number(commitment[6] || 0),
-        ipfsLink: commitment[7] || '',
+        merkleRoot: (commitment[1] || emptyResult.merkleRoot) as string,
+        totalBatches: Number(commitment[2] || 0),
+        processedBatches: Number(commitment[3] || 0),
+        approvalCount: Number(commitment[4] || 0),
+        ipfsLink: commitment[5] || '',
       };
     } catch (contractError: any) {
       if (contractError.message?.includes('returned no data')) return emptyResult;
@@ -600,6 +615,20 @@ export class ContractService {
     }
   }
 
+  /**
+   * Read the contract-configured approval quorum.
+   *
+   * RWD-H-004 — fail-closed. The previous implementation silently fell back
+   * to `1` on any read failure, which caused premature distribution when the
+   * RPC flaked: a freshly committed commitment already carries the
+   * committer's auto-approval (see v2 contract line 215), so `1 >= 1` would
+   * pass quorum on a single-approval fallback even when the real requirement
+   * was higher. The backend layer must refuse to progress until the real
+   * value is known, not guess. The outer callers (`approveCommitment`,
+   * `EpochProcessorService.checkCommitmentStatus`) already have try/catch
+   * blocks that will treat a throw here as "status unknown, retry next
+   * cycle" — which is the safe behaviour.
+   */
   async getRequiredApprovals(): Promise<number> {
     const ctx = new TaskContext('contract-service:get-required-approvals');
     try {
@@ -611,8 +640,13 @@ export class ContractService {
       });
       return Number(await contract.read.requiredApproves());
     } catch (error) {
-      ctx.logger.error({ error }, 'CRITICAL: Failed to get requiredApprovals from contract, defaulting to 1 — this may cause premature distribution');
-      return 1;
+      ctx.logger.error(
+        { error },
+        'RWD-H-004: failed to read requiredApproves from contract; refusing to progress rather than fall back to a guess.',
+      );
+      throw new Error(
+        'getRequiredApprovals: contract read failed; quorum unknown, refusing fail-open fallback',
+      );
     }
   }
 
@@ -651,12 +685,7 @@ export class ContractService {
       const commitmentKey = this.commitmentKeyService.generateKey(fromBlock, toBlock);
       return await this.publicClient.readContract({
         address: contractAddr,
-        abi: [{
-          type: 'function', name: 'approvedBy',
-          inputs: [{ name: '', type: 'bytes32', internalType: 'bytes32' }, { name: '', type: 'address', internalType: 'address' }],
-          outputs: [{ name: '', type: 'bool', internalType: 'bool' }],
-          stateMutability: 'view',
-        }],
+        abi: DistributedRewardsDistributionABI,
         functionName: 'approvedBy',
         args: [commitmentKey, address],
       });
@@ -709,9 +738,9 @@ export class ContractService {
 
       const logs = await this.publicClient.getLogs({
         address,
-        event: parseAbiItem(
-          'event BatchDistributed(uint256 fromBlock, uint256 toBlock, uint64 batchId, uint256[] recipients, uint256[] workerRewards, uint256[] stakerRewards)',
-        ),
+        event: DistributedRewardsDistributionABI.find(
+          (item) => item.type === 'event' && item.name === 'BatchDistributed',
+        )!,
         fromBlock: currentBlock - BigInt(blockWindow),
       });
 
@@ -868,7 +897,17 @@ export class ContractService {
           })
         : arbitrum;
 
-      const walletClient = createWalletClient({ account, chain, transport: http(rpcUrl) });
+      // RWD-H-008: explicit transport timeout so a flaky L2 node cannot
+      // block the approve path indefinitely.
+      const walletClient = createWalletClient({
+        account,
+        chain,
+        transport: http(rpcUrl, {
+          retryCount: 3,
+          retryDelay: 1_000,
+          timeout: 30_000,
+        }),
+      });
 
       for (let attempt = 1; attempt <= 3; attempt++) {
         try {

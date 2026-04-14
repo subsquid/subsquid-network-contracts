@@ -11,6 +11,66 @@ export type Logger = pinoms.Logger;
 
 let loggerInstance: Logger;
 
+function getStringField(
+  value: Record<string, unknown> | undefined,
+  key: string,
+): string | undefined {
+  const field = value?.[key];
+  if (typeof field === 'string' && field.trim().length > 0) {
+    return field;
+  }
+  if (
+    typeof field === 'number' ||
+    typeof field === 'bigint' ||
+    typeof field === 'boolean'
+  ) {
+    return String(field);
+  }
+  return undefined;
+}
+
+function asRecord(value: unknown): Record<string, unknown> | undefined {
+  return value !== null && typeof value === 'object'
+    ? (value as Record<string, unknown>)
+    : undefined;
+}
+
+function compactSerializedError(error: unknown) {
+  if (error == null) {
+    return undefined;
+  }
+
+  const record = asRecord(error);
+  const message =
+    getStringField(record, 'shortMessage') ||
+    getStringField(record, 'message') ||
+    (error instanceof Error ? error.message : String(error));
+
+  const compact: Record<string, string> = {
+    name:
+      getStringField(record, 'name') ||
+      (error instanceof Error ? error.name : 'Error'),
+    message,
+  };
+
+  const details = getStringField(record, 'details');
+  if (details && details !== message) {
+    compact.details = details;
+  }
+
+  const code = getStringField(record, 'code');
+  if (code) {
+    compact.code = code;
+  }
+
+  const cause = getStringField(asRecord(record?.cause), 'message');
+  if (cause && cause !== message) {
+    compact.cause = cause;
+  }
+
+  return compact;
+}
+
 export const Logger = {
   get() {
     return loggerInstance;
@@ -60,8 +120,8 @@ export function initializeLogger(appName: string) {
       ? () => `,"time":"${format(new Date(), 'HH:mm:ss.SSS')}"`
       : () => `,"timestamp":"${new Date().toISOString()}"`,
     serializers: {
-      error: pinoms.stdSerializers.err,
-      err: pinoms.stdSerializers.err,
+      error: compactSerializedError,
+      err: compactSerializedError,
     },
     streams,
   });

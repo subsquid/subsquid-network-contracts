@@ -18,13 +18,6 @@ export default registerAs('blockchain', () => ({
   distributor: {
     address: process.env.DISTRIBUTOR_ADDRESS,
     privateKey: process.env.DISTRIBUTOR_PRIVATE_KEY,
-    skipSignatureValidation: process.env.SKIP_SIGNATURE_VALIDATION === 'true',
-  },
-  fordefi: {
-    accessToken: process.env.FORDEFI_ACCESS_TOKEN || '',
-    vaultId: process.env.FORDEFI_VAULT_ID || '',
-    secretKey: process.env.FORDEFI_SECRET_KEY || '',
-    txGasPrice: parseInt(process.env.FORDEFI_TX_GAS_PRICE || '100000000', 10),
   },
   options: {
     confirmations: 1,

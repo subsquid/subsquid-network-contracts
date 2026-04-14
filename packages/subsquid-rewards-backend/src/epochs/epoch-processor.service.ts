@@ -224,7 +224,7 @@ export class EpochProcessorService implements OnModuleInit {
         return true;
       }
 
-      ctx.logger.info(`Starting approval phase for blocks ${fromBlock}-${toBlock}`);
+      ctx.logger.debug(`Starting approval phase for blocks ${fromBlock}-${toBlock}`);
       return await this.processApprovalWithMerkleTree(fromBlock, toBlock);
     } catch (error) {
       ctx.logger.error({ error }, 'Approval processing failed');
@@ -243,7 +243,7 @@ export class EpochProcessorService implements OnModuleInit {
         await this.statelessCoordinator.isCurrentCommitter();
 
       if (!committerCheck.isCommitter) {
-        ctx.logger.info(
+        ctx.logger.debug(
           `Not current committer - skipping distribution (window: ${committerCheck.currentWindow})`,
         );
         return true;
@@ -326,12 +326,71 @@ export class EpochProcessorService implements OnModuleInit {
     }
   }
 
+  async processApprovalForRange(
+    fromBlock: number,
+    toBlock: number,
+  ): Promise<boolean> {
+    const ctx = new TaskContext(
+      `epoch-processor:approval-explicit:${fromBlock}-${toBlock}`,
+    );
+
+    try {
+      if (fromBlock >= toBlock) {
+        ctx.logger.warn('Invalid explicit approval range');
+        return false;
+      }
+
+      return await this.processApprovalWithMerkleTree(fromBlock, toBlock);
+    } catch (error) {
+      ctx.logger.error({ error }, 'Explicit approval processing failed');
+      return false;
+    }
+  }
+
+  async processDistributionForRange(
+    fromBlock: number,
+    toBlock: number,
+  ): Promise<boolean> {
+    const ctx = new TaskContext(
+      `epoch-processor:distribution-explicit:${fromBlock}-${toBlock}`,
+    );
+
+    try {
+      if (fromBlock >= toBlock) {
+        ctx.logger.warn('Invalid explicit distribution range');
+        return false;
+      }
+
+      const commitment = await this.contractService.getCommitmentV2(
+        ctx,
+        fromBlock,
+        toBlock,
+      );
+
+      if (commitment.status !== 1) {
+        ctx.logger.warn(
+          `Explicit distribution refused: commitment ${fromBlock}-${toBlock} is not ACTIVE`,
+        );
+        return false;
+      }
+
+      return await this.distributionService.distributeApprovedEpoch(
+        fromBlock,
+        toBlock,
+        commitment.merkleRoot,
+      );
+    } catch (error) {
+      ctx.logger.error({ error }, 'Explicit distribution processing failed');
+      return false;
+    }
+  }
+
   private async getEpochRange(): Promise<[number, number]> {
     const ctx = new TaskContext('epoch-processor:get-epoch-range');
     try {
       const status = await this.contractService.getDistributionStatus(ctx);
 
-      ctx.logger.info(
+      ctx.logger.debug(
         `Distribution status: blocks ${status.nextFromBlock}-${status.nextToBlock}, ` +
           `ready: ${status.isReadyForDistribution}, hasCommitment: ${status.hasExistingCommitment}`,
       );
@@ -363,7 +422,14 @@ export class EpochProcessorService implements OnModuleInit {
         );
         return true;
       } else {
-        ctx.logger.error(`Merkle distribution failed: ${distributionStatus.error}`);
+        ctx.logger.error(
+          {
+            fromBlock,
+            toBlock,
+            distributionStatus,
+          },
+          'Merkle distribution failed',
+        );
         return false;
       }
     } catch (error) {
@@ -470,23 +536,16 @@ export class EpochProcessorService implements OnModuleInit {
       );
 
       if (!commitResult.success) {
-        ctx.logger.error('Failed to commit Merkle root');
-        return false;
-      }
-
-      try {
-        const s3Url = await this.distributionService.uploadEpochDataToS3(
-          fromBlock,
-          toBlock,
-          merkleTree.root,
-          merkleTree.totalBatches,
-          result.workers,
-          merkleTree,
-          batchSize,
+        ctx.logger.error(
+          {
+            fromBlock,
+            toBlock,
+            merkleRoot: merkleTree.root,
+            totalBatches: merkleTree.totalBatches,
+          },
+          'Failed to commit Merkle root',
         );
-        ctx.logger.info(`Epoch data uploaded to S3: ${s3Url}`);
-      } catch (e) {
-        ctx.logger.error({ error: e }, 'Failed to upload epoch data to S3');
+        return false;
       }
 
       ctx.logger.info(

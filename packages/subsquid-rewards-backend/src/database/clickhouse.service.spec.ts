@@ -23,6 +23,12 @@ const clickhouseConfig = {
   },
 };
 
+const hasClickHouseConfig = Boolean(
+  clickhouseConfig.url &&
+    clickhouseConfig.username &&
+    clickhouseConfig.password,
+);
+
 function createMockCtx() {
   return {
     logger: {
@@ -65,7 +71,9 @@ function createService(): ClickHouseService {
   return service;
 }
 
-describe('ClickHouseService', () => {
+const describeClickHouseIntegration = hasClickHouseConfig ? describe : describe.skip;
+
+describeClickHouseIntegration('ClickHouseService', () => {
   let service: ClickHouseService;
 
   beforeAll(() => {

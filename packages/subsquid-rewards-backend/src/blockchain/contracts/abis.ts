@@ -91,6 +91,16 @@ export const DistributedRewardsDistributionABI = [
   },
   {
     type: 'function',
+    name: 'approvedBy',
+    inputs: [
+      { name: '', type: 'bytes32', internalType: 'bytes32' },
+      { name: '', type: 'address', internalType: 'address' },
+    ],
+    outputs: [{ name: '', type: 'bool', internalType: 'bool' }],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
     name: 'processed',
     inputs: [
       { name: '', type: 'bytes32', internalType: 'bytes32' },
@@ -215,6 +225,34 @@ export const DistributedRewardsDistributionABI = [
     stateMutability: 'nonpayable',
   },
   {
+    type: 'function',
+    name: 'claim',
+    inputs: [{ name: 'workerId', type: 'uint256', internalType: 'uint256' }],
+    outputs: [{ name: 'reward', type: 'uint256', internalType: 'uint256' }],
+    stateMutability: 'nonpayable',
+  },
+  {
+    type: 'function',
+    name: 'claimable',
+    inputs: [{ name: 'workerId', type: 'uint256', internalType: 'uint256' }],
+    outputs: [{ name: 'reward', type: 'uint256', internalType: 'uint256' }],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    name: 'accumulativeRewardOf',
+    inputs: [{ name: 'workerId', type: 'uint256', internalType: 'uint256' }],
+    outputs: [{ name: 'reward', type: 'uint256', internalType: 'uint256' }],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    name: 'withdrawableRewardOf',
+    inputs: [{ name: 'workerId', type: 'uint256', internalType: 'uint256' }],
+    outputs: [{ name: 'reward', type: 'uint256', internalType: 'uint256' }],
+    stateMutability: 'view',
+  },
+  {
     type: 'event',
     name: 'NewCommitment',
     inputs: [
@@ -242,6 +280,43 @@ export const DistributedRewardsDistributionABI = [
         type: 'bytes32',
         indexed: false,
         internalType: 'bytes32',
+      },
+    ],
+    anonymous: false,
+  },
+  {
+    type: 'event',
+    name: 'Approved',
+    inputs: [
+      {
+        name: 'approver',
+        type: 'address',
+        indexed: true,
+        internalType: 'address',
+      },
+      {
+        name: 'fromBlock',
+        type: 'uint256',
+        indexed: false,
+        internalType: 'uint256',
+      },
+      {
+        name: 'toBlock',
+        type: 'uint256',
+        indexed: false,
+        internalType: 'uint256',
+      },
+      {
+        name: 'merkleRoot',
+        type: 'bytes32',
+        indexed: false,
+        internalType: 'bytes32',
+      },
+      {
+        name: 'ipfsLink',
+        type: 'string',
+        indexed: false,
+        internalType: 'string',
       },
     ],
     anonymous: false,
@@ -285,6 +360,81 @@ export const DistributedRewardsDistributionABI = [
         type: 'uint256[]',
         indexed: false,
         internalType: 'uint256[]',
+      },
+    ],
+    anonymous: false,
+  },
+  {
+    type: 'event',
+    name: 'RewardClaimed',
+    inputs: [
+      {
+        name: 'worker',
+        type: 'address',
+        indexed: true,
+        internalType: 'address',
+      },
+      {
+        name: 'workerId',
+        type: 'uint256',
+        indexed: false,
+        internalType: 'uint256',
+      },
+      {
+        name: 'amount',
+        type: 'uint256',
+        indexed: false,
+        internalType: 'uint256',
+      },
+    ],
+    anonymous: false,
+  },
+  {
+    type: 'event',
+    name: 'CommitmentCleared',
+    inputs: [
+      {
+        name: 'fromBlock',
+        type: 'uint256',
+        indexed: true,
+        internalType: 'uint256',
+      },
+      {
+        name: 'toBlock',
+        type: 'uint256',
+        indexed: true,
+        internalType: 'uint256',
+      },
+      {
+        name: 'commitmentKey',
+        type: 'bytes32',
+        indexed: true,
+        internalType: 'bytes32',
+      },
+      {
+        name: 'previousStatus',
+        type: 'uint8',
+        indexed: false,
+        internalType: 'enum DistributedRewardsDistribution.CommitmentStatus',
+      },
+    ],
+    anonymous: false,
+  },
+  {
+    type: 'event',
+    name: 'LastRewardedBlockUpdated',
+    inputs: [
+      {
+        name: 'previousBlock',
+        type: 'uint256',
+        indexed: true,
+        internalType: 'uint256',
+      },
+      {
+        name: 'newBlock',
+        type: 'uint256',
+        indexed: true,
+        internalType: 'uint256',
       },
     ],
     anonymous: false,

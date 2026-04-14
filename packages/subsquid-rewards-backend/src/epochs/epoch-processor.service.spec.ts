@@ -44,6 +44,10 @@ describe('EpochProcessor crash resilience', () => {
         isReadyForDistribution: true,
         hasExistingCommitment: false,
       }),
+      getCommitmentV2: jest.fn().mockResolvedValue({
+        status: 1,
+        merkleRoot: '0xabc',
+      }),
       getCommitmentInfo: jest.fn().mockResolvedValue(null),
       getRequiredApprovals: jest.fn().mockResolvedValue(2),
       isNextDistributionReady: jest.fn().mockResolvedValue({
@@ -224,8 +228,23 @@ describe('EpochProcessor crash resilience', () => {
       ).not.toHaveBeenCalled();
     });
 
-    it('should not overlap recovery — returns immediately if distribution is processing', async () => {
+    it('RWD-H-009: recovery runs independently of the distribution lock', async () => {
+      // Under the old shared-flag model, a long-running distribution cycle
+      // would perpetually starve the */17 recovery tick. After RWD-H-009
+      // recovery has its own lock (`isRecoveryProcessing`) so a distribution
+      // in flight no longer blocks recovery.
       (blockScheduler as any).isDistributionProcessing = true;
+      (blockScheduler as any).isRecoveryProcessing = false;
+
+      await blockScheduler.checkRecoveryInterval();
+
+      expect(
+        mockStatelessCoordinator.shouldSkipRecovery,
+      ).toHaveBeenCalled();
+    });
+
+    it('RWD-H-009: recovery does not overlap itself', async () => {
+      (blockScheduler as any).isRecoveryProcessing = true;
 
       await blockScheduler.checkRecoveryInterval();
 
@@ -280,6 +299,37 @@ describe('EpochProcessor crash resilience', () => {
       expect(
         mockStatelessCoordinator.shouldSkipRecovery,
       ).not.toHaveBeenCalled();
+    });
+
+    it('RWD-M-003: follower replicas skip automatic cron work', async () => {
+      const originalSchedulerPrimary = process.env.SCHEDULER_PRIMARY;
+      process.env.SCHEDULER_PRIMARY = 'false';
+
+      try {
+        const followerScheduler = new BlockSchedulerService(
+          mockConfigService as any,
+          mockContractService as any,
+          epochProcessor as any,
+          mockStatelessCoordinator as any,
+        );
+
+        await followerScheduler.checkDistributionInterval();
+        await followerScheduler.checkRecoveryInterval();
+
+        expect(
+          mockContractService.isNextDistributionReady,
+        ).not.toHaveBeenCalled();
+        expect(
+          mockStatelessCoordinator.shouldSkipRecovery,
+        ).not.toHaveBeenCalled();
+        expect(followerScheduler.getStatus().isPrimaryScheduler).toBe(false);
+      } finally {
+        if (originalSchedulerPrimary === undefined) {
+          delete process.env.SCHEDULER_PRIMARY;
+        } else {
+          process.env.SCHEDULER_PRIMARY = originalSchedulerPrimary;
+        }
+      }
     });
   });
 
@@ -375,6 +425,10 @@ describe('BlockScheduler trigger/force methods', () => {
         nextToBlock: 200,
         isReadyForDistribution: true,
         hasExistingCommitment: false,
+      }),
+      getCommitmentV2: jest.fn().mockResolvedValue({
+        status: 1,
+        merkleRoot: '0xabc',
       }),
       getCommitmentInfo: jest.fn().mockResolvedValue(null),
       getRequiredApprovals: jest.fn().mockResolvedValue(2),
@@ -544,9 +598,23 @@ describe('BlockScheduler trigger/force methods', () => {
   });
 
   describe('forceCommit', () => {
-    it('should return true when processApproval succeeds', async () => {
+    it('should return true when range matches next schedulable epoch and processApproval succeeds', async () => {
+      // mock default getDistributionStatus returns nextFromBlock:100, nextToBlock:200
       const result = await blockScheduler.forceCommit(100, 200);
       expect(result).toBe(true);
+    });
+
+    it('RWD-H-005: should refuse when supplied range does not match the next schedulable epoch', async () => {
+      // Next schedulable is 100-200; operator types 999-1000 by mistake.
+      // The old behaviour silently triggered processApproval() for the
+      // *actual* next epoch (100-200) and returned success with a
+      // misleading message. We now refuse.
+      const spy = jest.spyOn(epochProcessor, 'processApproval');
+
+      const result = await blockScheduler.forceCommit(999, 1000);
+
+      expect(result).toBe(false);
+      expect(spy).not.toHaveBeenCalled();
     });
 
     it('should return false and log when processApproval throws', async () => {
@@ -566,13 +634,22 @@ describe('BlockScheduler trigger/force methods', () => {
   });
 
   describe('forceDistribution', () => {
-    it('should return true when processDistribution succeeds', async () => {
+    it('should return true when range matches next schedulable epoch and processDistribution succeeds', async () => {
       const result = await blockScheduler.forceDistribution(100, 200);
       expect(result).toBe(true);
     });
 
+    it('RWD-H-005: should refuse when supplied range does not match the next schedulable epoch', async () => {
+      const spy = jest.spyOn(epochProcessor, 'processDistributionForRange');
+
+      const result = await blockScheduler.forceDistribution(42, 43);
+
+      expect(result).toBe(false);
+      expect(spy).not.toHaveBeenCalled();
+    });
+
     it('should return false and log when processDistribution throws', async () => {
-      jest.spyOn(epochProcessor, 'processDistribution').mockRejectedValue(
+      jest.spyOn(epochProcessor, 'processDistributionForRange').mockRejectedValue(
         new Error('Force distribution RPC error'),
       );
 
@@ -1373,15 +1450,7 @@ describe('EpochProcessor processApprovalWithMerkleTree - full flow', () => {
       { root: '0xmerkleroot', totalBatches: 3 },
       75,
     );
-    expect(mockDistributionService.uploadEpochDataToS3).toHaveBeenCalledWith(
-      100,
-      200,
-      '0xmerkleroot',
-      3,
-      workers,
-      { root: '0xmerkleroot', totalBatches: 3 },
-      75,
-    );
+    expect(mockDistributionService.uploadEpochDataToS3).not.toHaveBeenCalled();
   });
 
   it('should handle commitRootOnly failure', async () => {
@@ -2695,7 +2764,7 @@ describe('EpochProcessor processApproval full flow direct', () => {
     const m = base();
     expect(await make(m).processApproval()).toBe(true);
     expect(m.ds.commitRootOnly).toHaveBeenCalled();
-    expect(m.ds.uploadEpochDataToS3).toHaveBeenCalled();
+    expect(m.ds.uploadEpochDataToS3).not.toHaveBeenCalled();
   });
 
   it('commitRootOnly failure → false', async () => {
@@ -2706,6 +2775,7 @@ describe('EpochProcessor processApproval full flow direct', () => {
   it('S3 failure → still true', async () => {
     const m = base(); m.ds.uploadEpochDataToS3.mockRejectedValue(new Error('S3'));
     expect(await make(m).processApproval()).toBe(true);
+    expect(m.ds.uploadEpochDataToS3).not.toHaveBeenCalled();
   });
 
   it('non-committer + no commitment → true', async () => {
@@ -2724,10 +2794,9 @@ describe('EpochProcessor processApproval full flow direct', () => {
     expect(await make(m).processApproval()).toBe(true);
   });
 
-  it('should pass distributionBatchSize consistently to generateMerkleTreeOnly, commitRootOnly, and uploadEpochDataToS3', async () => {
+  it('should pass distributionBatchSize consistently to generateMerkleTreeOnly and commitRootOnly', async () => {
     const m = base();
     expect(await make(m).processApproval()).toBe(true);
-    // All calls should use the same batch size (75, from the mock's distributionBatchSize)
     expect(m.ds.generateMerkleTreeOnly).toHaveBeenCalledWith(
       expect.any(Array),
       75,
@@ -2741,13 +2810,6 @@ describe('EpochProcessor processApproval full flow direct', () => {
       expect.any(Object),
       75,      // batchSize must match
     );
-    expect(m.ds.uploadEpochDataToS3).toHaveBeenCalledWith(
-      100, 200,
-      '0xabc',
-      2,
-      expect.any(Array),
-      expect.any(Object),
-      75,      // batchSize must match
-    );
+    expect(m.ds.uploadEpochDataToS3).not.toHaveBeenCalled();
   });
 });

@@ -60,17 +60,6 @@ export class PublicController {
           true,
         );
 
-      // Get duration for APR calculation
-      const fromBlockInfo = await this.contractService.getL1Block(
-        ctx,
-        BigInt(fromBlockNum),
-      );
-      const toBlockInfo = await this.contractService.getL1Block(
-        ctx,
-        BigInt(toBlockNum),
-      );
-      const duration = Number(toBlockInfo.timestamp - fromBlockInfo.timestamp);
-
       const workers = result.workers.map((worker) => ({
         id: worker.id,
         workerReward: this.bn(worker.workerReward),

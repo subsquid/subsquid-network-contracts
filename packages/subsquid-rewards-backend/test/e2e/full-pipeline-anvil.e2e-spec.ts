@@ -246,7 +246,7 @@ beforeAll(async () => {
   // MerkleTreeService
   merkleTreeService = new MerkleTreeService({
     get: (key: string) => {
-      if (key === 'rewards.maxBatchSize') return 100;
+      if (key === 'rewards.commitmentBatchSize') return 100;
       return undefined;
     },
   } as any);

@@ -112,7 +112,14 @@ function createMockConfigService() {
           '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80',
         'blockchain.contracts.rewardsDistribution':
           '0x1234567890123456789012345678901234567890',
-        'blockchain.network.name': 'testnet',
+        'blockchain.network.networkName': 'testnet',
+        'rewards.commitmentBatchSize': parseInt(
+          process.env.COMMITMENT_BATCH_SIZE ||
+            process.env.DISTRIBUTION_BATCH_SIZE ||
+            process.env.MAX_BATCH_SIZE ||
+            '75',
+          10,
+        ),
       };
       return config[key] !== undefined ? config[key] : defaultValue;
     }),
@@ -125,6 +132,16 @@ function createMockContractService() {
     getBlockTimestamp: jest
       .fn()
       .mockResolvedValue(new Date('2024-01-01T00:00:00Z')),
+    getCommitmentV2: jest.fn().mockResolvedValue({
+      status: 0,
+      fromBlock: 0,
+      toBlock: 0,
+      merkleRoot: '0x0',
+      totalBatches: 0,
+      processedBatches: 0,
+      approvalCount: '0',
+      ipfsLink: '',
+    }),
   };
 }
 
@@ -198,18 +215,31 @@ function createMockCommitmentKeyService() {
 }
 
 function createMockS3Service(enabled = false) {
-  return {
+  let uploadedEpochData: any = null;
+  const s3Service = {
     isEnabled: jest.fn().mockReturnValue(enabled),
     generateS3Key: jest
       .fn()
-      .mockReturnValue('rewards/testnet/distributions/100-200.json'),
-    uploadEpochRewards: jest.fn().mockResolvedValue({
-      key: 'test.json',
-      url: 'https://s3/test.json',
+      .mockImplementation(
+        (network: string, fromBlock: number, toBlock: number) =>
+          `rewards/${network}/distributions/${fromBlock}-${toBlock}.json`,
+      ),
+    uploadEpochRewards: jest.fn().mockImplementation(async (epochData: any) => {
+      uploadedEpochData = epochData;
+      const key = s3Service.generateS3Key(
+        epochData.epochInfo.network,
+        epochData.epochInfo.fromBlock,
+        epochData.epochInfo.toBlock,
+      );
+      return {
+        key,
+        url: `https://s3/${key}`,
+      };
     }),
-    downloadJson: jest.fn().mockResolvedValue(null),
+    downloadJson: jest.fn().mockImplementation(async () => uploadedEpochData),
     checkFileExists: jest.fn().mockResolvedValue(false),
   };
+  return s3Service;
 }
 
 // ──────────────────────────────────────────────────────────────
@@ -283,7 +313,6 @@ function createService(overrides: Partial<MockServices> = {}): {
  */
 function setupFreshDistribution() {
   mockPublicClient.readContract
-    .mockResolvedValueOnce([0, 0n, 0n, '0x0', 0, 0, 0n, '']) // commitments check in distributeEpochRewards
     .mockResolvedValueOnce(true) // canCommit
     .mockResolvedValueOnce([0, 0n, 0n, '0x0', 0, 0, 0n, '']); // commitments check in commitMerkleRoot
 
@@ -320,16 +349,32 @@ function setupFreshDistribution() {
  * Sets up for resumeDistribution (existing commitment with matching root).
  */
 function setupResumeWithMatchingRoot() {
-  mockPublicClient.readContract.mockResolvedValueOnce([
-    1,
-    100n,
-    200n,
-    MERKLE_ROOT,
-    2,
-    0,
-    1n,
-    '',
-  ]);
+  mockPublicClient.simulateContract
+    .mockResolvedValueOnce({ request: 'distRequest1' })
+    .mockResolvedValueOnce({ request: 'distRequest2' });
+  mockWalletClient.writeContract
+    .mockResolvedValueOnce('0xbatch1hash')
+    .mockResolvedValueOnce('0xbatch2hash');
+  mockPublicClient.waitForTransactionReceipt
+    .mockResolvedValueOnce({
+      ...defaultReceipt,
+      transactionHash: '0xbatch1hash',
+    })
+    .mockResolvedValueOnce({
+      ...defaultReceipt,
+      transactionHash: '0xbatch2hash',
+    });
+
+  return {
+    status: 1,
+    fromBlock: 100,
+    toBlock: 200,
+    merkleRoot: MERKLE_ROOT,
+    totalBatches: 2,
+    processedBatches: 0,
+    approvalCount: '1',
+    ipfsLink: '',
+  };
 
   // Distribute batch 1
   mockPublicClient.simulateContract.mockResolvedValueOnce({
@@ -371,6 +416,10 @@ describe('DistributionService', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockPublicClient.readContract.mockReset();
+    mockPublicClient.simulateContract.mockReset();
+    mockPublicClient.waitForTransactionReceipt.mockReset();
+    mockWalletClient.writeContract.mockReset();
   });
 
   // ================================================================
@@ -563,8 +612,9 @@ describe('DistributionService', () => {
     });
 
     it('should skip S3 upload when S3 is disabled', async () => {
-      const s3Service = createMockS3Service(false);
+      const s3Service = createMockS3Service(true);
       const { service } = createService({ s3Service });
+      s3Service.isEnabled.mockReturnValue(false);
       setupFreshDistribution();
 
       await service.distributeEpochRewards(100, 200, 75);
@@ -582,21 +632,19 @@ describe('DistributionService', () => {
 
       const result = await service.distributeEpochRewards(100, 200, 75);
 
-      expect(result.status).toBe('completed');
+      expect(result.status).toBe('failed');
+      expect(result.error).toContain('S3 upload failed');
     });
 
-    it('should use S3 key from s3Service when S3 is enabled', async () => {
+    it('should read back the uploaded S3 artefact when S3 is enabled', async () => {
       const s3Service = createMockS3Service(true);
       const { service } = createService({ s3Service });
       setupFreshDistribution();
 
       await service.distributeEpochRewards(100, 200, 75);
 
-      expect(s3Service.generateS3Key).toHaveBeenCalledWith(
-        'testnet',
-        100,
-        200,
-      );
+      expect(s3Service.uploadEpochRewards).toHaveBeenCalled();
+      expect(s3Service.downloadJson).toHaveBeenCalled();
     });
   });
 
@@ -607,7 +655,9 @@ describe('DistributionService', () => {
   describe('distributeEpochRewards — resume distribution', () => {
     it('should resume when existing commitment matches reconstructed root', async () => {
       const { service, mocks } = createService();
-      setupResumeWithMatchingRoot();
+      mocks.contractService.getCommitmentV2.mockResolvedValueOnce(
+        setupResumeWithMatchingRoot(),
+      );
 
       const result = await service.distributeEpochRewards(100, 200, 75);
 
@@ -619,7 +669,7 @@ describe('DistributionService', () => {
     });
 
     it('should recover from S3 when reconstructed root does not match', async () => {
-      const s3Service = createMockS3Service(false);
+      const s3Service = createMockS3Service(true);
       const merkleTreeService = createMockMerkleTreeService();
 
       merkleTreeService.generateMerkleTree
@@ -637,18 +687,17 @@ describe('DistributionService', () => {
         merkleTree: { root: MERKLE_ROOT, totalBatches: 2, batchSize: 75 },
       });
 
-      const { service } = createService({ s3Service, merkleTreeService });
-
-      mockPublicClient.readContract.mockResolvedValueOnce([
-        1,
-        100n,
-        200n,
-        MERKLE_ROOT,
-        2,
-        0,
-        1n,
-        '',
-      ]);
+      const { service, mocks } = createService({ s3Service, merkleTreeService });
+      mocks.contractService.getCommitmentV2.mockResolvedValueOnce({
+        status: 1,
+        fromBlock: 100,
+        toBlock: 200,
+        merkleRoot: MERKLE_ROOT,
+        totalBatches: 2,
+        processedBatches: 0,
+        approvalCount: '1',
+        ipfsLink: '',
+      });
 
       mockPublicClient.simulateContract
         .mockResolvedValueOnce({ request: 'dist1' })
@@ -672,21 +721,20 @@ describe('DistributionService', () => {
         makeMerkleTreeResult('0xwrongroot'),
       );
 
-      const s3Service = createMockS3Service(false);
+      const s3Service = createMockS3Service(true);
       s3Service.downloadJson.mockResolvedValueOnce(null);
 
-      const { service } = createService({ s3Service, merkleTreeService });
-
-      mockPublicClient.readContract.mockResolvedValueOnce([
-        1,
-        100n,
-        200n,
-        MERKLE_ROOT,
-        2,
-        0,
-        1n,
-        '',
-      ]);
+      const { service, mocks } = createService({ s3Service, merkleTreeService });
+      mocks.contractService.getCommitmentV2.mockResolvedValueOnce({
+        status: 1,
+        fromBlock: 100,
+        toBlock: 200,
+        merkleRoot: MERKLE_ROOT,
+        totalBatches: 2,
+        processedBatches: 0,
+        approvalCount: '1',
+        ipfsLink: '',
+      });
 
       const result = await service.distributeEpochRewards(100, 200, 75);
 
@@ -702,7 +750,7 @@ describe('DistributionService', () => {
         .mockResolvedValueOnce(makeMerkleTreeResult('0xwrongroot'))
         .mockResolvedValueOnce(makeMerkleTreeResult('0xstillwrong'));
 
-      const s3Service = createMockS3Service(false);
+      const s3Service = createMockS3Service(true);
       s3Service.downloadJson.mockResolvedValueOnce({
         rawData: {
           totalWorkers: 2,
@@ -717,30 +765,33 @@ describe('DistributionService', () => {
         },
       });
 
-      const { service } = createService({ s3Service, merkleTreeService });
-
-      mockPublicClient.readContract.mockResolvedValueOnce([
-        1,
-        100n,
-        200n,
-        MERKLE_ROOT,
-        2,
-        0,
-        1n,
-        '',
-      ]);
+      const { service, mocks } = createService({ s3Service, merkleTreeService });
+      mocks.contractService.getCommitmentV2.mockResolvedValueOnce({
+        status: 1,
+        fromBlock: 100,
+        toBlock: 200,
+        merkleRoot: MERKLE_ROOT,
+        totalBatches: 2,
+        processedBatches: 0,
+        approvalCount: '1',
+        ipfsLink: '',
+      });
 
       const result = await service.distributeEpochRewards(100, 200, 75);
 
       expect(result.status).toBe('failed');
-      expect(result.error).toContain('Cannot recover');
+      expect(result.error).toContain(
+        'Cannot recover: merkle root mismatch and S3 recovery failed',
+      );
     });
 
     it('should upload to S3 during recovery when S3 is enabled', async () => {
       const s3Service = createMockS3Service(true);
-      const { service } = createService({ s3Service });
+      const { service, mocks } = createService({ s3Service });
 
-      setupResumeWithMatchingRoot();
+      mocks.contractService.getCommitmentV2.mockResolvedValueOnce(
+        setupResumeWithMatchingRoot(),
+      );
 
       await service.distributeEpochRewards(100, 200, 75);
 
@@ -753,12 +804,15 @@ describe('DistributionService', () => {
         new Error('S3 upload error'),
       );
 
-      const { service } = createService({ s3Service });
-      setupResumeWithMatchingRoot();
+      const { service, mocks } = createService({ s3Service });
+      mocks.contractService.getCommitmentV2.mockResolvedValueOnce(
+        setupResumeWithMatchingRoot(),
+      );
 
       const result = await service.distributeEpochRewards(100, 200, 75);
 
-      expect(result.status).toBe('completed');
+      expect(result.status).toBe('failed');
+      expect(result.error).toContain('S3 upload error');
     });
   });
 
@@ -1073,7 +1127,7 @@ describe('DistributionService', () => {
       expect(mockPublicClient.simulateContract).not.toHaveBeenCalled();
     });
 
-    it('should use S3 key when S3 is enabled and no ipfsLink provided', async () => {
+    it('should persist and read back the epoch artefact when S3 is enabled and no ipfsLink provided', async () => {
       const s3Service = createMockS3Service(true);
       const { service } = createService({ s3Service });
 
@@ -1089,13 +1143,28 @@ describe('DistributionService', () => {
         defaultReceipt,
       );
 
-      await service.commitRootOnly(100, 200, MERKLE_ROOT, 2);
-
-      expect(s3Service.generateS3Key).toHaveBeenCalledWith(
-        'testnet',
+      await service.commitRootOnly(
         100,
         200,
+        MERKLE_ROOT,
+        1,
+        '',
+        [
+          {
+            workerId: 1n,
+            id: 1n,
+            workerReward: 100n,
+            stakerReward: 50n,
+            stake: 1000n,
+            totalStake: 2000n,
+            calculationTime: 0,
+          },
+        ] as any,
+        makeMerkleTreeResult(MERKLE_ROOT, 1),
       );
+
+      expect(s3Service.uploadEpochRewards).toHaveBeenCalled();
+      expect(s3Service.downloadJson).toHaveBeenCalled();
     });
 
     it('should use provided ipfsLink when given', async () => {
@@ -1123,6 +1192,103 @@ describe('DistributionService', () => {
       );
 
       expect(mockPublicClient.simulateContract).toHaveBeenCalled();
+    });
+
+    // --- RWD-C-004: pre-commit sanity guard ---------------------------------
+    describe('pre-commit sanity guard (RWD-C-004)', () => {
+      it('should refuse to commit when workersData is an empty array', async () => {
+        const { service } = createService();
+
+        const result = await service.commitRootOnly(
+          100,
+          200,
+          MERKLE_ROOT,
+          2,
+          '',
+          [], // workersData: empty → guard must trip
+        );
+
+        expect(result.success).toBe(false);
+        // No on-chain simulation should even be attempted.
+        expect(mockPublicClient.simulateContract).not.toHaveBeenCalled();
+        expect(mockWalletClient.writeContract).not.toHaveBeenCalled();
+      });
+
+      it('should refuse to commit when every worker reward is zero', async () => {
+        const { service } = createService();
+
+        const zeroRewardWorkers = [
+          {
+            workerId: 1n,
+            id: 1n,
+            workerReward: 0n,
+            stakerReward: 0n,
+            stake: 100n,
+            totalStake: 100n,
+            calculationTime: 0,
+          },
+          {
+            workerId: 2n,
+            id: 2n,
+            workerReward: 0n,
+            stakerReward: 0n,
+            stake: 50n,
+            totalStake: 50n,
+            calculationTime: 0,
+          },
+        ];
+
+        const result = await service.commitRootOnly(
+          100,
+          200,
+          MERKLE_ROOT,
+          2,
+          '',
+          zeroRewardWorkers as any,
+        );
+
+        expect(result.success).toBe(false);
+        expect(mockPublicClient.simulateContract).not.toHaveBeenCalled();
+        expect(mockWalletClient.writeContract).not.toHaveBeenCalled();
+      });
+
+      it('should proceed when workers carry non-zero aggregate reward', async () => {
+        const { service } = createService();
+
+        mockPublicClient.readContract
+          .mockResolvedValueOnce(true)
+          .mockResolvedValueOnce([0, 0n, 0n, '0x0', 0, 0, 0n, '']);
+        mockPublicClient.simulateContract.mockResolvedValueOnce({
+          request: 'commitReq',
+        });
+        mockWalletClient.writeContract.mockResolvedValueOnce(TX_HASH);
+        mockPublicClient.waitForTransactionReceipt.mockResolvedValueOnce(
+          defaultReceipt,
+        );
+
+        const validWorkers = [
+          {
+            workerId: 1n,
+            id: 1n,
+            workerReward: 123n,
+            stakerReward: 45n,
+            stake: 100n,
+            totalStake: 100n,
+            calculationTime: 0,
+          },
+        ];
+
+        const result = await service.commitRootOnly(
+          100,
+          200,
+          MERKLE_ROOT,
+          2,
+          '',
+          validWorkers as any,
+        );
+
+        expect(result.success).toBe(true);
+      });
     });
   });
 
@@ -1338,7 +1504,7 @@ describe('DistributionService', () => {
         .mockResolvedValueOnce(makeMerkleTreeResult('0xwrongroot'))
         .mockResolvedValueOnce(makeMerkleTreeResult(MERKLE_ROOT));
 
-      const s3Service = createMockS3Service(false);
+      const s3Service = createMockS3Service(true);
       s3Service.downloadJson.mockResolvedValueOnce({
         rawData: {
           totalWorkers: 2,
@@ -1351,16 +1517,9 @@ describe('DistributionService', () => {
       });
 
       const { service } = createService({ s3Service, merkleTreeService });
-
-      mockPublicClient.simulateContract
-        .mockResolvedValueOnce({ request: 'dist1' })
-        .mockResolvedValueOnce({ request: 'dist2' });
-      mockWalletClient.writeContract
-        .mockResolvedValueOnce('0xb1')
-        .mockResolvedValueOnce('0xb2');
-      mockPublicClient.waitForTransactionReceipt
-        .mockResolvedValueOnce({ ...defaultReceipt, transactionHash: '0xb1' })
-        .mockResolvedValueOnce({ ...defaultReceipt, transactionHash: '0xb2' });
+      jest
+        .spyOn(service as any, 'distributeAndReport')
+        .mockResolvedValueOnce(true);
 
       const result = await service.distributeApprovedEpoch(
         100,
@@ -1377,7 +1536,7 @@ describe('DistributionService', () => {
         makeMerkleTreeResult('0xwrongroot'),
       );
 
-      const s3Service = createMockS3Service(false);
+      const s3Service = createMockS3Service(true);
       s3Service.downloadJson.mockResolvedValueOnce(null);
 
       const { service } = createService({ s3Service, merkleTreeService });
@@ -1551,12 +1710,13 @@ describe('DistributionService', () => {
       );
 
       expect(s3Service.uploadEpochRewards).toHaveBeenCalled();
-      expect(result).toBe('https://s3/test.json');
+      expect(result).toBe('https://s3/rewards/testnet/distributions/100-200.json');
     });
 
-    it('should return placeholder URL when S3 is disabled', async () => {
+    it('should throw when S3 is disabled', async () => {
       const s3Service = createMockS3Service(false);
       const { service } = createService({ s3Service });
+      s3Service.isEnabled.mockReturnValue(false);
 
       const workers = [
         {
@@ -1570,16 +1730,16 @@ describe('DistributionService', () => {
       ];
       const merkleTree = makeMerkleTreeResult();
 
-      const result = await service.uploadEpochDataToS3(
-        100,
-        200,
-        MERKLE_ROOT,
-        2,
-        workers as any,
-        merkleTree,
-      );
-
-      expect(result).toMatch(/^s3:\/\/rewards-100-200\.json$/);
+      await expect(
+        service.uploadEpochDataToS3(
+          100,
+          200,
+          MERKLE_ROOT,
+          2,
+          workers as any,
+          merkleTree,
+        ),
+      ).rejects.toThrow('S3 service disabled; cannot persist epoch artefact');
       expect(s3Service.uploadEpochRewards).not.toHaveBeenCalled();
     });
   });
@@ -1667,9 +1827,7 @@ describe('DistributionService', () => {
 
       const { service } = createService({ merkleTreeService });
 
-      // No existing commitment
       mockPublicClient.readContract
-        .mockResolvedValueOnce([0, 0n, 0n, '0x0', 0, 0, 0n, ''])
         .mockResolvedValueOnce(true) // canCommit
         .mockResolvedValueOnce([0, 0n, 0n, '0x0', 0, 0, 0n, '']); // commitment check
 
@@ -1722,7 +1880,7 @@ describe('DistributionService', () => {
         .mockResolvedValueOnce(makeMerkleTreeResult('0xwrongroot'))
         .mockResolvedValueOnce(makeMerkleTreeResult(MERKLE_ROOT));
 
-      const s3Service = createMockS3Service(false);
+      const s3Service = createMockS3Service(true);
       s3Service.downloadJson
         .mockResolvedValueOnce(null)
         .mockResolvedValueOnce({
@@ -1745,7 +1903,7 @@ describe('DistributionService', () => {
               '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80',
             'blockchain.contracts.rewardsDistribution':
               '0x1234567890123456789012345678901234567890',
-            'blockchain.network.name': 'localhost',
+            'blockchain.network.networkName': 'localhost',
           };
           return config[key] !== undefined ? config[key] : defaultValue;
         },
@@ -1756,25 +1914,33 @@ describe('DistributionService', () => {
         merkleTreeService,
         configService,
       });
+      jest
+        .spyOn(service as any, 'distributeAndReport')
+        .mockResolvedValueOnce(true);
 
-      mockPublicClient.simulateContract
-        .mockResolvedValueOnce({ request: 'dist1' })
-        .mockResolvedValueOnce({ request: 'dist2' });
-      mockWalletClient.writeContract
-        .mockResolvedValueOnce('0xb1')
-        .mockResolvedValueOnce('0xb2');
-      mockPublicClient.waitForTransactionReceipt
-        .mockResolvedValueOnce({ ...defaultReceipt, transactionHash: '0xb1' })
-        .mockResolvedValueOnce({ ...defaultReceipt, transactionHash: '0xb2' });
-
-      const result = await service.distributeApprovedEpoch(
+      await (service as any).recoverMerkleTreeFromS3(
+        {
+          logger: {
+            info: jest.fn(),
+            warn: jest.fn(),
+            error: jest.fn(),
+          },
+        },
         100,
         200,
-        MERKLE_ROOT,
       );
 
-      expect(result).toBe(true);
-      expect(s3Service.checkFileExists).toHaveBeenCalled();
+      expect(s3Service.generateS3Key).toHaveBeenCalledWith(
+        'localhost',
+        100,
+        200,
+      );
+      expect(s3Service.generateS3Key).toHaveBeenCalledWith(
+        'local',
+        100,
+        200,
+      );
+      expect(s3Service.downloadJson).toHaveBeenCalledTimes(2);
     });
 
     it('should return false when S3 data has invalid structure (missing rawData)', async () => {
@@ -1783,7 +1949,7 @@ describe('DistributionService', () => {
         makeMerkleTreeResult('0xwrongroot'),
       );
 
-      const s3Service = createMockS3Service(false);
+      const s3Service = createMockS3Service(true);
       s3Service.downloadJson.mockResolvedValueOnce({
         someOtherField: true,
       });
@@ -2065,17 +2231,16 @@ describe('DistributionService', () => {
     it('should resume from existing commitment with 1 of 2 batches already processed', async () => {
       const { service, mocks } = createService();
 
-      // Existing commitment: 1 batch already processed
-      mockPublicClient.readContract.mockResolvedValueOnce([
-        1,       // status: ACTIVE
-        100n,    // fromBlock
-        200n,    // toBlock
-        MERKLE_ROOT, // merkleRoot
-        2,       // totalBatches
-        1,       // processedBatches (1 already done!)
-        1n,      // approvalCount
-        '',      // ipfsLink
-      ]);
+      mocks.contractService.getCommitmentV2.mockResolvedValueOnce({
+        status: 1,
+        fromBlock: 100,
+        toBlock: 200,
+        merkleRoot: MERKLE_ROOT,
+        totalBatches: 2,
+        processedBatches: 1,
+        approvalCount: '1',
+        ipfsLink: '',
+      });
 
       // distributeBatches will try both batches; batch 1 already processed
       // Batch 1 simulate call should still work (distributeBatches handles BatchAlreadyProcessed)
@@ -2098,19 +2263,17 @@ describe('DistributionService', () => {
     });
 
     it('should complete status when all batches already processed in resume', async () => {
-      const { service } = createService();
-
-      // Existing commitment: all batches already processed
-      mockPublicClient.readContract.mockResolvedValueOnce([
-        1,       // status: ACTIVE
-        100n,    // fromBlock
-        200n,    // toBlock
-        MERKLE_ROOT,
-        2,       // totalBatches
-        2,       // processedBatches (all done!)
-        1n,
-        '',
-      ]);
+      const { service, mocks } = createService();
+      mocks.contractService.getCommitmentV2.mockResolvedValueOnce({
+        status: 1,
+        fromBlock: 100,
+        toBlock: 200,
+        merkleRoot: MERKLE_ROOT,
+        totalBatches: 2,
+        processedBatches: 2,
+        approvalCount: '1',
+        ipfsLink: '',
+      });
 
       // distributeBatches still tries to distribute but gets BatchAlreadyProcessed
       // Mock both batch attempts as successful (simulate + write + receipt)

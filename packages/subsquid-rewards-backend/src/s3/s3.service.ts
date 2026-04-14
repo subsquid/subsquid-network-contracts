@@ -176,7 +176,7 @@ export class S3Service implements OnModuleInit {
         `S3 service initialized - bucket: ${this.config.bucket}`,
       );
     } catch (error) {
-      this.logger.error('Failed to initialize S3 service', error);
+      this.logger.error({ error }, 'Failed to initialize S3 service');
 
       if (!this.s3Client) {
         this.s3Client = null;
@@ -276,7 +276,7 @@ export class S3Service implements OnModuleInit {
       } else if (error instanceof S3ServiceException) {
         this.logger.error(`S3 service error: ${error.message}`);
       } else {
-        this.logger.error('S3 health check failed', error);
+        this.logger.error({ error }, 'S3 health check failed');
       }
 
       return false;
@@ -448,7 +448,7 @@ export class S3Service implements OnModuleInit {
       };
     } catch (error) {
       const errorMessage = `Failed to upload epoch rewards to S3: ${error.message}`;
-      this.logger.error(errorMessage, error);
+      this.logger.error({ error, key }, errorMessage);
 
       throw new S3UploadError(errorMessage, key, error);
     }
@@ -498,7 +498,7 @@ export class S3Service implements OnModuleInit {
       }
 
       const errorMessage = `Failed to download from S3: ${error.message}`;
-      this.logger.error(errorMessage, error);
+      this.logger.error({ error, key }, errorMessage);
       throw new Error(errorMessage);
     }
   }
@@ -584,8 +584,8 @@ export class S3Service implements OnModuleInit {
       );
     } catch (error) {
       this.logger.error(
+        { error, prefix },
         `Failed to list files in S3 with prefix: ${prefix}`,
-        error,
       );
       return [];
     }

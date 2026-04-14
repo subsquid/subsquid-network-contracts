@@ -12,7 +12,10 @@ export const rewardsConfig = registerAs('rewards', () => ({
   requestPrice: parseInt(process.env.REQUEST_PRICE || '1', 10),
 
   workTimeout: parseInt(process.env.WORK_TIMEOUT_SECONDS || '300', 10) * 1000,
-  skipSignatureValidation: process.env.SKIP_SIGNATURE_VALIDATION === 'true',
+  // We intentionally run the backend in "skip validation" mode for now.
+  // Opting back into full libp2p signature verification requires restoring
+  // the exact v1 protobuf + peer-id verification path.
+  skipSignatureValidation: process.env.SKIP_SIGNATURE_VALIDATION !== 'false',
 
   // APR calculation method:
   // - 'contracts': Use contract-based APR calculation
@@ -24,14 +27,20 @@ export const rewardsConfig = registerAs('rewards', () => ({
     ? parseInt(process.env.BATCH_NUMBER, 10)
     : undefined,
   totalBatches: parseInt(process.env.TOTAL_BATCHES || '4', 10),
-  maxBatchSize: parseInt(process.env.MAX_BATCH_SIZE || '100', 10),
+  commitmentBatchSize: parseInt(
+    process.env.COMMITMENT_BATCH_SIZE ||
+      process.env.DISTRIBUTION_BATCH_SIZE ||
+      process.env.MAX_BATCH_SIZE ||
+      '75',
+    10,
+  ),
   maxGasPerBatch: parseInt(process.env.MAX_GAS_PER_BATCH || '10000000', 10),
   maxBatchesPerCommit: parseInt(
     process.env.MAX_BATCHES_PER_COMMIT || '256',
     10,
   ),
 
-  appPort: parseInt(process.env.APP_PORT || '3000', 10),
+  appPort: parseInt(process.env.PORT || process.env.APP_PORT || '3001', 10),
   logLevel: process.env.LOG_LEVEL || 'info',
   epochIntervalHours: parseInt(process.env.EPOCH_INTERVAL_HOURS || '1', 10),
 

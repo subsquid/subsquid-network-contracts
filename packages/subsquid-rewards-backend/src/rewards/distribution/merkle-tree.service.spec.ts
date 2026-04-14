@@ -14,7 +14,7 @@ describe('MerkleTreeService', () => {
           useValue: {
             get: (key: string, defaultValue?: any) => {
               const config: Record<string, any> = {
-                'rewards.maxBatchSize': 100,
+                'rewards.commitmentBatchSize': 100,
               };
               return config[key] ?? defaultValue;
             },
