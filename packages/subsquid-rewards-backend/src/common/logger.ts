@@ -5,7 +5,7 @@ import pinoms, { Level, prettyStream, Streams } from 'pino-multi-stream';
 import { createSentryTransport } from './pino-sentry';
 
 const prettyLog = process.env.NODE_ENV !== 'production';
-const logLevel = (process.env.LOG_LEVEL || 'debug') as Level;
+const logLevel = (process.env.LOG_LEVEL || 'info') as Level;
 
 export type Logger = pinoms.Logger;
 
