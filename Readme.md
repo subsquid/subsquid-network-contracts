@@ -1,10 +1,10 @@
 # Subsquid Network Contracts
 
 <p align="center">
-  <img src="https://subsquid.io/logo.png" height="200px" />
+  <img src="https://sqd.dev/brand/Logo_bl-bg.svg" height="100px" />
 </p>
 
-This is a monorepo that contains contracts and utils that enable [Subsquid](https://subsquid.io/) decentralised network
+This is a monorepo that contains contracts and utils that enable [Subsquid](https://sqd.dev/) decentralised network
 
 Subsquid uses [pnpm](https://pnpm.io/) as a package and monorepo manager.
 To install `pnpm`, run `npm install -g pnpm` or consult with [pnpm installation guide](https://pnpm.io/installation).
