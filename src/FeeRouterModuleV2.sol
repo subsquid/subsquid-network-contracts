@@ -6,7 +6,7 @@ import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import {IFeeRouter} from "./interfaces/IFeeRouter.sol";
+import {IFeeRouterV2} from "./interfaces/IFeeRouterV2.sol";
 import {IPancakeV3Router} from "./interfaces/IPancakeV3Router.sol";
 import {IPancakeV3Pool} from "./interfaces/IPancakeV3Pool.sol";
 import {IPancakeV3Factory} from "./interfaces/IPancakeV3Factory.sol";
@@ -21,12 +21,14 @@ import {TickMath} from "./libs/TickMath.sol";
  * workers + burn portions are swapped to SQD, then split proportionally.
  * e.g. (5000, 4500, 500) = 50% providers, 45% workers, 5% burn.
  */
-contract FeeRouterModuleV2 is AccessControl, Pausable, ReentrancyGuard, IFeeRouter {
+contract FeeRouterModuleV2 is AccessControl, Pausable, ReentrancyGuard, IFeeRouterV2 {
     using SafeERC20 for IERC20;
 
     uint256 public constant BASIS_POINTS = 10_000;
-    uint8 public constant SKIP_DISABLED = 0;
-    uint8 public constant SKIP_BELOW_THRESHOLD = 1;
+    /// @notice Hard cap on admin-settable slippage. Bounds MEV damage if the admin key is compromised.
+    uint16 public constant MAX_SLIPPAGE_BPS = 5000;
+    /// @notice Minimum TWAP window. Prevents the oracle from degrading into a spot-price check.
+    uint32 public constant MIN_TWAP_WINDOW = 600;
 
     FeeConfig public feeConfig;
 
@@ -35,65 +37,45 @@ contract FeeRouterModuleV2 is AccessControl, Pausable, ReentrancyGuard, IFeeRout
     IPancakeV3Router public pancakeRouter;
     IERC20 public sqd;
     address public weth;
+    /// @notice PancakeSwap V3 fee tier for the first hop in reward-token buybacks (`rewardToken -> WETH`)
+    /// @dev Reused for both swap execution and TWAP oracle pool lookup.
     uint24 public poolFee;
+    /// @notice PancakeSwap V3 fee tier for the second hop in reward-token buybacks (`WETH -> SQD`)
+    /// @dev Reused for both swap execution and TWAP oracle pool lookup.
     uint24 public poolFee2;
-    uint256 public minBuybackThreshold;
     bool public buybackEnabled;
-    bool public autoBuybackEnabled;
 
     IPancakeV3Factory public pancakeFactory;
-    uint24 public oraclePoolFee;
-    uint24 public oraclePoolFee2;
     uint32 public twapWindow;
     uint16 public maxSlippageBPS;
 
     mapping(address => bool) public allowedRewardTokens;
-    mapping(address => uint256) public accumulatedForBuyback;
-    address[] public accumulatedTokens;
-    mapping(address => bool) private _isAccumulatedToken;
-
-    event BuybackExecuted(
-        address indexed rewardToken, uint256 amountIn, uint256 sqdBought, uint256 toWorkerPool, uint256 toBurn
-    );
-    event BuybackSkipped(uint256 amount, uint8 reason);
-    event BuybackConfigured(address router, address sqd, address weth, uint24 fee1, uint24 fee2, uint256 minThreshold);
-    event BuybackEnabledChanged(bool enabled);
-    event AutoBuybackEnabledChanged(bool enabled);
-    event PoolFeeChanged(uint24 fee);
-    event PoolFee2Changed(uint24 fee);
-    event WethChanged(address weth);
-    event MinBuybackThresholdChanged(uint256 threshold);
-    event RewardTokenAllowed(address indexed token, bool allowed);
-    event TokensAccumulated(address indexed rewardToken, uint256 amount, uint256 totalAccumulated);
-    event SlippageProtectionConfigured(
-        address factory, uint24 oracleFee1, uint24 oracleFee2, uint32 window, uint16 slippage
-    );
-    event MaxSlippageChanged(uint16 oldValue, uint16 newValue);
-    event TwapWindowChanged(uint32 oldValue, uint32 newValue);
 
     constructor() {
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
-        feeConfig = FeeConfig({toProvidersBPS: 5000, toWorkerPoolBPS: 4500, toBurnBPS: 500});
+        feeConfig = FeeConfig({toProvidersBPS: uint16(BASIS_POINTS), toWorkerPoolBPS: 0, toBurnBPS: 0});
         sqdBurnAddress = address(0xdead);
         poolFee = 2500;
     }
 
     /**
-     * @dev calculates fee split. workers+burn are combined into toBurn for routing.
+     * @dev Calculates the provider leg and the combined protocol leg used by V2 routing.
      * @param amount total amount to split.
      * @return toProviders stablecoin amount kept for providers.
      * @return toWorkerPool always 0 (workers get sqd post-swap).
-     * @return toBurn combined amount to swap to sqd.
+     * @return toProtocolSwap combined amount routed through the worker/burn buyback path.
      */
     function calculateSplit(uint256 amount)
         external
         view
         override
-        returns (uint256 toProviders, uint256 toWorkerPool, uint256 toBurn)
+        returns (uint256 toProviders, uint256 toWorkerPool, uint256 toProtocolSwap)
     {
         toProviders = FullMath.mulDiv(amount, feeConfig.toProvidersBPS, BASIS_POINTS);
         toWorkerPool = 0;
-        toBurn = amount - toProviders;
+        unchecked {
+            toProtocolSwap = amount - toProviders;
+        }
     }
 
     /**
@@ -110,6 +92,9 @@ contract FeeRouterModuleV2 is AccessControl, Pausable, ReentrancyGuard, IFeeRout
         if (uint256(toProvidersBPS) + toWorkerPoolBPS + toBurnBPS != BASIS_POINTS) {
             revert PoolErrors.InvalidFeeConfig();
         }
+        if (toWorkerPoolBPS > 0 && workerPoolAddress == address(0)) {
+            revert PoolErrors.InvalidAddress();
+        }
 
         feeConfig = FeeConfig({toProvidersBPS: toProvidersBPS, toWorkerPoolBPS: toWorkerPoolBPS, toBurnBPS: toBurnBPS});
 
@@ -124,7 +109,8 @@ contract FeeRouterModuleV2 is AccessControl, Pausable, ReentrancyGuard, IFeeRout
     }
 
     /**
-     * @dev returns this contract's address. tokens accumulate here for buyback.
+     * @dev V2 routes the protocol leg to the router itself.
+     * The router swaps reward tokens to SQD, then sends final burned SQD to `sqdBurnAddress`.
      */
     function getBurnAddress() external view override returns (address) {
         return address(this);
@@ -132,81 +118,88 @@ contract FeeRouterModuleV2 is AccessControl, Pausable, ReentrancyGuard, IFeeRout
 
     /**
      * @dev routes tokens from caller to worker pool. caller must approve first.
-     * kept for IFeeRouter compat. not called in normal flow (calculateSplit returns toWorkerPool=0).
+     * not called in normal flow (calculateSplit returns toWorkerPool=0).
+     * restricted to whitelisted reward tokens for symmetry with routeToBurn and to avoid
+     * polluting worker pool accounting with arbitrary ERC20s.
      * @param rewardToken token to route.
      * @param amount amount to route.
      */
     function routeToWorkerPool(address rewardToken, uint256 amount) external whenNotPaused {
         if (amount == 0) return;
-        if (workerPoolAddress == address(0)) revert PoolErrors.InvalidAddress();
-        IERC20(rewardToken).safeTransferFrom(msg.sender, workerPoolAddress, amount);
+        if (!allowedRewardTokens[rewardToken]) revert PoolErrors.TokenNotAllowed();
+        address workerPool = workerPoolAddress;
+        if (workerPool == address(0)) revert PoolErrors.InvalidAddress();
+        IERC20(rewardToken).safeTransferFrom(msg.sender, workerPool, amount);
         emit RoutedToWorkerPool(msg.sender, rewardToken, amount);
     }
 
     /**
-     * @dev accumulates tokens for buyback. may trigger auto-buyback if enabled and above threshold.
-     * @param rewardToken token to accumulate.
-     * @param amount amount to accumulate.
+     * @dev routes tokens into an immediate buyback with TWAP slippage protection.
+     * reverts if TWAP protection is not configured for non-SQD inputs.
+     * @param rewardToken token to route.
+     * @param amount amount to route.
      */
     function routeToBurn(address rewardToken, uint256 amount) external whenNotPaused nonReentrant {
         if (amount == 0) return;
         if (!allowedRewardTokens[rewardToken]) revert PoolErrors.TokenNotAllowed();
 
+        uint256 received = _pullRewardTokenIn(rewardToken, amount);
+        emit RoutedToBurn(msg.sender, rewardToken, received);
+        _processBuyback(rewardToken, received);
+    }
+
+    function _pullRewardTokenIn(address rewardToken, uint256 amount) internal returns (uint256 received) {
         uint256 balanceBefore = IERC20(rewardToken).balanceOf(address(this));
         IERC20(rewardToken).safeTransferFrom(msg.sender, address(this), amount);
-        uint256 received = IERC20(rewardToken).balanceOf(address(this)) - balanceBefore;
+        return IERC20(rewardToken).balanceOf(address(this)) - balanceBefore;
+    }
 
-        accumulatedForBuyback[rewardToken] += received;
+    function _processBuyback(address rewardToken, uint256 amountIn) internal returns (uint256 sqdBought) {
+        if (amountIn == 0) return 0;
 
-        if (!_isAccumulatedToken[rewardToken]) {
-            accumulatedTokens.push(rewardToken);
-            _isAccumulatedToken[rewardToken] = true;
+        IERC20 sqdToken = sqd;
+        address sqdTokenAddress = address(sqdToken);
+
+        if (rewardToken == sqdTokenAddress) {
+            sqdBought = amountIn;
+            return _splitAndDistribute(rewardToken, amountIn, sqdBought, sqdToken);
         }
 
-        emit RoutedToBurn(msg.sender, rewardToken, received);
-        emit TokensAccumulated(rewardToken, received, accumulatedForBuyback[rewardToken]);
+        IPancakeV3Router router = pancakeRouter;
+        address routerAddress = address(router);
+        address wethToken = weth;
 
-        if (autoBuybackEnabled && accumulatedForBuyback[rewardToken] >= minBuybackThreshold) {
-            _executeBuybackInternal(rewardToken, 0);
+        if (!buybackEnabled || routerAddress == address(0) || sqdTokenAddress == address(0) || wethToken == address(0))
+        {
+            revert PoolErrors.BuybackDisabled();
         }
+
+        uint256 minSqdOut = resolveMinSqdOutFromTwap(rewardToken, amountIn, sqdTokenAddress, wethToken);
+
+        IERC20(rewardToken).forceApprove(routerAddress, amountIn);
+        sqdBought = _swapRewardTokenForSqd(router, rewardToken, amountIn, minSqdOut, sqdTokenAddress, wethToken);
+
+        return _splitAndDistribute(rewardToken, amountIn, sqdBought, sqdToken);
     }
 
     /**
-     * @dev swaps accumulated tokens to sqd and splits per config. callable by anyone.
+     * @dev swaps any current router balance to sqd and splits per config. callable by anyone.
+     * intended for sweeping accidental direct transfers or legacy balances.
      * @param rewardToken token to swap.
-     * @param minSqdOut minimum sqd out (slippage protection).
      * @return sqdBought total sqd purchased.
      */
-    function executeBuyback(address rewardToken, uint256 minSqdOut)
-        external
-        whenNotPaused
-        nonReentrant
-        returns (uint256 sqdBought)
-    {
+    function executeBuyback(address rewardToken) external whenNotPaused nonReentrant returns (uint256 sqdBought) {
         if (!allowedRewardTokens[rewardToken]) revert PoolErrors.TokenNotAllowed();
         uint256 balance = IERC20(rewardToken).balanceOf(address(this));
         if (balance == 0) revert PoolErrors.NothingToBuyback();
-        return _executeBuybackInternal(rewardToken, minSqdOut);
+        return _processBuyback(rewardToken, balance);
     }
 
     /**
-     * @dev returns pending buyback balance for a token.
+     * @dev returns current router balance for a token.
      */
     function getPendingBuyback(address rewardToken) external view returns (uint256) {
         return IERC20(rewardToken).balanceOf(address(this));
-    }
-
-    /**
-     * @dev returns all accumulated tokens and their balances.
-     */
-    function getAccumulatedTokens() external view returns (address[] memory tokens, uint256[] memory amounts) {
-        uint256 len = accumulatedTokens.length;
-        tokens = new address[](len);
-        amounts = new uint256[](len);
-        for (uint256 i = 0; i < len; ++i) {
-            tokens[i] = accumulatedTokens[i];
-            amounts[i] = IERC20(accumulatedTokens[i]).balanceOf(address(this));
-        }
     }
 
     /**
@@ -215,17 +208,9 @@ contract FeeRouterModuleV2 is AccessControl, Pausable, ReentrancyGuard, IFeeRout
     function getBuybackConfig()
         external
         view
-        returns (
-            address router,
-            address sqdToken,
-            address wethToken,
-            uint24 fee1,
-            uint24 fee2,
-            uint256 minThreshold,
-            bool enabled
-        )
+        returns (address router, address sqdToken, address wethToken, uint24 fee1, uint24 fee2, bool enabled)
     {
-        return (address(pancakeRouter), address(sqd), weth, poolFee, poolFee2, minBuybackThreshold, buybackEnabled);
+        return (address(pancakeRouter), address(sqd), weth, poolFee, poolFee2, buybackEnabled);
     }
 
     /**
@@ -236,25 +221,61 @@ contract FeeRouterModuleV2 is AccessControl, Pausable, ReentrancyGuard, IFeeRout
     }
 
     /**
+     * @notice Returns whether the TWAP-protected buyback path is ready for `rewardToken`.
+     * @dev Off-chain tooling can call this before invoking a top-up to surface a precise reason
+     *      when the oracle is not ready. Does not check pause state or router liveness.
+     * @param rewardToken reward token the operator intends to route.
+     * @return ok true when `routeToBurn(rewardToken, ...)` should succeed on the oracle path.
+     * @return reason granular readiness code (see `ReadyReason`).
+     */
+    function isSlippageProtectionReady(address rewardToken) external view returns (bool ok, ReadyReason reason) {
+        if (!allowedRewardTokens[rewardToken]) return (false, ReadyReason.TokenNotAllowed);
+
+        address sqdAddr = address(sqd);
+        if (rewardToken == sqdAddr) return (true, ReadyReason.Ready);
+
+        address wethAddr = weth;
+        if (!buybackEnabled || address(pancakeRouter) == address(0) || sqdAddr == address(0) || wethAddr == address(0))
+        {
+            return (false, ReadyReason.BuybackNotConfigured);
+        }
+
+        IPancakeV3Factory factory = pancakeFactory;
+        uint32 window = twapWindow;
+        if (address(factory) == address(0) || window == 0) {
+            return (false, ReadyReason.SlippageNotConfigured);
+        }
+
+        (bool wethSqdOk, bool wethSqdExists) = _probeOraclePool(factory, wethAddr, sqdAddr, poolFee2, window);
+        if (!wethSqdExists) return (false, ReadyReason.WethSqdPoolMissing);
+        if (!wethSqdOk) return (false, ReadyReason.WethSqdPoolNotReady);
+
+        if (rewardToken != wethAddr) {
+            (bool rewardWethOk, bool rewardWethExists) =
+                _probeOraclePool(factory, rewardToken, wethAddr, poolFee, window);
+            if (!rewardWethExists) return (false, ReadyReason.RewardWethPoolMissing);
+            if (!rewardWethOk) return (false, ReadyReason.RewardWethPoolNotReady);
+        }
+
+        return (true, ReadyReason.Ready);
+    }
+
+    /**
      * @dev configures buyback swap parameters.
      * @param _pancakeRouter pancakeswap v3 router address.
      * @param _sqd sqd token address.
      * @param _weth weth token address.
      * @param _poolFee fee tier for first hop (reward -> weth).
      * @param _poolFee2 fee tier for second hop (weth -> sqd).
-     * @param _minBuybackThreshold minimum balance to trigger buyback.
      */
-    function configureBuyback(
-        address _pancakeRouter,
-        address _sqd,
-        address _weth,
-        uint24 _poolFee,
-        uint24 _poolFee2,
-        uint256 _minBuybackThreshold
-    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function configureBuyback(address _pancakeRouter, address _sqd, address _weth, uint24 _poolFee, uint24 _poolFee2)
+        external
+        onlyRole(DEFAULT_ADMIN_ROLE)
+    {
         if (_pancakeRouter == address(0)) revert PoolErrors.InvalidAddress();
         if (_sqd == address(0)) revert PoolErrors.InvalidAddress();
         if (_weth == address(0)) revert PoolErrors.InvalidAddress();
+        if (_sqd == _weth) revert PoolErrors.InvalidTokenConfig();
         _validatePoolFee(_poolFee);
         _validatePoolFee(_poolFee2);
 
@@ -263,9 +284,8 @@ contract FeeRouterModuleV2 is AccessControl, Pausable, ReentrancyGuard, IFeeRout
         weth = _weth;
         poolFee = _poolFee;
         poolFee2 = _poolFee2;
-        minBuybackThreshold = _minBuybackThreshold;
 
-        emit BuybackConfigured(_pancakeRouter, _sqd, _weth, _poolFee, _poolFee2, _minBuybackThreshold);
+        emit BuybackConfigured(_pancakeRouter, _sqd, _weth, _poolFee, _poolFee2);
     }
 
     function setBuybackEnabled(bool enabled) external onlyRole(DEFAULT_ADMIN_ROLE) {
@@ -273,12 +293,8 @@ contract FeeRouterModuleV2 is AccessControl, Pausable, ReentrancyGuard, IFeeRout
         emit BuybackEnabledChanged(enabled);
     }
 
-    function setAutoBuybackEnabled(bool enabled) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        autoBuybackEnabled = enabled;
-        emit AutoBuybackEnabledChanged(enabled);
-    }
-
     function setAllowedRewardToken(address token, bool allowed) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (allowed && token == address(0)) revert PoolErrors.InvalidAddress();
         allowedRewardTokens[token] = allowed;
         emit RewardTokenAllowed(token, allowed);
     }
@@ -297,17 +313,14 @@ contract FeeRouterModuleV2 is AccessControl, Pausable, ReentrancyGuard, IFeeRout
 
     function setWeth(address _weth) external onlyRole(DEFAULT_ADMIN_ROLE) {
         if (_weth == address(0)) revert PoolErrors.InvalidAddress();
+        if (_weth == address(sqd)) revert PoolErrors.InvalidTokenConfig();
         weth = _weth;
         emit WethChanged(_weth);
     }
 
-    function setMinBuybackThreshold(uint256 _minBuybackThreshold) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        minBuybackThreshold = _minBuybackThreshold;
-        emit MinBuybackThresholdChanged(_minBuybackThreshold);
-    }
-
     function setBurnAddress(address newBurnAddress) external override onlyRole(DEFAULT_ADMIN_ROLE) {
         if (newBurnAddress == address(0)) revert PoolErrors.InvalidAddress();
+        if (newBurnAddress == address(this)) revert PoolErrors.InvalidAddress();
         sqdBurnAddress = newBurnAddress;
         emit BurnAddressUpdated(newBurnAddress);
     }
@@ -319,44 +332,39 @@ contract FeeRouterModuleV2 is AccessControl, Pausable, ReentrancyGuard, IFeeRout
     }
 
     /**
-     * @dev configures twap oracle for auto-buyback slippage protection.
+     * @dev Configures the TWAP oracle used by every non-SQD buyback path.
+     * The oracle reuses the configured execution fee tiers (`poolFee` and `poolFee2`).
+     *
      * @param _pancakeFactory pancakeswap v3 factory for pool lookup.
-     * @param _oraclePoolFee fee tier for rewardToken/weth oracle pool.
-     * @param _oraclePoolFee2 fee tier for weth/sqd oracle pool.
      * @param _twapWindow observation window in seconds (e.g. 1800 = 30min).
      * @param _maxSlippageBPS max allowed slippage in bps (e.g. 300 = 3%).
      */
-    function configureSlippageProtection(
-        address _pancakeFactory,
-        uint24 _oraclePoolFee,
-        uint24 _oraclePoolFee2,
-        uint32 _twapWindow,
-        uint16 _maxSlippageBPS
-    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function configureSlippageProtection(address _pancakeFactory, uint32 _twapWindow, uint16 _maxSlippageBPS)
+        external
+        onlyRole(DEFAULT_ADMIN_ROLE)
+    {
         if (_pancakeFactory == address(0)) revert PoolErrors.InvalidAddress();
-        if (_twapWindow == 0) revert PoolErrors.InvalidAmount();
-        if (_maxSlippageBPS > uint16(BASIS_POINTS)) revert PoolErrors.InvalidFeeConfig();
+        if (_twapWindow < MIN_TWAP_WINDOW) revert PoolErrors.InvalidAmount();
+        if (_maxSlippageBPS > MAX_SLIPPAGE_BPS) revert PoolErrors.InvalidFeeConfig();
+        _validatePoolFee(poolFee);
+        _validatePoolFee(poolFee2);
 
         pancakeFactory = IPancakeV3Factory(_pancakeFactory);
-        oraclePoolFee = _oraclePoolFee;
-        oraclePoolFee2 = _oraclePoolFee2;
         twapWindow = _twapWindow;
         maxSlippageBPS = _maxSlippageBPS;
 
-        emit SlippageProtectionConfigured(
-            _pancakeFactory, _oraclePoolFee, _oraclePoolFee2, _twapWindow, _maxSlippageBPS
-        );
+        emit SlippageProtectionConfigured(_pancakeFactory, poolFee, poolFee2, _twapWindow, _maxSlippageBPS);
     }
 
     function setMaxSlippageBPS(uint16 _maxSlippageBPS) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        if (_maxSlippageBPS > uint16(BASIS_POINTS)) revert PoolErrors.InvalidFeeConfig();
+        if (_maxSlippageBPS > MAX_SLIPPAGE_BPS) revert PoolErrors.InvalidFeeConfig();
         uint16 oldValue = maxSlippageBPS;
         maxSlippageBPS = _maxSlippageBPS;
         emit MaxSlippageChanged(oldValue, _maxSlippageBPS);
     }
 
     function setTwapWindow(uint32 _twapWindow) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        if (_twapWindow == 0) revert PoolErrors.InvalidAmount();
+        if (_twapWindow < MIN_TWAP_WINDOW) revert PoolErrors.InvalidAmount();
         uint32 oldValue = twapWindow;
         twapWindow = _twapWindow;
         emit TwapWindowChanged(oldValue, _twapWindow);
@@ -380,82 +388,60 @@ contract FeeRouterModuleV2 is AccessControl, Pausable, ReentrancyGuard, IFeeRout
         if (to == address(0)) revert PoolErrors.InvalidAddress();
         if (allowedRewardTokens[token]) revert PoolErrors.TokenNotAllowed();
         IERC20(token).safeTransfer(to, amount);
+        emit TokensRecovered(token, to, amount, false);
     }
 
     /**
-     * @dev swaps accumulated reward tokens to sqd via pancakeswap v3 multi-hop.
-     * splits purchased sqd proportionally between worker pool and burn per feeConfig.
-     * falls back to direct transfer if buyback is disabled or not configured.
-     * @param rewardToken token to swap.
-     * @param minSqdOut minimum sqd output (slippage protection).
-     * @return sqdBought total sqd purchased.
+     * @dev emergency recovery path for allowed reward tokens that are stuck in the contract
+     * (e.g. oracle/router misconfigured, buyback broken). requires paused state so
+     * no buyback flow can run concurrently and users can't route more during recovery.
+     * @param token allowed reward token to recover.
+     * @param to recipient address.
+     * @param amount amount to recover.
      */
-    function _executeBuybackInternal(address rewardToken, uint256 minSqdOut) internal returns (uint256 sqdBought) {
-        uint256 balance = IERC20(rewardToken).balanceOf(address(this));
-        if (balance == 0) return 0;
-
-        accumulatedForBuyback[rewardToken] = 0;
-
-        // if reward token is already sqd, skip swap — just split directly
-        if (rewardToken == address(sqd)) {
-            sqdBought = balance;
-            return _splitAndDistribute(rewardToken, balance, sqdBought);
-        }
-
-        if (!buybackEnabled || address(pancakeRouter) == address(0) || address(sqd) == address(0) || weth == address(0))
-        {
-            IERC20(rewardToken).safeTransfer(sqdBurnAddress, balance);
-            emit BuybackSkipped(balance, SKIP_DISABLED);
-            return 0;
-        }
-
-        if (balance < minBuybackThreshold) {
-            accumulatedForBuyback[rewardToken] = balance;
-            emit BuybackSkipped(balance, SKIP_BELOW_THRESHOLD);
-            return 0;
-        }
-
-        // if caller didn't specify minSqdOut, compute from twap oracle
-        if (minSqdOut == 0 && maxSlippageBPS > 0 && address(pancakeFactory) != address(0) && twapWindow > 0) {
-            minSqdOut = _computeTwapMinOut(rewardToken, balance);
-        }
-
-        IERC20(rewardToken).forceApprove(address(pancakeRouter), balance);
-
-        sqdBought = pancakeRouter.exactInput(
-            IPancakeV3Router.ExactInputParams({
-                path: abi.encodePacked(rewardToken, poolFee, weth, poolFee2, address(sqd)),
-                recipient: address(this),
-                amountIn: balance,
-                amountOutMinimum: minSqdOut
-            })
-        );
-
-        return _splitAndDistribute(rewardToken, balance, sqdBought);
+    function emergencyRecoverRewardToken(address token, address to, uint256 amount)
+        external
+        onlyRole(DEFAULT_ADMIN_ROLE)
+        whenPaused
+    {
+        if (to == address(0)) revert PoolErrors.InvalidAddress();
+        if (!allowedRewardTokens[token]) revert PoolErrors.TokenNotAllowed();
+        IERC20(token).safeTransfer(to, amount);
+        emit TokensRecovered(token, to, amount, true);
     }
 
     /**
      * @dev splits sqd between worker pool and burn per feeConfig ratio.
      */
-    function _splitAndDistribute(address rewardToken, uint256 amountIn, uint256 sqdAmount) internal returns (uint256) {
+    function _splitAndDistribute(address rewardToken, uint256 amountIn, uint256 sqdAmount, IERC20 sqdToken)
+        internal
+        returns (uint256)
+    {
         FeeConfig memory cfg = feeConfig;
-        uint256 protocolBPS = uint256(cfg.toWorkerPoolBPS) + cfg.toBurnBPS;
+        uint256 protocolBPS;
+        unchecked {
+            protocolBPS = uint256(cfg.toWorkerPoolBPS) + cfg.toBurnBPS;
+        }
 
         uint256 toWorkerPool;
         uint256 toBurn;
 
         if (protocolBPS > 0) {
             toWorkerPool = FullMath.mulDiv(sqdAmount, cfg.toWorkerPoolBPS, protocolBPS);
-            toBurn = sqdAmount - toWorkerPool;
+            unchecked {
+                toBurn = sqdAmount - toWorkerPool;
+            }
         } else {
             toBurn = sqdAmount;
         }
 
-        if (toWorkerPool > 0 && workerPoolAddress != address(0)) {
-            sqd.safeTransfer(workerPoolAddress, toWorkerPool);
+        address workerPool = workerPoolAddress;
+        if (toWorkerPool > 0) {
+            if (workerPool == address(0)) revert PoolErrors.InvalidAddress();
+            sqdToken.safeTransfer(workerPool, toWorkerPool);
         }
         if (toBurn > 0) {
-            sqd.safeTransfer(sqdBurnAddress, toBurn);
+            sqdToken.safeTransfer(sqdBurnAddress, toBurn);
         }
 
         emit BuybackExecuted(rewardToken, amountIn, sqdAmount, toWorkerPool, toBurn);
@@ -463,43 +449,62 @@ contract FeeRouterModuleV2 is AccessControl, Pausable, ReentrancyGuard, IFeeRout
     }
 
     /**
-     * @dev computes minimum sqd output from twap oracle for slippage protection.
-     * reads twap ticks from both hops (rewardToken/weth + weth/sqd), converts to price,
-     * and applies maxSlippageBPS tolerance.
+     * @dev Resolves a TWAP-based minimum SQD output for `rewardToken -> WETH -> SQD`.
+     * The two hop ticks are added after normalization, then reduced by `maxSlippageBPS`.
      */
-    function _computeTwapMinOut(address rewardToken, uint256 amountIn) internal view returns (uint256) {
-        int24 tick1 = _getTwapTick(rewardToken, weth, oraclePoolFee);
-        int24 tick2 = _getTwapTick(weth, address(sqd), oraclePoolFee2);
+    function resolveMinSqdOutFromTwap(address rewardToken, uint256 amountIn, address sqdTokenAddress, address wethToken)
+        public
+        view
+        returns (uint256)
+    {
+        IPancakeV3Factory factory = pancakeFactory;
+        uint32 window = twapWindow;
+        if (address(factory) == address(0) || window == 0) {
+            revert PoolErrors.SlippageProtectionNotConfigured();
+        }
+        uint24 fee1 = poolFee;
+        uint24 fee2 = poolFee2;
+        uint16 slippage = maxSlippageBPS;
 
-        // combined tick represents the full path price
-        int24 combinedTick = tick1 + tick2;
+        int24 combinedTick;
+        if (rewardToken == wethToken) {
+            combinedTick = _getTwapTick(factory, window, wethToken, sqdTokenAddress, fee2);
+        } else {
+            int24 tick1 = _getTwapTick(factory, window, rewardToken, wethToken, fee1);
+            int24 tick2 = _getTwapTick(factory, window, wethToken, sqdTokenAddress, fee2);
+            unchecked {
+                combinedTick = tick1 + tick2;
+            }
+        }
 
-        // convert tick to price: price = 1.0001^tick
-        // for amountOut: if tick is negative, output > input (token0 cheaper than token1)
-        // use the standard tick-to-sqrtPrice approximation
         uint256 expectedOut = _getAmountFromTick(amountIn, combinedTick);
-
-        // apply slippage tolerance
-        return FullMath.mulDiv(expectedOut, BASIS_POINTS - maxSlippageBPS, BASIS_POINTS);
+        return FullMath.mulDiv(expectedOut, BASIS_POINTS - slippage, BASIS_POINTS);
     }
 
     /**
      * @dev reads twap tick from a pancakeswap v3 pool over the configured window.
      */
-    function _getTwapTick(address tokenA, address tokenB, uint24 fee) internal view returns (int24) {
-        address pool = pancakeFactory.getPool(tokenA, tokenB, fee);
-        if (pool == address(0)) return 0;
+    function _getTwapTick(IPancakeV3Factory factory, uint32 window, address tokenA, address tokenB, uint24 fee)
+        internal
+        view
+        returns (int24)
+    {
+        address pool = factory.getPool(tokenA, tokenB, fee);
+        if (pool == address(0)) revert PoolErrors.InvalidPool();
 
         uint32[] memory secondsAgos = new uint32[](2);
-        secondsAgos[0] = twapWindow;
+        secondsAgos[0] = window;
         secondsAgos[1] = 0;
 
         (int56[] memory tickCumulatives,) = IPancakeV3Pool(pool).observe(secondsAgos);
 
         int56 tickDelta = tickCumulatives[1] - tickCumulatives[0];
-        int24 twapTick = int24(tickDelta / int56(int32(twapWindow)));
+        int56 timeDelta = int56(uint56(window));
+        int24 twapTick = int24(tickDelta / timeDelta);
+        if (tickDelta < 0 && (tickDelta % timeDelta != 0)) {
+            --twapTick;
+        }
 
-        // adjust sign: if tokenA > tokenB, pool stores inverted tick
         if (tokenA > tokenB) {
             twapTick = -twapTick;
         }
@@ -508,24 +513,49 @@ contract FeeRouterModuleV2 is AccessControl, Pausable, ReentrancyGuard, IFeeRout
     }
 
     /**
+     * @dev Probes a single oracle pool for existence and ability to serve a TWAP over `window`.
+     * @return ok true when `observe([window, 0])` would succeed against this pool.
+     * @return exists false when the factory has no pool for this (tokenA, tokenB, fee) tuple.
+     */
+    function _probeOraclePool(IPancakeV3Factory factory, address tokenA, address tokenB, uint24 fee, uint32 window)
+        internal
+        view
+        returns (bool ok, bool exists)
+    {
+        address pool = factory.getPool(tokenA, tokenB, fee);
+        if (pool == address(0)) return (false, false);
+        exists = true;
+
+        uint32[] memory secondsAgos = new uint32[](2);
+        secondsAgos[0] = window;
+        secondsAgos[1] = 0;
+
+        try IPancakeV3Pool(pool).observe(secondsAgos) returns (int56[] memory, uint160[] memory) {
+            ok = true;
+        } catch {
+            ok = false;
+        }
+    }
+
+    /**
      * @dev converts a tick to an expected output amount using TickMath.
-     * price = (sqrtPrice / 2^96)^2, so amountOut = amountIn / price.
-     * @param amountIn input amount.
-     * @param tick combined twap tick.
-     * @return expected output amount.
+     * price = (sqrtPrice / 2^96)^2, so amountOut = amountIn * price.
+     * V3 ticks already encode the raw-unit price ratio, so no extra decimals normalization is needed.
+     * @param amountIn input amount (raw units of input token).
+     * @param tick combined twap tick (sign-normalized for input -> output direction).
+     * @return expected output amount (raw units of output token).
      */
     function _getAmountFromTick(uint256 amountIn, int24 tick) internal pure returns (uint256) {
-        // get sqrtPriceX96 from tick using PancakeSwap's TickMath
         uint160 sqrtPriceX96 = TickMath.getSqrtRatioAtTick(tick);
 
         // price = (sqrtPriceX96 / 2^96)^2 = sqrtPriceX96^2 / 2^192
-        // amountOut = amountIn / price = amountIn * 2^192 / sqrtPriceX96^2
-        if (sqrtPriceX96 <= type(uint128).max) {
+        // amountOut = amountIn * price = amountIn * sqrtPriceX96^2 / 2^192
+        if (sqrtPriceX96 < (1 << 128)) {
             uint256 priceX192 = uint256(sqrtPriceX96) * sqrtPriceX96;
-            return FullMath.mulDiv(amountIn, 1 << 192, priceX192);
+            return FullMath.mulDiv(amountIn, priceX192, 1 << 192);
         } else {
             uint256 priceX128 = FullMath.mulDiv(uint256(sqrtPriceX96), sqrtPriceX96, 1 << 64);
-            return FullMath.mulDiv(amountIn, 1 << 128, priceX128);
+            return FullMath.mulDiv(amountIn, priceX128, 1 << 128);
         }
     }
 
@@ -533,5 +563,41 @@ contract FeeRouterModuleV2 is AccessControl, Pausable, ReentrancyGuard, IFeeRout
         if (fee != 100 && fee != 500 && fee != 2500 && fee != 10000) {
             revert PoolErrors.InvalidPoolFee();
         }
+    }
+
+    function _swapRewardTokenForSqd(
+        IPancakeV3Router router,
+        address rewardToken,
+        uint256 amountIn,
+        uint256 minSqdOut,
+        address sqdTokenAddress,
+        address wethToken
+    ) internal returns (uint256 sqdBought) {
+        if (rewardToken == wethToken) {
+            uint24 fee = poolFee2;
+
+            return router.exactInputSingle(
+                IPancakeV3Router.ExactInputSingleParams({
+                    tokenIn: rewardToken,
+                    tokenOut: sqdTokenAddress,
+                    fee: fee,
+                    recipient: address(this),
+                    deadline: block.timestamp,
+                    amountIn: amountIn,
+                    amountOutMinimum: minSqdOut,
+                    sqrtPriceLimitX96: 0
+                })
+            );
+        }
+
+        return router.exactInput(
+            IPancakeV3Router.ExactInputParams({
+                path: abi.encodePacked(rewardToken, poolFee, wethToken, poolFee2, sqdTokenAddress),
+                recipient: address(this),
+                deadline: block.timestamp,
+                amountIn: amountIn,
+                amountOutMinimum: minSqdOut
+            })
+        );
     }
 }

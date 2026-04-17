@@ -11,6 +11,7 @@ interface IPancakeV3Router {
         address tokenOut;
         uint24 fee;
         address recipient;
+        uint256 deadline;
         uint256 amountIn;
         uint256 amountOutMinimum;
         uint160 sqrtPriceLimitX96;
@@ -22,10 +23,10 @@ interface IPancakeV3Router {
     function exactInputSingle(ExactInputSingleParams calldata params) external payable returns (uint256 amountOut);
 
     /// @notice Parameters for multi-hop exact input swap
-    /// @dev PancakeSwap V3 SmartRouter does NOT include deadline in this struct
     struct ExactInputParams {
         bytes path;
         address recipient;
+        uint256 deadline;
         uint256 amountIn;
         uint256 amountOutMinimum;
     }

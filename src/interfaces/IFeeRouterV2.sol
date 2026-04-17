@@ -1,61 +1,100 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.28;
 
-import {IFeeRouter} from "./IFeeRouter.sol";
+/// @title IFeeRouterV2
+/// @notice Fee router interface with buyback and TWAP slippage controls
+interface IFeeRouterV2 {
+    struct FeeConfig {
+        uint16 toProvidersBPS;
+        uint16 toWorkerPoolBPS;
+        uint16 toBurnBPS;
+    }
 
-/// @title IFeeRouterV2 Interface
-/// @notice Extended fee router interface with buyback functionality
-interface IFeeRouterV2 is IFeeRouter {
-    /// @notice Routes fees with automatic SQD buyback for the burn portion
-    /// @param rewardToken The reward token being distributed (e.g., USDC)
-    /// @param amount The total amount to route
-    /// @param workerPoolAddress Where to send the worker pool portion
-    /// @param minSqdOut Minimum SQD to receive from buyback (0 = use default slippage)
-    /// @return toProviders Amount returned to pool for provider distribution
-    /// @return toWorkerPool Amount sent to worker pool
-    /// @return sqdBought Amount of SQD bought and burned (0 if buyback skipped)
-    function routeFeesWithBuyback(address rewardToken, uint256 amount, address workerPoolAddress, uint256 minSqdOut)
+    /// @notice Granular readiness codes returned by `isSlippageProtectionReady`.
+    enum ReadyReason {
+        Ready,
+        TokenNotAllowed,
+        BuybackNotConfigured,
+        SlippageNotConfigured,
+        WethSqdPoolMissing,
+        RewardWethPoolMissing,
+        WethSqdPoolNotReady,
+        RewardWethPoolNotReady
+    }
+
+    event FeeConfigUpdated(uint16 toProviders, uint16 toWorkerPool, uint16 toBurn);
+    event BurnAddressUpdated(address burnAddress);
+    event WorkerPoolAddressUpdated(address workerPoolAddress);
+    event RoutedToWorkerPool(address indexed from, address indexed rewardToken, uint256 amount);
+    event RoutedToBurn(address indexed from, address indexed rewardToken, uint256 amount);
+    event BuybackExecuted(
+        address indexed rewardToken, uint256 amountIn, uint256 sqdBought, uint256 toWorkerPool, uint256 toBurn
+    );
+    event BuybackConfigured(address router, address sqd, address weth, uint24 fee1, uint24 fee2);
+    event BuybackEnabledChanged(bool enabled);
+    event PoolFeeChanged(uint24 fee);
+    event PoolFee2Changed(uint24 fee);
+    event WethChanged(address weth);
+    event RewardTokenAllowed(address indexed token, bool allowed);
+    event SlippageProtectionConfigured(address factory, uint24 fee1, uint24 fee2, uint32 window, uint16 slippage);
+    event MaxSlippageChanged(uint16 oldValue, uint16 newValue);
+    event TwapWindowChanged(uint32 oldValue, uint32 newValue);
+    event TokensRecovered(address indexed token, address indexed to, uint256 amount, bool emergency);
+
+    function calculateSplit(uint256 amount)
         external
-        returns (uint256 toProviders, uint256 toWorkerPool, uint256 sqdBought);
+        view
+        returns (uint256 toProviders, uint256 toWorkerPool, uint256 toBurn);
 
-    /// @notice Configures buyback parameters
-    /// @param pancakeRouter PancakeSwap V3 SmartRouter address
-    /// @param sqd SQD token address
-    /// @param poolFee Pool fee tier (100, 500, 2500, or 10000)
-    /// @param slippageBPS Maximum slippage in basis points
-    /// @param minBuybackThreshold Minimum amount to trigger buyback
-    function configureBuyback(
-        address pancakeRouter,
-        address sqd,
-        uint24 poolFee,
-        uint16 slippageBPS,
-        uint256 minBuybackThreshold
-    ) external;
+    function setFeeConfig(uint16 toProvidersBPS, uint16 toWorkerPoolBPS, uint16 toBurnBPS) external;
 
-    /// @notice Enables or disables buyback functionality
-    function setBuybackEnabled(bool enabled) external;
+    function getFeeConfig() external view returns (FeeConfig memory);
 
-    /// @notice Returns current buyback configuration
+    function setBurnAddress(address newBurnAddress) external;
+
+    function getBurnAddress() external view returns (address);
+
+    function setWorkerPoolAddress(address workerPool) external;
+
+    function getWorkerPoolAddress() external view returns (address);
+
+    function routeToWorkerPool(address rewardToken, uint256 amount) external;
+
+    function routeToBurn(address rewardToken, uint256 amount) external;
+
+    function executeBuyback(address rewardToken) external returns (uint256 sqdBought);
+
+    function getPendingBuyback(address rewardToken) external view returns (uint256);
+
     function getBuybackConfig()
         external
         view
-        returns (address router, address sqdToken, uint24 fee, uint16 slippage, uint256 minThreshold, bool enabled);
+        returns (address router, address sqdToken, address wethToken, uint24 fee1, uint24 fee2, bool enabled);
 
-    /// @notice Emitted when a buyback is executed
-    event BuybackExecuted(address indexed rewardToken, uint256 amountIn, uint256 sqdBought, address indexed recipient);
+    function configureBuyback(address pancakeRouter, address sqd, address weth, uint24 poolFee, uint24 poolFee2)
+        external;
 
-    /// @notice Emitted when buyback config is updated
-    event BuybackConfigUpdated(
-        address indexed pancakeRouter,
-        address indexed sqd,
-        uint24 poolFee,
-        uint16 slippageBPS,
-        uint256 minBuybackThreshold
-    );
+    function setBuybackEnabled(bool enabled) external;
 
-    /// @notice Emitted when buyback is enabled/disabled
-    event BuybackEnabledChanged(bool enabled);
+    function setAllowedRewardToken(address token, bool allowed) external;
 
-    /// @notice Emitted when buyback is skipped
-    event BuybackSkipped(uint256 amount, string reason);
+    function setPoolFee(uint24 poolFee) external;
+
+    function setPoolFee2(uint24 poolFee2) external;
+
+    function setWeth(address weth) external;
+
+    function configureSlippageProtection(address pancakeFactory, uint32 twapWindow, uint16 maxSlippageBPS) external;
+
+    function setMaxSlippageBPS(uint16 maxSlippageBPS) external;
+
+    function setTwapWindow(uint32 twapWindow) external;
+
+    function isSlippageProtectionReady(address rewardToken) external view returns (bool ok, ReadyReason reason);
+
+    function recoverTokens(address token, address to, uint256 amount) external;
+
+    function pause() external;
+
+    function unpause() external;
 }
