@@ -47,6 +47,7 @@ library PoolErrors {
     // Validation errors
     error InvalidAmount();
     error InvalidAddress();
+    error AddressAlreadySet();
     error BelowMinimum();
     error AboveMaximum();
     error BelowCurrentStake();

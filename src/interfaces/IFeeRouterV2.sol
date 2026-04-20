@@ -35,8 +35,11 @@ interface IFeeRouterV2 {
     event PoolFeeChanged(uint24 fee);
     event PoolFee2Changed(uint24 fee);
     event WethChanged(address weth);
+    event SqdChanged(address sqd);
+    event PancakeRouterChanged(address pancakeRouter);
+    event PancakeFactoryChanged(address pancakeFactory);
     event RewardTokenAllowed(address indexed token, bool allowed);
-    event SlippageProtectionConfigured(address factory, uint24 fee1, uint24 fee2, uint32 window, uint16 slippage);
+    event SlippageProtectionConfigured(uint24 fee1, uint24 fee2, uint32 window, uint16 slippage);
     event MaxSlippageChanged(uint16 oldValue, uint16 newValue);
     event TwapWindowChanged(uint32 oldValue, uint32 newValue);
     event TokensRecovered(address indexed token, address indexed to, uint256 amount, bool emergency);
@@ -84,7 +87,13 @@ interface IFeeRouterV2 {
 
     function setWeth(address weth) external;
 
-    function configureSlippageProtection(address pancakeFactory, uint32 twapWindow, uint16 maxSlippageBPS) external;
+    function setSqd(address sqd) external;
+
+    function setPancakeRouter(address pancakeRouter) external;
+
+    function setPancakeFactory(address pancakeFactory) external;
+
+    function configureSlippageProtection(uint32 twapWindow, uint16 maxSlippageBPS) external;
 
     function setMaxSlippageBPS(uint16 maxSlippageBPS) external;
 

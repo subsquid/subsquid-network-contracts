@@ -51,11 +51,21 @@ contract FeeRouterModuleV2 is AccessControl, Pausable, ReentrancyGuard, IFeeRout
 
     mapping(address => bool) public allowedRewardTokens;
 
-    constructor() {
+    constructor(address _pancakeRouter, address _pancakeFactory, address _sqd, address _weth) {
+        if (_pancakeRouter == address(0)) revert PoolErrors.InvalidAddress();
+        if (_sqd == address(0)) revert PoolErrors.InvalidAddress();
+        if (_weth == address(0)) revert PoolErrors.InvalidAddress();
+        if (_sqd == _weth) revert PoolErrors.InvalidTokenConfig();
+        if (_pancakeFactory == address(0)) revert PoolErrors.InvalidAddress();
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
+        pancakeRouter = IPancakeV3Router(_pancakeRouter);
+        sqd = IERC20(_sqd);
+        pancakeFactory = IPancakeV3Factory(_pancakeFactory);
+        weth = _weth;
         feeConfig = FeeConfig({toProvidersBPS: uint16(BASIS_POINTS), toWorkerPoolBPS: 0, toBurnBPS: 0});
         sqdBurnAddress = address(0xdead);
         poolFee = 2500;
+        poolFee2 = 10000;
     }
 
     /**
@@ -311,6 +321,25 @@ contract FeeRouterModuleV2 is AccessControl, Pausable, ReentrancyGuard, IFeeRout
         emit PoolFee2Changed(_poolFee2);
     }
 
+    function setPancakeRouter(address _pancakeRouter) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (_pancakeRouter == address(0)) revert PoolErrors.InvalidAddress();
+        pancakeRouter = IPancakeV3Router(_pancakeRouter);
+        emit PancakeRouterChanged(_pancakeRouter);
+    }
+
+    function setSqd(address _sqd) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (_sqd == address(0)) revert PoolErrors.InvalidAddress();
+        if (_sqd == weth) revert PoolErrors.InvalidTokenConfig();
+        sqd = IERC20(_sqd);
+        emit SqdChanged(_sqd);
+    }
+
+    function setPancakeFactory(address _pancakeFactory) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (_pancakeFactory == address(0)) revert PoolErrors.InvalidAddress();
+        pancakeFactory = IPancakeV3Factory(_pancakeFactory);
+        emit PancakeFactoryChanged(_pancakeFactory);
+    }
+
     function setWeth(address _weth) external onlyRole(DEFAULT_ADMIN_ROLE) {
         if (_weth == address(0)) revert PoolErrors.InvalidAddress();
         if (_weth == address(sqd)) revert PoolErrors.InvalidTokenConfig();
@@ -318,15 +347,16 @@ contract FeeRouterModuleV2 is AccessControl, Pausable, ReentrancyGuard, IFeeRout
         emit WethChanged(_weth);
     }
 
-    function setBurnAddress(address newBurnAddress) external override onlyRole(DEFAULT_ADMIN_ROLE) {
-        if (newBurnAddress == address(0)) revert PoolErrors.InvalidAddress();
-        if (newBurnAddress == address(this)) revert PoolErrors.InvalidAddress();
-        sqdBurnAddress = newBurnAddress;
-        emit BurnAddressUpdated(newBurnAddress);
+    function setBurnAddress(address _newBurnAddress) external override onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (_newBurnAddress == address(0)) revert PoolErrors.InvalidAddress();
+        if (_newBurnAddress == address(this)) revert PoolErrors.InvalidAddress();
+        sqdBurnAddress = _newBurnAddress;
+        emit BurnAddressUpdated(_newBurnAddress);
     }
 
     function setWorkerPoolAddress(address _workerPoolAddress) external onlyRole(DEFAULT_ADMIN_ROLE) {
         if (_workerPoolAddress == address(0)) revert PoolErrors.InvalidAddress();
+        if (_workerPoolAddress == address(this)) revert PoolErrors.InvalidAddress();
         workerPoolAddress = _workerPoolAddress;
         emit WorkerPoolAddressUpdated(_workerPoolAddress);
     }
@@ -335,25 +365,22 @@ contract FeeRouterModuleV2 is AccessControl, Pausable, ReentrancyGuard, IFeeRout
      * @dev Configures the TWAP oracle used by every non-SQD buyback path.
      * The oracle reuses the configured execution fee tiers (`poolFee` and `poolFee2`).
      *
-     * @param _pancakeFactory pancakeswap v3 factory for pool lookup.
      * @param _twapWindow observation window in seconds (e.g. 1800 = 30min).
      * @param _maxSlippageBPS max allowed slippage in bps (e.g. 300 = 3%).
      */
-    function configureSlippageProtection(address _pancakeFactory, uint32 _twapWindow, uint16 _maxSlippageBPS)
+    function configureSlippageProtection(uint32 _twapWindow, uint16 _maxSlippageBPS)
         external
         onlyRole(DEFAULT_ADMIN_ROLE)
     {
-        if (_pancakeFactory == address(0)) revert PoolErrors.InvalidAddress();
         if (_twapWindow < MIN_TWAP_WINDOW) revert PoolErrors.InvalidAmount();
         if (_maxSlippageBPS > MAX_SLIPPAGE_BPS) revert PoolErrors.InvalidFeeConfig();
         _validatePoolFee(poolFee);
         _validatePoolFee(poolFee2);
 
-        pancakeFactory = IPancakeV3Factory(_pancakeFactory);
         twapWindow = _twapWindow;
         maxSlippageBPS = _maxSlippageBPS;
 
-        emit SlippageProtectionConfigured(_pancakeFactory, poolFee, poolFee2, _twapWindow, _maxSlippageBPS);
+        emit SlippageProtectionConfigured(poolFee, poolFee2, _twapWindow, _maxSlippageBPS);
     }
 
     function setMaxSlippageBPS(uint16 _maxSlippageBPS) external onlyRole(DEFAULT_ADMIN_ROLE) {

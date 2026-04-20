@@ -16,6 +16,7 @@ contract FeeRouterV2EdgeCasesTest is Test {
     MockERC20 public sqdToken;
     MockERC20 public wethToken;
     MockPancakeRouter public pancakeRouter;
+    MockPancakeFactory public pancakeFactory;
 
     address public admin = address(this);
     address public workerPool = address(0x5555);
@@ -26,8 +27,11 @@ contract FeeRouterV2EdgeCasesTest is Test {
         sqdToken = new MockERC20("SQD", "SQD", 18);
         wethToken = new MockERC20("WETH", "WETH", 18);
         pancakeRouter = new MockPancakeRouter();
+        pancakeFactory = new MockPancakeFactory();
 
-        router = new FeeRouterModuleV2();
+        router = new FeeRouterModuleV2(
+            address(pancakeRouter), address(pancakeFactory), address(sqdToken), address(wethToken)
+        );
         router.configureBuyback(address(pancakeRouter), address(sqdToken), address(wethToken), 2500, 2500);
         router.setWorkerPoolAddress(workerPool);
         router.setFeeConfig(5000, 4500, 500);
@@ -142,9 +146,7 @@ contract FeeRouterV2EdgeCasesTest is Test {
         assertLe(a, amount);
     }
 
-    function _setupTwap() internal returns (MockPancakeFactory factory, MockPancakePool pool1, MockPancakePool pool2) {
-        factory = new MockPancakeFactory();
-
+    function _setupTwap() internal returns (MockPancakePool pool1, MockPancakePool pool2) {
         address t0Hop1 = address(usdc) < address(wethToken) ? address(usdc) : address(wethToken);
         address t1Hop1 = address(usdc) < address(wethToken) ? address(wethToken) : address(usdc);
         pool1 = new MockPancakePool(t0Hop1, t1Hop1);
@@ -153,11 +155,11 @@ contract FeeRouterV2EdgeCasesTest is Test {
         address t1Hop2 = address(wethToken) < address(sqdToken) ? address(sqdToken) : address(wethToken);
         pool2 = new MockPancakePool(t0Hop2, t1Hop2);
 
-        factory.setPool(address(usdc), address(wethToken), 2500, address(pool1));
-        factory.setPool(address(wethToken), address(sqdToken), 2500, address(pool2));
+        pancakeFactory.setPool(address(usdc), address(wethToken), 2500, address(pool1));
+        pancakeFactory.setPool(address(wethToken), address(sqdToken), 2500, address(pool2));
         pool1.setTickCumulatives(0, 0);
         pool2.setTickCumulatives(0, 0);
 
-        router.configureSlippageProtection(address(factory), TWAP_WINDOW, 300);
+        router.configureSlippageProtection(TWAP_WINDOW, 300);
     }
 }

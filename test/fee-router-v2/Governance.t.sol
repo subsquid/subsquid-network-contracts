@@ -58,7 +58,9 @@ contract FeeRouterV2GovernanceTest is Test {
     /* ------------------------------------------------------------ */
 
     function test_Constants_Values() public {
-        FeeRouterModuleV2 r = new FeeRouterModuleV2();
+        FeeRouterModuleV2 r = new FeeRouterModuleV2(
+            address(pancakeRouter), address(pancakeFactory), address(sqdToken), address(wethToken)
+        );
         assertEq(r.MAX_SLIPPAGE_BPS(), 5000, "cap expected at 50%");
         assertEq(r.MIN_TWAP_WINDOW(), 600, "min window expected at 10min");
     }
@@ -69,7 +71,7 @@ contract FeeRouterV2GovernanceTest is Test {
 
     function test_SetMaxSlippageBPS_AcceptsExactMax() public {
         FeeRouterModuleV2 r = _routerReadyForSlippage();
-        r.configureSlippageProtection(address(pancakeFactory), 1800, 300);
+        r.configureSlippageProtection(1800, 300);
         r.setMaxSlippageBPS(5000);
         assertEq(r.maxSlippageBPS(), 5000);
     }
@@ -82,7 +84,7 @@ contract FeeRouterV2GovernanceTest is Test {
 
     function test_SetMaxSlippageBPS_AcceptsZero() public {
         FeeRouterModuleV2 r = _routerReadyForSlippage();
-        r.configureSlippageProtection(address(pancakeFactory), 1800, 300);
+        r.configureSlippageProtection(1800, 300);
         r.setMaxSlippageBPS(0);
         assertEq(r.maxSlippageBPS(), 0, "zero is valid (strict TWAP)");
     }
@@ -100,7 +102,7 @@ contract FeeRouterV2GovernanceTest is Test {
 
     function test_SetTwapWindow_AcceptsExactMin() public {
         FeeRouterModuleV2 r = _routerReadyForSlippage();
-        r.configureSlippageProtection(address(pancakeFactory), 1800, 300);
+        r.configureSlippageProtection(1800, 300);
         r.setTwapWindow(600);
         assertEq(r.twapWindow(), 600);
     }
@@ -119,12 +121,101 @@ contract FeeRouterV2GovernanceTest is Test {
     }
 
     /* ------------------------------------------------------------ */
+    /* setPancakeRouter                                             */
+    /* ------------------------------------------------------------ */
+
+    function test_SetPancakeRouter_Success() public {
+        FeeRouterModuleV2 r = _routerReadyForSlippage();
+        MockPancakeRouter newRouter = new MockPancakeRouter();
+        vm.expectEmit(true, true, true, true);
+        emit IFeeRouterV2.PancakeRouterChanged(address(newRouter));
+        r.setPancakeRouter(address(newRouter));
+        assertEq(address(r.pancakeRouter()), address(newRouter));
+    }
+
+    function test_SetPancakeRouter_RevertsZero() public {
+        FeeRouterModuleV2 r = _routerReadyForSlippage();
+        vm.expectRevert(PoolErrors.InvalidAddress.selector);
+        r.setPancakeRouter(address(0));
+    }
+
+    function test_SetPancakeRouter_RevertsForNonAdmin() public {
+        FeeRouterModuleV2 r = _routerReadyForSlippage();
+        MockPancakeRouter newRouter = new MockPancakeRouter();
+        vm.prank(address(0xBEEF));
+        vm.expectRevert();
+        r.setPancakeRouter(address(newRouter));
+    }
+
+    function test_SetPancakeRouter_AllowsResettingSameValue() public {
+        FeeRouterModuleV2 r = _routerReadyForSlippage();
+        // Intentionally no AddressAlreadySet guard: setting the same value should emit the event
+        // so off-chain indexers can still react (consistent with other setters).
+        r.setPancakeRouter(address(pancakeRouter));
+        assertEq(address(r.pancakeRouter()), address(pancakeRouter));
+    }
+
+    /* ------------------------------------------------------------ */
+    /* setSqd                                                       */
+    /* ------------------------------------------------------------ */
+
+    function test_SetSqd_Success() public {
+        FeeRouterModuleV2 r = _routerReadyForSlippage();
+        MockERC20 newSqd = new MockERC20("New SQD", "SQD2", 18);
+        vm.expectEmit(true, true, true, true);
+        emit IFeeRouterV2.SqdChanged(address(newSqd));
+        r.setSqd(address(newSqd));
+        assertEq(address(r.sqd()), address(newSqd));
+    }
+
+    function test_SetSqd_RevertsZero() public {
+        FeeRouterModuleV2 r = _routerReadyForSlippage();
+        vm.expectRevert(PoolErrors.InvalidAddress.selector);
+        r.setSqd(address(0));
+    }
+
+    function test_SetSqd_RevertsEqualsWeth() public {
+        FeeRouterModuleV2 r = _routerReadyForSlippage();
+        vm.expectRevert(PoolErrors.InvalidTokenConfig.selector);
+        r.setSqd(address(wethToken));
+    }
+
+    function test_SetSqd_RevertsForNonAdmin() public {
+        FeeRouterModuleV2 r = _routerReadyForSlippage();
+        MockERC20 newSqd = new MockERC20("New SQD", "SQD2", 18);
+        vm.prank(address(0xBEEF));
+        vm.expectRevert();
+        r.setSqd(address(newSqd));
+    }
+
+    /* ------------------------------------------------------------ */
+    /* setPancakeFactory                                            */
+    /* ------------------------------------------------------------ */
+
+    function test_SetPancakeFactory_AllowsResettingSameValue() public {
+        FeeRouterModuleV2 r = _routerReadyForSlippage();
+        // AddressAlreadySet guard was removed for consistency with other setters — no revert expected.
+        r.setPancakeFactory(address(pancakeFactory));
+        assertEq(address(r.pancakeFactory()), address(pancakeFactory));
+    }
+
+    /* ------------------------------------------------------------ */
+    /* setWorkerPoolAddress self-address defense                    */
+    /* ------------------------------------------------------------ */
+
+    function test_SetWorkerPoolAddress_RevertsSelf() public {
+        FeeRouterModuleV2 r = _routerReadyForSlippage();
+        vm.expectRevert(PoolErrors.InvalidAddress.selector);
+        r.setWorkerPoolAddress(address(r));
+    }
+
+    /* ------------------------------------------------------------ */
     /* configureSlippageProtection boundaries                       */
     /* ------------------------------------------------------------ */
 
     function test_ConfigureSlippageProtection_AcceptsExactBoundaries() public {
         FeeRouterModuleV2 r = _routerReadyForSlippage();
-        r.configureSlippageProtection(address(pancakeFactory), 600, 5000);
+        r.configureSlippageProtection(600, 5000);
         assertEq(r.twapWindow(), 600);
         assertEq(r.maxSlippageBPS(), 5000);
     }
@@ -132,13 +223,13 @@ contract FeeRouterV2GovernanceTest is Test {
     function test_ConfigureSlippageProtection_RevertsWindowOneBelowMin() public {
         FeeRouterModuleV2 r = _routerReadyForSlippage();
         vm.expectRevert(PoolErrors.InvalidAmount.selector);
-        r.configureSlippageProtection(address(pancakeFactory), 599, 300);
+        r.configureSlippageProtection(599, 300);
     }
 
     function test_ConfigureSlippageProtection_RevertsSlippageOneAboveMax() public {
         FeeRouterModuleV2 r = _routerReadyForSlippage();
         vm.expectRevert(PoolErrors.InvalidFeeConfig.selector);
-        r.configureSlippageProtection(address(pancakeFactory), 1800, 5001);
+        r.configureSlippageProtection(1800, 5001);
     }
 
     /* ------------------------------------------------------------ */
@@ -155,10 +246,11 @@ contract FeeRouterV2GovernanceTest is Test {
     }
 
     function test_IsReady_SqdShortcutsWithoutOracle() public {
-        // Router configured for buyback but no slippage/oracle setup at all.
-        // SQD reward must still report Ready because the buyback code takes the SQD shortcut.
-        FeeRouterModuleV2 r = new FeeRouterModuleV2();
-        r.configureBuyback(address(pancakeRouter), address(sqdToken), address(wethToken), FEE1, FEE2);
+        // SQD reward must report Ready because the buyback code takes the SQD shortcut,
+        // skipping the oracle path even when slippage is not configured.
+        FeeRouterModuleV2 r = new FeeRouterModuleV2(
+            address(pancakeRouter), address(pancakeFactory), address(sqdToken), address(wethToken)
+        );
         r.setAllowedRewardToken(address(sqdToken), true);
         r.setBuybackEnabled(true);
 
@@ -168,8 +260,11 @@ contract FeeRouterV2GovernanceTest is Test {
     }
 
     function test_IsReady_BuybackNotConfigured_WhenDisabled() public {
-        FeeRouterModuleV2 r = new FeeRouterModuleV2();
-        r.configureBuyback(address(pancakeRouter), address(sqdToken), address(wethToken), FEE1, FEE2);
+        // Only reachable sub-case of BuybackNotConfigured: router/sqd/weth are enforced non-zero
+        // by the constructor, so the remaining path is `buybackEnabled == false`.
+        FeeRouterModuleV2 r = new FeeRouterModuleV2(
+            address(pancakeRouter), address(pancakeFactory), address(sqdToken), address(wethToken)
+        );
         r.setAllowedRewardToken(address(usdc), true);
         // buybackEnabled stays false
 
@@ -178,19 +273,10 @@ contract FeeRouterV2GovernanceTest is Test {
         assertEq(uint8(reason), uint8(IFeeRouterV2.ReadyReason.BuybackNotConfigured));
     }
 
-    function test_IsReady_BuybackNotConfigured_WhenRouterUnset() public {
-        // Fresh contract: configureBuyback never called (router/sqd/weth all zero).
-        FeeRouterModuleV2 r = new FeeRouterModuleV2();
-        r.setAllowedRewardToken(address(usdc), true);
-
-        (bool ok, IFeeRouterV2.ReadyReason reason) = r.isSlippageProtectionReady(address(usdc));
-        assertFalse(ok);
-        assertEq(uint8(reason), uint8(IFeeRouterV2.ReadyReason.BuybackNotConfigured));
-    }
-
-    function test_IsReady_SlippageNotConfigured_WhenFactoryMissing() public {
+    function test_IsReady_SlippageNotConfigured_WhenWindowUnset() public {
         FeeRouterModuleV2 r = _routerReadyForSlippage();
-        // configureSlippageProtection intentionally skipped: factory=0, window=0
+        // configureSlippageProtection intentionally skipped: twapWindow stays 0
+        // (factory is enforced non-zero by the constructor).
 
         (bool ok, IFeeRouterV2.ReadyReason reason) = r.isSlippageProtectionReady(address(usdc));
         assertFalse(ok);
@@ -199,7 +285,7 @@ contract FeeRouterV2GovernanceTest is Test {
 
     function test_IsReady_WethSqdPoolMissing() public {
         FeeRouterModuleV2 r = _routerReadyForSlippage();
-        r.configureSlippageProtection(address(pancakeFactory), 1800, 300);
+        r.configureSlippageProtection(1800, 300);
         // Factory has no pools registered at all.
 
         (bool ok, IFeeRouterV2.ReadyReason reason) = r.isSlippageProtectionReady(address(usdc));
@@ -209,7 +295,7 @@ contract FeeRouterV2GovernanceTest is Test {
 
     function test_IsReady_WethSqdPoolExistsButObserveReverts() public {
         FeeRouterModuleV2 r = _routerReadyForSlippage();
-        r.configureSlippageProtection(address(pancakeFactory), 1800, 300);
+        r.configureSlippageProtection(1800, 300);
         // weth/sqd pool address returns a pool whose observe() reverts → try/catch catches.
         RevertingObservePool badPool = new RevertingObservePool();
         pancakeFactory.setPool(address(wethToken), address(sqdToken), FEE2, address(badPool));
@@ -221,7 +307,7 @@ contract FeeRouterV2GovernanceTest is Test {
 
     function test_IsReady_RewardWethPoolMissing() public {
         FeeRouterModuleV2 r = _routerReadyForSlippage();
-        r.configureSlippageProtection(address(pancakeFactory), 1800, 300);
+        r.configureSlippageProtection(1800, 300);
         // weth/sqd present, reward/weth absent
         _registerValidPool(address(wethToken), address(sqdToken), FEE2);
 
@@ -232,7 +318,7 @@ contract FeeRouterV2GovernanceTest is Test {
 
     function test_IsReady_RewardWethPoolExistsButObserveReverts() public {
         FeeRouterModuleV2 r = _routerReadyForSlippage();
-        r.configureSlippageProtection(address(pancakeFactory), 1800, 300);
+        r.configureSlippageProtection(1800, 300);
         _registerValidPool(address(wethToken), address(sqdToken), FEE2);
         // reward/weth pool returns a contract whose observe() reverts.
         RevertingObservePool badPool = new RevertingObservePool();
@@ -255,7 +341,7 @@ contract FeeRouterV2GovernanceTest is Test {
         // When rewardToken == WETH the reward/weth hop is unreachable; only weth/sqd is required.
         FeeRouterModuleV2 r = _routerReadyForSlippage();
         r.setAllowedRewardToken(address(wethToken), true);
-        r.configureSlippageProtection(address(pancakeFactory), 1800, 300);
+        r.configureSlippageProtection(1800, 300);
         _registerValidPool(address(wethToken), address(sqdToken), FEE2);
         // Deliberately skip any usdc/weth pool setup.
 
@@ -269,7 +355,9 @@ contract FeeRouterV2GovernanceTest is Test {
     /* ------------------------------------------------------------ */
 
     function _routerReadyForSlippage() internal returns (FeeRouterModuleV2 r) {
-        r = new FeeRouterModuleV2();
+        r = new FeeRouterModuleV2(
+            address(pancakeRouter), address(pancakeFactory), address(sqdToken), address(wethToken)
+        );
         r.configureBuyback(address(pancakeRouter), address(sqdToken), address(wethToken), FEE1, FEE2);
         r.setWorkerPoolAddress(WORKER_POOL);
         r.setAllowedRewardToken(address(usdc), true);
@@ -278,7 +366,7 @@ contract FeeRouterV2GovernanceTest is Test {
 
     function _fullyConfigured() internal returns (FeeRouterModuleV2 r) {
         r = _routerReadyForSlippage();
-        r.configureSlippageProtection(address(pancakeFactory), 1800, 300);
+        r.configureSlippageProtection(1800, 300);
         _registerValidPool(address(wethToken), address(sqdToken), FEE2);
         _registerValidPool(address(usdc), address(wethToken), FEE1);
     }

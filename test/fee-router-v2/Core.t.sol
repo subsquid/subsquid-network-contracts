@@ -16,6 +16,7 @@ contract FeeRouterModuleV2Test is Test {
     MockERC20 public sqdToken;
     MockERC20 public wethToken;
     MockPancakeRouter public pancakeRouter;
+    MockPancakeFactory public pancakeFactory;
 
     address public admin = address(this);
     address public workerPool = address(0x5555);
@@ -29,8 +30,9 @@ contract FeeRouterModuleV2Test is Test {
         sqdToken = new MockERC20("Subsquid", "SQD", 18);
         wethToken = new MockERC20("WETH", "WETH", 18);
         pancakeRouter = new MockPancakeRouter();
+        pancakeFactory = new MockPancakeFactory();
 
-        router = new FeeRouterModuleV2();
+        router = _newRouter();
         router.configureBuyback(address(pancakeRouter), address(sqdToken), address(wethToken), 2500, 2500);
         router.setWorkerPoolAddress(workerPool);
         router.setFeeConfig(5000, 4500, 500);
@@ -45,7 +47,7 @@ contract FeeRouterModuleV2Test is Test {
     }
 
     function test_Constructor_Defaults() public {
-        FeeRouterModuleV2 fresh = new FeeRouterModuleV2();
+        FeeRouterModuleV2 fresh = _newRouter();
         IFeeRouterV2.FeeConfig memory cfg = fresh.getFeeConfig();
         assertEq(cfg.toProvidersBPS, 10_000);
         assertEq(cfg.toWorkerPoolBPS, 0);
@@ -100,7 +102,7 @@ contract FeeRouterModuleV2Test is Test {
     }
 
     function test_RouteToWorkerPool_RevertNoAddress() public {
-        FeeRouterModuleV2 fresh = new FeeRouterModuleV2();
+        FeeRouterModuleV2 fresh = _newRouter();
         fresh.setAllowedRewardToken(address(usdc), true);
         usdc.approve(address(fresh), 100);
         vm.expectRevert(PoolErrors.InvalidAddress.selector);
@@ -108,7 +110,7 @@ contract FeeRouterModuleV2Test is Test {
     }
 
     function test_RouteToWorkerPool_RevertTokenNotAllowed() public {
-        FeeRouterModuleV2 fresh = new FeeRouterModuleV2();
+        FeeRouterModuleV2 fresh = _newRouter();
         fresh.setWorkerPoolAddress(workerPool);
         usdc.approve(address(fresh), 100);
         vm.expectRevert(PoolErrors.TokenNotAllowed.selector);
@@ -231,10 +233,10 @@ contract FeeRouterModuleV2Test is Test {
         assertEq(usdc.balanceOf(admin), balanceBefore, "route revert must refund reward tokens");
     }
 
-    function test_ExecuteBuyback_RevertsWhenBuybackConfigIsIncomplete() public {
-        FeeRouterModuleV2 fresh = new FeeRouterModuleV2();
+    function test_ExecuteBuyback_RevertsWhenBuybackDisabled() public {
+        FeeRouterModuleV2 fresh = _newRouter();
         fresh.setAllowedRewardToken(address(usdc), true);
-        fresh.setBuybackEnabled(true);
+        // buybackEnabled stays false
         usdc.transfer(address(fresh), 500 * 1e6);
 
         vm.expectRevert(PoolErrors.BuybackDisabled.selector);
@@ -279,7 +281,7 @@ contract FeeRouterModuleV2Test is Test {
     }
 
     function test_RouteToBurn_RevertsWhenTwapNotConfigured() public {
-        FeeRouterModuleV2 fresh = new FeeRouterModuleV2();
+        FeeRouterModuleV2 fresh = _newRouter();
         fresh.configureBuyback(address(pancakeRouter), address(sqdToken), address(wethToken), 2500, 2500);
         fresh.setWorkerPoolAddress(workerPool);
         fresh.setAllowedRewardToken(address(usdc), true);
@@ -292,7 +294,7 @@ contract FeeRouterModuleV2Test is Test {
     }
 
     function test_ExecuteBuyback_RevertsWhenTwapNotConfigured() public {
-        FeeRouterModuleV2 fresh = new FeeRouterModuleV2();
+        FeeRouterModuleV2 fresh = _newRouter();
         fresh.configureBuyback(address(pancakeRouter), address(sqdToken), address(wethToken), 2500, 2500);
         fresh.setWorkerPoolAddress(workerPool);
         fresh.setAllowedRewardToken(address(usdc), true);
@@ -407,7 +409,7 @@ contract FeeRouterModuleV2Test is Test {
     }
 
     function test_SetFeeConfig_RevertWorkerBPSWithoutWorkerPool() public {
-        FeeRouterModuleV2 fresh = new FeeRouterModuleV2();
+        FeeRouterModuleV2 fresh = _newRouter();
         vm.expectRevert(PoolErrors.InvalidAddress.selector);
         fresh.setFeeConfig(5000, 4500, 500);
     }
@@ -499,15 +501,9 @@ contract FeeRouterModuleV2Test is Test {
         router.setWorkerPoolAddress(address(0));
     }
 
-    function test_ConfigureSlippageProtection_RevertZeroFactory() public {
-        vm.expectRevert(PoolErrors.InvalidAddress.selector);
-        router.configureSlippageProtection(address(0), TWAP_WINDOW, 300);
-    }
-
     function test_ConfigureSlippageProtection_RevertZeroWindow() public {
-        MockPancakeFactory f = new MockPancakeFactory();
         vm.expectRevert(PoolErrors.InvalidAmount.selector);
-        router.configureSlippageProtection(address(f), 0, 300);
+        router.configureSlippageProtection(0, 300);
     }
 
     function test_RecoverTokens_RevertZeroAddress() public {
@@ -516,9 +512,13 @@ contract FeeRouterModuleV2Test is Test {
         router.recoverTokens(address(rnd), address(0), 100);
     }
 
-    function _setupTwap() internal returns (MockPancakeFactory factory, MockPancakePool pool1, MockPancakePool pool2) {
-        factory = new MockPancakeFactory();
+    function _newRouter() internal returns (FeeRouterModuleV2) {
+        return new FeeRouterModuleV2(
+            address(pancakeRouter), address(pancakeFactory), address(sqdToken), address(wethToken)
+        );
+    }
 
+    function _setupTwap() internal returns (MockPancakePool pool1, MockPancakePool pool2) {
         address t0Hop1 = address(usdc) < address(wethToken) ? address(usdc) : address(wethToken);
         address t1Hop1 = address(usdc) < address(wethToken) ? address(wethToken) : address(usdc);
         pool1 = new MockPancakePool(t0Hop1, t1Hop1);
@@ -527,11 +527,11 @@ contract FeeRouterModuleV2Test is Test {
         address t1Hop2 = address(wethToken) < address(sqdToken) ? address(sqdToken) : address(wethToken);
         pool2 = new MockPancakePool(t0Hop2, t1Hop2);
 
-        factory.setPool(address(usdc), address(wethToken), router.poolFee(), address(pool1));
-        factory.setPool(address(wethToken), address(sqdToken), router.poolFee2(), address(pool2));
+        pancakeFactory.setPool(address(usdc), address(wethToken), router.poolFee(), address(pool1));
+        pancakeFactory.setPool(address(wethToken), address(sqdToken), router.poolFee2(), address(pool2));
         pool1.setTickCumulatives(0, 0);
         pool2.setTickCumulatives(0, 0);
 
-        router.configureSlippageProtection(address(factory), TWAP_WINDOW, 300);
+        router.configureSlippageProtection(TWAP_WINDOW, 300);
     }
 }

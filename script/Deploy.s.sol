@@ -17,6 +17,7 @@ contract DeployPortalSystem is Script {
     address public constant USDC = 0x8baf8707861a84e3d978aC067447de9AAd862FAc;
     address public constant WETH = 0x980B62Da83eFf3D4576C647993b0c1D7faf17c73;
     address public constant PANCAKE_V3_ROUTER = 0x1b81D678ffb9C0263b24A97847620C99d213eB14;
+    address public constant PANCAKE_V3_FACTORY = 0x0BFbCF9fa4f9C56B0F40a671Ad40E0805A091865;
     address public constant WORKER_POOL = 0xFa27FdC303FA02F6F21Ec8F597421b7B34BD61Ee;
 
     // Additional admin to be granted roles after deployment
@@ -94,7 +95,7 @@ contract DeployPortalSystem is Script {
         console.log("PortalRegistry proxy:", d.portalRegistry);
 
         console.log("\n--- Deploying FeeRouterModuleV2 ---");
-        FeeRouterModuleV2 feeRouter = new FeeRouterModuleV2();
+        FeeRouterModuleV2 feeRouter = new FeeRouterModuleV2(PANCAKE_V3_ROUTER, PANCAKE_V3_FACTORY, SQD, WETH);
         d.feeRouter = address(feeRouter);
         console.log("FeeRouterModuleV2 deployed at:", d.feeRouter);
 

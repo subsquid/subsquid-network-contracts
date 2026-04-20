@@ -111,13 +111,13 @@ contract LocalArbitrumV2E2E is Script {
         MockERC20 usdc,
         MockERC20 weth
     ) internal returns (FeeRouterModuleV2 feeRouter) {
-        feeRouter = new FeeRouterModuleV2();
+        feeRouter = new FeeRouterModuleV2(pancakeRouter, pancakeFactory, address(sqd), address(weth));
         feeRouter.configureBuyback(pancakeRouter, address(sqd), address(weth), 2500, 2500);
         feeRouter.setWorkerPoolAddress(WORKER_POOL);
         feeRouter.setAllowedRewardToken(address(usdc), true);
         feeRouter.setBuybackEnabled(true);
         feeRouter.setFeeConfig(5000, 4500, 500);
-        feeRouter.configureSlippageProtection(pancakeFactory, TWAP_WINDOW, 300);
+        feeRouter.configureSlippageProtection(TWAP_WINDOW, 300);
     }
 
     function _deployFactory(PortalRegistry registry, FeeRouterModuleV2 feeRouter, MockERC20 sqd)

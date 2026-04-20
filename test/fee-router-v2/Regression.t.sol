@@ -20,6 +20,7 @@ contract FeeRouterV2RegressionTest is Test {
     MockERC20 internal sqdToken;
     MockERC20 internal wethToken;
     MockPancakeRouter internal pancakeRouter;
+    MockPancakeFactory internal pancakeFactory;
 
     address internal workerPool = address(0x5555);
 
@@ -28,8 +29,11 @@ contract FeeRouterV2RegressionTest is Test {
         sqdToken = new MockERC20("Subsquid", "SQD", 18);
         wethToken = new MockERC20("Wrapped Ether", "WETH", 18);
         pancakeRouter = new MockPancakeRouter();
+        pancakeFactory = new MockPancakeFactory();
 
-        router = new FeeRouterModuleV2();
+        router = new FeeRouterModuleV2(
+            address(pancakeRouter), address(pancakeFactory), address(sqdToken), address(wethToken)
+        );
         router.configureBuyback(address(pancakeRouter), address(sqdToken), address(wethToken), 2500, 2500);
         router.setAllowedRewardToken(address(usdc), true);
         router.setWorkerPoolAddress(workerPool);
@@ -40,17 +44,16 @@ contract FeeRouterV2RegressionTest is Test {
     }
 
     function test_NonOneToOneTwapFloorRejectsWorsePrice() public {
-        MockPancakeFactory factory = new MockPancakeFactory();
         MockPancakePool rewardToWethPool = _deployPool(address(usdc), address(wethToken));
         MockPancakePool wethToSqdPool = _deployPool(address(wethToken), address(sqdToken));
 
-        factory.setPool(address(usdc), address(wethToken), router.poolFee(), address(rewardToWethPool));
-        factory.setPool(address(wethToken), address(sqdToken), router.poolFee2(), address(wethToSqdPool));
+        pancakeFactory.setPool(address(usdc), address(wethToken), router.poolFee(), address(rewardToWethPool));
+        pancakeFactory.setPool(address(wethToken), address(sqdToken), router.poolFee2(), address(wethToSqdPool));
 
         _setReturnedTwapTick(rewardToWethPool, address(usdc), address(wethToken), 0);
         _setReturnedTwapTick(wethToSqdPool, address(wethToken), address(sqdToken), TICK_FOR_2X_PRICE);
 
-        router.configureSlippageProtection(address(factory), TWAP_WINDOW, 300);
+        router.configureSlippageProtection(TWAP_WINDOW, 300);
         pancakeRouter.setRate(1, 1);
         usdc.approve(address(router), 100 * 1e6);
 
@@ -61,19 +64,20 @@ contract FeeRouterV2RegressionTest is Test {
     }
 
     function test_FreshDeploy_DefaultsToProviderOnlyUntilWorkerPoolConfigured() public {
-        FeeRouterModuleV2 freshRouter = new FeeRouterModuleV2();
+        MockPancakeFactory freshFactory = new MockPancakeFactory();
+        FeeRouterModuleV2 freshRouter =
+            new FeeRouterModuleV2(address(pancakeRouter), address(freshFactory), address(sqdToken), address(wethToken));
         freshRouter.configureBuyback(address(pancakeRouter), address(sqdToken), address(wethToken), 2500, 2500);
         freshRouter.setAllowedRewardToken(address(usdc), true);
         freshRouter.setBuybackEnabled(true);
-        MockPancakeFactory factory = new MockPancakeFactory();
         MockPancakePool rewardToWethPool = _deployPool(address(usdc), address(wethToken));
         MockPancakePool wethToSqdPool = _deployPool(address(wethToken), address(sqdToken));
 
-        factory.setPool(address(usdc), address(wethToken), freshRouter.poolFee(), address(rewardToWethPool));
-        factory.setPool(address(wethToken), address(sqdToken), freshRouter.poolFee2(), address(wethToSqdPool));
+        freshFactory.setPool(address(usdc), address(wethToken), freshRouter.poolFee(), address(rewardToWethPool));
+        freshFactory.setPool(address(wethToken), address(sqdToken), freshRouter.poolFee2(), address(wethToSqdPool));
         _setReturnedTwapTick(rewardToWethPool, address(usdc), address(wethToken), 0);
         _setReturnedTwapTick(wethToSqdPool, address(wethToken), address(sqdToken), 0);
-        freshRouter.configureSlippageProtection(address(factory), TWAP_WINDOW, 300);
+        freshRouter.configureSlippageProtection(TWAP_WINDOW, 300);
 
         usdc.approve(address(freshRouter), 100 * 1e6);
         pancakeRouter.setRate(1, 1);
@@ -85,15 +89,9 @@ contract FeeRouterV2RegressionTest is Test {
         assertEq(sqdToken.balanceOf(address(0xdead)), 100 * 1e6, "default config burns the routed protocol leg");
     }
 
-    function test_ConfigureSlippageProtectionRejectsUnsetPoolFee2() public {
-        FeeRouterModuleV2 fresh = new FeeRouterModuleV2();
-        vm.expectRevert(PoolErrors.InvalidPoolFee.selector);
-        fresh.configureSlippageProtection(address(0x1234), TWAP_WINDOW, 300);
-    }
-
     function test_ConfigureSlippageProtectionRejectsHundredPercentSlippage() public {
         vm.expectRevert(PoolErrors.InvalidFeeConfig.selector);
-        router.configureSlippageProtection(address(0x1234), TWAP_WINDOW, 10_000);
+        router.configureSlippageProtection(TWAP_WINDOW, 10_000);
     }
 
     function test_SetMaxSlippageBPSRejectsHundredPercentSlippage() public {
@@ -102,17 +100,16 @@ contract FeeRouterV2RegressionTest is Test {
     }
 
     function test_ZeroSlippageStillUsesTwapFloor() public {
-        MockPancakeFactory factory = new MockPancakeFactory();
         MockPancakePool rewardToWethPool = _deployPool(address(usdc), address(wethToken));
         MockPancakePool wethToSqdPool = _deployPool(address(wethToken), address(sqdToken));
 
-        factory.setPool(address(usdc), address(wethToken), router.poolFee(), address(rewardToWethPool));
-        factory.setPool(address(wethToken), address(sqdToken), router.poolFee2(), address(wethToSqdPool));
+        pancakeFactory.setPool(address(usdc), address(wethToken), router.poolFee(), address(rewardToWethPool));
+        pancakeFactory.setPool(address(wethToken), address(sqdToken), router.poolFee2(), address(wethToSqdPool));
 
         _setReturnedTwapTick(rewardToWethPool, address(usdc), address(wethToken), 0);
         _setReturnedTwapTick(wethToSqdPool, address(wethToken), address(sqdToken), TICK_FOR_2X_PRICE);
 
-        router.configureSlippageProtection(address(factory), TWAP_WINDOW, 0);
+        router.configureSlippageProtection(TWAP_WINDOW, 0);
         pancakeRouter.setRate(1, 1);
         usdc.approve(address(router), 100 * 1e6);
 
@@ -121,18 +118,17 @@ contract FeeRouterV2RegressionTest is Test {
     }
 
     function test_NegativeTwapRoundingFloorsInsteadOfTruncatingTowardZero() public {
-        MockPancakeFactory factory = new MockPancakeFactory();
         MockPancakePool rewardToWethPool = _deployPool(address(usdc), address(wethToken));
         MockPancakePool wethToSqdPool = _deployPool(address(wethToken), address(sqdToken));
 
-        factory.setPool(address(usdc), address(wethToken), router.poolFee(), address(rewardToWethPool));
-        factory.setPool(address(wethToken), address(sqdToken), router.poolFee2(), address(wethToSqdPool));
+        pancakeFactory.setPool(address(usdc), address(wethToken), router.poolFee(), address(rewardToWethPool));
+        pancakeFactory.setPool(address(wethToken), address(sqdToken), router.poolFee2(), address(wethToSqdPool));
 
         int56 rawRewardToWethTickDelta = -int56(int32(TWAP_WINDOW)) * 1000 - 1;
         rewardToWethPool.setTickCumulatives(0, rawRewardToWethTickDelta);
         _setReturnedTwapTick(wethToSqdPool, address(wethToken), address(sqdToken), -5000);
 
-        router.configureSlippageProtection(address(factory), TWAP_WINDOW, 0);
+        router.configureSlippageProtection(TWAP_WINDOW, 0);
 
         int24 buggyTick1 = _buggyTwapTickFromRawDelta(rawRewardToWethTickDelta, address(usdc), address(wethToken));
         int24 fixedTick1 = _fixedTwapTickFromRawDelta(rawRewardToWethTickDelta, address(usdc), address(wethToken));
@@ -156,8 +152,8 @@ contract FeeRouterV2RegressionTest is Test {
     }
 
     function test_TwapProtectionRevertsWhenOraclePoolMissing() public {
-        MockPancakeFactory factory = new MockPancakeFactory();
-        router.configureSlippageProtection(address(factory), TWAP_WINDOW, 300);
+        // pancakeFactory has no pools registered
+        router.configureSlippageProtection(TWAP_WINDOW, 300);
         pancakeRouter.setRate(1, 1);
         usdc.approve(address(router), 100 * 1e6);
 
@@ -168,16 +164,15 @@ contract FeeRouterV2RegressionTest is Test {
     }
 
     function test_ConfigChangeAfterImmediateRouteCannotRetroactivelyAffectBalances() public {
-        MockPancakeFactory factory = new MockPancakeFactory();
         MockPancakePool rewardToWethPool = _deployPool(address(usdc), address(wethToken));
         MockPancakePool wethToSqdPool = _deployPool(address(wethToken), address(sqdToken));
 
-        factory.setPool(address(usdc), address(wethToken), router.poolFee(), address(rewardToWethPool));
-        factory.setPool(address(wethToken), address(sqdToken), router.poolFee2(), address(wethToSqdPool));
+        pancakeFactory.setPool(address(usdc), address(wethToken), router.poolFee(), address(rewardToWethPool));
+        pancakeFactory.setPool(address(wethToken), address(sqdToken), router.poolFee2(), address(wethToSqdPool));
         _setReturnedTwapTick(rewardToWethPool, address(usdc), address(wethToken), 0);
         _setReturnedTwapTick(wethToSqdPool, address(wethToken), address(sqdToken), 0);
 
-        router.configureSlippageProtection(address(factory), TWAP_WINDOW, 300);
+        router.configureSlippageProtection(TWAP_WINDOW, 300);
         pancakeRouter.setRate(1, 1);
         usdc.approve(address(router), 1000 * 1e6);
 

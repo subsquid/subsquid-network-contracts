@@ -31,12 +31,14 @@ contract PortalPoolFactoryInitialSlippageTest is Test {
     MockERC20 internal usdc;
     MockERC20 internal weth;
     MockPancakeRouter internal pancakeRouter;
+    MockPancakeFactory internal pancakeFactory;
 
     function setUp() public {
         sqd = new MockERC20("Subsquid", "SQD", 18);
         usdc = new MockERC20("USD Coin", "USDC", 6);
         weth = new MockERC20("Wrapped Ether", "WETH", 18);
         pancakeRouter = new MockPancakeRouter();
+        pancakeFactory = new MockPancakeFactory();
 
         PortalRegistry registryImpl = new PortalRegistry();
         ERC1967Proxy registryProxy = new ERC1967Proxy(
@@ -45,7 +47,7 @@ contract PortalPoolFactoryInitialSlippageTest is Test {
         );
         registry = PortalRegistry(address(registryProxy));
 
-        feeRouter = new FeeRouterModuleV2();
+        feeRouter = new FeeRouterModuleV2(address(pancakeRouter), address(pancakeFactory), address(sqd), address(weth));
         feeRouter.configureBuyback(address(pancakeRouter), address(sqd), address(weth), 500, 10000);
         feeRouter.setAllowedRewardToken(address(usdc), true);
         feeRouter.setBuybackEnabled(true);
@@ -78,7 +80,6 @@ contract PortalPoolFactoryInitialSlippageTest is Test {
     }
 
     function test_CreatePortalPool_ExecutesImmediateBuybackOnInitialDeposit() public {
-        MockPancakeFactory pancakeFactory = new MockPancakeFactory();
         MockPancakePool rewardToWethPool = _deployPool(address(usdc), address(weth));
         MockPancakePool wethToSqdPool = _deployPool(address(weth), address(sqd));
 
@@ -88,7 +89,7 @@ contract PortalPoolFactoryInitialSlippageTest is Test {
         _setReturnedTwapTick(rewardToWethPool, address(usdc), address(weth), 0);
         _setReturnedTwapTick(wethToSqdPool, address(weth), address(sqd), 0);
 
-        feeRouter.configureSlippageProtection(address(pancakeFactory), TWAP_WINDOW, 0);
+        feeRouter.configureSlippageProtection(TWAP_WINDOW, 0);
         pancakeRouter.setRate(2, 1);
 
         IPortalFactory.CreatePortalPoolParams memory params = _defaultParams();
@@ -103,7 +104,6 @@ contract PortalPoolFactoryInitialSlippageTest is Test {
     }
 
     function test_CreatePortalPool_UsesTwapFloorForInitialDepositBuyback() public {
-        MockPancakeFactory pancakeFactory = new MockPancakeFactory();
         MockPancakePool rewardToWethPool = _deployPool(address(usdc), address(weth));
         MockPancakePool wethToSqdPool = _deployPool(address(weth), address(sqd));
 
@@ -113,7 +113,7 @@ contract PortalPoolFactoryInitialSlippageTest is Test {
         _setReturnedTwapTick(rewardToWethPool, address(usdc), address(weth), 0);
         _setReturnedTwapTick(wethToSqdPool, address(weth), address(sqd), TICK_FOR_2X_PRICE);
 
-        feeRouter.configureSlippageProtection(address(pancakeFactory), TWAP_WINDOW, 0);
+        feeRouter.configureSlippageProtection(TWAP_WINDOW, 0);
         pancakeRouter.setRate(1, 1);
 
         IPortalFactory.CreatePortalPoolParams memory params = _defaultParams();
