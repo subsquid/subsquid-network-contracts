@@ -7,24 +7,26 @@ on:
 jobs:
   pr-review:
     runs-on: ubuntu-latest
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     permissions:
       contents: read
-      pull-requests: read
+      pull-requests: write
       issues: read
       id-token: write
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 1
 
       - name: Review pull request
         id: review
-        uses: anthropics/claude-code-action@beta
+        uses: anthropics/claude-code-action@v1
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
-          direct_prompt: |
+          prompt: |
             Review this pull request as a smart contracts change. Focus on:
             - Security: reentrancy, unsafe external calls, access control, privileged roles, approvals/allowances, oracle and price-manipulation risks, signature replay or malleability, delegatecall/proxy footguns
             - Correctness: state invariants, rounding and precision (especially with tokens), edge cases on zero balances, failed transfers, and boundary conditions
