@@ -29,6 +29,18 @@ pnpm install
 |---|---|
 | **SQD** | [`0x1337420dED5ADb9980CFc35f8f2B054ea86f8aB1`](https://etherscan.io/token/0x1337420dED5ADb9980CFc35f8f2B054ea86f8aB1) |
 
+### Base
+
+| Contract | Address |
+|---|---|
+| **SQD** | [`0xd4554bea546efa83c1e6b389ecac40ea999b3e78`](https://basescan.org/token/0xd4554bea546efa83c1e6b389ecac40ea999b3e78) |
+
+### BNB Smart Chain
+
+| Contract | Address |
+|---|---|
+| **SQD** | [`0xe50e3d1a46070444f44df911359033f2937fcc13`](https://bscscan.com/token/0xe50e3d1a46070444f44df911359033f2937fcc13) |
+
 ### Arbitrum One (production)
 
 | Contract | Address |
