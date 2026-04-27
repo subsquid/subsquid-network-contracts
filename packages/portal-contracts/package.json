@@ -1,0 +1,30 @@
+{
+  "name": "sqd-portal-contracts",
+  "version": "1.0.0",
+  "description": "**Foundry is a blazing fast, portable and modular toolkit for Ethereum application development written in Rust.**",
+  "main": "index.js",
+  "directories": {
+    "lib": "lib",
+    "test": "test"
+  },
+  "scripts": {
+    "test": "forge test",
+    "lint": "solhint 'src/**/*.sol'",
+    "lint:fix": "solhint 'src/**/*.sol' --fix"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/subsquid/sqd-portal-contracts.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/subsquid/sqd-portal-contracts/issues"
+  },
+  "homepage": "https://github.com/subsquid/sqd-portal-contracts#readme",
+  "devDependencies": {
+    "solhint": "^6.0.1"
+  }
+}

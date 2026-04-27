@@ -1,0 +1,40 @@
+name: Claude Code Review
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+jobs:
+  claude-review:
+    runs-on: ubuntu-latest
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+      id-token: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 1
+
+      - name: Run Claude Code Review
+        id: claude-review
+        uses: anthropics/claude-code-action@beta
+        with:
+          github_token: ${{ github.token }}
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          direct_prompt: |
+            Review this pull request as a smart contracts change and post actionable findings as PR review comments.
+            Focus on:
+            - Security: reentrancy, unsafe external calls, access control, privileged roles, approvals/allowances, oracle and price-manipulation risks, signature replay or malleability, delegatecall/proxy footguns
+            - Correctness: state invariants, rounding and precision (especially with tokens), edge cases on zero balances, failed transfers, and boundary conditions
+            - Solidity and design: visibility, immutability vs mutability, events for critical state, upgrade patterns if present, compiler/version assumptions
+            - Gas and operational impact where it affects on-chain behavior or DoS surfaces
+            - Tests: coverage of failure paths, fuzz/invariant tests if applicable, and whether changes need new or updated tests
+
+            If you find no actionable issues, post a short PR comment saying the review completed and no major issues were found.
+            Be specific, cite files or symbols when helpful, and keep feedback constructive.
