@@ -1,0 +1,71 @@
+name: Sync portal-contracts from upstream
+
+on:
+  workflow_dispatch:
+    inputs:
+      upstream_ref:
+        description: "Upstream branch or tag to pull (default: main)"
+        required: false
+        default: "main"
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout monorepo with full history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Configure git identity
+        run: |
+          git config user.name  "portal-sync-bot"
+          git config user.email "portal-sync-bot@users.noreply.github.com"
+
+      - name: Add upstream remote and fetch
+        run: |
+          git remote add portal https://github.com/subsquid/sqd-portal-contracts.git
+          git fetch portal "${{ inputs.upstream_ref }}"
+
+      - name: Create sync branch
+        id: branch
+        run: |
+          BRANCH="sync/portal-contracts-$(date -u +%Y%m%d-%H%M%S)"
+          git checkout -b "$BRANCH"
+          echo "name=$BRANCH" >> "$GITHUB_OUTPUT"
+
+      - name: Subtree pull (history preserved, no squash)
+        id: pull
+        run: |
+          set -e
+          BEFORE=$(git rev-parse HEAD)
+          git subtree pull --prefix=packages/portal-contracts portal \
+            "${{ inputs.upstream_ref }}" \
+            -m "merge: sync packages/portal-contracts with sqd-portal-contracts ${{ inputs.upstream_ref }}"
+          AFTER=$(git rev-parse HEAD)
+          if [ "$BEFORE" = "$AFTER" ]; then
+            echo "Nothing to sync."
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Push sync branch
+        if: steps.pull.outputs.changed == 'true'
+        run: git push origin "${{ steps.branch.outputs.name }}"
+
+      - name: Open PR
+        if: steps.pull.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr create \
+            --base main \
+            --head "${{ steps.branch.outputs.name }}" \
+            --title "Sync packages/portal-contracts from sqd-portal-contracts ${{ inputs.upstream_ref }}" \
+            --body "Routine subtree pull from subsquid/sqd-portal-contracts ref ${{ inputs.upstream_ref }}. Merge with a regular merge commit (do not squash) to keep subtree pulls working."
