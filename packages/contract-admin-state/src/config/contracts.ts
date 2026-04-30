@@ -1,5 +1,5 @@
 import Deployments from "../../../contracts/deployments/42161.json";
-import rewardsDistributionAbi from "../../../contracts/artifacts/DistributedRewardDistribution.sol/DistributedRewardsDistribution";
+import rewardsDistributionAbi from "../../../contracts/artifacts/DistributedRewardsDistribution.sol/DistributedRewardsDistribution";
 import stakingAbi from "../../../contracts/artifacts/Staking.sol/Staking";
 import networkControllerAbi from "../../../contracts/artifacts/NetworkController.sol/NetworkController";
 import gatewayRegistryAbi from "../../../contracts/artifacts/GatewayRegistry.sol/GatewayRegistry";
