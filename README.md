@@ -8,9 +8,11 @@ Portal Pools connect pool operators with SQD holders. Operators create pools and
 
 ### Creating a Pool
 
-Any operator can deploy their own pool through the PortalPoolFactory. When creating a pool, the operator sets a capacity (how much SQD the pool can hold) and a distribution rate (how fast rewards flow to depositors). The operator can also seed the pool with an initial credit of reward tokens.
+Pools are deployed through the PortalPoolFactory. By default, deployment is controlled by accounts with `POOL_DEPLOYER_ROLE`. The admin can open deployment with `poolDeploymentOpen`; when deployment is open, an operator can create their own pool directly, while trusted deployers can still create pools on behalf of others.
 
-The initial credit must cover at least one day of distributions at the chosen rate. This ensures the pool doesn't start empty. For example, if you set a rate that distributes 100 USDC per day, your initial credit needs to be at least 100 USDC.
+When creating a pool, the operator sets a capacity (how much SQD the pool can hold), a reward token, and a distribution rate (how fast rewards flow to depositors). The reward token must be allowed by the factory, and capacity must be at least `PortalRegistry.minStake()`.
+
+The initial reward deposit must cover at least one day of distributions at the chosen rate. This check happens before fee routing, so the actual provider credit is whatever provider share remains after the current FeeRouter split. For example, if you set a rate that distributes 100 USDC per day and the fee split sends 100% to providers, your initial deposit needs to be at least 100 USDC.
 
 Once created, the pool enters a collecting phase. It stays in this phase until deposits reach the full capacity. If the capacity isn't reached before the deadline (default 30 days), the pool fails and everyone gets their SQD back.
 
@@ -20,25 +22,21 @@ The distribution rate controls how many reward tokens get distributed per second
 
 Setting the rate to zero is allowed. This lets you create private pools where no rewards are distributed - useful for sharing capacity with friends or team members without the overhead of managing reward distributions.
 
-When the rate is non-zero, rewards drain from the pool's credit balance over time. You can check the runway (how long until credit runs out) and top up with more reward tokens before it hits zero. 
+When the rate is non-zero, rewards drain from the pool's credit balance over time. You can check the runway (the timestamp when credit runs out) and top up with more reward tokens before it hits zero.
 
-When the pool runs out of credit, it can go into debt. Top-ups first pay down debt, then increase credit. Because of this, runway and claimable rewards can recover in a non-linear way after dry periods, and the balance can be negative during those periods.
+When the pool runs out of credit, it becomes dry. Rewards stop accruing at the runway timestamp, existing unclaimed rewards stay safe, and the reported debt stays zero. The pool balance does not go negative.
 
-The runway tells you how long rewards will last at the current rate. While there's credit, you earn at the displayed rate.
+When the operator tops up after a dry period, the provider share becomes new credit and distribution resumes from the top-up time. Dry time is not paid retroactively.
 
-When the operator tops up a pool that has debt:
-
-1. New funds first pay off the debt (what the pool "owed")
-2. Remaining funds become new credit
-3. Distribution resumes at the set rate
+The runway tells you when rewards will stop at the current rate. While there's credit, active stake earns at the displayed rate.
 
 ### Depositing and Earning
 
 Users deposit SQD into a pool and receive plSQD tokens as a receipt. These liquid tokens represent their share of the pool and can be transferred to other wallets. Rewards accumulate automatically based on each user's share - claim them whenever you want.
 
-The pool tracks a credit/debt model internally. When there's credit available, rewards distribute at the set rate. When credit hits zero, no new rewards accumulate but existing unclaimed rewards stay safe. If the operator tops up while the pool has debt, the new funds first pay off what was owed before becoming fresh credit.
+The pool tracks credit and runway internally. When there's credit available, rewards distribute at the set rate. When credit hits zero, no new rewards accumulate but existing unclaimed rewards stay safe. `getDebt()` and the `currentDebt` field in `getRewardStatus()` are kept for compatibility and return zero.
 
-Stakes are divided into active stake and total stake. 
+Stakes are divided into active stake and total stake.
 While exits are pending, totalStaked can exceed capacity, and new deposits are allowed as long as active stake stays within capacity.
 When a user requests an exit, their stake moves out of active stake, stops earning new rewards, and frees capacity so new participants can stake while exits are processed.
 
@@ -70,24 +68,24 @@ PortalPoolFactory (UUPS)
 
 ## Fee Routing and Buyback
 
-When an operator tops up a pool with reward tokens (USDC, USDT, etc.), the funds don't all go to depositors. They pass through a FeeRouter that splits them three ways:
+When an operator tops up a pool with reward tokens (USDC, USDT, etc.), the funds pass through a FeeRouter. Depending on the active config, the router can split them three ways:
 
 - **Providers** — stays as stablecoins in the pool, building credit for depositor rewards
 - **Worker pool** — converted to SQD and sent to the network's worker reward pool
 - **Burn** — converted to SQD and sent to a dead address, permanently removed from supply
 
-The default split is 50% providers / 45% workers / 5% burn. The admin can change these numbers at any time — for example, `setFeeConfig(3000, 5000, 2000)` would set 30% providers / 50% workers / 20% burn. The three numbers must always add up to 10000 (100%).
+The default split is `10000 / 0 / 0`, which means 100% providers, 0% workers, and 0% burn. The admin can change these numbers at any time. For example, `setFeeConfig(5000, 4500, 500)` sets 50% providers / 45% workers / 5% burn. The three numbers must always add up to 10000 (100%).
 
 ### How the Buyback Works
 
-The worker and burn portions need to be converted from stablecoins to SQD. This happens through an automatic buyback system built into the FeeRouterModuleV2.
+In FeeRouterModuleV2, the worker and burn portions are converted from stablecoins to SQD. This happens through an automatic buyback system built into the router.
 
-When the pool routes fees, the non-provider share flows to the FeeRouter contract. The router accumulates these stablecoins until the balance crosses a configurable threshold. Once it does, the auto-buyback kicks in — the stablecoins are swapped to SQD through PancakeSwap V3 in the same transaction. The purchased SQD is then split proportionally between the worker pool and burn based on the fee config ratios.
+When the pool routes fees, the non-provider share flows to the FeeRouter contract and the buyback runs immediately in the same transaction. The stablecoins are swapped to SQD through PancakeSwap V3. The purchased SQD is then split proportionally between the worker pool and burn based on the fee config ratios.
 
 For example, with a 50/45/5 split and a $1000 top-up:
 
 1. $500 stays as USDC → providers (pool credit)
-2. $500 goes to the FeeRouter → auto-buyback triggers
+2. $500 goes to the FeeRouter and is routed through the buyback
 3. it is swapped to SQD via PancakeSwap
 4. Of the SQD received: 90% (45/50) goes to the worker reward pool, 10% (5/50) gets burned
 
@@ -95,9 +93,11 @@ If the reward token is already SQD (not a stablecoin), the router skips the swap
 
 ### Slippage Protection
 
-Swapping on a DEX carries the risk of getting a bad price, especially from MEV sandwich attacks. The router protects against this using a TWAP (time-weighted average price) oracle from PancakeSwap V3. Before executing a swap, it checks what the average price has been over the last 30 minutes and sets a minimum acceptable output. If the current price is too far from the average (more than 3% by default), the swap reverts instead of executing at a bad rate.
+Swapping on a DEX carries the risk of getting a bad price, especially from MEV sandwich attacks. The router protects against this using a TWAP (time-weighted average price) oracle from PancakeSwap V3. Before executing a swap, it checks what the average price has been over the configured window and sets a minimum acceptable SQD output. If the swap cannot meet that minimum, it reverts instead of executing at a bad rate.
 
-The admin can adjust the TWAP window (how far back the average looks). The operator can adjust the maximum allowed slippage while topping up rewards.
+The admin controls slippage protection with `configureSlippageProtection`, `setTwapWindow`, and `setMaxSlippageBPS`. The minimum TWAP window is 600 seconds. The maximum allowed slippage is capped at 5000 bps. Operators do not pass a slippage setting when topping up rewards.
+
+Integrations can call `isSlippageProtectionReady(rewardToken)` before a top-up to see whether the buyback path is ready. Direct token balances held by the router can be swept through the same buyback path with `executeBuyback(rewardToken)`.
 
 
 ## Pool States
@@ -108,11 +108,11 @@ Pools move through several states during their lifecycle:
 
 **Active** - Pool reached capacity and is distributing rewards. Users can deposit more (up to capacity), claim rewards, and request exits.
 
-**Idle** - Active stake dropped below the minimum threshold. Distributions pause until more SQD comes in.
+**Idle** - Registry stake dropped below `PortalRegistry.minStake()`. Distributions pause until more SQD comes in.
 
-**Failed** - Deadline passed without reaching capacity. Users withdraw their SQD directly.
+**Failed** - Deadline passed without reaching capacity. Users withdraw their SQD directly, and the operator can recover remaining reward tokens.
 
-**Closed** - Users can withdraw immediately without going through the exit queue.
+**Closed** - Factory admin closed the pool. Users withdraw immediately without going through the exit queue, and can claim any rewards that were earned before closure.
 
 ### State Overview
 
@@ -142,7 +142,8 @@ When a pool is first created, it starts in **COLLECTING** state.
 - Pool is open for deposits
 - Deposits accumulate until capacity is reached
 - No rewards distributed yet
-- Operator has set a deadline for activation
+- Operator can top up rewards, but those rewards do not accrue until activation
+- Factory has set a deadline for activation
 
 **What you can do:**
 - Deposit SQD into the pool
@@ -171,17 +172,18 @@ A pool becomes **ACTIVE** when it reaches full capacity during the collection pe
 - Request exit to start withdrawing
 
 **Transitions:**
-- → **IDLE**: If active stake drops below `minStakeThreshold`
+- → **IDLE**: If registry stake drops below `PortalRegistry.minStake()`
+- → **CLOSED**: If the factory admin closes the pool
 
 **Note:** Once activated, a pool stays activated. It can go IDLE but never back to COLLECTING.
 
 ### IDLE (Temporary Pause)
 
-A pool enters **IDLE** state when the active stake drops too low.
+A pool enters **IDLE** state when it was active before, but registry stake drops below `PortalRegistry.minStake()`.
 
 **What's happening:**
 - Pool was once active but stake dropped below minimum
-- Reward distribution pauses (rate = 0)
+- Reward distribution pauses
 - Deposits still accepted
 - Exit queue still processes
 
@@ -190,19 +192,52 @@ A pool enters **IDLE** state when the active stake drops too low.
 - Complete pending exits
 - Claim any rewards earned before IDLE
 
+**Transitions:**
+- → **ACTIVE**: When stake reaches `PortalRegistry.minStake()` again
+- → **CLOSED**: If the factory admin closes the pool
+
+### FAILED (Collection Failed)
+
+A pool becomes **FAILED** when the collection deadline passes before it reaches capacity.
+
+**What's happening:**
+- Pool never activated
+- Deposits stop
+- SQD stays in the pool instead of being staked to the registry
+- Operator can recover remaining reward tokens
+
+**What you can do:**
+- Withdraw your SQD directly with `withdrawFromFailed`
+
+### CLOSED (Emergency Shutdown)
+
+A factory admin can close a pool in an emergency.
+
+**What's happening:**
+- Reward distribution stops
+- Exit queue is bypassed
+- Users can withdraw their stake immediately
+- Rewards earned before closure can still be claimed
+
+**What you can do:**
+- Withdraw SQD with `emergencyWithdraw`
+- Claim earned rewards with `claimRewardsFromClosed`
+- Operator can recover unused reward budget
+
 ## Quick Reference
 
 | Concept | What It Means |
 |---------|---------------|
 | Credit | Reward funds available for distribution |
-| Debt | Unfunded obligations (pool ran dry) |
-| Runway | How long credit lasts at current rate |
+| Dry state | Pool has no credit left and rewards stop accruing |
+| Runway | Timestamp when credit runs out at current rate |
 | Distribution rate | Rewards per second to all lockers |
 | Exit queue | Line of withdrawal requests waiting |
 | plSQD | Your receipt token for deposited SQD |
 | Fee split | How top-ups are divided (providers / workers / burn) |
-| Auto-buyback | Swap triggers automatically when enough stablecoins accumulate |
+| Auto-buyback | Protocol share is swapped to SQD immediately in FeeRouterModuleV2 |
 | TWAP | Time-weighted average price used for slippage protection |
+| Min stake | `PortalRegistry.minStake()`, the registry threshold used by pools |
 
 ## Deploy
 
@@ -212,24 +247,19 @@ Testnet (Arbitrum Sepolia):
 Mainnet (Arbitrum One):
 `forge script script/Deploy.s.sol:DeployArbitrum --rpc-url https://arb1.arbitrum.io/rpc --broadcast --verify`
 
+The Sepolia deploy path uses `FeeRouterModuleV2` and currently configures fees as 100% providers until SQD liquidity exists on PancakeSwap V3. The mainnet deploy script still deploys the legacy `FeeRouterModule`; FeeRouterModuleV2 can be deployed separately with `script/DeployFeeRouterV2.s.sol`.
+
 ## Contract Size Optimization
 
-The PortalPoolImplementation contract is close to the 24,576 byte EVM limit. We use `optimizer_runs = 1` to minimize bytecode size. Higher values optimize for cheaper runtime gas but produce larger bytecode.
+The PortalPoolImplementation contract is close to the 24,576 byte EVM limit. We use `optimizer_runs = 1` to minimize bytecode size. Higher values optimize for cheaper runtime gas but produce larger bytecode, so size needs to be checked before changing the optimizer profile.
 
-| optimizer_runs | Contract Size | Margin  | Status |
-|----------------|---------------|---------|--------|
-| 1              | 24,197 bytes  | +379    | ✓      |
-| 100            | 24,231 bytes  | +345    | ✓      |
-| 200            | 24,421 bytes  | +155    | ✓      |
-| 300            | 24,355 bytes  | +221    | ✓      |
-| 400            | 24,378 bytes  | +198    | ✓      |
-| 500            | 24,454 bytes  | +122    | ✓      |
-| 1000           | 26,694 bytes  | -2,118  | ✗      |
-| 2000           | 27,855 bytes  | -3,279  | ✗      |
-| 5000           | 29,028 bytes  | -4,452  | ✗      |
-| 10000          | 29,755 bytes  | -5,179  | ✗      |
+Current `forge build --sizes` result:
 
-At `optimizer_runs >= 1000`, the contract exceeds the EVM limit and cannot be deployed. The sweet spot is `optimizer_runs = 1` which gives the most margin for future changes while staying deployable.
+| Contract | Runtime Size | Runtime Margin | Status |
+|----------|--------------|----------------|--------|
+| PortalPoolImplementation | 23,946 bytes | +630 bytes | ✓ |
+
+The current default profile stays deployable, but the margin is small enough that new pool logic should always be checked with `forge build --sizes`.
 
 ## License
 
