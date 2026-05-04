@@ -19,6 +19,9 @@ jobs:
 
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
+        with:
+          # pin stable so `forge fmt --check` matches local stable installs (nightly fmt can differ)
+          version: stable
 
       - name: Show Forge version
         run: |
