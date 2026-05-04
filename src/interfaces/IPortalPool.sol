@@ -117,6 +117,7 @@ interface IPortalPool {
             uint256 unlockTimestamp
         );
     function getTotalProcessed() external view returns (uint256);
+    /// @dev Deprecated compatibility getter. New integrations should read PortalRegistry.minStake() instead.
     function getMinCapacity() external view returns (uint256);
     function getWithdrawalWaitingTimestamp(uint256 amount) external view returns (uint256 unlockTimestamp);
 

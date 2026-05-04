@@ -70,6 +70,7 @@ interface IPortalFactory {
     function exitUnlockRatePerSecond() external view returns (uint256);
     function collectionDeadlineSeconds() external view returns (uint256);
     function defaultMaxStakePerWallet() external view returns (uint256);
+    /// @dev Deprecated compatibility getter. New integrations should read PortalRegistry.minStake() instead.
     function getMinCapacity() external view returns (uint256);
 
     function setMaxPaymentTokens(uint256 value) external;
@@ -77,12 +78,14 @@ interface IPortalFactory {
     function setCollectionDeadline(uint256 seconds_) external;
     function setMaxDistributionRate(uint256 ratePerSecond) external;
     function setMinDistributionRate(uint256 ratePerSecond) external;
+    /// @dev Deprecated compatibility setter. Keep this mirror aligned with PortalRegistry.minStake().
     function setMinStakeThreshold(uint256 _minStakeThreshold) external;
     function setWorkerEpochLength(uint256 _workerEpochLength) external;
     function feeRouter() external view returns (address);
     function setFeeRouter(address _feeRouter) external;
     function maxDistributionRatePerSecond() external view returns (uint256);
     function minDistributionRatePerSecond() external view returns (uint256);
+    /// @dev Deprecated compatibility mirror for legacy reads. PortalRegistry.minStake() is the source of truth.
     function minStakeThreshold() external view returns (uint256);
     function workerEpochLength() external view returns (uint256);
 
