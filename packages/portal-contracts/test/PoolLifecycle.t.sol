@@ -223,6 +223,47 @@ contract PoolLifecycleTest is BaseTest {
         pool.recoverRewards();
     }
 
+    function test_RecoverRewards_FromFailed_AfterCollectingTopUpOnlyReturnsRemainingPoolBalance() public {
+        address portal = _createCollectingPool();
+        PortalPoolImplementation pool = PortalPoolImplementation(portal);
+
+        uint256 workerPoolBalanceBefore = usdc.balanceOf(workerRewardPool);
+        uint256 poolBalanceBeforeTopUp = usdc.balanceOf(portal);
+
+        uint256 topUpAmount = 1000 * 1e6;
+        uint256 expectedRoutedToWorkerPool = topUpAmount / 2;
+        uint256 expectedRetainedInPool = topUpAmount / 2;
+
+        vm.startPrank(operator);
+        usdc.approve(portal, topUpAmount);
+        pool.topUpRewards(topUpAmount);
+        vm.stopPrank();
+
+        uint256 expectedRecoverable = poolBalanceBeforeTopUp + expectedRetainedInPool;
+        assertEq(usdc.balanceOf(portal), expectedRecoverable, "Only provider share should remain in pool");
+        assertEq(
+            usdc.balanceOf(workerRewardPool),
+            workerPoolBalanceBefore + expectedRoutedToWorkerPool,
+            "Worker pool share should be routed out immediately"
+        );
+
+        _warpToAfterDeadline(portal);
+        pool.checkAndFailPortal();
+
+        uint256 operatorBalanceBefore = usdc.balanceOf(operator);
+        vm.prank(operator);
+        uint256 recovered = pool.recoverRewards();
+
+        assertEq(recovered, expectedRecoverable);
+        assertEq(usdc.balanceOf(operator), operatorBalanceBefore + expectedRecoverable);
+        assertEq(usdc.balanceOf(portal), 0, "Recovered amount should match remaining pool balance");
+        assertEq(
+            usdc.balanceOf(workerRewardPool),
+            workerPoolBalanceBefore + expectedRoutedToWorkerPool,
+            "Routed fees should stay out of the pool"
+        );
+    }
+
     function test_RecoverRewards_FromClosed_Success() public {
         address portal = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "RecoverClosed");
         PortalPoolImplementation pool = PortalPoolImplementation(portal);
@@ -240,8 +281,7 @@ contract PoolLifecycleTest is BaseTest {
         pool.closePool();
         assertEq(uint256(pool.getState()), uint256(IPortalPool.PoolState.CLOSED));
 
-        uint256 expectedRecover =
-            pool.credit() > pool.totalRewardsPaid() ? pool.credit() - pool.totalRewardsPaid() : 0;
+        uint256 expectedRecover = pool.credit() > pool.totalRewardsPaid() ? pool.credit() - pool.totalRewardsPaid() : 0;
         assertTrue(expectedRecover > 0, "should have unused budget");
 
         uint256 operatorBalBefore = usdc.balanceOf(operator);

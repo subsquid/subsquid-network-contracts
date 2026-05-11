@@ -47,6 +47,7 @@ library PoolErrors {
     // Validation errors
     error InvalidAmount();
     error InvalidAddress();
+    error AddressAlreadySet();
     error BelowMinimum();
     error AboveMaximum();
     error BelowCurrentStake();
@@ -62,6 +63,7 @@ library PoolErrors {
     error NoPaymentTokens();
     error NothingToClaim();
     error InvalidDecimals();
+    error InvalidTokenConfig();
 
     // Distribution errors
     error DistributionTurnedOff();
@@ -76,4 +78,8 @@ library PoolErrors {
 
     // Fee router errors
     error InvalidFeeConfig();
+    error InvalidPoolFee();
+    error NothingToBuyback();
+    error BuybackDisabled();
+    error SlippageProtectionNotConfigured();
 }
