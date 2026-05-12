@@ -1,3 +1,5 @@
+[profile.ci]
+
 [profile.default]
 src = "src"
 out = "out"
