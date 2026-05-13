@@ -1,4 +1,4 @@
-import { formatEther, parseAbi, type Address } from "viem";
+import { formatEther, formatUnits, parseAbi, type Address } from "viem";
 import { arbitrum } from "viem/chains";
 import promClient from "prom-client";
 import { chainId, client } from "./client.js";
@@ -74,7 +74,7 @@ export async function updateWalletMetrics() {
     if (res.status === "success") {
       balanceGauge.set(
         { wallet: sqdBalanceWallets[i], token: "SQD" },
-        Number(formatEther(res.result)),
+        Number(formatUnits(res.result, 18)),
       );
     }
   }

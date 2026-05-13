@@ -1,5 +1,6 @@
 import {
   formatUnits,
+  getAddress,
   parseAbi,
   zeroAddress,
   type Address,
@@ -7,33 +8,33 @@ import {
 import promClient from "prom-client";
 import { client } from "./client.js";
 
-const portalRegistryAddress = (process.env.PORTAL_REGISTRY ?? "").trim() as
-  | Address
-  | "";
-
-const portalOperators = (process.env.PORTAL_OPERATORS ?? "")
+const rawRegistry = (process.env.PORTAL_REGISTRY ?? "").trim();
+const rawOperators = (process.env.PORTAL_OPERATORS ?? "")
   .split(",")
-  .map((a) => a.trim().toLowerCase())
+  .map((a) => a.trim())
   .filter(Boolean);
 
-if (portalRegistryAddress && portalOperators.length === 0) {
+if (rawRegistry && rawOperators.length === 0) {
   throw new Error(
     "PORTAL_REGISTRY is set but PORTAL_OPERATORS is empty. Set PORTAL_OPERATORS to a comma-separated list of operator addresses to monitor.",
   );
 }
-if (!portalRegistryAddress && portalOperators.length > 0) {
+if (!rawRegistry && rawOperators.length > 0) {
   throw new Error(
     "PORTAL_OPERATORS is set but PORTAL_REGISTRY is empty. Set PORTAL_REGISTRY to the portal registry contract address.",
   );
 }
 
-const portalOperatorSet = new Set(portalOperators);
+const portalRegistryAddress: Address | undefined = rawRegistry
+  ? getAddress(rawRegistry)
+  : undefined;
+const portalOperatorSet = new Set(rawOperators.map((a) => getAddress(a).toLowerCase()));
 
 export const hasPortalToMonitor =
   !!portalRegistryAddress && portalOperatorSet.size > 0;
 
 // Unix timestamp at end of year 9999, used as a cap when distribution is paused.
-const RUNWAY_INFINITY_CAP = 253402300799;
+const RUNWAY_INFINITY_CAP = 253402300799n;
 
 const portalRegistryAbi = parseAbi([
   "function clusterCount() view returns (uint256)",
@@ -90,15 +91,17 @@ type TokenMetadata = { decimals: number; symbol: string };
 const tokenMetadataCache = new Map<Address, TokenMetadata>();
 
 async function fetchPools(): Promise<Pool[]> {
+  if (!portalRegistryAddress) return [];
+
   const count = await client.readContract({
-    address: portalRegistryAddress as Address,
+    address: portalRegistryAddress,
     abi: portalRegistryAbi,
     functionName: "clusterCount",
   });
   if (count === 0n) return [];
 
   const [, clusters] = await client.readContract({
-    address: portalRegistryAddress as Address,
+    address: portalRegistryAddress,
     abi: portalRegistryAbi,
     functionName: "getClustersPaginated",
     args: [0n, count],
@@ -216,8 +219,8 @@ function setGauges(poolData: PoolData[]) {
       if (runway < 0n) {
         // Should not occur on a healthy pool; surface as 0 to make dashboards visible.
         runwaySeconds = 0;
-      } else if (runway > BigInt(RUNWAY_INFINITY_CAP)) {
-        runwaySeconds = RUNWAY_INFINITY_CAP;
+      } else if (runway > RUNWAY_INFINITY_CAP) {
+        runwaySeconds = Number(RUNWAY_INFINITY_CAP);
       } else {
         runwaySeconds = Number(runway);
       }
@@ -256,9 +259,7 @@ export async function updatePortalMetrics() {
   if (!hasPortalToMonitor) return;
 
   const pools = await fetchPools();
-  if (pools.length === 0) return;
-
-  const poolData = await fetchPoolData(pools);
+  const poolData = pools.length > 0 ? await fetchPoolData(pools) : [];
 
   const uniqueTokens = Array.from(
     new Set(poolData.map((p) => p.rewardToken).filter((t): t is Address => !!t)),
@@ -267,5 +268,11 @@ export async function updatePortalMetrics() {
 
   await fetchErc20Balances(poolData);
 
+  // Reset only after all reads succeeded so transient RPC failures keep stale values
+  // visible; on success this clears series for pools/labels that no longer apply
+  // (removed from registry, dropped from allowlist, active flipped, reward token changed).
+  portalRunwayGauge.reset();
+  portalRewardBalanceGauge.reset();
+  portalRewardErc20BalanceGauge.reset();
   setGauges(poolData);
 }

@@ -13,8 +13,10 @@ const intervalMs = 1000 * 60 * Number(process.env.INTERVAL_MINUTES ?? 120);
 startServer();
 
 async function updateMetrics() {
-  await updateWalletMetrics().catch(console.error);
-  await updatePortalMetrics().catch(console.error);
+  await Promise.all([
+    updateWalletMetrics().catch(console.error),
+    updatePortalMetrics().catch(console.error),
+  ]);
   setTimeout(updateMetrics, intervalMs);
 }
 
