@@ -1,12 +1,13 @@
 {
   "name": "@subsquid-network/contracts",
   "type": "module",
-  "version": "0.0.3",
+  "version": "0.1.0",
   "bin": {
     "subsquid-network-register": "packages/contracts/scripts/register-worker.js"
   },
   "dependencies": {
     "@openzeppelin/merkle-tree": "^1.0.6",
+    "@openzeppelin/contracts": "^5.0.2",
     "bs58": "^5.0.0",
     "dotenv": "^16.0.3",
     "ethers": "^5.7.2",

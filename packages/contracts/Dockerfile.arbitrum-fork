@@ -1,0 +1,61 @@
+
+FROM ubuntu:22.04
+
+RUN apt-get update && apt-get install -y \
+    curl \
+    git \
+    build-essential \
+    jq \
+    python3 \
+    python3-pip \
+    bash \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN curl -fsSL https://deb.nodesource.com/setup_18.x | bash - \
+    && apt-get install -y nodejs
+
+RUN pip3 install base58
+
+RUN npm install -g pnpm@latest
+
+RUN curl -L https://foundry.paradigm.xyz | bash
+ENV PATH="/root/.foundry/bin:${PATH}"
+RUN foundryup
+
+WORKDIR /usr/src/app
+
+COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
+COPY packages/contracts/package.json ./packages/contracts/
+COPY packages/rewards-calculator/package.json ./packages/rewards-calculator/
+
+RUN pnpm install
+
+COPY packages/contracts/foundry.toml ./packages/contracts/foundry.toml
+
+WORKDIR /usr/src/app/packages/contracts
+RUN forge install foundry-rs/forge-std OpenZeppelin/openzeppelin-contracts@v5.0.1 OpenZeppelin/openzeppelin-contracts-upgradeable@v5.0.2 PaulRBerg/prb-math@release-v4 --no-git
+
+COPY packages/contracts/src ./src
+COPY packages/contracts/script/DeployDistributedRewards.s.sol ./script/DeployDistributedRewards.s.sol
+#COPY packages/contracts/test ./test
+COPY packages/contracts/lib ./lib
+COPY packages/contracts/generate_merkle.mjs ./generate_merkle.mjs
+COPY packages/contracts/b58.py ./b58.py
+
+RUN forge build
+
+COPY packages/contracts/deploy ./deploy
+COPY packages/contracts/deployments ./deployments
+
+RUN mkdir -p /usr/src/app/packages/contracts/docker-scripts
+
+COPY packages/contracts/docker-scripts/ ./docker-scripts/
+
+RUN chmod +x docker-scripts/*.sh
+
+EXPOSE 8545
+
+WORKDIR /usr/src/app/packages/contracts
+
+CMD ["./docker-scripts/run_arbitrum_fork.sh"] 

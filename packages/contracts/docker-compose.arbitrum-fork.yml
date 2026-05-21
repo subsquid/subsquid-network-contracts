@@ -1,0 +1,35 @@
+version: '3.8'
+
+services:
+  arbitrum-fork:
+    build:
+      context: ../../
+      dockerfile: packages/contracts/Dockerfile.arbitrum-fork
+    ports:
+      - "8545:8545"
+    environment:
+      - ADMIN_KEY=${ADMIN_KEY:-}
+      - DISTRIBUTOR1_KEY=${DISTRIBUTOR1_KEY:-}
+      - DISTRIBUTOR2_KEY=${DISTRIBUTOR2_KEY:-}
+      
+      - NUM_WORKERS=${NUM_WORKERS:-500}
+      - BATCH_SIZE=${BATCH_SIZE:-100}
+      - IPFS_LINK=${IPFS_LINK:-ipfs://test}
+      
+      - SKIP_COMMIT=${SKIP_COMMIT:-false}
+      - SKIP_APPROVE=${SKIP_APPROVE:-false}
+      - SKIP_DISTRIBUTE=${SKIP_DISTRIBUTE:-false}
+      
+      - FORK_URL=${FORK_URL:-https://arb1.arbitrum.io/rpc}
+      - FORK_BLOCK_NUMBER=${FORK_BLOCK_NUMBER:-latest}
+    volumes:
+      - ./broadcast:/usr/src/app/packages/contracts/broadcast
+      - ./cache:/usr/src/app/packages/contracts/cache
+      - ./out:/usr/src/app/packages/contracts/out
+    networks:
+      - arbitrum-fork-network
+    command: ["./docker-scripts/run_arbitrum_fork.sh"]
+
+networks:
+  arbitrum-fork-network:
+    driver: bridge 
