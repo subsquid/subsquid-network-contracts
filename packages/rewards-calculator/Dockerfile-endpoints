@@ -15,7 +15,7 @@ COPY packages/contracts/src ./contracts/src
 COPY packages/contracts/package.json ./contracts/package.json
 
 WORKDIR /usr/src/app/contracts
-RUN forge install foundry-rs/forge-std OpenZeppelin/openzeppelin-contracts OpenZeppelin/openzeppelin-contracts-upgradeable PaulRBerg/prb-math@release-v4 --no-git
+RUN forge install foundry-rs/forge-std OpenZeppelin/openzeppelin-contracts@v5.0.1 OpenZeppelin/openzeppelin-contracts-upgradeable@v5.0.2 PaulRBerg/prb-math@release-v4 --no-git
 RUN yarn build
 WORKDIR /usr/src/app
 COPY packages/rewards-calculator ./rewards-calculator
