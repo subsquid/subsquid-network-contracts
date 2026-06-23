@@ -15,6 +15,7 @@ import { Rewards } from "./reward";
 import { Workers } from "./workers";
 import { fordefiRequest } from "./fordefi/request";
 import { sendFordefiTransaction } from "./fordefi/sendTransaction";
+import { rewardsToTxArgs } from "./rewardsToTxArgs";
 import assert from "assert";
 
 const MAX_BLOCK_RANGE_SIZE = BigInt(config.logScanMaxRange)
@@ -238,17 +239,6 @@ export async function getBlockTimestamp(blockNumber: number) {
 
 export async function canCommit(address: Hex) {
   return contracts.rewardsDistribution.read.canCommit([address]);
-}
-
-function rewardsToTxArgs(rewards: Rewards) {
-  const workerPeerIds = Object.keys(rewards ?? {});
-  const workerIds = workerPeerIds.map((id) => rewards[id].id);
-  const rewardAmounts = workerPeerIds.map((id) => rewards[id].workerReward);
-  const stakedAmounts = workerPeerIds.map((id) => rewards[id].stakerReward);
-  const computationUnitsUsed = workerPeerIds.map(
-    (id) => rewards[id].computationUnitsUsed ?? 0n,
-  );
-  return { workerIds, rewardAmounts, stakedAmounts, computationUnitsUsed };
 }
 
 async function sendCommitRequest(

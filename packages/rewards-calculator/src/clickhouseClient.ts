@@ -50,6 +50,7 @@ export class ClickhouseClient {
           ${config.clickhouse.logsTableName}.worker_timestamp <= '${formatDate(this.to)}' and
           (toUnixTimestamp64Micro(collector_timestamp) - toUnixTimestamp64Micro(worker_timestamp)) / 60000000 < 20
         group by worker_id
+        order by worker_id
       `;
       const res: any[] = await clickhouse.query(query).toPromise()
 
