@@ -32,7 +32,7 @@ export const useRewards = () => {
     (async () => {
       const distributions = await publicClient.getLogs({
         ...distributorContractConfig,
-        event: getEventByName(distributorContractConfig.abi, "Distributed"),
+        event: getEventByName(distributorContractConfig.abi, "BatchDistributed"),
         fromBlock: 0n,
       });
       const _rewards = distributions

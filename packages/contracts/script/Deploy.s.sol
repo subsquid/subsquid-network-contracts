@@ -11,7 +11,7 @@ import "../src/Staking.sol";
 import "../src/WorkerRegistration.sol";
 import "../src/RewardTreasury.sol";
 import "../src/RewardCalculation.sol";
-import "../src/DistributedRewardDistribution.sol";
+import "../src/DistributedRewardsDistribution.sol";
 import "../src/SQD.sol";
 import "../src/Router.sol";
 import "../src/GatewayRegistry.sol";
