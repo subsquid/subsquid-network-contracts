@@ -273,7 +273,7 @@ contract SubsquidVestingTest is BaseTest {
     vm.roll(block.number + 100);
     vesting.execute(address(router.staking()), call2);
     assertEq(vesting.releasable(address(token)), 4.8 ether); // (10 + 4) * 21 / 30   - 5
-      //                                                         total  month passed  released
+    //                                                         total  month passed  released
   }
 
   function test_RevertsIf_CallToUnallowedContract() public {
