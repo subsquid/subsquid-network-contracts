@@ -1,10 +1,10 @@
-import { NetworkStatsEntry } from "./clickhouseClient";
+import type { NetworkStatsEntry } from "./clickhouseClient";
 import { getWorkerId } from "./chain";
 import { QueryLog, validateSignatures } from "./signatureVerification";
 import { config } from "./config";
 
 import Decimal from "decimal.js";
-Decimal.set({ precision: 28, minE: -9 });
+Decimal.set({ precision: 28 });
 
 export class Worker {
   private contractId: bigint | undefined;

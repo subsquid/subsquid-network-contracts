@@ -1,4 +1,4 @@
-import testLog from "./data/test_log.json" assert { type: "json" };
+import testLog from "./data/test_log.json" with { type: "json" };
 import {
   populateQueryProto,
   validateSignatures,

@@ -1,10 +1,10 @@
-import workerRegistrationAbi from "../../contracts/artifacts/WorkerRegistration.sol/WorkerRegistration";
-import SQDAbi from "../../contracts/artifacts/SQD.sol/SQD";
-import rewardCalculationAbi from "../../contracts/artifacts/RewardCalculation.sol/RewardCalculation";
-import rewardsDistributionAbi from "../../contracts/artifacts/DistributedRewardDistribution.sol/DistributedRewardsDistribution";
-import stakingAbi from "../../contracts/artifacts/Staking.sol/Staking";
-import capAbi from "../../contracts/artifacts/SoftCap.sol/SoftCap";
-import networkControllerAbi from "../../contracts/artifacts/NetworkController.sol/NetworkController";
+import workerRegistrationAbi from "../../contracts/artifacts/WorkerRegistration.sol/WorkerRegistration.json" with { type: "json" };
+import SQDAbi from "../../contracts/artifacts/SQD.sol/SQD.json" with { type: "json" };
+import rewardCalculationAbi from "../../contracts/artifacts/RewardCalculation.sol/RewardCalculation.json" with { type: "json" };
+import rewardsDistributionAbi from "../../contracts/artifacts/DistributedRewardDistribution.sol/DistributedRewardsDistribution.json" with { type: "json" };
+import stakingAbi from "../../contracts/artifacts/Staking.sol/Staking.json" with { type: "json" };
+import capAbi from "../../contracts/artifacts/SoftCap.sol/SoftCap.json" with { type: "json" };
+import networkControllerAbi from "../../contracts/artifacts/NetworkController.sol/NetworkController.json" with { type: "json" };
 import SepoliaDeployments from "../../contracts/deployments/421614.json" with { type: "json" };
 import ArbitrumDeployments from "../../contracts/deployments/42161.json" with { type: "json" };
 import { Address, createPublicClient, getContract, http } from "viem";
