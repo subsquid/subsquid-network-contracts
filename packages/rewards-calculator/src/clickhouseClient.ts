@@ -197,7 +197,7 @@ export async function historicalLiveness(
   const to = sortedEpochRanges.at(-1);
   const pings = await clickhouseClient.getPings(from, to);
   const epochRangesTimestamps = sortedEpochRanges.map((date) =>
-    dayjs(formatDate(date)).utc().unix(),
+    dayjs.utc(formatDate(date)).unix(),
   );
   const splittedPings = Object.entries(pings).map(([workerId, timestamps]) => {
     return [workerId, splitLogs(timestamps, epochRangesTimestamps)] as const;

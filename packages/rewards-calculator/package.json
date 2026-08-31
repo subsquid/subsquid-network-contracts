@@ -21,6 +21,7 @@
   "scripts": {
     "reward-simulation": "ts-node src/generate-logs.ts && ts-node src/index.ts",
     "start": "TS_NODE_TRANSPILE_ONLY=true NODE_OPTIONS=\"--loader ts-node/esm\" ts-node src/index.ts",
+    "test": "TS_NODE_TRANSPILE_ONLY=true mocha",
     "endpoints": "TS_NODE_TRANSPILE_ONLY=true NODE_OPTIONS=\"--loader ts-node/esm\" ts-node src/endpoints.ts",
     "stats": "ts-node src/epochStats.ts"
   },

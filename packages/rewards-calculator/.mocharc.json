@@ -2,5 +2,7 @@
   "extensions": ["ts"],
   "node-option": [
     "loader=ts-node/esm"
-  ]
+  ],
+  "file": ["test/setup.ts"],
+  "spec": ["test/**/*.ts"]
 }

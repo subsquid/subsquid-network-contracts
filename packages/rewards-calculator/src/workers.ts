@@ -34,7 +34,7 @@ import Decimal from "decimal.js";
 import bs58 from "bs58";
 import { strict as assert } from "assert";
 
-Decimal.set({ precision: 28, minE: -9 });
+Decimal.set({ precision: 28 });
 
 const YEAR = 365 * 24 * 60 * 60;
 
