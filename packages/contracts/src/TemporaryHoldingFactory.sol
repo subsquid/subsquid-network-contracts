@@ -36,8 +36,9 @@ contract TemporaryHoldingFactory is AccessControlledPausable {
     uint64 unlockTimestamp,
     uint256 expectedTotalAmount
   ) external onlyRole(HOLDING_CREATOR_ROLE) whenNotPaused returns (TemporaryHolding) {
-    TemporaryHolding holding =
-      new TemporaryHolding(token, router, beneficiaryAddress, admin, unlockTimestamp, expectedTotalAmount);
+    TemporaryHolding holding = new TemporaryHolding(
+      token, router, beneficiaryAddress, admin, unlockTimestamp, expectedTotalAmount
+    );
     emit TemporaryHoldingCreated(holding, beneficiaryAddress, admin, unlockTimestamp, expectedTotalAmount);
     return holding;
   }

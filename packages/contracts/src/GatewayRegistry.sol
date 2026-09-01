@@ -2,8 +2,9 @@ pragma solidity 0.8.20;
 
 import "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 import {PausableUpgradeable} from "openzeppelin-contracts-upgradeable/contracts/utils/PausableUpgradeable.sol";
-import {AccessControlUpgradeable} from
-  "openzeppelin-contracts-upgradeable/contracts/access/AccessControlUpgradeable.sol";
+import {
+  AccessControlUpgradeable
+} from "openzeppelin-contracts-upgradeable/contracts/access/AccessControlUpgradeable.sol";
 
 import "./interfaces/IERC20WithMetadata.sol";
 import "./interfaces/IRouter.sol";
@@ -339,7 +340,10 @@ contract GatewayRegistry is AccessControlledPausableUpgradeable, IGatewayRegistr
 
   /// @dev Allow/ban contract to be used by strategy
   /// @notice if isDefault is true, the strategy will be used for all new gateway operators
-  function setIsStrategyAllowed(address strategy, bool isAllowed, bool isDefault) external onlyRole(DEFAULT_ADMIN_ROLE) {
+  function setIsStrategyAllowed(address strategy, bool isAllowed, bool isDefault)
+    external
+    onlyRole(DEFAULT_ADMIN_ROLE)
+  {
     if (!isAllowed && (isDefault || defaultStrategy == strategy)) {
       revert("Cannot set disallowed strategy as default");
     }
@@ -403,8 +407,8 @@ contract GatewayRegistry is AccessControlledPausableUpgradeable, IGatewayRegistr
     Stake storage _stake = operators[msg.sender].stake;
     require(_stake.autoExtension, "AutoExtension disabled");
     _stake.autoExtension = false;
-    _stake.lockEnd = _stake.lockStart
-      + (_saturatedDiff(uint128(block.number), _stake.lockStart) / _stake.duration + 1) * _stake.duration;
+    _stake.lockEnd = _stake.lockStart + (_saturatedDiff(uint128(block.number), _stake.lockStart) / _stake.duration + 1)
+      * _stake.duration;
 
     emit AutoextensionDisabled(msg.sender, _stake.lockEnd);
   }
