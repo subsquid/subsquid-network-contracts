@@ -20,13 +20,14 @@ import { Workers } from './workers';
 
 const MAX_BLOCK_RANGE_SIZE = BigInt(config.logScanMaxRange);
 
-function getNitroGenesisBlock(chainId: number) {
-  // all networks except Arbitrum One started off with Nitro
+// Arbitrum One moved to Nitro at L1 block 15447158, and its first Nitro L2 block
+// is 22207817; all other networks started off with Nitro.
+function getNitroGenesis(chainId: number) {
   if (chainId === 42161) {
-    return 15447158n;
+    return { l1Block: 15447158n, l2Block: 22207817n };
   }
 
-  return 0n;
+  return { l1Block: 0n, l2Block: 0n };
 }
 
 let lastKnowBlockPair: { l1Block: bigint; l2Block: bigint } | undefined =
@@ -41,13 +42,15 @@ export async function getFirstBlockForL1Block(
   let start: bigint;
   if (lastKnowBlockPair == null || lastKnowBlockPair.l1Block > targetL1Block) {
     const chainId = await publicClient.getChainId();
-    start = getNitroGenesisBlock(chainId);
+    const nitroGenesis = getNitroGenesis(chainId);
 
-    if (targetL1Block < start) {
+    if (targetL1Block < nitroGenesis.l1Block) {
       throw new Error(
-        `Target L1 block ${targetL1Block} is before the Nitro genesis block ${start}`,
+        `Target L1 block ${targetL1Block} is before the Nitro genesis block ${nitroGenesis.l1Block}`,
       );
     }
+
+    start = nitroGenesis.l2Block;
   } else if (lastKnowBlockPair.l1Block < targetL1Block) {
     start = lastKnowBlockPair.l2Block;
   } else {
