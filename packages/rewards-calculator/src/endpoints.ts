@@ -3,6 +3,7 @@ import { currentApy, getFirstBlockForL1Block, getL1BlockNumber } from './chain';
 import { config, l1Client, publicClient } from './config';
 import { logger } from './logger';
 import { epochStats } from './reward';
+import { withCache } from './utils';
 
 const app = express();
 const port = process.env.PORT ?? 3000;
@@ -29,6 +30,58 @@ const duration = async (_fromBlock: bigint, _toBlock: bigint) => {
 const bn = (value: { toString(): string }) =>
   BigInt(Math.floor(Number(value.toString())));
 
+async function computeRewards(fromBlock: number, toBlock: number) {
+  const _epochStats = await epochStats(
+    fromBlock,
+    toBlock,
+    config.skipSignatureValidation,
+  );
+  const _duration = await duration(BigInt(fromBlock), BigInt(toBlock));
+  const workerStats = _epochStats.map((worker) => ({
+    id: worker.peerId,
+    workerReward: bn(worker.workerReward),
+    stakerReward: bn(worker.stakerReward),
+    apr: worker.apr(_duration, 365 * 24 * 60 * 60),
+    traffic: {
+      bytesSent: worker.bytesSent,
+      chunksRead: worker.chunksRead,
+      trafficWeight: worker.trafficWeight.toNumber(),
+      dTraffic: worker.dTraffic.toNumber(),
+      validRequests: worker.requestsProcessed,
+      totalRequests: worker.totalRequests,
+      requestErrorRate: 1 - worker.requestsProcessed / worker.totalRequests,
+    },
+    delegation: {
+      totalDelegated: bn(worker.totalStake),
+      effectiveStake: bn(worker.stake),
+    },
+    liveness: {
+      livenessCoefficient: worker.livenessCoefficient.toNumber(),
+      tenure: worker.dTenure.toNumber(),
+    },
+  }));
+  const totalWorkerReward = workerStats
+    .map((worker) => worker.workerReward)
+    .reduce((a, b) => a + bn(b), 0n);
+  const totalStakerReward = workerStats
+    .map((worker) => worker.stakerReward)
+    .reduce((a, b) => a + bn(b), 0n);
+
+  return {
+    totalRewards: {
+      worker: totalWorkerReward,
+      staker: totalStakerReward,
+    },
+    workers: workerStats,
+  };
+}
+
+// Clients retry the same window; one ClickHouse scan per window is enough.
+const cachedRewards = withCache(computeRewards, {
+  ttl: config.rewardsCacheTtl,
+  maxEntries: 16,
+});
+
 async function rewards(
   fromBlock: string,
   toBlock: string,
@@ -47,49 +100,7 @@ async function rewards(
     return;
   }
   try {
-    const _epochStats = await epochStats(
-      Number(fromBlock),
-      Number(toBlock),
-      config.skipSignatureValidation,
-    );
-    const _duration = await duration(BigInt(fromBlock), BigInt(toBlock));
-    const workerStats = _epochStats.map((worker) => ({
-      id: worker.peerId,
-      workerReward: bn(worker.workerReward),
-      stakerReward: bn(worker.stakerReward),
-      apr: worker.apr(_duration, 365 * 24 * 60 * 60),
-      traffic: {
-        bytesSent: worker.bytesSent,
-        chunksRead: worker.chunksRead,
-        trafficWeight: worker.trafficWeight.toNumber(),
-        dTraffic: worker.dTraffic.toNumber(),
-        validRequests: worker.requestsProcessed,
-        totalRequests: worker.totalRequests,
-        requestErrorRate: 1 - worker.requestsProcessed / worker.totalRequests,
-      },
-      delegation: {
-        totalDelegated: bn(worker.totalStake),
-        effectiveStake: bn(worker.stake),
-      },
-      liveness: {
-        livenessCoefficient: worker.livenessCoefficient.toNumber(),
-        tenure: worker.dTenure.toNumber(),
-      },
-    }));
-    const totalWorkerReward = workerStats
-      .map((worker) => worker.workerReward)
-      .reduce((a, b) => a + bn(b), 0n);
-    const totalStakerReward = workerStats
-      .map((worker) => worker.stakerReward)
-      .reduce((a, b) => a + bn(b), 0n);
-
-    res.jsonp({
-      totalRewards: {
-        worker: totalWorkerReward,
-        staker: totalStakerReward,
-      },
-      workers: workerStats,
-    });
+    res.jsonp(await cachedRewards(Number(fromBlock), Number(toBlock)));
   } catch (e: any) {
     console.error(e);
     res.status(500).send(e.message);

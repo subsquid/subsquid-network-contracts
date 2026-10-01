@@ -46,6 +46,7 @@ export const config = {
   requestPrice: Number(env('REQUEST_PRICE', 1n)),
   tenureEpochCount: Number(env('TENURE_EPOCH_COUNT', 10)),
   workTimeout: Number(env('WORK_TIMEOUT_SECONDS', 300)) * 1000,
+  rewardsCacheTtl: Number(env('REWARDS_CACHE_TTL_SECONDS', 1800)) * 1000,
   rewardEpochLength: Number(env('REWARD_EPOCH_LENGTH_BLOCKS', 7000)),
   epochConfirmationBlocks: Number(env('EPOCH_CONFIRMATION_BLOCKS', 150)),
   maxEpochsPerCommit: Number(env('MAX_EPOCHS_PER_COMMIT', 1)),
