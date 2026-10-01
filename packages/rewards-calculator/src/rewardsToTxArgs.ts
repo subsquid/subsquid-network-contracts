@@ -1,4 +1,4 @@
-import type { Rewards } from "./reward";
+import type { Rewards } from './reward';
 
 /**
  * Build the on-chain commit/approve arguments from the computed rewards.

@@ -1,21 +1,21 @@
-import testLog from "./data/test_log.json" with { type: "json" };
+import { describe, expect, it } from 'vitest';
 import {
   populateQueryProto,
   validateSignatures,
   verifySignature,
-} from "../src/signatureVerification";
-import { expect } from "chai";
+} from '../src/signatureVerification';
+import testLog from './data/test_log.json' with { type: 'json' };
 
 const [withDefaultValues, withoutDefaultValues] = testLog;
 
-describe("Signature verification", () => {
-  it("populateQueryProto returns buffer", async () => {
+describe('Signature verification', () => {
+  it('populateQueryProto returns buffer', async () => {
     const populated = await populateQueryProto(withDefaultValues);
     expect(populated).to.be.instanceOf(Uint8Array);
     expect(populated.length).to.equal(149);
   });
 
-  it("verifySignature returns true for correct signature in log without default values", async () => {
+  it('verifySignature returns true for correct signature in log without default values', async () => {
     const message = await populateQueryProto(withoutDefaultValues);
     expect(
       verifySignature(
@@ -26,7 +26,7 @@ describe("Signature verification", () => {
     ).to.be.true;
   });
 
-  it("verifySignature returns true for correct signature in withDefaultValues", async () => {
+  it('verifySignature returns true for correct signature in withDefaultValues', async () => {
     const message = await populateQueryProto(withDefaultValues);
     expect(
       verifySignature(
@@ -37,7 +37,7 @@ describe("Signature verification", () => {
     ).to.be.true;
   });
 
-  it("verifySignature returns false for incorrect signature", async () => {
+  it('verifySignature returns false for incorrect signature', async () => {
     const message = await populateQueryProto(withDefaultValues);
     expect(
       verifySignature(
@@ -48,7 +48,7 @@ describe("Signature verification", () => {
     ).to.be.false;
   });
 
-  it("verifySignatures returns true for correct query object", async () => {
+  it('verifySignatures returns true for correct query object', async () => {
     expect(await validateSignatures(withDefaultValues)).to.be.true;
     expect(await validateSignatures(withoutDefaultValues)).to.be.true;
   });

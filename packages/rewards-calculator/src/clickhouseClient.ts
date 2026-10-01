@@ -1,11 +1,10 @@
-import { ClickHouse } from "clickhouse";
-import dayjs from "dayjs";
-import utc from "dayjs/plugin/utc";
-
-import { Workers } from "./workers";
-import { logger } from "./logger";
-import { config } from "./config";
-import { sum } from "./utils";
+import { ClickHouse } from 'clickhouse';
+import dayjs from 'dayjs';
+import utc from 'dayjs/plugin/utc';
+import { config } from './config';
+import { logger } from './logger';
+import { sum } from './utils';
+import { Workers } from './workers';
 
 dayjs.extend(utc);
 const clickhouse = new ClickHouse({
@@ -14,11 +13,11 @@ const clickhouse = new ClickHouse({
     username: config.clickhouse.username,
     password: config.clickhouse.password,
   },
-  format: "json",
+  format: 'json',
 });
 
 function formatDate(date: Date) {
-  return dayjs(date).utc().format("YYYY-MM-DD HH:mm:ss");
+  return dayjs(date).utc().format('YYYY-MM-DD HH:mm:ss');
 }
 
 export class ClickhouseClient {
@@ -34,17 +33,15 @@ export class ClickhouseClient {
   public async getActiveWorkers(shouldSkipSignatureValidation = false) {
     if (shouldSkipSignatureValidation) {
       const columns = [
-        "worker_id",
-        "sum(num_read_chunks) as num_read_chunks",
-        "sum(output_size) as output_size",
-        "count(*) as totalRequests",
+        'worker_id',
+        'sum(num_read_chunks) as num_read_chunks',
+        'sum(output_size) as output_size',
+        'count(*) as totalRequests',
       ];
       await this.logTotalQueries();
       const query = `
-        select ${columns.join(",")}
-        from ${
-          config.clickhouse.logsTableName
-        }
+        select ${columns.join(',')}
+        from ${config.clickhouse.logsTableName}
         where
           ${config.clickhouse.logsTableName}.worker_timestamp >= '${formatDate(this.from)}' and  
           ${config.clickhouse.logsTableName}.worker_timestamp <= '${formatDate(this.to)}' and
@@ -52,49 +49,47 @@ export class ClickhouseClient {
         group by worker_id
         order by worker_id
       `;
-      const res: any[] = await clickhouse.query(query).toPromise()
+      const res: any[] = await clickhouse.query(query).toPromise();
 
-
-
-      let rows = 0
+      let rows = 0;
       for await (const row of res) {
         const worker = this.workers.add(row.worker_id);
         worker.totalRequests = row.totalRequests;
         worker.requestsProcessed = row.totalRequests;
         worker.bytesSent = row.output_size;
         worker.chunksRead = row.num_read_chunks;
-        rows+= row.totalRequests
+        rows += row.totalRequests;
       }
 
-      console.log('ROWS', rows)
+      console.log('ROWS', rows);
 
       return this.workers;
-    } 
+    }
 
     const columns = [
-      "client_id",
-      "worker_id",
-      "query_id",
-      "dataset",
-      "query",
-      "profiling",
-      "client_state_json",
-      "lcase(hex(query_hash)) as query_hash",
-      "exec_time_ms",
-      "result",
-      "num_read_chunks",
-      "output_size",
-      "lcase(hex(output_hash)) as output_hash",
-      "error_msg",
-      "seq_no",
-      "lcase(hex(client_signature)) as client_signature",
-      "lcase(hex(worker_signature)) as worker_signature",
-      "toUnixTimestamp64Milli(worker_timestamp) as worker_timestamp",
-      "toUnixTimestamp64Milli(collector_timestamp) as collector_timestamp",
-      "(collector_timestamp - worker_timestamp) / 60000 as timeDiff",
+      'client_id',
+      'worker_id',
+      'query_id',
+      'dataset',
+      'query',
+      'profiling',
+      'client_state_json',
+      'lcase(hex(query_hash)) as query_hash',
+      'exec_time_ms',
+      'result',
+      'num_read_chunks',
+      'output_size',
+      'lcase(hex(output_hash)) as output_hash',
+      'error_msg',
+      'seq_no',
+      'lcase(hex(client_signature)) as client_signature',
+      'lcase(hex(worker_signature)) as worker_signature',
+      'toUnixTimestamp64Milli(worker_timestamp) as worker_timestamp',
+      'toUnixTimestamp64Milli(collector_timestamp) as collector_timestamp',
+      '(collector_timestamp - worker_timestamp) / 60000 as timeDiff',
     ];
     await this.logTotalQueries();
-    const query = `select ${columns.join(",")} from ${
+    const query = `select ${columns.join(',')} from ${
       config.clickhouse.logsTableName
     } where ${
       config.clickhouse.logsTableName
@@ -102,13 +97,13 @@ export class ClickhouseClient {
       config.clickhouse.logsTableName
     }.worker_timestamp <= '${formatDate(this.to)}' and timeDiff < 20 order by query_hash`;
 
-    let rows = 0
+    let rows = 0;
     for await (const row of clickhouse.query(query).stream()) {
-      rows++
+      rows++;
       const worker = this.workers.add(row.worker_id);
       await worker.processQuery(row, false);
     }
-    console.log('ROWS', rows)
+    console.log('ROWS', rows);
 
     return this.workers;
   }
@@ -142,7 +137,7 @@ export class ClickhouseClient {
       config.clickhouse.logsTableName
     }.worker_timestamp <= '${formatDate(this.to)}'`;
     const [{ total }] = (await clickhouse.query(count).toPromise()) as any;
-    logger.log("Processing queries:", total);
+    logger.log('Processing queries:', total);
   }
 }
 
@@ -163,14 +158,11 @@ export async function livenessFactor(clickhouseClient: ClickhouseClient) {
   const pings = await clickhouseClient.getPings();
   const totalPeriodSeconds = dayjs(clickhouseClient.to).diff(
     dayjs(clickhouseClient.from),
-    "second",
+    'second',
   );
   const res: Record<string, NetworkStatsEntry> = {};
   for (const workersKey in pings) {
-    res[workersKey] = networkStats(
-      pings[workersKey],
-      totalPeriodSeconds,
-    );
+    res[workersKey] = networkStats(pings[workersKey], totalPeriodSeconds);
   }
   return res;
 }

@@ -1,22 +1,22 @@
+import { Account, Address, Hex, parseAbiItem } from 'viem';
 import {
   approveRewards,
   canCommit,
   commitRewards,
   epochLength,
-  getL1BlockNumber,
   getFirstBlockForL1Block,
+  getL1BlockNumber,
   getLatestCommitment,
   getRegistrations,
   isCommitted,
   lastRewardedBlock,
   Registrations,
-} from "./chain";
-import { epochStats } from "./reward";
-import { addresses, config, contracts, publicClient } from "./config";
-import { Account, Address, Hex, parseAbiItem } from "viem";
-import type { Workers } from "./workers";
-import { logger } from "./logger";
-import { decimalSum } from "./utils";
+} from './chain';
+import { addresses, config, contracts, publicClient } from './config';
+import { logger } from './logger';
+import { epochStats } from './reward';
+import { decimalSum } from './utils';
+import type { Workers } from './workers';
 
 const TOTAL_BATCHES: number = 4;
 
@@ -40,21 +40,32 @@ export class RewardBot {
 
   private async commitIfPossible() {
     try {
-      const { fromBlock, toBlock, epochLen, batchNumber } = await this.commitRange();
+      const { fromBlock, toBlock, epochLen, batchNumber } =
+        await this.commitRange();
 
       if (await this.canCommit(fromBlock, toBlock)) {
-        console.log(`Can commit ${fromBlock} — ${toBlock} from ${this.address}`);
+        console.log(
+          `Can commit ${fromBlock} — ${toBlock} from ${this.address}`,
+        );
 
         /**
          * We need to calculate `TOTAL_BATCHES` epochs to get the correct period for the rewards
          * because of splitting the rewards to batches
          */
-        const workers = await epochStats(toBlock - epochLen * TOTAL_BATCHES, toBlock, config.skipSignatureValidation);
+        const workers = await epochStats(
+          toBlock - epochLen * TOTAL_BATCHES,
+          toBlock,
+          config.skipSignatureValidation,
+        );
 
         /**
          * We send to blockchain original epoch length due to a flaw in the contract
          */
-        await this.tryToCommit(fromBlock, toBlock, workers.filterBatch(batchNumber, TOTAL_BATCHES));
+        await this.tryToCommit(
+          fromBlock,
+          toBlock,
+          workers.filterBatch(batchNumber, TOTAL_BATCHES),
+        );
       } else {
         console.log(`Nothing to commit ${fromBlock} — ${toBlock}`);
       }
@@ -78,20 +89,20 @@ export class RewardBot {
     workers: Workers,
   ) {
     try {
-      const tx = await commitRewards(
+      const tx = await commitRewards({
         fromBlock,
         toBlock,
         workers,
-        this.address,
-        this.index,
-      );
+        address: this.address,
+        index: this.index,
+      });
 
       if (!tx) return;
 
       console.log(
         JSON.stringify({
           time: new Date(),
-          type: "rewards_commited",
+          type: 'rewards_commited',
           bot_wallet: this.address,
           tx_hash: tx,
           from_block: fromBlock,
@@ -103,10 +114,10 @@ export class RewardBot {
         }),
       );
     } catch (e: any) {
-      if (e.message?.includes("Already approved")) {
+      if (e.message?.includes('Already approved')) {
         return;
       }
-      if (e.message?.includes("not all blocks covered")) {
+      if (e.message?.includes('not all blocks covered')) {
         return;
       }
       console.log(e);
@@ -121,25 +132,29 @@ export class RewardBot {
          * We need to calculate `TOTAL_BATCHES` epochs to get the correct period for the rewards
          * because of splitting the rewards to batches
          */
-        const workers = await epochStats(ranges.toBlock - ranges.epochLen * TOTAL_BATCHES, ranges.toBlock, config.skipSignatureValidation);
+        const workers = await epochStats(
+          ranges.toBlock - ranges.epochLen * TOTAL_BATCHES,
+          ranges.toBlock,
+          config.skipSignatureValidation,
+        );
 
         /**
          * We send to blockchain original epoch length due to a flaw in the contract
          */
-        const tx = await approveRewards(
-          ranges.fromBlock,
-          ranges.toBlock,
-          workers.filterBatch(ranges.batchNumber, TOTAL_BATCHES),
-          this.address,
-          this.index,
-          ranges.commitment,
-        );
+        const tx = await approveRewards({
+          fromBlock: ranges.fromBlock,
+          toBlock: ranges.toBlock,
+          workers: workers.filterBatch(ranges.batchNumber, TOTAL_BATCHES),
+          address: this.address,
+          index: this.index,
+          commitment: ranges.commitment,
+        });
 
         if (tx) {
           console.log(
             JSON.stringify({
               time: new Date(),
-              type: "rewards_approved",
+              type: 'rewards_approved',
               bot_wallet: this.address,
               tx_hash: tx,
               from_block: ranges.fromBlock,
@@ -154,13 +169,18 @@ export class RewardBot {
     setTimeout(() => this.approveIfNecessary(), config.workTimeout);
   }
 
-  private async commitRange(): Promise<{ fromBlock: number, toBlock: number, epochLen: number, batchNumber: number }> {
+  private async commitRange(): Promise<{
+    fromBlock: number;
+    toBlock: number;
+    epochLen: number;
+    batchNumber: number;
+  }> {
     const epochLen = await epochLength();
     const maxCommitBlocksCovered = epochLen * config.maxEpochsPerCommit;
 
     let _lastRewardedBlock = await lastRewardedBlock();
     if (_lastRewardedBlock === 0) {
-      logger.error(`Last reward block is 0!`)
+      logger.error(`Last reward block is 0!`);
       _lastRewardedBlock = await firstRegistrationBlock(
         await getRegistrations(),
       );
@@ -172,19 +192,23 @@ export class RewardBot {
       return { fromBlock: 0, toBlock: 0, epochLen, batchNumber: 0 };
     }
 
-
     const toBlock = Math.min(
       _lastRewardedBlock + maxCommitBlocksCovered,
       lastConfirmedBlock,
     );
     const fromBlock = _lastRewardedBlock + 1;
 
-    return { fromBlock, toBlock, epochLen, batchNumber: getBatchNumber(toBlock, epochLen) };
+    return {
+      fromBlock,
+      toBlock,
+      epochLen,
+      batchNumber: getBatchNumber(toBlock, epochLen),
+    };
   }
 }
 
 function getBatchNumber(block: number, epochLen: number): number {
-  return Math.ceil(block / epochLen) % TOTAL_BATCHES
+  return Math.ceil(block / epochLen) % TOTAL_BATCHES;
 }
 
 export async function approveRanges(): Promise<
@@ -202,8 +226,8 @@ export async function approveRanges(): Promise<
 > {
   const epochLen = await epochLength();
 
-  const latestCommit =  await getLatestCommitment()
-  logger.log(`Latest commit: ${JSON.stringify(latestCommit)}`)
+  const latestCommit = await getLatestCommitment();
+  logger.log(`Latest commit: ${JSON.stringify(latestCommit)}`);
 
   if (latestCommit == null) {
     return { shouldApprove: false };
@@ -214,21 +238,22 @@ export async function approveRanges(): Promise<
   );
 
   if (latestDistributionBlock >= Number(latestCommit.toBlock)) {
-    logger.log(`Latest distribution block ${latestDistributionBlock} is not before the latest commit block ${latestCommit.toBlock}, no approve needed` )
+    logger.log(
+      `Latest distribution block ${latestDistributionBlock} is not before the latest commit block ${latestCommit.toBlock}, no approve needed`,
+    );
     return { shouldApprove: false };
   }
 
   if (!latestCommit.fromBlock) {
     // FIXME can it even happen?
-    logger.log(`latestCommit.fromBlock is undefined, no approve`)
+    logger.log(`latestCommit.fromBlock is undefined, no approve`);
     return { shouldApprove: false };
   }
-
 
   return {
     shouldApprove: true,
     ...latestCommit,
     epochLen,
-    batchNumber: getBatchNumber(Number(latestCommit.toBlock), epochLen)
+    batchNumber: getBatchNumber(Number(latestCommit.toBlock), epochLen),
   };
 }
