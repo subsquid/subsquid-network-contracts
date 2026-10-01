@@ -58,28 +58,21 @@ export async function getFirstBlockForL1Block(
   // so, since we use .getBlock() further down the code, we should use .getBlock() here as well
   let end = await publicClient.getBlock().then((block) => block.number);
 
+  // Arbitrum skips some L1 block numbers, so an exact match may not exist:
+  // take the first L2 block whose L1 block is the target or later.
   let targetL2Block: bigint | undefined;
   while (start <= end) {
-    // Calculate the midpoint of the current range.
     const mid = start + (end - start) / 2n;
 
     const l1Block = await publicClient
       .getBlock({ blockNumber: mid })
       .then((block) => BigInt((block as any).l1BlockNumber));
 
-    // If the midpoint matches the target, we've found a match.
-    // Adjust the range to search for the first occurrence.
-    if (l1Block === targetL1Block) {
-      end = mid - 1n;
-    } else if (l1Block < targetL1Block) {
-      start = mid + 1n;
-    } else {
-      end = mid - 1n;
-    }
-
-    // Stores last valid Arbitrum block corresponding to the current, or greater, L1 block.
-    if (l1Block === targetL1Block) {
+    if (l1Block >= targetL1Block) {
       targetL2Block = mid;
+      end = mid - 1n;
+    } else {
+      start = mid + 1n;
     }
   }
 
