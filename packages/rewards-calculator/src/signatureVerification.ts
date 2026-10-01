@@ -1,8 +1,8 @@
-import protobuf from "protobufjs";
-import path from "path";
-import { peerIdFromString } from "@libp2p/peer-id";
-import { fileURLToPath } from "url";
-import { keys } from "@libp2p/crypto";
+import { keys } from '@libp2p/crypto';
+import { peerIdFromString } from '@libp2p/peer-id';
+import path from 'path';
+import protobuf from 'protobufjs';
+import { fileURLToPath } from 'url';
 
 export interface QueryLog {
   client_id: string;
@@ -26,19 +26,19 @@ export interface QueryLog {
   collector_timestamp: number;
 }
 
-async function loadProto(type: "Query" | "QueryExecuted") {
+async function loadProto(type: 'Query' | 'QueryExecuted') {
   const __filename = fileURLToPath(import.meta.url);
   const __dirname = path.dirname(__filename);
 
   const proto = await protobuf.load(
-    path.resolve(__dirname, "protobuf/query.proto"),
+    path.resolve(__dirname, 'protobuf/query.proto'),
   );
   return proto.lookupType(type);
 }
 
 function queryPayload(queryLog: QueryLog, signature?: string) {
   const signatureInBytes = signature
-    ? Buffer.from(signature, "hex")
+    ? Buffer.from(signature, 'hex')
     : undefined;
   return {
     queryId: queryLog.query_id,
@@ -51,7 +51,7 @@ function queryPayload(queryLog: QueryLog, signature?: string) {
 }
 
 export async function populateQueryProto(queryLog: QueryLog) {
-  const Query = await loadProto("Query");
+  const Query = await loadProto('Query');
   const payload = queryPayload(queryLog);
   const err = Query.verify(payload);
   if (err) {
@@ -71,7 +71,7 @@ function queryResult(queryLog: QueryLog) {
       numReadChunks: queryLog.num_read_chunks,
       output: {
         size: queryLog.output_size,
-        sha3_256: Buffer.from(queryLog.output_hash, "hex"),
+        sha3_256: Buffer.from(queryLog.output_hash, 'hex'),
       },
     },
   };
@@ -82,7 +82,7 @@ function queryExecutedPayload(queryLog: QueryLog, clientSignature: string) {
     clientId: queryLog.client_id,
     workerId: queryLog.worker_id,
     query: queryPayload(queryLog, clientSignature),
-    queryHash: Buffer.from(queryLog.query_hash, "hex"),
+    queryHash: Buffer.from(queryLog.query_hash, 'hex'),
     execTimeMs: queryLog.exec_time_ms,
     ...queryResult(queryLog),
     seqNo: queryLog.seq_no,
@@ -94,7 +94,7 @@ export async function populateQueryExecuted(
   queryLog: QueryLog,
   clientSignature: string,
 ) {
-  const QueryExecuted = await loadProto("QueryExecuted");
+  const QueryExecuted = await loadProto('QueryExecuted');
   const payload = queryExecutedPayload(queryLog, clientSignature);
   const err = QueryExecuted.verify(payload);
   if (err) {
@@ -111,7 +111,7 @@ export function verifySignature(
   const publicKey = keys.unmarshalPublicKey(
     peerIdFromString(peerId).publicKey!,
   );
-  return publicKey.verify(message, Buffer.from(signature, "hex"));
+  return publicKey.verify(message, Buffer.from(signature, 'hex'));
 }
 
 export async function validateSignatures(queryLog: QueryLog) {

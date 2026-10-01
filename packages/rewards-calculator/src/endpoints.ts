@@ -1,8 +1,8 @@
-import express from "express";
-import { epochStats } from "./reward";
-import { config, l1Client, publicClient } from "./config";
-import { getL1BlockNumber, currentApy, getFirstBlockForL1Block } from "./chain";
-import { logger } from "./logger"
+import express from 'express';
+import { currentApy, getFirstBlockForL1Block, getL1BlockNumber } from './chain';
+import { config, l1Client, publicClient } from './config';
+import { logger } from './logger';
+import { epochStats } from './reward';
 
 const app = express();
 const port = process.env.PORT ?? 3000;
@@ -35,15 +35,15 @@ async function rewards(
   res: express.Response,
 ) {
   if (!isInteger(fromBlock)) {
-    res.status(400).send("fromBlock is not an integer");
+    res.status(400).send('fromBlock is not an integer');
     return;
   }
   if (!isInteger(toBlock)) {
-    res.status(400).send("toBlock is not an integer");
+    res.status(400).send('toBlock is not an integer');
     return;
   }
   if (Number(fromBlock) >= Number(toBlock)) {
-    res.status(400).send("fromBlock should be less than toBlock");
+    res.status(400).send('fromBlock should be less than toBlock');
     return;
   }
   try {
@@ -96,38 +96,38 @@ async function rewards(
   }
 }
 
-app.get("/config", async (_, res) => {
+app.get('/config', async (_, res) => {
   const { fordefi, clickhouse, ...rest } = config;
   res.jsonp(rest);
 });
 
-app.get("/rewards/:fromBlock/:toBlock", async (req, res) => {
+app.get('/rewards/:fromBlock/:toBlock', async (req, res) => {
   const { fromBlock, toBlock } = req.params;
   await rewards(fromBlock, toBlock, res);
 });
 
-app.get("/currentApy/:atBlock?", async (req, res) => {
+app.get('/currentApy/:atBlock?', async (req, res) => {
   try {
-    const { atBlock } = req.params
-    let blockNumber: bigint
-    let l1BlockNumber: bigint
+    const { atBlock } = req.params;
+    let blockNumber: bigint;
+    let l1BlockNumber: bigint;
     if (!atBlock || !isInteger(atBlock)) {
-      let block = await publicClient.getBlock()
-      blockNumber = block.number
-      l1BlockNumber = BigInt((block as any).l1BlockNumber)
+      let block = await publicClient.getBlock();
+      blockNumber = block.number;
+      l1BlockNumber = BigInt((block as any).l1BlockNumber);
     } else {
-      l1BlockNumber = BigInt(atBlock)
-      blockNumber = await getFirstBlockForL1Block(l1BlockNumber)
+      l1BlockNumber = BigInt(atBlock);
+      blockNumber = await getFirstBlockForL1Block(l1BlockNumber);
     }
     const apy = await currentApy(blockNumber);
-    res.jsonp({ blockNumber, l1BlockNumber, apy})
+    res.jsonp({ blockNumber, l1BlockNumber, apy });
   } catch (e: any) {
     console.error(e);
     res.status(500).send(e.message);
   }
 });
 
-app.get("/rewards/:lastNBlocks", async (req, res) => {
+app.get('/rewards/:lastNBlocks', async (req, res) => {
   const lastBlock = await getL1BlockNumber();
   const fromBlock = lastBlock - Number(req.params.lastNBlocks);
   await rewards(fromBlock.toString(), lastBlock.toString(), res);

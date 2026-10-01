@@ -1,13 +1,13 @@
-import { Hex } from "viem";
+import { Hex } from 'viem';
 
 export async function getVaultAddress(): Promise<Hex> {
   const vaultId = process.env.FORDEFI_VAULT_ID;
   if (!vaultId) {
-    throw new Error("FORDEFI_VAULT_ID is not set");
+    throw new Error('FORDEFI_VAULT_ID is not set');
   }
   const accessToken = process.env.FORDEFI_ACCESS_TOKEN;
   if (!accessToken) {
-    throw new Error("FORDEFI_ACCESS_TOKEN is not set");
+    throw new Error('FORDEFI_ACCESS_TOKEN is not set');
   }
   const request = await fetch(
     `https://api.fordefi.com/api/v1/vaults/${vaultId}`,

@@ -1,4 +1,4 @@
-import { startBot } from "./startBot";
+import { startBot } from './startBot';
 
 const n: number = Number(process.argv[2]);
 

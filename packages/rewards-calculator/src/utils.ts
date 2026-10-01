@@ -1,7 +1,7 @@
-import { formatEther } from "viem";
-import bs58 from "bs58";
+import bs58 from 'bs58';
+import Decimal from 'decimal.js';
+import { formatEther } from 'viem';
 
-import Decimal from "decimal.js";
 Decimal.set({ precision: 28 });
 
 const { decode, encode } = bs58;
@@ -9,7 +9,7 @@ export function keysToFixed(object: Object) {
   return Object.fromEntries(
     Object.entries(object).map(([key, value]) => [
       key,
-      typeof value === "number" || value instanceof Decimal
+      typeof value === 'number' || value instanceof Decimal
         ? value.toFixed(2)
         : value,
     ]),
@@ -37,24 +37,30 @@ export function decimalToBigInt(value: Decimal) {
 }
 
 export function formatSqd(value: Decimal) {
-  return formatEther(decimalToBigInt(value)).replace(/(\.\d{3})\d+/, "$1");
+  return formatEther(decimalToBigInt(value)).replace(/(\.\d{3})\d+/, '$1');
 }
 
 export function fromBase58(value: string): `0x${string}` {
-  return `0x${Buffer.from(decode(value)).toString("hex")}`;
+  return `0x${Buffer.from(decode(value)).toString('hex')}`;
 }
 
 export function toBase58(value: `0x${string}`): string {
-  return encode(Buffer.from(value.slice(2), "hex"));
+  return encode(Buffer.from(value.slice(2), 'hex'));
 }
 
-export function withCache<T extends (...args: any[]) => Promise<any>>(func: T): T {
+export function withCache<T extends (...args: any[]) => Promise<any>>(
+  func: T,
+): T {
   const cache = new Map<string, ReturnType<T>>();
 
-  return (async function (...args: Parameters<T>): Promise<ReturnType<T>> {
+  return async function (...args: Parameters<T>): Promise<ReturnType<T>> {
     // Custom key generator to handle BigInt
     const key = args
-      .map(arg => JSON.stringify(arg, (_, v) => typeof v === 'bigint' ? `bigint:${v.toString()}` : v))
+      .map((arg) =>
+        JSON.stringify(arg, (_, v) =>
+          typeof v === 'bigint' ? `bigint:${v.toString()}` : v,
+        ),
+      )
       .join('|');
 
     if (cache.has(key)) {
@@ -65,5 +71,5 @@ export function withCache<T extends (...args: any[]) => Promise<any>>(func: T): 
     const result = await func(...args);
     cache.set(key, result);
     return result;
-  }) as T;
+  } as T;
 }

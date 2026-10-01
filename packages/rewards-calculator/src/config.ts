@@ -1,14 +1,32 @@
-import workerRegistrationAbi from "../../contracts/artifacts/WorkerRegistration.sol/WorkerRegistration.json" with { type: "json" };
-import SQDAbi from "../../contracts/artifacts/SQD.sol/SQD.json" with { type: "json" };
-import rewardCalculationAbi from "../../contracts/artifacts/RewardCalculation.sol/RewardCalculation.json" with { type: "json" };
-import rewardsDistributionAbi from "../../contracts/artifacts/DistributedRewardDistribution.sol/DistributedRewardsDistribution.json" with { type: "json" };
-import stakingAbi from "../../contracts/artifacts/Staking.sol/Staking.json" with { type: "json" };
-import capAbi from "../../contracts/artifacts/SoftCap.sol/SoftCap.json" with { type: "json" };
-import networkControllerAbi from "../../contracts/artifacts/NetworkController.sol/NetworkController.json" with { type: "json" };
-import SepoliaDeployments from "../../contracts/deployments/421614.json" with { type: "json" };
-import ArbitrumDeployments from "../../contracts/deployments/42161.json" with { type: "json" };
-import { Address, createPublicClient, getContract, http } from "viem";
-import { arbitrum, arbitrumSepolia, mainnet, sepolia } from "viem/chains";
+import { Address, createPublicClient, getContract, http } from 'viem';
+import { arbitrum, arbitrumSepolia, mainnet, sepolia } from 'viem/chains';
+import rewardsDistributionAbi from '../../contracts/artifacts/DistributedRewardDistribution.sol/DistributedRewardsDistribution.json' with {
+  type: 'json',
+};
+import networkControllerAbi from '../../contracts/artifacts/NetworkController.sol/NetworkController.json' with {
+  type: 'json',
+};
+import rewardCalculationAbi from '../../contracts/artifacts/RewardCalculation.sol/RewardCalculation.json' with {
+  type: 'json',
+};
+import capAbi from '../../contracts/artifacts/SoftCap.sol/SoftCap.json' with {
+  type: 'json',
+};
+import SQDAbi from '../../contracts/artifacts/SQD.sol/SQD.json' with {
+  type: 'json',
+};
+import stakingAbi from '../../contracts/artifacts/Staking.sol/Staking.json' with {
+  type: 'json',
+};
+import workerRegistrationAbi from '../../contracts/artifacts/WorkerRegistration.sol/WorkerRegistration.json' with {
+  type: 'json',
+};
+import ArbitrumDeployments from '../../contracts/deployments/42161.json' with {
+  type: 'json',
+};
+import SepoliaDeployments from '../../contracts/deployments/421614.json' with {
+  type: 'json',
+};
 
 function env<T>(
   name: string,
@@ -21,49 +39,46 @@ function env<T>(
 }
 
 export const config = {
-  logScanMaxRange: Number(env("LOG_SCAN_MAX_RANGE", 2000)), // Max range for get logs for RPC not to shit
-  targetCapacityGB: BigInt(env("TARGET_CAPACITY_GB", 30_000n)),
-  workerOfflineThreshold: Number(env("WORKER_OFFLINE_THRESHOLD_SECONDS", 65)),
-  dTrafficAlpha: Number(env("D_TRAFFIC_ALPHA", 0.1)),
-  requestPrice: Number(env("REQUEST_PRICE", 1n)),
-  tenureEpochCount: Number(env("TENURE_EPOCH_COUNT", 10)),
-  workTimeout: Number(env("WORK_TIMEOUT_SECONDS", 300)) * 1000,
-  rewardEpochLength: Number(env("REWARD_EPOCH_LENGTH_BLOCKS", 7000)),
-  epochConfirmationBlocks: Number(env("EPOCH_CONFIRMATION_BLOCKS", 150)),
-  maxEpochsPerCommit: Number(env("MAX_EPOCHS_PER_COMMIT", 1)),
-  skipSignatureValidation: env<string>("SKIP_SIGNATURE_VALIDATION", 'false') === 'true',
+  logScanMaxRange: Number(env('LOG_SCAN_MAX_RANGE', 2000)), // Max range for get logs for RPC not to shit
+  targetCapacityGB: BigInt(env('TARGET_CAPACITY_GB', 30_000n)),
+  workerOfflineThreshold: Number(env('WORKER_OFFLINE_THRESHOLD_SECONDS', 65)),
+  dTrafficAlpha: Number(env('D_TRAFFIC_ALPHA', 0.1)),
+  requestPrice: Number(env('REQUEST_PRICE', 1n)),
+  tenureEpochCount: Number(env('TENURE_EPOCH_COUNT', 10)),
+  workTimeout: Number(env('WORK_TIMEOUT_SECONDS', 300)) * 1000,
+  rewardEpochLength: Number(env('REWARD_EPOCH_LENGTH_BLOCKS', 7000)),
+  epochConfirmationBlocks: Number(env('EPOCH_CONFIRMATION_BLOCKS', 150)),
+  maxEpochsPerCommit: Number(env('MAX_EPOCHS_PER_COMMIT', 1)),
+  skipSignatureValidation:
+    env<string>('SKIP_SIGNATURE_VALIDATION', 'false') === 'true',
   clickhouse: {
-    username: env("CLICKHOUSE_USERNAME", "sqd_read"),
-    password: env("CLICKHOUSE_PASSWORD"),
-    url: env("CLICKHOUSE_URL", "https://clickhouse.subsquid.io/"),
-    logsTableName: env("CLICKHOUSE_LOGS_TABLE", "testnet.worker_query_logs"),
-    pingsTableName: env("CLICKHOUSE_PINGS_TABLE", "testnet.worker_pings_v2"),
+    username: env('CLICKHOUSE_USERNAME', 'sqd_read'),
+    password: env('CLICKHOUSE_PASSWORD'),
+    url: env('CLICKHOUSE_URL', 'https://clickhouse.subsquid.io/'),
+    logsTableName: env('CLICKHOUSE_LOGS_TABLE', 'testnet.worker_query_logs'),
+    pingsTableName: env('CLICKHOUSE_PINGS_TABLE', 'testnet.worker_pings_v2'),
   },
   fordefi: {
-    accessToken: env("FORDEFI_ACCESS_TOKEN"),
-    vaultId: env("FORDEFI_VAULT_ID"),
-    secretPath: env("FORDEFI_SECRET_KEY", "./private.pem"),
-    txGasPrice: env("FORDEFI_TX_GAS_PRICE", "100000000"),
+    accessToken: env('FORDEFI_ACCESS_TOKEN'),
+    vaultId: env('FORDEFI_VAULT_ID'),
+    secretPath: env('FORDEFI_SECRET_KEY', './private.pem'),
+    txGasPrice: env('FORDEFI_TX_GAS_PRICE', '100000000'),
   },
   network: {
-    gasLimit: BigInt(env("GAS_LIMIT", 10_000_000n)),
-    networkName: env<"sepolia" | "mainnet" | "testnet">(
-      "NETWORK_NAME",
-      "sepolia",
+    gasLimit: BigInt(env('GAS_LIMIT', 10_000_000n)),
+    networkName: env<'sepolia' | 'mainnet' | 'testnet'>(
+      'NETWORK_NAME',
+      'sepolia',
     ),
-    l2RpcUrl: env<string | undefined>(
-      "L2_RPC_URL"
-    ),
-    l1RpcUrl: env<string | undefined>(
-      "L1_RPC_URL"
-    ),
+    l2RpcUrl: env<string | undefined>('L2_RPC_URL'),
+    l1RpcUrl: env<string | undefined>('L1_RPC_URL'),
   },
 };
 
 function isTestnet() {
   return (
-    config.network.networkName === "testnet" ||
-    config.network.networkName === "sepolia"
+    config.network.networkName === 'testnet' ||
+    config.network.networkName === 'sepolia'
   );
 }
 
@@ -122,11 +137,11 @@ export function contract<T extends ContractName>(name: T) {
 }
 
 export const contracts = {
-  workerRegistration: contract("workerRegistration"),
-  SQD: contract("SQD"),
-  rewardCalculation: contract("rewardCalculation"),
-  rewardsDistribution: contract("rewardsDistribution"),
-  staking: contract("staking"),
-  capedStaking: contract("capedStaking"),
-  networkController: contract("networkController"),
+  workerRegistration: contract('workerRegistration'),
+  SQD: contract('SQD'),
+  rewardCalculation: contract('rewardCalculation'),
+  rewardsDistribution: contract('rewardsDistribution'),
+  staking: contract('staking'),
+  capedStaking: contract('capedStaking'),
+  networkController: contract('networkController'),
 };

@@ -1,9 +1,9 @@
-import type { NetworkStatsEntry } from "./clickhouseClient";
-import { getWorkerId } from "./chain";
-import { QueryLog, validateSignatures } from "./signatureVerification";
-import { config } from "./config";
+import Decimal from 'decimal.js';
+import { getWorkerId } from './chain';
+import type { NetworkStatsEntry } from './clickhouseClient';
+import { config } from './config';
+import { QueryLog, validateSignatures } from './signatureVerification';
 
-import Decimal from "decimal.js";
 Decimal.set({ precision: 28 });
 
 export class Worker {
@@ -85,9 +85,8 @@ export class Worker {
   public async calculateDTenure(historicalLiveness: number[]) {
     const LIVENESS_THRESHOLD = 0.9;
     const liveEpochs = new Decimal(
-      historicalLiveness.filter(
-        (liveness) => liveness >= LIVENESS_THRESHOLD,
-      ).length,
+      historicalLiveness.filter((liveness) => liveness >= LIVENESS_THRESHOLD)
+        .length,
     );
     this.dTenure = new Decimal(0.5).add(
       Decimal.floor(liveEpochs.div(2).add(0.05)).mul(0.1),
@@ -118,7 +117,7 @@ export class Worker {
     return {
       worker_apr: workerReward.div(bond).mul(duration).toFixed(),
       delegator_apr: this.totalStake.eq(0)
-        ? "0"
+        ? '0'
         : stakerReward.div(this.totalStake).mul(duration).toFixed(),
     };
   }

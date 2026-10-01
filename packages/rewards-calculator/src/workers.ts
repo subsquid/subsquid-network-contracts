@@ -1,3 +1,7 @@
+import { strict as assert } from 'assert';
+import bs58 from 'bs58';
+import dayjs from 'dayjs';
+import Decimal from 'decimal.js';
 import {
   bond,
   currentApy,
@@ -5,12 +9,20 @@ import {
   getBlockTimestamp,
   getLatestDistributionBlock,
   getStakes,
+  targetCapacity as getTargetCapacity,
   MulticallResult,
   preloadWorkerIds,
   registeredWorkersCount,
   storagePerWorkerInGb,
-  targetCapacity as getTargetCapacity,
-} from "./chain";
+} from './chain';
+import {
+  ClickhouseClient,
+  historicalLiveness,
+  livenessFactor,
+} from './clickhouseClient';
+import { config } from './config';
+import { logger } from './logger';
+import { Rewards } from './reward';
 import {
   bigIntToDecimal,
   decimalSum,
@@ -18,21 +30,8 @@ import {
   formatSqd,
   keysToFixed,
   sum,
-} from "./utils";
-import {
-  ClickhouseClient,
-  historicalLiveness,
-  livenessFactor,
-} from "./clickhouseClient";
-import { logger } from "./logger";
-import { Worker } from "./worker";
-import dayjs from "dayjs";
-import { config } from "./config";
-import { Rewards } from "./reward";
-
-import Decimal from "decimal.js";
-import bs58 from "bs58";
-import { strict as assert } from "assert";
+} from './utils';
+import { Worker } from './worker';
 
 Decimal.set({ precision: 28 });
 
@@ -42,12 +41,12 @@ export class Workers {
   private workers: Record<string, Worker> = {};
   private bond = new Decimal(0);
   private nextDistributionStartBlockNumber = 0n;
-  
+
   baseApr = new Decimal(0);
   stakeFactor = new Decimal(0);
   rAPR = new Decimal(0);
-  commitmentTxHash = "";
-  commitmentError = "";
+  commitmentTxHash = '';
+  commitmentError = '';
 
   constructor(private clickhouseClient: ClickhouseClient) {}
 
@@ -63,18 +62,22 @@ export class Workers {
     return Object.values(this.workers).map(fn);
   }
 
+  public forEach(fn: (worker: Worker, index: number) => void) {
+    Object.values(this.workers).forEach(fn);
+  }
+
   filterBatch(batchNumber: number, totalBatches: number) {
-    assert(totalBatches <= 64);  // consider using multiple bytes if more batches are needed
-    const newWorkers = Object.values(this.workers).filter(w => {
-      const arr = bs58.decode(w.peerId)
+    assert(totalBatches <= 64); // consider using multiple bytes if more batches are needed
+    const newWorkers = Object.values(this.workers).filter((w) => {
+      const arr = bs58.decode(w.peerId);
       const group = arr[arr.length - 1] % totalBatches;
 
       return batchNumber === group;
     });
 
-    this.workers = Object.fromEntries(newWorkers.map(w => [w.peerId, w]));
+    this.workers = Object.fromEntries(newWorkers.map((w) => [w.peerId, w]));
 
-    return this
+    return this;
   }
 
   public count() {
@@ -90,7 +93,7 @@ export class Workers {
     const bondRaw = await bond(this.nextDistributionStartBlockNumber);
     this.bond = new Decimal(bondRaw.toString());
 
-    this.map((worker) => {
+    this.forEach((worker) => {
       worker.bond = this.bond;
     });
     return this.bond;
@@ -117,11 +120,11 @@ export class Workers {
       this.nextDistributionStartBlockNumber,
     );
     this.parseMulticallResult(
-      "stake",
+      'stake',
       this.mapMulticallResult(capedStakes, bigIntToDecimal),
     );
     this.parseMulticallResult(
-      "totalStake",
+      'totalStake',
       this.mapMulticallResult(totalStakes, bigIntToDecimal),
     );
   }
@@ -156,7 +159,7 @@ export class Workers {
       this.clickhouseClient,
       epochStartTimestamps,
     );
-    this.map((worker) => {
+    this.forEach((worker) => {
       worker.calculateDTenure(_historicalLiveness[worker.peerId] ?? []);
     });
   }
@@ -164,11 +167,9 @@ export class Workers {
   public async calculateRewards() {
     const duration = dayjs(this.clickhouseClient.to).diff(
       dayjs(this.clickhouseClient.from),
-      "second",
+      'second',
     );
-    const baseApr = await currentApy(
-      this.nextDistributionStartBlockNumber,
-    );
+    const baseApr = await currentApy(this.nextDistributionStartBlockNumber);
     this.baseApr = bigIntToDecimal(baseApr);
 
     this.stakeFactor = this.calculateStakeFactor();
@@ -207,7 +208,7 @@ export class Workers {
 
     const duration = dayjs(this.clickhouseClient.to).diff(
       dayjs(this.clickhouseClient.from),
-      "second",
+      'second',
     );
 
     const total_reward = decimalSum(
@@ -223,12 +224,12 @@ export class Workers {
         time: new Date(),
         epoch_start: this.clickhouseClient.from,
         epoch_end: this.clickhouseClient.to,
-        type: "rewards_report",
+        type: 'rewards_report',
         bot_id: botId,
         bot_wallet: address,
         is_commit_success: isCommitSuccess,
-        commit_tx_hash: this.commitmentTxHash ?? "",
-        commit_error_message: this.commitmentError ?? "",
+        commit_tx_hash: this.commitmentTxHash ?? '',
+        commit_error_message: this.commitmentError ?? '',
         target_capacity,
         current_capacity,
         active_workers_count,
@@ -252,7 +253,7 @@ export class Workers {
       console.log(
         JSON.stringify({
           time: new Date(),
-          type: "worker_report",
+          type: 'worker_report',
           bot_id: botId,
           bot_wallet: address,
           worker_id: worker.peerId,
@@ -276,7 +277,7 @@ export class Workers {
     TKey extends keyof Worker,
     TValue extends Worker[TKey],
   >(key: TKey, multicallResult: MulticallResult<TValue>[]) {
-    this.map((worker, i) => {
+    this.forEach((worker, i) => {
       worker[key] = multicallResult[i].result!;
     });
   }
@@ -286,7 +287,7 @@ export class Workers {
     mapper: (v: S) => T,
   ): MulticallResult<T>[] {
     return multicallResult.map(({ status, error, result }) =>
-      status === "success"
+      status === 'success'
         ? { status, error, result: mapper(result) }
         : { status, error, result },
     );
@@ -309,9 +310,13 @@ export class Workers {
   private async rUnlocked() {
     const duration = dayjs(this.clickhouseClient.to).diff(
       dayjs(this.clickhouseClient.from),
-      "second",
+      'second',
     );
-    return this.baseApr.mul(this.totalSupply()).mul(duration).div(YEAR).div(10_000);
+    return this.baseApr
+      .mul(this.totalSupply())
+      .mul(duration)
+      .div(YEAR)
+      .div(10_000);
   }
 
   private calculateStakeFactor() {
@@ -340,18 +345,18 @@ export class Workers {
       ),
     );
     logger.table(stats);
-    logger.log("Max unlocked:", formatSqd(totalUnlocked));
-    logger.log("Total reward:", formatSqd(totalReward));
+    logger.log('Max unlocked:', formatSqd(totalUnlocked));
+    logger.log('Total reward:', formatSqd(totalReward));
     this.logPercentageUnlocked(totalReward, totalUnlocked);
   }
 
   private logPercentageUnlocked(totalReward: Decimal, totalUnlocked: Decimal) {
-    if (!totalUnlocked) logger.log("Percentage unlocked 0 %");
+    if (!totalUnlocked) logger.log('Percentage unlocked 0 %');
     else
       logger.log(
-        "Percentage of max unlocked",
+        'Percentage of max unlocked',
         totalReward.mul(10000).div(totalUnlocked).div(100).toFixed(2),
-        "%",
+        '%',
       );
   }
 

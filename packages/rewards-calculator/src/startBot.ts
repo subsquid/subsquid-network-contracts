@@ -3,16 +3,16 @@ import {
   createWalletClient,
   fromHex,
   http,
-  parseEther,
   PublicActions,
+  parseEther,
   publicActions,
   toHex,
   WalletClient,
-} from "viem";
-import { arbitrumSepolia } from "viem/chains";
-import { logger } from "./logger";
-import { RewardBot } from "./rewardBot";
-import { getVaultAddress } from "./fordefi/getAddress";
+} from 'viem';
+import { arbitrumSepolia } from 'viem/chains';
+import { getVaultAddress } from './fordefi/getAddress';
+import { logger } from './logger';
+import { RewardBot } from './rewardBot';
 
 async function transferFundsIfNecessary(
   walletClient: WalletClient & PublicActions,
@@ -21,9 +21,9 @@ async function transferFundsIfNecessary(
   const balance = await walletClient.getBalance({
     address: walletClient.account!.address,
   });
-  logger.log("Balance", balance);
+  logger.log('Balance', balance);
   if (balance === 0n) {
-    logger.log("Funding account");
+    logger.log('Funding account');
     await createWalletClient({
       chain: arbitrumSepolia,
       transport: http(),
@@ -31,7 +31,7 @@ async function transferFundsIfNecessary(
       account: from,
       chain: arbitrumSepolia,
       to: walletClient.account!.address,
-      value: parseEther("0.05"),
+      value: parseEther('0.05'),
     });
   }
 }

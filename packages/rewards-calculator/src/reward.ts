@@ -1,7 +1,7 @@
-import { ClickhouseClient } from "./clickhouseClient";
-import { logger } from "./logger";
-import { getBlockTimestamp } from "./chain";
-import { Workers } from "./workers";
+import { getBlockTimestamp } from './chain';
+import { ClickhouseClient } from './clickhouseClient';
+import { logger } from './logger';
+import { Workers } from './workers';
 
 export type Rewards = {
   [key in string]: {
@@ -19,9 +19,11 @@ export async function epochStats(
 ): Promise<Workers> {
   const from = await getBlockTimestamp(fromBlock);
   const to = await getBlockTimestamp(toBlock);
-  logger.log(from, "-", to);
+  logger.log(from, '-', to);
   const clickhouse = new ClickhouseClient(from, to);
-  const workers = await clickhouse.getActiveWorkers(shouldSkipSignatureValidation);
+  const workers = await clickhouse.getActiveWorkers(
+    shouldSkipSignatureValidation,
+  );
   if (workers.count() === 0) {
     return workers;
   }
