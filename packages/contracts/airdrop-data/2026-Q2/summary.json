@@ -1,0 +1,21 @@
+{
+  "label": "2026-Q2",
+  "chainId": 42161,
+  "token": "0x1337420dED5ADb9980CFc35f8f2B054ea86f8aB1",
+  "periodStart": "2026-04-01",
+  "periodEnd": "2026-06-29",
+  "periodEndExclusive": "2026-06-30",
+  "source": "csv:airdrop.csv",
+  "params": {
+    "workers": null,
+    "targetUsd": null,
+    "price": null,
+    "priceSource": null
+  },
+  "testnetRewardTotal": null,
+  "wallets": 20,
+  "total": "157492440362862582671800",
+  "totalSqd": "157492.4403628625826718",
+  "root": "0xf0ed8bdd0a555d4508c9dd8e5d73b94030f54d2bc03bb2b639a5e63912715d45",
+  "generatedAt": "2026-10-12T11:41:09.040Z"
+}

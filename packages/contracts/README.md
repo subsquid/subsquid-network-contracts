@@ -79,7 +79,8 @@ These contracts are the on-chain rails that make all of the above work: they hol
 | `deploy/` | Foundry deployment scripts (run with `forge script Deploy.s.sol`) |
 | `deployments/` | Deployment artifacts per network |
 | `artifacts/` | Compiled contract output |
-| `scripts/` | TypeScript utility scripts (register workers, list workers, etc.) |
+| `scripts/` | TypeScript utility scripts (register workers, list workers, testnet rewards, etc.) |
+| `airdrop-data/` | Per-quarter testnet reward data (rewards.csv, merkle tree, summary) |
 | `test/` | Foundry tests |
 
 ## Install, build, test
@@ -134,6 +135,32 @@ Same `.env` variables as above. Then:
 ```bash
 pnpm run list-workers
 ```
+
+## Testnet rewards
+
+Every quarter, testnet (tethys) workers are paid in real SQD on Arbitrum One through a fresh [`MerkleDistributor`](./src/MerkleDistributor.sol). The target budget is 25 workers × $225 at the period's average SQD/USD price, split pro rata by each owner's testnet rewards. [`scripts/testnet-rewards.ts`](./scripts/testnet-rewards.ts) does the data side; deploying and funding are done by hand with the commands it prints. It never sends a transaction.
+
+1. **Build.** Point it at the read-only Postgres of the `subsquid-network-testnet` squid and build the quarter:
+
+   ```bash
+   export TESTNET_SQUID_PG_URL=$(sqd view -o subsquid -n subsquid-network-testnet -t prod --json --no-interactive \
+     | jq -r '.addons.postgres.connections[] | select(.type=="read") | .uri')
+   bun scripts/testnet-rewards.ts build --quarter 2026-Q3
+   ```
+
+   The period runs from the first day of the quarter up to, but not including, the first day of the next one. The price defaults to the CoinGecko daily average over the period; set `COINGECKO_API_KEY` for periods older than 365 days. You can override it with `--price`, and the budget with `--workers` and `--target-usd`. `--from/--to` (exclusive end) override the period, and `--from-csv` takes a per-wallet CSV instead of the squid. The build aborts if the squid hasn't indexed past the end of the period.
+
+   It writes `airdrop-data/<quarter>/{rewards.csv,tree.json,summary.json}`, prints the root, the total and a diff against the previous quarter, then prints the next two commands.
+2. **Deploy and verify** with the printed `forge create … --verify --verifier sourcify` command (`--account sqd-ops`).
+3. **Fund** the contract with the printed `cast send <SQD> "transfer(address,uint256)" <contract> <total>` command.
+4. **Publish.** Check the contract and write the cdn files:
+
+   ```bash
+   bun scripts/testnet-rewards.ts publish --quarter 2026-Q3 --contract 0x… --cdn-dir ~/dev/subsquid/cdn
+   ```
+
+   It aborts unless the contract's `merkleRoot()` matches the tree, its `token()` is SQD, and its SQD balance covers everything still claimable. It then writes `src/points/testnet-rewards/current.json` (what the claim page reads) and `src/points/<contract>.json` (the plain tree dump) into the cdn checkout and prints the git commands for the cdn PR. Merging that PR uploads `src/` to `gs://subsquid-public`.
+5. Commit `airdrop-data/<quarter>/` here.
 
 ---
 
