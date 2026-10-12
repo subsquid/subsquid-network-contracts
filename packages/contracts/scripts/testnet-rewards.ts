@@ -229,29 +229,45 @@ function readCsv(file: string): CsvInput {
   return { kind, rows };
 }
 
-async function fetchAveragePrice(from: Date, to: Date): Promise<{ price: string; source: string }> {
-  if (to.getTime() > Date.now()) fail("the period has not ended yet; pass --price explicitly if you really mean it");
-  const fromTs = Math.floor(from.getTime() / 1000);
-  const toTs = Math.floor(to.getTime() / 1000);
-  const url = `https://api.coingecko.com/api/v3/coins/${COINGECKO_COIN_ID}/market_chart/range?vs_currency=usd&from=${fromTs}&to=${toTs}`;
+// CoinGecko only returns hourly points for ranges of 1-90 days, so fetch in 30-day chunks.
+async function fetchHourlyPrices(from: Date, to: Date): Promise<[number, number][]> {
   const headers: Record<string, string> = { accept: "application/json" };
   if (process.env.COINGECKO_API_KEY) headers["x-cg-demo-api-key"] = process.env.COINGECKO_API_KEY;
-  const res = await fetch(url, { headers });
-  const body: any = await res.json().catch(() => null);
-  if (!res.ok || !Array.isArray(body?.prices)) {
-    fail(
-      `CoinGecko price request failed (HTTP ${res.status}): ${JSON.stringify(body?.error ?? body)}\n` +
-        "The keyless API only covers the last 365 days. Set COINGECKO_API_KEY (demo key) or pass --price.",
-    );
+  const points = new Map<number, number>();
+  for (let start = from.getTime(); start < to.getTime(); start += 30 * 86_400_000) {
+    const end = Math.min(start + 30 * 86_400_000, to.getTime());
+    const url = `https://api.coingecko.com/api/v3/coins/${COINGECKO_COIN_ID}/market_chart/range?vs_currency=usd&from=${start / 1000}&to=${end / 1000}`;
+    let res = await fetch(url, { headers });
+    if (res.status === 429) {
+      await Bun.sleep(60_000);
+      res = await fetch(url, { headers });
+    }
+    const body: any = await res.json().catch(() => null);
+    if (!res.ok || !Array.isArray(body?.prices)) {
+      fail(
+        `CoinGecko price request failed (HTTP ${res.status}): ${JSON.stringify(body?.error ?? body)}\n` +
+          "The keyless API only covers the last 365 days. Set COINGECKO_API_KEY (demo key) or pass --price.",
+      );
+    }
+    for (const [t, p] of body.prices as [number, number][]) if (t >= from.getTime() && t < to.getTime()) points.set(t, p);
   }
-  const prices: number[] = body.prices.map((p: [number, number]) => p[1]);
-  const days = Math.round((to.getTime() - from.getTime()) / 86_400_000);
-  if (prices.length < days - 1) warn(`CoinGecko returned only ${prices.length} samples for a ${days}-day period`);
-  if (prices.length === 0) fail("CoinGecko returned no prices for the period");
-  const avg = prices.reduce((a, b) => a + b, 0) / prices.length;
+  return [...points.entries()].sort(([a], [b]) => a - b);
+}
+
+// Time-weighted average price over [from, to): each hourly sample is weighted by the time until
+// the next one (trapezoid rule).
+async function fetchTwap(from: Date, to: Date): Promise<{ price: string; source: string }> {
+  if (to.getTime() > Date.now()) fail("the price window has not ended yet; pass --price explicitly if you really mean it");
+  const points = await fetchHourlyPrices(from, to);
+  const hours = (to.getTime() - from.getTime()) / 3_600_000;
+  if (points.length < 2) fail("CoinGecko returned fewer than 2 prices for the period");
+  if (points.length < hours * 0.95) warn(`CoinGecko returned only ${points.length} hourly samples for a ${hours}-hour window`);
+  let area = 0;
+  for (let i = 1; i < points.length; i++) area += ((points[i][0] - points[i - 1][0]) * (points[i][1] + points[i - 1][1])) / 2;
+  const twap = area / (points[points.length - 1][0] - points[0][0]);
   return {
-    price: avg.toFixed(6),
-    source: `CoinGecko ${COINGECKO_COIN_ID}/usd mean of ${prices.length} daily samples, ${formatDay(from)} to ${formatDay(to)} (exclusive), rounded to 6 decimals from ${avg}`,
+    price: twap.toFixed(6),
+    source: `CoinGecko ${COINGECKO_COIN_ID}/usd TWAP of ${points.length} hourly samples, ${formatDay(from)} to ${formatDay(to)} (exclusive), rounded to 6 decimals from ${twap}`,
   };
 }
 
@@ -273,17 +289,13 @@ async function build(argv: string[]) {
     strict: true,
   });
 
-  let from: Date;
-  let to: Date;
-  if (values.quarter) ({ from, to } = quarterBounds(values.quarter));
-  if (values.from) from = parseDay(values.from, "--from");
-  if (values.to) to = parseDay(values.to, "--to");
-  // @ts-ignore definite assignment is checked right here
+  const bounds = values.quarter ? quarterBounds(values.quarter) : null;
+  const from = values.from ? parseDay(values.from, "--from") : bounds?.from;
+  const to = values.to ? parseDay(values.to, "--to") : bounds?.to;
   if (!from || !to) fail("pass --quarter, or both --from and --to (exclusive end)");
   if (from >= to) fail("--from must be before --to");
   const label = values.quarter ?? `${formatDay(from)}_${formatDay(to)}`;
-  const quarterDefault = values.quarter ? quarterBounds(values.quarter) : null;
-  if (quarterDefault && (quarterDefault.from.getTime() !== from.getTime() || quarterDefault.to.getTime() !== to.getTime())) {
+  if (bounds && (bounds.from.getTime() !== from.getTime() || bounds.to.getTime() !== to.getTime())) {
     warn(`period ${formatDay(from)}..${formatDay(to)} (exclusive) differs from the calendar bounds of ${values.quarter}`);
   }
 
@@ -324,7 +336,8 @@ async function build(argv: string[]) {
     if (dropped.length) warn(`dropping ${dropped.length} wallet(s) with zero testnet rewards: ${dropped.map(([w]) => w).join(", ")}`);
     raw = raw.filter(([, amount]) => amount > 0n);
     testnetRewardTotal = raw.reduce((acc, [, a]) => acc + a, 0n);
-    if (!price) ({ price, source: priceSource } = await fetchAveragePrice(from, to));
+    // The price is the TWAP over the whole calendar quarter, even when --from/--to narrow the data.
+    if (!price) ({ price, source: priceSource } = await fetchTwap(bounds?.from ?? from, bounds?.to ?? to));
     console.log(`SQD price: $${price} (${priceSource})`);
     console.log(`Target: ${workers} workers x $${targetUsd}`);
     allocations = normalize(

@@ -148,7 +148,7 @@ Every quarter, testnet (tethys) workers are paid in real SQD on Arbitrum One thr
    bun scripts/testnet-rewards.ts build --quarter 2026-Q3
    ```
 
-   The period runs from the first day of the quarter up to, but not including, the first day of the next one. The price defaults to the CoinGecko daily average over the period; set `COINGECKO_API_KEY` for periods older than 365 days. You can override it with `--price`, and the budget with `--workers` and `--target-usd`. `--from/--to` (exclusive end) override the period, and `--from-csv` takes a per-wallet CSV instead of the squid. The build aborts if the squid hasn't indexed past the end of the period.
+   The period runs from the first day of the quarter up to, but not including, the first day of the next one. The price defaults to the time-weighted average (TWAP) of CoinGecko's hourly SQD/USD over the full calendar quarter, as in past quarters. Set `COINGECKO_API_KEY` (demo key) for quarters older than 365 days. You can override it with `--price`, and the budget with `--workers` and `--target-usd`. `--from/--to` (exclusive end) override the period, and `--from-csv` takes a per-wallet CSV instead of the squid. The build aborts if the squid hasn't indexed past the end of the period.
 
    It writes `airdrop-data/<quarter>/{rewards.csv,tree.json,summary.json}`, prints the root, the total and a diff against the previous quarter, then prints the next two commands.
 2. **Deploy and verify** with the printed `forge create … --verify --verifier sourcify` command (`--account sqd-ops`).
