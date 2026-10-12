@@ -8,5 +8,5 @@
     "moduleResolution": "bundler",
     "types": ["bun"]
   },
-  "files": ["testnet-rewards.ts"]
+  "files": ["testnet-rewards.ts", "testnet-rewards.test.ts"]
 }

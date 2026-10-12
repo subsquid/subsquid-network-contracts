@@ -229,14 +229,19 @@ function readCsv(file: string): CsvInput {
   return { kind, rows };
 }
 
+const PRICE_PAD_MS = 86_400_000;
+const MAX_SAMPLE_GAP_MS = 2 * 3_600_000;
+
 // CoinGecko only returns hourly points for ranges of 1-90 days, so fetch in 30-day chunks.
+// The range is padded by a day on each side so there are samples around both boundaries.
 async function fetchHourlyPrices(from: Date, to: Date): Promise<[number, number][]> {
   const headers: Record<string, string> = { accept: "application/json" };
   if (process.env.COINGECKO_API_KEY) headers["x-cg-demo-api-key"] = process.env.COINGECKO_API_KEY;
   const points = new Map<number, number>();
-  for (let start = from.getTime(); start < to.getTime(); start += 30 * 86_400_000) {
-    const end = Math.min(start + 30 * 86_400_000, to.getTime());
-    const url = `https://api.coingecko.com/api/v3/coins/${COINGECKO_COIN_ID}/market_chart/range?vs_currency=usd&from=${start / 1000}&to=${end / 1000}`;
+  const rangeEnd = Math.min(to.getTime() + PRICE_PAD_MS, Date.now());
+  for (let start = from.getTime() - PRICE_PAD_MS; start < rangeEnd; start += 30 * 86_400_000) {
+    const end = Math.min(start + 30 * 86_400_000, rangeEnd);
+    const url = `https://api.coingecko.com/api/v3/coins/${COINGECKO_COIN_ID}/market_chart/range?vs_currency=usd&from=${Math.floor(start / 1000)}&to=${Math.floor(end / 1000)}`;
     let res = await fetch(url, { headers });
     if (res.status === 429) {
       await Bun.sleep(60_000);
@@ -249,25 +254,53 @@ async function fetchHourlyPrices(from: Date, to: Date): Promise<[number, number]
           "The keyless API only covers the last 365 days. Set COINGECKO_API_KEY (demo key) or pass --price.",
       );
     }
-    for (const [t, p] of body.prices as [number, number][]) if (t >= from.getTime() && t < to.getTime()) points.set(t, p);
+    for (const [t, p] of body.prices as [number, number][]) points.set(t, p);
   }
   return [...points.entries()].sort(([a], [b]) => a - b);
 }
 
-// Time-weighted average price over [from, to): each hourly sample is weighted by the time until
-// the next one (trapezoid rule).
+// Time-weighted average of the price curve over exactly [from, to]. The curve is the linear
+// interpolation of the samples, held flat beyond the first/last sample, and integrated with the
+// trapezoid rule between from, every sample strictly inside, and to.
+export function twap(points: [number, number][], from: number, to: number): number {
+  if (points.length === 0) throw new Error("no price samples");
+  if (to <= from) throw new Error("empty price window");
+  const at = (t: number): number => {
+    if (t <= points[0][0]) return points[0][1];
+    const last = points[points.length - 1];
+    if (t >= last[0]) return last[1];
+    let i = 1;
+    while (points[i][0] < t) i++;
+    const [t0, p0] = points[i - 1];
+    const [t1, p1] = points[i];
+    return p0 + ((p1 - p0) * (t - t0)) / (t1 - t0);
+  };
+  const knots = [from, ...points.map(([t]) => t).filter((t) => t > from && t < to), to];
+  let area = 0;
+  for (let i = 1; i < knots.length; i++) area += ((knots[i] - knots[i - 1]) * (at(knots[i]) + at(knots[i - 1]))) / 2;
+  return area / (to - from);
+}
+
 async function fetchTwap(from: Date, to: Date): Promise<{ price: string; source: string }> {
   if (to.getTime() > Date.now()) fail("the price window has not ended yet; pass --price explicitly if you really mean it");
-  const points = await fetchHourlyPrices(from, to);
-  const hours = (to.getTime() - from.getTime()) / 3_600_000;
-  if (points.length < 2) fail("CoinGecko returned fewer than 2 prices for the period");
-  if (points.length < hours * 0.95) warn(`CoinGecko returned only ${points.length} hourly samples for a ${hours}-hour window`);
-  let area = 0;
-  for (let i = 1; i < points.length; i++) area += ((points[i][0] - points[i - 1][0]) * (points[i][1] + points[i - 1][1])) / 2;
-  const twap = area / (points[points.length - 1][0] - points[0][0]);
+  const all = await fetchHourlyPrices(from, to);
+  const [fromMs, toMs] = [from.getTime(), to.getTime()];
+  const inside = all.filter(([t]) => t >= fromMs && t <= toMs).length;
+  const hours = (toMs - fromMs) / 3_600_000;
+  if (inside < hours * 0.95) warn(`CoinGecko returned only ${inside} samples for a ${hours}-hour window`);
+  for (let i = 1; i < all.length; i++) {
+    const [a, b] = [all[i - 1][0], all[i][0]];
+    if (b > fromMs && a < toMs && b - a > MAX_SAMPLE_GAP_MS) {
+      warn(`no CoinGecko prices between ${new Date(a).toISOString()} and ${new Date(b).toISOString()}; interpolating`);
+    }
+  }
+  if (all.length === 0 || all[0][0] > fromMs + MAX_SAMPLE_GAP_MS || all[all.length - 1][0] < toMs - MAX_SAMPLE_GAP_MS) {
+    fail(`CoinGecko prices do not cover ${from.toISOString()} to ${to.toISOString()}; pass --price`);
+  }
+  const value = twap(all, fromMs, toMs);
   return {
-    price: twap.toFixed(6),
-    source: `CoinGecko ${COINGECKO_COIN_ID}/usd TWAP of ${points.length} hourly samples, ${formatDay(from)} to ${formatDay(to)} (exclusive), rounded to 6 decimals from ${twap}`,
+    price: value.toFixed(6),
+    source: `CoinGecko ${COINGECKO_COIN_ID}/usd TWAP over ${formatDay(from)} to ${formatDay(to)} (exclusive) from ${inside} hourly samples, rounded to 6 decimals from ${value}`,
   };
 }
 
@@ -556,10 +589,12 @@ Open the cdn PR (not done automatically):
 
 // ---------- main ----------
 
-const [command, ...rest] = process.argv.slice(2);
-if (command === "build") await build(rest);
-else if (command === "publish") await publish(rest);
-else {
-  console.error("usage: bun scripts/testnet-rewards.ts <build|publish> [options]  (see the header of this file)");
-  process.exit(1);
+if (import.meta.main) {
+  const [command, ...rest] = process.argv.slice(2);
+  if (command === "build") await build(rest);
+  else if (command === "publish") await publish(rest);
+  else {
+    console.error("usage: bun scripts/testnet-rewards.ts <build|publish> [options]  (see the header of this file)");
+    process.exit(1);
+  }
 }
