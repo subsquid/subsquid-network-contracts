@@ -22,9 +22,6 @@
     "deploy": "TOKEN=0x24f9C46d86c064a6FA2a568F918fe62fC6917B3c forge script script/Deploy.s.sol --broadcast --verify --json --rpc-url arbitrum-sepolia && node scripts/deployment-json.js",
     "register-worker": "forge script script/RegisterWorker.s.sol --broadcast --json --rpc-url arbitrum-sepolia",
     "list-workers": "node -r dotenv/config scripts/active-workers.js",
-    "testnet-rewards": "bun scripts/testnet-rewards.ts",
-    "typecheck:scripts": "tsc -p scripts/tsconfig.json",
-    "test:scripts": "bun test scripts/",
     "build": "forge build --out artifacts && npm run build:types",
     "build:types": "find artifacts -name \"*.json\" -exec bash -c \"echo export default \\<const\\> > {}.ts && cat {} >> {}.ts\" \\; && find artifacts -name \"*.json.ts\" -exec bash -c 'mv $0 ${0%???????}ts' {} \\;",
     "bounty": "docker run -v $PWD:/app ghcr.io/foundry-rs/foundry:latest 'forge script /app/script/Bounty.s.sol  --root /app --rpc-url arbitrum-sepolia --broadcast'"
@@ -33,7 +30,6 @@
     "@arbitrum/sdk": "^3.1.13",
     "@nomiclabs/hardhat-ethers": "^2.2.3",
     "@nomiclabs/hardhat-waffle": "^2.0.5",
-    "@types/bun": "^1.4.3",
     "@types/chai": "^4.3.4",
     "@types/mocha": "^10.0.1",
     "@types/node": "^18.15.11",

@@ -37,6 +37,10 @@ jobs:
         run: pnpm build
         id: build
 
+      # packages/testnet-rewards runs its unit tests with bun test.
+      - name: Install Bun
+        uses: oven-sh/setup-bun@v2
+
       - name: Run tests
         run: pnpm test
         id: test

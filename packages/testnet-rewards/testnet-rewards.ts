@@ -1,10 +1,11 @@
 // Quarterly testnet (tethys) worker rewards: squid query -> normalization -> merkle tree -> cdn files.
 //
-//   bun scripts/testnet-rewards.ts build --quarter 2026-Q3 [--from YYYY-MM-DD --to YYYY-MM-DD]
+//   bun testnet-rewards.ts build --quarter 2026-Q3 [--from YYYY-MM-DD --to YYYY-MM-DD]
 //       [--price 0.0357] [--target-usd 225] [--workers 25] [--from-csv file.csv] [--allow-incomplete]
-//   bun scripts/testnet-rewards.ts publish --quarter 2026-Q3 --contract 0x... --cdn-dir ~/dev/subsquid/cdn
+//       [--cdn-dir ~/dev/subsquid/cdn]
+//   bun testnet-rewards.ts publish --quarter 2026-Q3 --contract 0x... --cdn-dir ~/dev/subsquid/cdn
 //
-// See the "Testnet rewards" section of the package README for the full quarterly procedure.
+// See README.md for the full quarterly procedure.
 
 import { StandardMerkleTree } from "@openzeppelin/merkle-tree";
 import { SQL } from "bun";
@@ -23,8 +24,11 @@ const DEFAULT_WORKERS = "25";
 const DEFAULT_TARGET_USD = "225";
 const COINGECKO_COIN_ID = "subsquid";
 
-const PACKAGE_DIR = path.resolve(import.meta.dir, "..");
-const DATA_DIR = path.join(PACKAGE_DIR, "airdrop-data");
+const PACKAGE_DIR = import.meta.dir;
+const CONTRACTS_DIR = path.resolve(PACKAGE_DIR, "..", "contracts");
+// Scratch output between build and publish; the published record lives in subsquid/cdn.
+const OUT_DIR = path.join(PACKAGE_DIR, "out");
+const PUBLIC_BUCKET_URL = "https://storage.googleapis.com/subsquid-public";
 const WEI = 10n ** 18n;
 
 type Leaf = [number, string, string];
@@ -49,6 +53,8 @@ interface Summary {
   totalSqd: string;
   root: string;
   generatedAt: string;
+  // Set by publish in the cdn copy.
+  contract?: string;
 }
 
 function fail(message: string): never {
@@ -318,6 +324,7 @@ async function build(argv: string[]) {
       workers: { type: "string" },
       "from-csv": { type: "string" },
       "allow-incomplete": { type: "boolean", default: false },
+      "cdn-dir": { type: "string" },
     },
     strict: true,
   });
@@ -350,8 +357,8 @@ async function build(argv: string[]) {
     if (csv.kind === "raw") raw = csv.rows;
     else {
       console.log(`Using final SQD amounts from ${file} as-is (no normalization).`);
-      if (values.price || values.workers || values["target-usd"]) warn("--price/--workers/--target-usd are ignored for a normalized CSV");
-      price = priceSource = null;
+      // Amounts are final; --price/--workers/--target-usd are only recorded in summary.json.
+      if (values.price) priceSource = "--price (recorded only; amounts taken from the CSV)";
       rejectDuplicates(csv.rows.map(([w]) => w));
       allocations = csv.rows;
     }
@@ -391,7 +398,7 @@ async function build(argv: string[]) {
   const total = allocations.reduce((acc, [, amount]) => acc + amount, 0n);
   const tree = StandardMerkleTree.of(leaves, LEAF_ENCODING);
 
-  const outDir = path.join(DATA_DIR, label);
+  const outDir = path.join(OUT_DIR, label);
   fs.mkdirSync(outDir, { recursive: true });
   fs.writeFileSync(
     path.join(outDir, "rewards.csv"),
@@ -406,7 +413,12 @@ async function build(argv: string[]) {
     periodEnd: formatDay(addDays(to, -1)),
     periodEndExclusive: formatDay(to),
     source,
-    params: { workers: raw ? workers : null, targetUsd: raw ? targetUsd : null, price, priceSource },
+    params: {
+      workers: raw || values.workers ? workers : null,
+      targetUsd: raw || values["target-usd"] ? targetUsd : null,
+      price,
+      priceSource,
+    },
     testnetRewardTotal: testnetRewardTotal?.toString() ?? null,
     wallets: leaves.length,
     total: total.toString(),
@@ -421,11 +433,12 @@ async function build(argv: string[]) {
   console.log(`Total:   ${formatSqd(total)} SQD (${total} wei)`);
   console.log(`Root:    ${tree.root}`);
 
-  compareWithPrevious(label, summary, leaves);
+  await compareWithPrevious(label, summary, leaves, values["cdn-dir"]);
 
+  const relContracts = path.relative(process.cwd(), CONTRACTS_DIR) || ".";
   const relPkg = path.relative(process.cwd(), PACKAGE_DIR) || ".";
   console.log(`
-Next steps (run from ${relPkg}; nothing has been broadcast):
+Next steps (nothing has been broadcast). Run steps 1-2 in ${relContracts}/ and step 3 in ${relPkg}/
 
 1. Deploy the distributor on Arbitrum One and verify it on Sourcify:
    forge create src/MerkleDistributor.sol:MerkleDistributor \\
@@ -441,18 +454,40 @@ Next steps (run from ${relPkg}; nothing has been broadcast):
      --rpc-url ${RPC_URL} --account sqd-ops
 
 3. Check the contract and write the cdn files:
-   bun scripts/testnet-rewards.ts publish --quarter ${label} --contract <CONTRACT> --cdn-dir ~/dev/subsquid/cdn`);
+   bun testnet-rewards.ts publish --quarter ${label} --contract <CONTRACT> --cdn-dir ~/dev/subsquid/cdn`);
 }
 
-function compareWithPrevious(label: string, summary: Summary, leaves: Leaf[]) {
+// Previous quarter as published to subsquid/cdn: from a local checkout if given, else from the public bucket.
+async function loadPublished(label: string, cdnDir?: string): Promise<{ summary: Summary; tree: StandardMerkleTree<Leaf> } | null> {
+  const read = async (rel: string): Promise<any | null> => {
+    if (cdnDir) {
+      const file = path.join(path.resolve(expandHome(cdnDir)), "src", rel);
+      return fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, "utf8")) : null;
+    }
+    const res = await fetch(`${PUBLIC_BUCKET_URL}/${rel}`);
+    return res.ok ? res.json() : null;
+  };
+  const summary: Summary | null = await read(`points/testnet-rewards/${label}.summary.json`);
+  if (!summary?.contract) return null;
+  let dump = await read(`points/${summary.contract}.json`);
+  if (!dump) {
+    const current = await read("points/testnet-rewards/current.json");
+    if (current?.contract === summary.contract) dump = current.tree;
+  }
+  if (!dump) return null;
+  const tree = StandardMerkleTree.load<Leaf>(dump);
+  if (tree.root !== summary.root) warn(`published ${label} tree root ${tree.root} != its summary root ${summary.root}`);
+  return { summary, tree };
+}
+
+async function compareWithPrevious(label: string, summary: Summary, leaves: Leaf[], cdnDir?: string) {
   const prev = previousQuarter(label);
-  const prevDir = prev ? path.join(DATA_DIR, prev) : null;
-  if (!prev || !prevDir || !fs.existsSync(path.join(prevDir, "summary.json"))) {
-    console.log(`\nNo previous quarter data${prev ? ` (airdrop-data/${prev}/summary.json)` : ""} to compare with.`);
+  const published = prev ? await loadPublished(prev, cdnDir).catch(() => null) : null;
+  if (!prev || !published) {
+    console.log(`\nNo published ${prev ?? "previous quarter"} summary in ${cdnDir ?? PUBLIC_BUCKET_URL} to compare with.`);
     return;
   }
-  const prevSummary: Summary = JSON.parse(fs.readFileSync(path.join(prevDir, "summary.json"), "utf8"));
-  const prevTree = StandardMerkleTree.load<Leaf>(JSON.parse(fs.readFileSync(path.join(prevDir, "tree.json"), "utf8")));
+  const { summary: prevSummary, tree: prevTree } = published;
   const prevWallets = new Map<string, bigint>();
   for (const [, [, wallet, amount]] of prevTree.entries()) prevWallets.set(wallet.toLowerCase(), BigInt(amount));
   const curWallets = new Map(leaves.map(([, w, a]) => [w, BigInt(a)]));
@@ -461,7 +496,7 @@ function compareWithPrevious(label: string, summary: Summary, leaves: Leaf[]) {
   const prevTotal = BigInt(prevSummary.total);
   const curTotal = BigInt(summary.total);
   const pct = prevTotal === 0n ? "n/a" : `${(Number(((curTotal - prevTotal) * 10000n) / prevTotal) / 100).toFixed(2)}%`;
-  console.log(`\nCompared with ${prev} (root ${prevSummary.root}):`);
+  console.log(`\nCompared with ${prev} (${prevSummary.contract}, root ${prevSummary.root}):`);
   console.log(`  total:   ${formatSqdShort(prevTotal)} -> ${formatSqdShort(curTotal)} SQD (${pct})`);
   console.log(`  wallets: ${prevSummary.wallets} -> ${summary.wallets} (+${added.length} new, -${removed.length} gone)`);
   console.log(`  price:   ${prevSummary.params.price ?? "n/a"} -> ${summary.params.price ?? "n/a"}`);
@@ -501,7 +536,7 @@ async function publish(argv: string[]) {
   const cdnDir = path.resolve(expandHome(values["cdn-dir"]));
   if (!fs.existsSync(path.join(cdnDir, "src", "points"))) fail(`${cdnDir} does not look like the cdn repo (no src/points)`);
 
-  const dir = path.join(DATA_DIR, values.quarter);
+  const dir = path.join(OUT_DIR, values.quarter);
   if (!fs.existsSync(path.join(dir, "summary.json"))) fail(`no build output in ${dir}; run build first`);
   const summary: Summary = JSON.parse(fs.readFileSync(path.join(dir, "summary.json"), "utf8"));
   const treeRaw = fs.readFileSync(path.join(dir, "tree.json"), "utf8");
@@ -567,13 +602,18 @@ async function publish(argv: string[]) {
     total: total.toString(),
     tree: treeDump,
   };
-  if (fs.existsSync(archivePath) && fs.readFileSync(archivePath, "utf8").trim() !== treeRaw.trim() && !values.force) {
-    fail(`${archivePath} already exists with different content; pass --force to overwrite`);
+  const summaryPath = path.join(cdnDir, "src", "points", "testnet-rewards", `${values.quarter}.summary.json`);
+  const summaryRaw = JSON.stringify({ ...summary, contract: contractAddress }, null, 2) + "\n";
+  for (const [file, content] of [[archivePath, treeRaw], [summaryPath, summaryRaw]]) {
+    if (fs.existsSync(file) && fs.readFileSync(file, "utf8").trim() !== content.trim() && !values.force) {
+      fail(`${file} already exists with different content; pass --force to overwrite`);
+    }
   }
   fs.mkdirSync(path.dirname(currentPath), { recursive: true });
-  fs.writeFileSync(currentPath, JSON.stringify(current) + "\n");
+  fs.writeFileSync(currentPath, JSON.stringify(current, null, 2) + "\n");
   fs.writeFileSync(archivePath, treeRaw);
-  console.log(`\nWrote:\n  ${currentPath}\n  ${archivePath}`);
+  fs.writeFileSync(summaryPath, summaryRaw);
+  console.log(`\nWrote:\n  ${currentPath}\n  ${archivePath}\n  ${summaryPath}`);
 
   const rel = (p: string) => path.relative(cdnDir, p);
   const branch = `testnet-rewards-${values.quarter}`;
@@ -581,7 +621,7 @@ async function publish(argv: string[]) {
 Open the cdn PR (not done automatically):
   cd ${cdnDir}
   git switch -c ${branch}
-  git add ${rel(currentPath)} ${rel(archivePath)}
+  git add ${rel(currentPath)} ${rel(archivePath)} ${rel(summaryPath)}
   git commit -m "Add testnet rewards for ${values.quarter} (${contractAddress})"
   git push -u origin ${branch}
   gh pr create --fill --base main`);
@@ -594,7 +634,7 @@ if (import.meta.main) {
   if (command === "build") await build(rest);
   else if (command === "publish") await publish(rest);
   else {
-    console.error("usage: bun scripts/testnet-rewards.ts <build|publish> [options]  (see the header of this file)");
+    console.error("usage: bun testnet-rewards.ts <build|publish> [options]  (see the header of this file)");
     process.exit(1);
   }
 }

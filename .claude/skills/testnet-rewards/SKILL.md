@@ -11,9 +11,9 @@ Testnet worker operators receive real SQD every quarter. Each quarter gets its o
 `points/testnet-rewards/current.json` in `gs://subsquid-public`, for the contract, the period and the tree,
 and computes proofs in the browser. So a new quarter needs no change to the frontend or to the API.
 
-The full procedure, with every flag, is the "Testnet rewards" section of
-[packages/contracts/README.md](../../../packages/contracts/README.md). The script is
-[packages/contracts/scripts/testnet-rewards.ts](../../../packages/contracts/scripts/testnet-rewards.ts).
+The full procedure, with every flag, is in
+[packages/testnet-rewards/README.md](../../../packages/testnet-rewards/README.md). The script is
+[packages/testnet-rewards/testnet-rewards.ts](../../../packages/testnet-rewards/testnet-rewards.ts).
 This skill adds the things the README does not say: access, the checks between the steps, and the traps.
 
 ## Before you start
@@ -27,14 +27,13 @@ This skill adds the things the README does not say: access, the checks between t
 
 ## Steps
 
-1. `build --quarter <YYYY-QN>`. Read the printed summary before you continue:
+1. `build --quarter <YYYY-QN> --cdn-dir <cdn checkout>` (from `packages/testnet-rewards`). Read the printed summary before you continue:
    - Compare the wallet count and the total with the previous quarter (the script prints the diff).
    - A total far from 25 × $225 / price, or a large change in wallets, needs an explanation before anyone deploys.
    - Show the summary to the human.
-2. The human runs the printed `forge create` command. Record the deployed address.
+2. The human runs the printed `forge create` command from `packages/contracts`. Record the deployed address.
 3. The human runs the printed `cast send … transfer` for the full total. Optionally, send a small test amount first.
-4. Run `publish --quarter … --contract 0x… --cdn-dir <cdn checkout>`. Then open the cdn PR with the printed git commands. When the PR merges, CI uploads the file with `Cache-Control: no-cache`.
-5. Commit `packages/contracts/airdrop-data/<quarter>/` in this repo (PR to main).
+4. Run `publish --quarter … --contract 0x… --cdn-dir <cdn checkout>`. Then open the cdn PR with the printed git commands. That PR is the record of the payout: it adds `<quarter>.summary.json` (price, parameters, root, total) next to `current.json`, and nothing is committed in this repo. When the PR merges, CI uploads the file with `Cache-Control: no-cache`.
 
 ## Check that the claim page uses the new quarter
 

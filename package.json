@@ -7,5 +7,10 @@
   },
   "devDependencies": {
     "turbo": "^1.9.9"
+  },
+  "pnpm": {
+    "overrides": {
+      "bun-types>@types/node": "^26"
+    }
   }
 }
