@@ -62,7 +62,7 @@ These contracts are the on-chain rails that make all of the above work: they hol
 | [`VestingFactory.sol`](./src/VestingFactory.sol) | Deploys `SubsquidVesting` wallets. Only the team (role-gated) can create new ones. |
 | [`TemporaryHolding.sol`](./src/TemporaryHolding.sol) | Time-locked SQD that a beneficiary can *use* on-chain before a deadline (to stake, run a gateway, etc.) but cannot withdraw. After the deadline, the admin reclaims whatever's left. |
 | [`TemporaryHoldingFactory.sol`](./src/TemporaryHoldingFactory.sol) | Deploys `TemporaryHolding` contracts. Role-gated. |
-| [`MerkleDistributor.sol`](./src/MerkleDistributor.sol) | Standard Merkle-proof airdrop contract (same shape as Uniswap's). Owner can reclaim leftovers once the drop is over. |
+| [`MerkleDistributor.sol`](./src/MerkleDistributor.sol) | Standard Merkle-proof airdrop contract (same shape as Uniswap's). Owner can reclaim leftovers once the drop is over. Used for the quarterly testnet rewards, see [`packages/testnet-rewards`](../testnet-rewards). |
 
 ### Base utilities
 
