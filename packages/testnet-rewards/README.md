@@ -16,8 +16,8 @@ Run `pnpm i` at the repo root once. Run the script from this directory with [Bun
    bun testnet-rewards.ts build --quarter 2026-Q3 --cdn-dir ~/dev/subsquid/cdn
    ```
 
-   - **Period:** from the first day of the quarter up to, but not including, the first day of the next one. The build aborts if the squid hasn't indexed past the end of the period.
-   - **Price:** the time-weighted average (TWAP) of CoinGecko's hourly SQD/USD over the whole calendar quarter. Set `COINGECKO_API_KEY` (demo key) for quarters older than 365 days.
+   - **Period:** from the first day of the quarter up to, but not including, the first day of the next one. The build aborts if the squid hasn't indexed past the end of the period. `--allow-incomplete` builds anyway for inspection, marks `summary.json` as incomplete, and `publish` refuses it.
+   - **Price:** the time-weighted average (TWAP) of CoinGecko's hourly SQD/USD over the whole calendar quarter. CoinGecko's free API only serves the last 365 days; for older quarters, pass `--price`.
    - **Overrides:** `--price` for the price; `--workers` and `--target-usd` for the budget; `--from/--to` (exclusive end) for the data window; `--from-csv` to read a per-wallet CSV instead of the squid.
 
    It writes `out/<quarter>/{rewards.csv,tree.json,summary.json}` (gitignored) and prints the root and the total. It then compares the result with the previous quarter's published summary, read from `--cdn-dir` or, without it, from the public bucket. Last, it prints the commands for the next two steps.
@@ -29,7 +29,7 @@ Run `pnpm i` at the repo root once. Run the script from this directory with [Bun
    bun testnet-rewards.ts publish --quarter 2026-Q3 --contract 0x… --cdn-dir ~/dev/subsquid/cdn
    ```
 
-   It aborts unless:
+   It refuses to point `current.json` back at an older quarter unless you pass `--force`. It also aborts unless:
    - the contract's `merkleRoot()` matches the tree,
    - its `token()` is SQD,
    - its SQD balance covers everything still claimable.

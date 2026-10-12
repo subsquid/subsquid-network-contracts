@@ -48,6 +48,8 @@ interface Summary {
     priceSource: string | null;
   };
   testnetRewardTotal: string | null;
+  // Set when built with --allow-incomplete: how far the squid had indexed. publish refuses such builds.
+  incomplete: { indexedUpTo: string | null } | null;
   wallets: number;
   total: string;
   totalSqd: string;
@@ -83,7 +85,7 @@ function addDays(date: Date, days: number): Date {
   return new Date(date.getTime() + days * 86_400_000);
 }
 
-function quarterBounds(quarter: string): { from: Date; to: Date } {
+export function quarterBounds(quarter: string): { from: Date; to: Date } {
   const match = /^(\d{4})-Q([1-4])$/.exec(quarter);
   if (!match) fail(`--quarter must look like 2026-Q3, got "${quarter}"`);
   const year = Number(match[1]);
@@ -92,7 +94,7 @@ function quarterBounds(quarter: string): { from: Date; to: Date } {
   return { from: new Date(Date.UTC(year, (q - 1) * 3, 1)), to: new Date(Date.UTC(year, q * 3, 1)) };
 }
 
-function previousQuarter(quarter: string): string | null {
+export function previousQuarter(quarter: string): string | null {
   const match = /^(\d{4})-Q([1-4])$/.exec(quarter);
   if (!match) return null;
   const year = Number(match[1]);
@@ -102,12 +104,12 @@ function previousQuarter(quarter: string): string | null {
 
 // ---------- exact decimal math ----------
 
-interface Fraction {
+export interface Fraction {
   num: bigint;
   den: bigint;
 }
 
-function parseDecimal(value: string, what: string): Fraction {
+export function parseDecimal(value: string, what: string): Fraction {
   const match = /^(\d+)(?:\.(\d+))?$/.exec(value.trim());
   if (!match) fail(`${what} must be a non-negative decimal number, got "${value}"`);
   const fraction = match[2] ?? "";
@@ -128,7 +130,7 @@ function formatSqdShort(wei: bigint): string {
 
 // amount_i = wallet_i * workers * targetUsd / (sum_all * price), in wei, rounded down.
 // Same formula as the old fetch-rewards-from-testnet-squid.sh, without the floating point.
-function normalize(
+export function normalize(
   rewards: [string, bigint][],
   workers: Fraction,
   targetUsd: Fraction,
@@ -162,7 +164,11 @@ function rejectDuplicates(wallets: string[]) {
 
 // ---------- sources ----------
 
-async function fetchSquidRewards(from: Date, to: Date, allowIncomplete: boolean): Promise<[string, bigint][]> {
+async function fetchSquidRewards(
+  from: Date,
+  to: Date,
+  allowIncomplete: boolean,
+): Promise<{ rows: [string, bigint][]; incomplete: { indexedUpTo: string | null } | null }> {
   const url = process.env.TESTNET_SQUID_PG_URL;
   if (!url) {
     fail(
@@ -180,22 +186,24 @@ async function fetchSquidRewards(from: Date, to: Date, allowIncomplete: boolean)
       if (!allowIncomplete) fail(`${msg}. Wait for the squid to catch up, or pass --allow-incomplete.`);
       warn(msg);
     }
+    const incomplete = !headTime || headTime < to ? { indexedUpTo: headTime?.toISOString() ?? null } : null;
 
     // Same semantics as the old shell script: worker_reward joined to worker, summed per real owner,
     // timestamp >= from and < to.
     const rows: { wallet: string | null; total: string }[] = await sql`
-      select w.real_owner_id as wallet, sum(r.amount)::text as total
+      select lower(w.real_owner_id) as wallet, sum(r.amount)::text as total
       from worker_reward r
       join worker w on w.id = r.worker_id
       where r.timestamp >= ${from.toISOString()}::timestamptz
         and r.timestamp < ${to.toISOString()}::timestamptz
-      group by w.real_owner_id
+      group by lower(w.real_owner_id)
     `;
-    return rows.map((row): [string, bigint] => {
+    const result = rows.map((row): [string, bigint] => {
       if (!row.wallet) fail(`a worker with rewards has no real_owner_id (total ${row.total})`);
       if (!/^\d+$/.test(row.total)) fail(`non-integer reward total "${row.total}" for ${row.wallet}`);
       return [normalizeAddress(row.wallet, "squid real_owner_id"), BigInt(row.total)];
     });
+    return { rows: result, incomplete };
   } finally {
     await sql.close();
   }
@@ -242,7 +250,6 @@ const MAX_SAMPLE_GAP_MS = 2 * 3_600_000;
 // The range is padded by a day on each side so there are samples around both boundaries.
 async function fetchHourlyPrices(from: Date, to: Date): Promise<[number, number][]> {
   const headers: Record<string, string> = { accept: "application/json" };
-  if (process.env.COINGECKO_API_KEY) headers["x-cg-demo-api-key"] = process.env.COINGECKO_API_KEY;
   const points = new Map<number, number>();
   const rangeEnd = Math.min(to.getTime() + PRICE_PAD_MS, Date.now());
   for (let start = from.getTime() - PRICE_PAD_MS; start < rangeEnd; start += 30 * 86_400_000) {
@@ -257,7 +264,7 @@ async function fetchHourlyPrices(from: Date, to: Date): Promise<[number, number]
     if (!res.ok || !Array.isArray(body?.prices)) {
       fail(
         `CoinGecko price request failed (HTTP ${res.status}): ${JSON.stringify(body?.error ?? body)}\n` +
-          "The keyless API only covers the last 365 days. Set COINGECKO_API_KEY (demo key) or pass --price.",
+          "CoinGecko's free API only serves the last 365 days; for older quarters pass --price.",
       );
     }
     for (const [t, p] of body.prices as [number, number][]) points.set(t, p);
@@ -350,6 +357,7 @@ async function build(argv: string[]) {
   let allocations: [string, bigint][];
 
   let raw: [string, bigint][] | null = null;
+  let incomplete: Summary["incomplete"] = null;
   if (values["from-csv"]) {
     const file = path.resolve(values["from-csv"]);
     const csv = readCsv(file);
@@ -365,12 +373,12 @@ async function build(argv: string[]) {
   } else {
     source = "squid:subsquid-network-testnet";
     if (to.getTime() > Date.now() && !values["allow-incomplete"]) fail(`the period has not ended yet (last day ${formatDay(addDays(to, -1))})`);
-    raw =await fetchSquidRewards(from, to, values["allow-incomplete"]!);
-    // Deterministic leaf order for fresh builds.
-    raw.sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+    ({ rows: raw, incomplete } = await fetchSquidRewards(from, to, values["allow-incomplete"]!));
   }
 
   if (raw) {
+    // Leaf order by wallet, so the same rewards always give the same root whatever the input order.
+    raw.sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
     rejectDuplicates(raw.map(([w]) => w));
     const dropped = raw.filter(([, amount]) => amount === 0n);
     if (dropped.length) warn(`dropping ${dropped.length} wallet(s) with zero testnet rewards: ${dropped.map(([w]) => w).join(", ")}`);
@@ -420,6 +428,7 @@ async function build(argv: string[]) {
       priceSource,
     },
     testnetRewardTotal: testnetRewardTotal?.toString() ?? null,
+    incomplete,
     wallets: leaves.length,
     total: total.toString(),
     totalSqd: formatSqd(total).replace(/,/g, ""),
@@ -434,6 +443,13 @@ async function build(argv: string[]) {
   console.log(`Root:    ${tree.root}`);
 
   await compareWithPrevious(label, summary, leaves, values["cdn-dir"]);
+
+  if (incomplete) {
+    console.log(`
+INCOMPLETE BUILD: the squid had only indexed up to ${incomplete.indexedUpTo ?? "nothing"}.
+This output is for inspection only; publish refuses it. Rebuild once the squid has caught up.`);
+    return;
+  }
 
   const relContracts = path.relative(process.cwd(), CONTRACTS_DIR) || ".";
   const relPkg = path.relative(process.cwd(), PACKAGE_DIR) || ".";
@@ -465,24 +481,29 @@ async function loadPublished(label: string, cdnDir?: string): Promise<{ summary:
       return fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, "utf8")) : null;
     }
     const res = await fetch(`${PUBLIC_BUCKET_URL}/${rel}`);
-    return res.ok ? res.json() : null;
+    if (res.status === 404) return null;
+    if (!res.ok) throw new Error(`GET ${PUBLIC_BUCKET_URL}/${rel}: HTTP ${res.status}`);
+    return res.json();
   };
   const summary: Summary | null = await read(`points/testnet-rewards/${label}.summary.json`);
-  if (!summary?.contract) return null;
+  if (!summary) return null;
+  if (!summary.contract) throw new Error(`published ${label} summary has no contract`);
   let dump = await read(`points/${summary.contract}.json`);
   if (!dump) {
     const current = await read("points/testnet-rewards/current.json");
     if (current?.contract === summary.contract) dump = current.tree;
   }
-  if (!dump) return null;
+  if (!dump) throw new Error(`published ${label} summary names ${summary.contract}, but its tree is missing`);
   const tree = StandardMerkleTree.load<Leaf>(dump);
-  if (tree.root !== summary.root) warn(`published ${label} tree root ${tree.root} != its summary root ${summary.root}`);
+  if (tree.root !== summary.root) throw new Error(`published ${label} tree root ${tree.root} != its summary root ${summary.root}`);
   return { summary, tree };
 }
 
 async function compareWithPrevious(label: string, summary: Summary, leaves: Leaf[], cdnDir?: string) {
   const prev = previousQuarter(label);
-  const published = prev ? await loadPublished(prev, cdnDir).catch(() => null) : null;
+  const published = prev
+    ? await loadPublished(prev, cdnDir).catch((e) => fail(`could not load the published ${prev} for comparison: ${e.message ?? e}`))
+    : null;
   if (!prev || !published) {
     console.log(`\nNo published ${prev ?? "previous quarter"} summary in ${cdnDir ?? PUBLIC_BUCKET_URL} to compare with.`);
     return;
@@ -548,6 +569,9 @@ async function publish(argv: string[]) {
   const total = leaves.reduce((acc, [, , amount]) => acc + BigInt(amount), 0n);
   if (tree.root !== summary.root) fail(`tree.json root ${tree.root} != summary.json root ${summary.root}`);
   if (total.toString() !== summary.total) fail(`tree.json total ${total} != summary.json total ${summary.total}`);
+  if (summary.incomplete && !values.force) {
+    fail(`${values.quarter} was built with --allow-incomplete (squid indexed up to ${summary.incomplete.indexedUpTo}); rebuild it once the squid has caught up`);
+  }
   console.log(`Local ${values.quarter}: root ${tree.root}, ${leaves.length} wallets, total ${formatSqd(total)} SQD`);
 
   const provider = new ethers.providers.StaticJsonRpcProvider(values["rpc-url"]);
@@ -602,6 +626,13 @@ async function publish(argv: string[]) {
     total: total.toString(),
     tree: treeDump,
   };
+  // Never roll the claim page back to an older quarter by accident.
+  if (fs.existsSync(currentPath) && !values.force) {
+    const live = JSON.parse(fs.readFileSync(currentPath, "utf8"));
+    if (live.periodStart > summary.periodStart) {
+      fail(`${currentPath} is for a later period (${live.periodStart}, ${live.contract}); pass --force to point it back at ${values.quarter}`);
+    }
+  }
   const summaryPath = path.join(cdnDir, "src", "points", "testnet-rewards", `${values.quarter}.summary.json`);
   const summaryRaw = JSON.stringify({ ...summary, contract: contractAddress }, null, 2) + "\n";
   for (const [file, content] of [[archivePath, treeRaw], [summaryPath, summaryRaw]]) {
