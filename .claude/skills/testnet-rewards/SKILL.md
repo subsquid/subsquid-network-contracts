@@ -1,0 +1,59 @@
+---
+name: testnet-rewards
+description: >-
+  Pay the quarterly testnet (tethys) worker rewards: build the merkle tree from the testnet squid, deploy and fund a MerkleDistributor on Arbitrum One, publish the claim file via subsquid/cdn, check claim.tethys.sqd.dev, sweep old distributors. Use for "testnet rewards", "tethys rewards Q3", "airdrop contract", "claim page shows the wrong period".
+---
+
+# Quarterly testnet worker rewards
+
+Testnet worker operators receive real SQD every quarter. Each quarter gets its own
+`MerkleDistributor` on Arbitrum One. The claim page (claim.tethys.sqd.dev) reads one file,
+`points/testnet-rewards/current.json` in `gs://subsquid-public`, for the contract, the period and the tree,
+and computes proofs in the browser. So a new quarter needs no change to the frontend or to the API.
+
+The full procedure, with every flag, is the "Testnet rewards" section of
+[packages/contracts/README.md](../../../packages/contracts/README.md). The script is
+[packages/contracts/scripts/testnet-rewards.ts](../../../packages/contracts/scripts/testnet-rewards.ts).
+This skill adds the things the README does not say: access, the checks between the steps, and the traps.
+
+## Before you start
+
+- **Access.** The human runs every transaction, never the agent. Collect the access first:
+  - The `sqd-ops` foundry keystore account (`cast wallet address --account sqd-ops`). It deploys, and it must hold the SQD to fund.
+  - `sqd` CLI access to the `subsquid` org in SQD Cloud, for the read-only squid URI.
+  - Write access to [subsquid/cdn](https://github.com/subsquid/cdn), for a PR. Nobody uploads to GCS directly.
+- **Squid lag.** The quarter must be complete in the `subsquid-network-testnet` squid. `build` aborts when the squid has not indexed past the period end. Do not use `--allow-incomplete` for a real payout. If the squid is stuck, fix the squid first.
+- **Period end.** The period is `[first day of quarter, first day of next quarter)`. Up to Q2 2026 the last day of the quarter was dropped by mistake. Do not "fix" it back.
+
+## Steps
+
+1. `build --quarter <YYYY-QN>`. Read the printed summary before you continue:
+   - Compare the wallet count and the total with the previous quarter (the script prints the diff).
+   - A total far from 25 × $225 / price, or a large change in wallets, needs an explanation before anyone deploys.
+   - Show the summary to the human.
+2. The human runs the printed `forge create` command. Record the deployed address.
+3. The human runs the printed `cast send … transfer` for the full total. Optionally, send a small test amount first.
+4. Run `publish --quarter … --contract 0x… --cdn-dir <cdn checkout>`. Then open the cdn PR with the printed git commands. When the PR merges, CI uploads the file with `Cache-Control: no-cache`.
+5. Commit `packages/contracts/airdrop-data/<quarter>/` in this repo (PR to main).
+
+## Check that the claim page uses the new quarter
+
+- `curl -s https://storage.googleapis.com/subsquid-public/points/testnet-rewards/current.json | jq '.contract, .periodStart, .periodEnd'` returns the new values.
+- `cast call <contract> "merkleRoot()(bytes32)" --rpc-url https://arb1.arbitrum.io/rpc` equals the tree root, `jq -r '.tree.tree[0]'` on that file. The claim page compares the two. On a mismatch it shows "Rewards are being updated" and offers no claim button.
+- Open claim.tethys.sqd.dev with any wallet from `rewards.csv`. It shows the new period and amount.
+
+## Sweep old distributors
+
+A per-quarter contract keeps the unclaimed SQD forever. Its owner (`0x24B97D7eE13Abc7c1fc109Ea66CabdcBe3ADe1a7`)
+can call `withdrawAll()`, which sends the full balance to the owner.
+- After a claim window agreed with the human (for example, when the next quarter is published), list the old
+  contracts with a balance: the archive files `src/points/0x*.json` in subsquid/cdn, plus the git history of
+  `src/api/points.ts` in subsquid/network-points-landing for quarters before Q3 2026.
+- Prepare `cast send <old contract> "withdrawAll()" --account <owner signer>` for the human.
+- Do not sweep the contract that `current.json` names: its claims are live.
+
+## Traps
+
+- The claim page reads only `current.json`. The archive file `src/points/<contract>.json` is for history, not for the page.
+- If the page shows "temporarily unavailable", the browser could not load or validate `current.json`. Check bucket CORS (`curl -sI -H 'Origin: https://claim.tethys.sqd.dev' <url>` must return `access-control-allow-origin`) and the JSON.
+- Never edit `current.json` by hand. The page rehashes the full tree and refuses a file with edited amounts.
