@@ -2,8 +2,8 @@
 //
 //   bun testnet-rewards.ts build --quarter 2026-Q3 [--from YYYY-MM-DD --to YYYY-MM-DD]
 //       [--price 0.0357] [--target-usd 225] [--workers 25] [--from-csv file.csv] [--allow-incomplete]
-//       [--cdn-dir ~/dev/subsquid/cdn]
-//   bun testnet-rewards.ts publish --quarter 2026-Q3 --contract 0x... --cdn-dir ~/dev/subsquid/cdn
+//       [--cdn-dir path/to/cdn]
+//   bun testnet-rewards.ts publish --quarter 2026-Q3 --contract 0x... --cdn-dir path/to/cdn
 //
 // See README.md for the full quarterly procedure.
 
@@ -92,6 +92,48 @@ export function quarterBounds(quarter: string): { from: Date; to: Date } {
   const q = Number(match[2]);
   // Exclusive end: first day of the next quarter, so the last day of the quarter is included.
   return { from: new Date(Date.UTC(year, (q - 1) * 3, 1)), to: new Date(Date.UTC(year, q * 3, 1)) };
+}
+
+// Data window [from, to) and the price window: the calendar quarter when --quarter is given, even
+// if --from/--to move the data window.
+export function resolvePeriod(opts: { quarter?: string; from?: string; to?: string }) {
+  const bounds = opts.quarter ? quarterBounds(opts.quarter) : null;
+  const from = opts.from ? parseDay(opts.from, "--from") : bounds?.from;
+  const to = opts.to ? parseDay(opts.to, "--to") : bounds?.to;
+  if (!from || !to) fail("pass --quarter, or both --from and --to (exclusive end)");
+  if (from >= to) fail("--from must be before --to");
+  const label = opts.quarter ?? `${formatDay(from)}_${formatDay(to)}`;
+  return { label, from, to, priceFrom: bounds?.from ?? from, priceTo: bounds?.to ?? to };
+}
+
+// How a window starting at `from` follows the previous one, which ended at `prevEndExclusive` (YYYY-MM-DD).
+export function windowRelation(prevEndExclusive: string, from: Date): "contiguous" | "gap" | "overlap" {
+  const start = formatDay(from);
+  return prevEndExclusive === start ? "contiguous" : prevEndExclusive < start ? "gap" : "overlap";
+}
+
+// What is wrong with a subsquid/cdn checkout, or null if it is on main, not behind origin/main, and has
+// src/points/testnet-rewards/. A stale checkout gives a wrong comparison and a PR that rolls files back.
+export function cdnCheckoutProblem(dir: string): string | null {
+  const git = (...args: string[]) => {
+    const res = Bun.spawnSync(["git", "-C", dir, ...args], { stdout: "pipe", stderr: "pipe" });
+    return res.exitCode === 0 ? res.stdout.toString().trim() : null;
+  };
+  const branch = fs.existsSync(dir) ? git("rev-parse", "--abbrev-ref", "HEAD") : null;
+  if (branch === null) return `${dir} is not a git checkout`;
+  if (branch !== "main") return `${dir} is on branch "${branch}", not main`;
+  if (git("fetch", "--quiet", "origin") === null) return `git fetch origin failed in ${dir}`;
+  const behind = git("rev-list", "--count", "HEAD..origin/main");
+  if (behind !== "0") return `${dir} is ${behind ?? "?"} commit(s) behind origin/main; run git -C ${dir} pull --ff-only`;
+  if (!fs.existsSync(path.join(dir, "src", "points", "testnet-rewards"))) return `${dir} has no src/points/testnet-rewards/`;
+  return null;
+}
+
+function freshCdnDir(arg: string): string {
+  const dir = path.resolve(expandHome(arg));
+  const problem = cdnCheckoutProblem(dir);
+  if (problem) fail(`--cdn-dir: ${problem}`);
+  return dir;
 }
 
 export function previousQuarter(quarter: string): string | null {
@@ -336,15 +378,12 @@ async function build(argv: string[]) {
     strict: true,
   });
 
-  const bounds = values.quarter ? quarterBounds(values.quarter) : null;
-  const from = values.from ? parseDay(values.from, "--from") : bounds?.from;
-  const to = values.to ? parseDay(values.to, "--to") : bounds?.to;
-  if (!from || !to) fail("pass --quarter, or both --from and --to (exclusive end)");
-  if (from >= to) fail("--from must be before --to");
-  const label = values.quarter ?? `${formatDay(from)}_${formatDay(to)}`;
-  if (bounds && (bounds.from.getTime() !== from.getTime() || bounds.to.getTime() !== to.getTime())) {
-    warn(`period ${formatDay(from)}..${formatDay(to)} (exclusive) differs from the calendar bounds of ${values.quarter}`);
+  const { label, from, to, priceFrom, priceTo } = resolvePeriod(values);
+  if (priceFrom.getTime() !== from.getTime() || priceTo.getTime() !== to.getTime()) {
+    warn(`data window ${formatDay(from)}..${formatDay(to)} (exclusive) differs from ${label}; the price stays the quarter's TWAP`);
   }
+  // Check before the slow part, so a stale checkout fails fast.
+  const cdnDir = values["cdn-dir"] ? freshCdnDir(values["cdn-dir"]) : undefined;
 
   console.log(`Period: ${formatDay(from)} to ${formatDay(addDays(to, -1))} inclusive (timestamp >= ${from.toISOString()} and < ${to.toISOString()})`);
 
@@ -385,7 +424,7 @@ async function build(argv: string[]) {
     raw = raw.filter(([, amount]) => amount > 0n);
     testnetRewardTotal = raw.reduce((acc, [, a]) => acc + a, 0n);
     // The price is the TWAP over the whole calendar quarter, even when --from/--to narrow the data.
-    if (!price) ({ price, source: priceSource } = await fetchTwap(bounds?.from ?? from, bounds?.to ?? to));
+    if (!price) ({ price, source: priceSource } = await fetchTwap(priceFrom, priceTo));
     console.log(`SQD price: $${price} (${priceSource})`);
     console.log(`Target: ${workers} workers x $${targetUsd}`);
     allocations = normalize(
@@ -442,7 +481,7 @@ async function build(argv: string[]) {
   console.log(`Total:   ${formatSqd(total)} SQD (${total} wei)`);
   console.log(`Root:    ${tree.root}`);
 
-  await compareWithPrevious(label, summary, leaves, values["cdn-dir"]);
+  await compareWithPrevious(label, summary, leaves, cdnDir);
 
   if (incomplete) {
     console.log(`
@@ -454,30 +493,30 @@ This output is for inspection only; publish refuses it. Rebuild once the squid h
   const relContracts = path.relative(process.cwd(), CONTRACTS_DIR) || ".";
   const relPkg = path.relative(process.cwd(), PACKAGE_DIR) || ".";
   console.log(`
-Next steps (nothing has been broadcast). Run steps 1-2 in ${relContracts}/ and step 3 in ${relPkg}/
+Next steps (nothing has been broadcast). Run step 1 in ${relContracts}/ and step 3 in ${relPkg}/
 
-1. Deploy the distributor on Arbitrum One and verify it on Sourcify:
+1. Deploy the distributor on Arbitrum One and verify it on Sourcify. Any deployer works (--account <your-keystore>
+   or --ledger); the owner is the last constructor argument, and publish checks it.
    forge create src/MerkleDistributor.sol:MerkleDistributor \\
-     --rpc-url ${RPC_URL} --account sqd-ops --broadcast \\
+     --rpc-url ${RPC_URL} --account <your-keystore> --broadcast \\
      --verify --verifier sourcify \\
      --constructor-args ${SQD_TOKEN} ${tree.root} ${DISTRIBUTOR_OWNER}
    # if verification fails, retry it on its own:
    # forge verify-contract <CONTRACT> src/MerkleDistributor.sol:MerkleDistributor --chain ${CHAIN_ID} --verifier sourcify \\
    #   --constructor-args $(cast abi-encode "constructor(address,bytes32,address)" ${SQD_TOKEN} ${tree.root} ${DISTRIBUTOR_OWNER})
 
-2. Fund it with the total (${formatSqd(total)} SQD):
-   cast send ${SQD_TOKEN} "transfer(address,uint256)" <CONTRACT> ${total} \\
-     --rpc-url ${RPC_URL} --account sqd-ops
+2. Fund it: the holder of the testnet rewards budget transfers exactly ${formatSqd(total)} SQD
+   (${total} wei) of SQD ${SQD_TOKEN} to the contract on Arbitrum One.
 
 3. Check the contract and write the cdn files:
-   bun testnet-rewards.ts publish --quarter ${label} --contract <CONTRACT> --cdn-dir ~/dev/subsquid/cdn`);
+   bun testnet-rewards.ts publish --quarter ${label} --contract <CONTRACT> --cdn-dir ${cdnDir ?? "<subsquid/cdn checkout>"}`);
 }
 
 // Previous quarter as published to subsquid/cdn: from a local checkout if given, else from the public bucket.
 async function loadPublished(label: string, cdnDir?: string): Promise<{ summary: Summary; tree: StandardMerkleTree<Leaf> } | null> {
   const read = async (rel: string): Promise<any | null> => {
     if (cdnDir) {
-      const file = path.join(path.resolve(expandHome(cdnDir)), "src", rel);
+      const file = path.join(cdnDir, "src", rel);
       return fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, "utf8")) : null;
     }
     const res = await fetch(`${PUBLIC_BUCKET_URL}/${rel}`);
@@ -504,8 +543,9 @@ async function compareWithPrevious(label: string, summary: Summary, leaves: Leaf
   const published = prev
     ? await loadPublished(prev, cdnDir).catch((e) => fail(`could not load the published ${prev} for comparison: ${e.message ?? e}`))
     : null;
+  const where = cdnDir ? `cdn checkout ${cdnDir}` : `public bucket ${PUBLIC_BUCKET_URL} (no --cdn-dir given)`;
   if (!prev || !published) {
-    console.log(`\nNo published ${prev ?? "previous quarter"} summary in ${cdnDir ?? PUBLIC_BUCKET_URL} to compare with.`);
+    warn(`NOT COMPARED: no published ${prev ?? "previous quarter"} summary in the ${where}. Expected only for the first quarter.`);
     return;
   }
   const { summary: prevSummary, tree: prevTree } = published;
@@ -517,7 +557,9 @@ async function compareWithPrevious(label: string, summary: Summary, leaves: Leaf
   const prevTotal = BigInt(prevSummary.total);
   const curTotal = BigInt(summary.total);
   const pct = prevTotal === 0n ? "n/a" : `${(Number(((curTotal - prevTotal) * 10000n) / prevTotal) / 100).toFixed(2)}%`;
-  console.log(`\nCompared with ${prev} (${prevSummary.contract}, root ${prevSummary.root}):`);
+  console.log(`\nCompared with ${prev} (${prevSummary.contract}, root ${prevSummary.root}), read from the ${where}:`);
+  const prevEnd = prevSummary.periodEndExclusive;
+  console.log(`  window:  ${prevSummary.periodStart}..${prevEnd} -> ${summary.periodStart}..${summary.periodEndExclusive} (exclusive ends; ${windowRelation(prevEnd, new Date(`${summary.periodStart}T00:00:00Z`)).toUpperCase()})`);
   console.log(`  total:   ${formatSqdShort(prevTotal)} -> ${formatSqdShort(curTotal)} SQD (${pct})`);
   console.log(`  wallets: ${prevSummary.wallets} -> ${summary.wallets} (+${added.length} new, -${removed.length} gone)`);
   console.log(`  price:   ${prevSummary.params.price ?? "n/a"} -> ${summary.params.price ?? "n/a"}`);
@@ -554,8 +596,7 @@ async function publish(argv: string[]) {
   if (!values.quarter || !values.contract || !values["cdn-dir"]) fail("publish needs --quarter, --contract and --cdn-dir");
   if (!utils.isAddress(values.contract)) fail(`--contract is not an address: ${values.contract}`);
   const contractAddress = utils.getAddress(values.contract);
-  const cdnDir = path.resolve(expandHome(values["cdn-dir"]));
-  if (!fs.existsSync(path.join(cdnDir, "src", "points"))) fail(`${cdnDir} does not look like the cdn repo (no src/points)`);
+  const cdnDir = freshCdnDir(values["cdn-dir"]);
 
   const dir = path.join(OUT_DIR, values.quarter);
   if (!fs.existsSync(path.join(dir, "summary.json"))) fail(`no build output in ${dir}; run build first`);
@@ -588,9 +629,9 @@ async function publish(argv: string[]) {
   const problems: string[] = [];
   if (onchainRoot.toLowerCase() !== tree.root.toLowerCase()) problems.push(`merkleRoot() is ${onchainRoot}, local tree root is ${tree.root}`);
   if (utils.getAddress(onchainToken) !== SQD_TOKEN) problems.push(`token() is ${onchainToken}, expected SQD ${SQD_TOKEN}`);
+  if (utils.getAddress(onchainOwner) !== DISTRIBUTOR_OWNER) problems.push(`owner() is ${onchainOwner}, expected ${DISTRIBUTOR_OWNER}`);
   if (problems.length) fail(`contract ${contractAddress} does not match ${values.quarter}:\n  - ${problems.join("\n  - ")}`);
-  console.log(`On-chain merkleRoot() matches, token() is SQD.`);
-  if (utils.getAddress(onchainOwner) !== DISTRIBUTOR_OWNER) warn(`owner() is ${onchainOwner}, not the usual ${DISTRIBUTOR_OWNER}`);
+  console.log(`On-chain merkleRoot() matches, token() is SQD, owner() is ${DISTRIBUTOR_OWNER}.`);
 
   const sqd = new ethers.Contract(SQD_TOKEN, ERC20_ABI, provider);
   const balance: bigint = (await sqd.balanceOf(contractAddress)).toBigInt();
@@ -604,8 +645,8 @@ async function publish(argv: string[]) {
     if (balance < unclaimed) {
       fail(
         `contract is underfunded: balance ${formatSqd(balance)} SQD < ${formatSqd(unclaimed)} SQD still claimable ` +
-          `(${claimedCount}/${leaves.length} claimed). Fund it with:\n` +
-          `  cast send ${SQD_TOKEN} "transfer(address,uint256)" ${contractAddress} ${unclaimed - balance} --rpc-url ${RPC_URL} --account sqd-ops`,
+          `(${claimedCount}/${leaves.length} claimed). The holder of the testnet rewards budget must transfer ` +
+          `${unclaimed - balance} wei more SQD to ${contractAddress}.`,
       );
     }
     warn(
