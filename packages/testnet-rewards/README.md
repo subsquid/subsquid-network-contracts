@@ -44,6 +44,12 @@ Run `pnpm i` at the repo root once. Run the script from this directory with [Bun
 | `src/points/testnet-rewards/<quarter>.summary.json` | How the quarter was computed: price and its source, parameters, data window, root, total, wallet count, contract. |
 | `src/points/<contract>.json` | The plain `StandardMerkleTree` dump, kept per contract for history and the legacy proof API. |
 
+## Old distributors
+
+`bun testnet-rewards.ts distributors --cdn-dir path/to/cdn` is read-only. It lists every distributor archived in the cdn checkout, plus `LEGACY_DISTRIBUTORS` in the script, with its owner and SQD balance. It prints the sweepable total and one `withdrawAll()` call (calldata `0x853828b6`, value 0) for each old contract that holds SQD. Only the contract's owner can send that call. Never sweep the live contract.
+
+After sweeping, re-run it to confirm the balances are 0. `withdrawAll()` does not disable claims, so SQD later sent to an old distributor becomes claimable again.
+
 ## Development
 
 ```bash
