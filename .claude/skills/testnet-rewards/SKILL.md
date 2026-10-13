@@ -45,13 +45,13 @@ This skill adds the things the README does not say: access, the checks between t
 
 ## Sweep old distributors
 
-A per-quarter contract keeps the unclaimed SQD forever. Its owner (`0x24B97D7eE13Abc7c1fc109Ea66CabdcBe3ADe1a7`)
+A per-quarter contract keeps the unclaimed SQD forever. Its owner (`DISTRIBUTOR_OWNER` in the script)
 can call `withdrawAll()`, which sends the full balance to the owner.
-- After a claim window agreed with the human (for example, when the next quarter is published), list the old
-  contracts with a balance: the archive files `src/points/0x*.json` in subsquid/cdn, plus the git history of
-  `src/api/points.ts` in subsquid/network-points-landing for quarters before Q3 2026.
-- Prepare `cast send <old contract> "withdrawAll()" --account <owner signer>` for the human.
+- After a claim window agreed with the human (for example, when the next quarter is published), run
+  `distributors --cdn-dir <cdn checkout>`. It is read-only and prints the `withdrawAll()` calls; the human sends them from the owner.
 - Do not sweep the contract that `current.json` names: its claims are live.
+- After sweeping, re-run `distributors` to confirm the balances are 0. `withdrawAll()` does not disable claims, so SQD
+  later sent to an old distributor becomes claimable again.
 
 ## Traps
 

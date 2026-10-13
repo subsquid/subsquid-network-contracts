@@ -4,6 +4,7 @@
 //       [--price 0.0357] [--target-usd 225] [--workers 25] [--from-csv file.csv] [--allow-incomplete]
 //       [--cdn-dir path/to/cdn]
 //   bun testnet-rewards.ts publish --quarter 2026-Q3 --contract 0x... --cdn-dir path/to/cdn
+//   bun testnet-rewards.ts distributors --cdn-dir path/to/cdn   (read-only: balances and sweep calls)
 //
 // See README.md for the full quarterly procedure.
 
@@ -699,14 +700,75 @@ Open the cdn PR (not done automatically):
   gh pr create --fill --base main`);
 }
 
+// ---------- distributors ----------
+
+// Used before the cdn archive covered every distributor.
+export const LEGACY_DISTRIBUTORS = [
+  "0xD8F3cC3352b17bDe4ff8F2223b7b7F9b3B48c759",
+  "0x070FEb1a767Fd7b6b81d4E5c3Fcd9d58640D7c25",
+  "0x3CA7B890BCF2ec13662B6cccb0059512061B5D73",
+  "0x7039287a60030917baCde577950FB42040e69f55",
+  "0x59Eae72DdFc99851aCd1A766d4e2EB5e8686c0d4",
+  "0x56f2bcd6c2a892137968154f3859625938f5BED4",
+  "0xabD12e5b2A102cf616d749f8bf1b271ad67d1f74",
+  "0xE7Ba2eCB45Bd95a5941a62a7681bf8C9bE23a891",
+];
+export const WITHDRAW_ALL_CALLDATA = "0x853828b6";
+
+// Archived as src/points/0x<address>.json or retrospective-rewards-0x<address>.json, plus the legacy list.
+export function distributorAddresses(files: string[]): string[] {
+  const archived = files.flatMap((f) => /^(?:retrospective-rewards-)?(0x[0-9a-fA-F]{40})\.json$/.exec(f)?.[1] ?? []);
+  return [...new Set([...archived, ...LEGACY_DISTRIBUTORS].map((a) => utils.getAddress(a.toLowerCase())))];
+}
+
+// PUSH4 of the selector in the dispatcher; the oldest distributors have no withdrawAll().
+export function hasWithdrawAll(code: string): boolean {
+  return code.toLowerCase().includes(`63${WITHDRAW_ALL_CALLDATA.slice(2)}`);
+}
+
+async function distributors(argv: string[]) {
+  const { values } = parseArgs({
+    args: argv,
+    options: {
+      "cdn-dir": { type: "string" },
+      "rpc-url": { type: "string", default: process.env.ARBITRUM_RPC_URL ?? RPC_URL },
+    },
+    strict: true,
+  });
+  if (!values["cdn-dir"]) fail("distributors needs --cdn-dir");
+  const pointsDir = path.join(freshCdnDir(values["cdn-dir"]), "src", "points");
+  const live = utils.getAddress(JSON.parse(fs.readFileSync(path.join(pointsDir, "testnet-rewards", "current.json"), "utf8")).contract);
+  const provider = new ethers.providers.StaticJsonRpcProvider(values["rpc-url"]);
+  const sqd = new ethers.Contract(SQD_TOKEN, ERC20_ABI, provider);
+
+  const totals = { sweepable: 0n, live: 0n, stuck: 0n };
+  const toSweep: string[] = [];
+  for (const contract of distributorAddresses(fs.readdirSync(pointsDir).sort())) {
+    const withdrawable = hasWithdrawAll(await provider.getCode(contract));
+    const balance: bigint = (await sqd.balanceOf(contract)).toBigInt();
+    const owner: string = await new ethers.Contract(contract, DISTRIBUTOR_ABI, provider).owner().catch(() => "-");
+    const kind = contract === live ? "live" : withdrawable ? "sweepable" : "stuck";
+    totals[kind] += balance;
+    if (kind === "sweepable" && balance > 0n) toSweep.push(contract);
+    console.log(`${contract}  ${contract === live ? "LIVE" : "old "}  owner ${owner.padEnd(42)}  ${formatSqd(balance).padStart(28)} SQD${withdrawable ? "" : "  no withdrawAll()"}`);
+  }
+
+  console.log(`\nSweepable: ${formatSqd(totals.sweepable)} SQD in ${toSweep.length} old distributor(s)`);
+  console.log(`Live:      ${formatSqd(totals.live)} SQD in ${live}, sweepable once the next quarter is published`);
+  console.log(`Stuck:     ${formatSqd(totals.stuck)} SQD in distributors without withdrawAll()`);
+  console.log(`\nNothing was sent. Each call must come from the contract's owner(); withdrawAll() sends the whole balance to it.`);
+  for (const contract of toSweep) console.log(`  to ${contract}  data ${WITHDRAW_ALL_CALLDATA} (withdrawAll())  value 0`);
+}
+
 // ---------- main ----------
 
 if (import.meta.main) {
   const [command, ...rest] = process.argv.slice(2);
   if (command === "build") await build(rest);
   else if (command === "publish") await publish(rest);
+  else if (command === "distributors") await distributors(rest);
   else {
-    console.error("usage: bun testnet-rewards.ts <build|publish> [options]  (see the header of this file)");
+    console.error("usage: bun testnet-rewards.ts <build|publish|distributors> [options]  (see the header of this file)");
     process.exit(1);
   }
 }

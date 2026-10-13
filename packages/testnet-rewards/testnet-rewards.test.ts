@@ -1,15 +1,20 @@
 import { describe, expect, test } from "bun:test";
 import fs from "fs";
 import os from "os";
+import { utils } from "ethers";
 import path from "path";
 import {
   cdnCheckoutProblem,
+  distributorAddresses,
+  hasWithdrawAll,
+  LEGACY_DISTRIBUTORS,
   normalize,
   parseDecimal,
   previousQuarter,
   quarterBounds,
   resolvePeriod,
   twap,
+  WITHDRAW_ALL_CALLDATA,
   windowRelation,
 } from "./testnet-rewards";
 
@@ -134,4 +139,25 @@ test("cdnCheckoutProblem", () => {
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
+});
+
+describe("distributors", () => {
+  test("withdrawAll() calldata is its selector", () => {
+    expect(WITHDRAW_ALL_CALLDATA).toBe(utils.id("withdrawAll()").slice(0, 10));
+    expect(hasWithdrawAll("0x6080604052600436106100295760003560e01c8063853828b61461002e57")).toBe(true);
+    expect(hasWithdrawAll("0x6080604052600436106100295760003560e01c80634e71d92d1461002e57")).toBe(false);
+  });
+
+  test("distributorAddresses merges the archive and the legacy list without duplicates", () => {
+    const files = [
+      "0x6413556136D260B6B7A00C1781634f40C2de4E34.json",
+      "retrospective-rewards-0x070feb1a767fd7b6b81d4e5c3fcd9d58640d7c25.json",
+      "testnet-rewards",
+      "README.md",
+    ];
+    const all = distributorAddresses(files);
+    expect(all[0]).toBe("0x6413556136D260B6B7A00C1781634f40C2de4E34");
+    expect(all.length).toBe(1 + LEGACY_DISTRIBUTORS.length);
+    expect(all).toContain("0x070FEb1a767Fd7b6b81d4E5c3Fcd9d58640D7c25");
+  });
 });
