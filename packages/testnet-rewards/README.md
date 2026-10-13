@@ -1,6 +1,6 @@
 # Testnet rewards
 
-Every quarter, testnet (tethys) workers are paid in real SQD on Arbitrum One through a fresh [`MerkleDistributor`](../contracts/src/MerkleDistributor.sol). The budget is 25 workers × $225 at the quarter's SQD/USD price, split pro rata by each owner's testnet rewards.
+Every quarter, testnet (tethys) workers are paid in real SQD on Arbitrum One through a fresh [`MerkleDistributor`](../contracts/src/MerkleDistributor.sol). The budget is $75 per worker per month for a target of 25 workers, i.e. $1,875 a month or $225 × 25 a quarter, at the quarter's SQD/USD price. It is split pro rata by each owner's testnet rewards across however many workers run, so with more than 25 workers each gets less than $75. With fewer than 25 rewarded workers, the budget shrinks to $225 per rewarded worker.
 
 [`testnet-rewards.ts`](./testnet-rewards.ts) does the data side. You deploy and fund the contract yourself with the commands it prints; the script never sends a transaction. The record of every payout is in [subsquid/cdn](https://github.com/subsquid/cdn) under `src/points/`. Nothing is committed here.
 

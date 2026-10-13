@@ -211,7 +211,7 @@ async function fetchSquidRewards(
   from: Date,
   to: Date,
   allowIncomplete: boolean,
-): Promise<{ rows: [string, bigint][]; incomplete: { indexedUpTo: string | null } | null }> {
+): Promise<{ rows: [string, bigint][]; workers: number; incomplete: { indexedUpTo: string | null } | null }> {
   const url = process.env.TESTNET_SQUID_PG_URL;
   if (!url) {
     fail(
@@ -246,7 +246,11 @@ async function fetchSquidRewards(
       if (!/^\d+$/.test(row.total)) fail(`non-integer reward total "${row.total}" for ${row.wallet}`);
       return [normalizeAddress(row.wallet, "squid real_owner_id"), BigInt(row.total)];
     });
-    return { rows: result, incomplete };
+    const [count] = await sql`
+      select count(distinct worker_id)::int as workers from worker_reward
+      where timestamp >= ${from.toISOString()}::timestamptz and timestamp < ${to.toISOString()}::timestamptz
+    `;
+    return { rows: result, workers: count.workers, incomplete };
   } finally {
     await sql.close();
   }
@@ -391,7 +395,7 @@ async function build(argv: string[]) {
 
   console.log(`Period: ${formatDay(from)} to ${formatDay(addDays(to, -1))} inclusive (timestamp >= ${from.toISOString()} and < ${to.toISOString()})`);
 
-  const workers = values.workers ?? DEFAULT_WORKERS;
+  let workers = values.workers ?? DEFAULT_WORKERS;
   const targetUsd = values["target-usd"] ?? DEFAULT_TARGET_USD;
   let price: string | null = values.price ?? null;
   let priceSource: string | null = values.price ? "--price" : null;
@@ -416,7 +420,14 @@ async function build(argv: string[]) {
   } else {
     source = "squid:subsquid-network-testnet";
     if (to.getTime() > Date.now() && !values["allow-incomplete"]) fail(`the period has not ended yet (last day ${formatDay(addDays(to, -1))})`);
-    ({ rows: raw, incomplete } = await fetchSquidRewards(from, to, values["allow-incomplete"]!));
+    let rewarded: number;
+    ({ rows: raw, workers: rewarded, incomplete } = await fetchSquidRewards(from, to, values["allow-incomplete"]!));
+    console.log(`Workers rewarded in the window: ${rewarded}`);
+    // The budget is $targetUsd for each of up to `workers` workers: with fewer workers, nobody gets more than that.
+    if (rewarded < Number(workers)) {
+      warn(`only ${rewarded} workers were rewarded, fewer than ${workers}; sizing the budget for ${rewarded}`);
+      workers = String(rewarded);
+    }
   }
 
   if (raw) {
