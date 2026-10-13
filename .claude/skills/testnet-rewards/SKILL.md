@@ -34,7 +34,7 @@ This skill adds the things the README does not say: access, the checks between t
    - The payout total is budget / price by construction, so it proves nothing. Look at the wallets: every `new` and `gone` wallet, and a large change in the count, needs an explanation before anyone deploys.
    - Show the comparison to the human.
 2. The human runs the printed `forge create` command from `packages/contracts` with their own signer, constructor arguments unchanged. Record the deployed address.
-3. The holder of the testnet rewards budget transfers exactly the printed total to the contract. Optionally, send a small test amount first.
+3. The holder of the testnet rewards budget transfers the printed amount (the total rounded up to 0.001 SQD) to the contract. Optionally, send a small test amount first.
 4. Run `publish --quarter … --contract 0x… --cdn-dir <cdn checkout>`. Then open the cdn PR with the printed git commands. That PR is the record of the payout: it adds `<quarter>.summary.json` (price, parameters, root, total) next to `current.json`, and nothing is committed in this repo. When the PR merges, CI uploads the file with `Cache-Control: no-cache`.
 
 ## Check that the claim page uses the new quarter

@@ -166,6 +166,12 @@ function formatSqd(wei: bigint): string {
   return frac ? `${wholeStr}.${frac}` : wholeStr;
 }
 
+// Funding requests don't need wei precision: round up to 0.001 SQD, so the transfer always covers the total.
+export function fundingAmount(wei: bigint): bigint {
+  const step = 10n ** 15n;
+  return ((wei + step - 1n) / step) * step;
+}
+
 function formatSqdShort(wei: bigint): string {
   const [whole, frac = ""] = formatSqd(wei).split(".");
   return `${whole}.${frac.padEnd(2, "0").slice(0, 2)}`;
@@ -521,8 +527,8 @@ Next steps (nothing has been broadcast). Run step 1 in ${relContracts}/ and step
    # forge verify-contract <CONTRACT> src/MerkleDistributor.sol:MerkleDistributor --chain ${CHAIN_ID} --verifier etherscan \\
    #   --constructor-args $(cast abi-encode "constructor(address,bytes32,address)" ${SQD_TOKEN} ${tree.root} ${DISTRIBUTOR_OWNER})
 
-2. Fund it: the holder of the testnet rewards budget transfers exactly ${formatSqd(total)} SQD
-   (${total} wei) of SQD ${SQD_TOKEN} to the contract on Arbitrum One.
+2. Fund it: the holder of the testnet rewards budget transfers ${formatSqd(fundingAmount(total))} SQD
+   (the total ${formatSqd(total)} SQD rounded up to 0.001) of SQD ${SQD_TOKEN} to the contract on Arbitrum One.
 
 3. Check the contract and write the cdn files:
    bun testnet-rewards.ts publish --quarter ${label} --contract <CONTRACT> --cdn-dir ${cdnDir ?? "<subsquid/cdn checkout>"}`);
@@ -662,7 +668,7 @@ async function publish(argv: string[]) {
       fail(
         `contract is underfunded: balance ${formatSqd(balance)} SQD < ${formatSqd(unclaimed)} SQD still claimable ` +
           `(${claimedCount}/${leaves.length} claimed). The holder of the testnet rewards budget must transfer ` +
-          `${unclaimed - balance} wei more SQD to ${contractAddress}.`,
+          `${formatSqd(fundingAmount(unclaimed - balance))} SQD more to ${contractAddress}.`,
       );
     }
     warn(
