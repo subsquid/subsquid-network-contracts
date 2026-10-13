@@ -454,7 +454,7 @@ This output is for inspection only; publish refuses it. Rebuild once the squid h
   const relContracts = path.relative(process.cwd(), CONTRACTS_DIR) || ".";
   const relPkg = path.relative(process.cwd(), PACKAGE_DIR) || ".";
   console.log(`
-Next steps (nothing has been broadcast). Run steps 1-2 in ${relContracts}/ and step 3 in ${relPkg}/
+Next steps (nothing has been broadcast). Run step 1 in ${relContracts}/ and step 3 in ${relPkg}/
 
 1. Deploy the distributor on Arbitrum One and verify it on Sourcify:
    forge create src/MerkleDistributor.sol:MerkleDistributor \\
@@ -465,9 +465,8 @@ Next steps (nothing has been broadcast). Run steps 1-2 in ${relContracts}/ and s
    # forge verify-contract <CONTRACT> src/MerkleDistributor.sol:MerkleDistributor --chain ${CHAIN_ID} --verifier sourcify \\
    #   --constructor-args $(cast abi-encode "constructor(address,bytes32,address)" ${SQD_TOKEN} ${tree.root} ${DISTRIBUTOR_OWNER})
 
-2. Fund it with the total (${formatSqd(total)} SQD):
-   cast send ${SQD_TOKEN} "transfer(address,uint256)" <CONTRACT> ${total} \\
-     --rpc-url ${RPC_URL} --account sqd-ops
+2. Ask company ops to fund it: transfer exactly ${formatSqd(total)} SQD (${total} wei) of SQD
+   ${SQD_TOKEN} on Arbitrum One to <CONTRACT>. sqd-ops only deploys; it does not hold the payout.
 
 3. Check the contract and write the cdn files:
    bun testnet-rewards.ts publish --quarter ${label} --contract <CONTRACT> --cdn-dir ~/dev/subsquid/cdn`);
@@ -604,8 +603,8 @@ async function publish(argv: string[]) {
     if (balance < unclaimed) {
       fail(
         `contract is underfunded: balance ${formatSqd(balance)} SQD < ${formatSqd(unclaimed)} SQD still claimable ` +
-          `(${claimedCount}/${leaves.length} claimed). Fund it with:\n` +
-          `  cast send ${SQD_TOKEN} "transfer(address,uint256)" ${contractAddress} ${unclaimed - balance} --rpc-url ${RPC_URL} --account sqd-ops`,
+          `(${claimedCount}/${leaves.length} claimed). Ask company ops to transfer ` +
+          `${formatSqd(unclaimed - balance)} SQD (${unclaimed - balance} wei) to ${contractAddress}.`,
       );
     }
     warn(

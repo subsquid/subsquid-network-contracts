@@ -2,7 +2,7 @@
 
 Every quarter, testnet (tethys) workers are paid in real SQD on Arbitrum One through a fresh [`MerkleDistributor`](../contracts/src/MerkleDistributor.sol). The budget is 25 workers × $225 at the quarter's SQD/USD price, split pro rata by each owner's testnet rewards.
 
-[`testnet-rewards.ts`](./testnet-rewards.ts) does the data side. You deploy and fund the contract yourself with the commands it prints; the script never sends a transaction. The record of every payout is in [subsquid/cdn](https://github.com/subsquid/cdn) under `src/points/`. Nothing is committed here.
+[`testnet-rewards.ts`](./testnet-rewards.ts) does the data side. You deploy the contract with the command it prints, and company ops funds it; the script never sends a transaction. The record of every payout is in [subsquid/cdn](https://github.com/subsquid/cdn) under `src/points/`. Nothing is committed here.
 
 ## Quarterly steps
 
@@ -22,7 +22,7 @@ Run `pnpm i` at the repo root once. Run the script from this directory with [Bun
 
    It writes `out/<quarter>/{rewards.csv,tree.json,summary.json}` (gitignored) and prints the root and the total. It then compares the result with the previous quarter's published summary, read from `--cdn-dir` or, without it, from the public bucket. Last, it prints the commands for the next two steps.
 2. **Deploy and verify.** From `packages/contracts`, run the printed `forge create … --verify --verifier sourcify` command (`--account sqd-ops`).
-3. **Fund** the contract with the printed `cast send <SQD> "transfer(address,uint256)" <contract> <total>` command.
+3. **Fund.** Ask company ops to transfer exactly the printed total of SQD to the contract. `sqd-ops` only deploys; it does not hold the payout.
 4. **Publish.** Check the contract and write the cdn files:
 
    ```bash

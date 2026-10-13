@@ -19,7 +19,7 @@ This skill adds the things the README does not say: access, the checks between t
 ## Before you start
 
 - **Access.** The human runs every transaction, never the agent. Collect the access first:
-  - The `sqd-ops` foundry keystore account (`cast wallet address --account sqd-ops`). It deploys, and it must hold the SQD to fund.
+  - The `sqd-ops` foundry keystore account (`cast wallet address --account sqd-ops`). It only deploys; it needs a little ETH for gas and holds no SQD.
   - `sqd` CLI access to the `subsquid` org in SQD Cloud, for the read-only squid URI.
   - Write access to [subsquid/cdn](https://github.com/subsquid/cdn), for a PR. Nobody uploads to GCS directly.
 - **Squid lag.** The quarter must be complete in the `subsquid-network-testnet` squid. `build` aborts when the squid has not indexed past the period end. Do not use `--allow-incomplete` for a real payout. If the squid is stuck, fix the squid first.
@@ -32,7 +32,7 @@ This skill adds the things the README does not say: access, the checks between t
    - A total far from 25 × $225 / price, or a large change in wallets, needs an explanation before anyone deploys.
    - Show the summary to the human.
 2. The human runs the printed `forge create` command from `packages/contracts`. Record the deployed address.
-3. The human runs the printed `cast send … transfer` for the full total. Optionally, send a small test amount first.
+3. Company ops funds the contract: the human asks them to transfer exactly the printed total of SQD to the contract address. Do not continue until the transfer has landed; `publish` checks the balance.
 4. Run `publish --quarter … --contract 0x… --cdn-dir <cdn checkout>`. Then open the cdn PR with the printed git commands. That PR is the record of the payout: it adds `<quarter>.summary.json` (price, parameters, root, total) next to `current.json`, and nothing is committed in this repo. When the PR merges, CI uploads the file with `Cache-Control: no-cache`.
 
 ## Check that the claim page uses the new quarter
