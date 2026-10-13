@@ -23,7 +23,7 @@ Run `pnpm i` at the repo root once. Run the script from this directory with [Bun
 
    It writes `out/<quarter>/{rewards.csv,tree.json,summary.json}` (gitignored) and prints the root and the total. It then compares the result with the previous quarter's published summary, read from `--cdn-dir` or, without it, from the public bucket (the output says which). `--cdn-dir` must be a subsquid/cdn checkout on `main`, not behind `origin/main` (the script fetches), with `src/points/testnet-rewards/`; `publish` checks the same. Last, it prints the commands for the next steps.
 2. **Deploy and verify.** From `packages/contracts`, run the printed `forge create … --verify --verifier etherscan` command with any signer (`--account <your-keystore>`, `--ledger`). Verification on Arbiscan needs `ETHERSCAN_API_KEY` (an Etherscan V2 key) in your environment or in `packages/contracts/.env`. The deployer does not matter; the owner constructor argument (`DISTRIBUTOR_OWNER` in the script) does, and `publish` checks it.
-3. **Fund.** The holder of the testnet rewards budget transfers exactly the printed total (SQD, in wei) to the contract.
+3. **Fund.** The holder of the testnet rewards budget transfers the printed amount to the contract: the total rounded up to 0.001 SQD.
 4. **Publish.** Check the contract and write the cdn files:
 
    ```bash

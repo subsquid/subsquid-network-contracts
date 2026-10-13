@@ -6,6 +6,7 @@ import path from "path";
 import {
   cdnCheckoutProblem,
   distributorAddresses,
+  fundingAmount,
   hasWithdrawAll,
   LEGACY_DISTRIBUTORS,
   normalize,
@@ -159,5 +160,13 @@ describe("distributors", () => {
     expect(all[0]).toBe("0x6413556136D260B6B7A00C1781634f40C2de4E34");
     expect(all.length).toBe(1 + LEGACY_DISTRIBUTORS.length);
     expect(all).toContain("0x070FEb1a767Fd7b6b81d4E5c3Fcd9d58640D7c25");
+  });
+});
+
+describe("fundingAmount", () => {
+  test("rounds up to 0.001 SQD", () => {
+    expect(fundingAmount(169366494038299409851852n)).toBe(169366495000000000000000n);
+    expect(fundingAmount(1000000000000000000n)).toBe(1000000000000000000n);
+    expect(fundingAmount(1n)).toBe(1000000000000000n);
   });
 });
