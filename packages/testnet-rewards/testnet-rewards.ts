@@ -499,14 +499,15 @@ This output is for inspection only; publish refuses it. Rebuild once the squid h
   console.log(`
 Next steps (nothing has been broadcast). Run step 1 in ${relContracts}/ and step 3 in ${relPkg}/
 
-1. Deploy the distributor on Arbitrum One and verify it on Sourcify. Any deployer works (--account <your-keystore>
-   or --ledger); the owner is the last constructor argument, and publish checks it.
+1. Deploy the distributor on Arbitrum One and verify it on Arbiscan (needs ETHERSCAN_API_KEY, see
+   ${relContracts}/foundry.toml). Any deployer works (--account <your-keystore> or --ledger); the owner is the last
+   constructor argument, and publish checks it.
    forge create src/MerkleDistributor.sol:MerkleDistributor \\
      --rpc-url ${RPC_URL} --account <your-keystore> --broadcast \\
-     --verify --verifier sourcify \\
+     --verify --verifier etherscan \\
      --constructor-args ${SQD_TOKEN} ${tree.root} ${DISTRIBUTOR_OWNER}
-   # if verification fails, retry it on its own:
-   # forge verify-contract <CONTRACT> src/MerkleDistributor.sol:MerkleDistributor --chain ${CHAIN_ID} --verifier sourcify \\
+   # if verification fails, retry it on its own; --verifier sourcify also verifies on Sourcify, without a key:
+   # forge verify-contract <CONTRACT> src/MerkleDistributor.sol:MerkleDistributor --chain ${CHAIN_ID} --verifier etherscan \\
    #   --constructor-args $(cast abi-encode "constructor(address,bytes32,address)" ${SQD_TOKEN} ${tree.root} ${DISTRIBUTOR_OWNER})
 
 2. Fund it: the holder of the testnet rewards budget transfers exactly ${formatSqd(total)} SQD
