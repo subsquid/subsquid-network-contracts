@@ -298,11 +298,14 @@ async function fetchHourlyPrices(from: Date, to: Date): Promise<[number, number]
     const end = Math.min(start + 30 * 86_400_000, rangeEnd);
     const url = `https://api.coingecko.com/api/v3/coins/${COINGECKO_COIN_ID}/market_chart/range?vs_currency=usd&from=${Math.floor(start / 1000)}&to=${Math.floor(end / 1000)}`;
     let res = await fetch(url, { headers });
-    if (res.status === 429) {
-      await Bun.sleep(60_000);
+    // The free API rate-limits per minute; back off and retry a few times.
+    for (let attempt = 1; res.status === 429 && attempt <= 4; attempt++) {
+      warn(`CoinGecko rate limit (HTTP 429), retrying in ${attempt * 30}s (${attempt}/4)`);
+      await Bun.sleep(attempt * 30_000);
       res = await fetch(url, { headers });
     }
     const body: any = await res.json().catch(() => null);
+    if (res.status === 429) fail("CoinGecko is still rate-limiting (HTTP 429); wait a few minutes and run build again.");
     if (!res.ok || !Array.isArray(body?.prices)) {
       fail(
         `CoinGecko price request failed (HTTP ${res.status}): ${JSON.stringify(body?.error ?? body)}\n` +
