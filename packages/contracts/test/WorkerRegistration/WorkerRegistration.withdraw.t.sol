@@ -122,4 +122,33 @@ contract WorkerRegistrationWithdrawTest is WorkerRegistrationTest {
     assertEq(workerRegistration.getAllWorkersCount(), 1);
     assertEq(workerRegistration.getActiveWorkers()[0].peerId, workerId2);
   }
+
+  function testWithdrawsAfterLockPeriodAboveOldLimit() public {
+    uint128 lockPeriod = 1_095_000;
+    networkController.setLockPeriod(lockPeriod);
+    workerRegistration.register(workerId);
+    jumpEpoch();
+    uint256 unlockBlock = workerRegistration.nextEpoch() + lockPeriod;
+    workerRegistration.deregister(workerId);
+
+    vm.roll(unlockBlock - 1);
+    vm.expectRevert("Worker is locked");
+    workerRegistration.withdraw(workerId);
+
+    vm.roll(unlockBlock);
+    workerRegistration.withdraw(workerId);
+    assertEq(token.balanceOf(creator), token.totalSupply());
+  }
+
+  function testLockPeriodChangeAppliesToDeregisteredWorkers() public {
+    workerRegistration.register(workerId);
+    jumpEpoch();
+    uint256 deregisteredAt = workerRegistration.nextEpoch();
+    workerRegistration.deregister(workerId);
+    networkController.setLockPeriod(1_095_000);
+
+    vm.roll(deregisteredAt + EPOCH_LENGTH);
+    vm.expectRevert("Worker is locked");
+    workerRegistration.withdraw(workerId);
+  }
 }
