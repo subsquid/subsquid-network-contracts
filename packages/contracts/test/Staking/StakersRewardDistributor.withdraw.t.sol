@@ -101,6 +101,44 @@ contract StakersRewardDistributionWithdrawTest is StakersRewardDistributionTest 
     assertEq(whenCanWithdraw, 107);
   }
 
+  function test_CannotWithdrawBeforeLockPeriodAboveOldLimit() public {
+    network.setLockPeriod(1_095_000);
+    staking.deposit(workers[0], 100);
+    (, uint256 whenCanWithdraw) = staking.getDeposit(address(this), workers[0]);
+    assertEq(whenCanWithdraw, 5 + 1_095_000);
+
+    vm.roll(whenCanWithdraw - 1);
+    vm.expectRevert("Too early to withdraw");
+    staking.withdraw(workers[0], 100);
+
+    vm.roll(whenCanWithdraw);
+    staking.withdraw(workers[0], 100);
+  }
+
+  function test_LockPeriodChangeKeepsUnlockBlockOfPastDeposit() public {
+    network.setLockPeriod(50);
+    staking.deposit(workers[0], 100);
+    network.setLockPeriod(1_095_000);
+
+    (, uint256 whenCanWithdraw) = staking.getDeposit(address(this), workers[0]);
+    assertEq(whenCanWithdraw, 55);
+    jumpToMomentWhenCanWithdraw(address(this));
+    staking.withdraw(workers[0], 100);
+  }
+
+  function test_TopUpRelocksWholeDepositWithNewLockPeriod() public {
+    network.setLockPeriod(50);
+    staking.deposit(workers[0], 100);
+    network.setLockPeriod(1_095_000);
+    staking.deposit(workers[0], 1);
+
+    (, uint256 whenCanWithdraw) = staking.getDeposit(address(this), workers[0]);
+    assertEq(whenCanWithdraw, 5 + 1_095_000);
+    vm.roll(55);
+    vm.expectRevert("Too early to withdraw");
+    staking.withdraw(workers[0], 100);
+  }
+
   // 2.5M gas for 100 distinct deposits
   function test_ClaimGasUsage() public {
     vm.mockCall(

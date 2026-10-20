@@ -12,6 +12,8 @@ import "./interfaces/INetworkController.sol";
  */
 contract NetworkController is AccessControl, INetworkController {
   uint256 internal constant ONE_BASIS_POINT = 10_000;
+  /// @dev ~1 year of 12 s L1 blocks; on Arbitrum `block.number` follows L1
+  uint128 public constant MAX_LOCK_PERIOD = 2_628_000;
 
   /// @notice deprecated used ONLY for worker bond and delegation lock period
   uint128 public epochLength;
@@ -65,10 +67,11 @@ contract NetworkController is AccessControl, INetworkController {
     emit EpochLengthUpdated(_epochLength);
   }
 
-  /// @dev Set how long the
+  /// @dev Set how many blocks a worker bond stays locked after deregistration
+  /// and a delegation stays locked after deposit (times Staking.epochsLockedAfterStake)
   function setLockPeriod(uint128 _lockPeriod) external onlyRole(DEFAULT_ADMIN_ROLE) {
     require(_lockPeriod > 1, "Lock period too short");
-    require(_lockPeriod < 100000, "Lock period too long");
+    require(_lockPeriod <= MAX_LOCK_PERIOD, "Lock period too long");
 
     epochLength = _lockPeriod;
 
