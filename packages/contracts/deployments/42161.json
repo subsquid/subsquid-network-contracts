@@ -1,8 +1,8 @@
 {
   "SQD": "0x1337420dED5ADb9980CFc35f8f2B054ea86f8aB1",
   "RouterImplementation": "0x4a7c41397f623ca04b60a59bcaa77346aeae86aa",
-  "Router": "0x67F56D27dab93eEb07f6372274aCa277F49dA941 ",
-  "NetworkController": "0x4cf58097d790b193d22ed633bf8b15c9bc4f0da7",
+  "Router": "0x67F56D27dab93eEb07f6372274aCa277F49dA941",
+  "NetworkController": "0xd365C790cEF04492F3fC0811a998271f2f55D69b",
   "Staking": "0xb31a0d39d2c69ed4b28d96e12cbf52c5f9ac9a51",
   "WorkerRegistration": "0x36e2b147db67e76ab67a4d07c293670ebefcae4e",
   "RewardTreasury": "0x237abf43bc51fd5c50d0d598a1a4c26e56a8a2a0",

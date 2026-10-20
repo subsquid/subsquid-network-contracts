@@ -45,13 +45,6 @@ export async function currentApyTest(blockNumber?: number) {
         blockNumber: l2blockNumber,
       });
 
-    // const yearlyRewardCapCoefficient = await client.readContract({
-    //   address: addresses.networkController,
-    //   abi,
-    //   functionName: 'yearlyRewardCapCoefficient',
-    //   blockNumber,
-    // }) as bigint;
-
     const yearlyRewardCapCoefficient =
       await contracts.networkController.read.yearlyRewardCapCoefficient({
         blockNumber: l2blockNumber,

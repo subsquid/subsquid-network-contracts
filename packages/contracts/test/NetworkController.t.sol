@@ -99,4 +99,42 @@ contract NetworkControllerTest is BaseTest {
     controller.setStoragePerWorkerInGb(10);
     assertEq(controller.storagePerWorkerInGb(), 10);
   }
+
+  function test_SetsLockPeriodAboveOldLimit() public {
+    uint128 lockPeriod = 1_095_000;
+    controller.setLockPeriod(lockPeriod);
+    assertEq(controller.lockPeriod(), lockPeriod);
+    assertEq(controller.epochLength(), lockPeriod);
+  }
+
+  function test_SetsLockPeriodToMax() public {
+    uint128 max = controller.MAX_LOCK_PERIOD();
+    controller.setLockPeriod(max);
+    assertEq(controller.lockPeriod(), max);
+  }
+
+  function test_RevertsIf_SettingLockPeriodAboveMax() public {
+    uint128 max = controller.MAX_LOCK_PERIOD();
+    vm.expectRevert("Lock period too long");
+    controller.setLockPeriod(max + 1);
+  }
+
+  function test_RevertsIf_SettingLockPeriodTo1() public {
+    vm.expectRevert("Lock period too short");
+    controller.setLockPeriod(1);
+  }
+
+  function test_RevertsIf_SettingLockPeriodNotByAdmin() public {
+    hoax(address(1));
+    expectNotAdminRevert();
+    controller.setLockPeriod(1_095_000);
+  }
+
+  function test_LockPeriodDoesNotMoveEpochs() public {
+    vm.roll(27);
+    controller.setLockPeriod(controller.MAX_LOCK_PERIOD());
+    assertEq(controller.workerEpochLength(), 5);
+    assertEq(controller.epochNumber(), 5);
+    assertEq(controller.nextEpoch(), 30);
+  }
 }
