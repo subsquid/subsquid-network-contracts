@@ -15,20 +15,7 @@ docs/
 # Dotenv file
 .env
 
-# Frontend (Next.js)
 node_modules/
-frontend/node_modules/
-frontend/.pnp
-frontend/.pnp.js
-frontend/.next/
-frontend/out/
-frontend/build/
-frontend/.vercel/
-frontend/*.tsbuildinfo
-frontend/next-env.d.ts
-frontend/pnpm-lock.yaml
-frontend/package-lock.json
-frontend/yarn.lock
 
 # Testing
 coverage/

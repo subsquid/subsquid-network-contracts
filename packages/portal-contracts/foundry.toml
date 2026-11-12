@@ -4,6 +4,8 @@
 src = "src"
 out = "out"
 libs = ["lib"]
+# Pinned so that a newer forge cannot change the bytecode by changing its default. Other profiles inherit it.
+evm_version = "prague"
 optimizer = true
 optimizer_runs = 1
 via_ir = true
@@ -25,10 +27,9 @@ code_size_limit = 49152  # 48KB - Arbitrum supports larger contracts
 [profile.default.fuzz]
 runs = 256
 
-# Tenderly verification configuration
 [etherscan]
-arbitrum = { key = "338GM13A6DDG5S86A5CJBT2ZV7SRUGUPZ2", chain = 42161, url = "https://api.arbiscan.io/api" }
-arbitrum_sepolia = { key = "338GM13A6DDG5S86A5CJBT2ZV7SRUGUPZ2", chain = 421614, url = "https://api-sepolia.arbiscan.io/api" }
-unknown_chain = { key = "ZcvkdUX2yO0MWRQ6nA3R0E7gPnscsySk", chain = 42161, url = "https://virtual.arbitrum.eu.rpc.tenderly.co/1975f1f7-1857-4714-b409-e3620497dad8/verify/etherscan" }
+# One Etherscan V2 key covers every chain. Put ETHERSCAN_API_KEY in packages/portal-contracts/.env (gitignored); forge loads it.
+arbitrum = { key = "${ETHERSCAN_API_KEY}" }
+arbitrum-sepolia = { key = "${ETHERSCAN_API_KEY}" }
 
 # See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options
