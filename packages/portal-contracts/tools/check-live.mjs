@@ -6,7 +6,10 @@
 //
 // For every contract in the manifest:
 //   - there is code at the address;
-//   - deployTx was mined in startBlock and created the contract or emitted a log from it.
+//   - deployTx was mined in startBlock and is the transaction that created the contract.
+//     The beacon is created by the factory while the factory itself is being deployed, so
+//     its deployTx must be the one that created the factory and must carry the event the
+//     beacon's constructor emits.
 // For the wiring: the factory points at this beacon, this registry and the fee router that
 // is not retired, and the registry points back at the factory.
 // For a chain with a released version (`version` is not null), also:
@@ -29,6 +32,11 @@ const DEFAULT_RPC = {
 
 // ERC-1967: bytes32(uint256(keccak256('eip1967.proxy.implementation')) - 1)
 const IMPLEMENTATION_SLOT = '0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc'
+
+// keccak256('OwnershipTransferred(address,address)'). With a zero previous owner it is
+// emitted only by the constructor of an Ownable contract, which the beacon is.
+const OWNERSHIP_TRANSFERRED = '0x8be0079c531659141344cd1fd0a4f28419497f9722a3daafe3b4186f6b6457e0'
+const ZERO_WORD = `0x${'0'.repeat(64)}`
 
 function parseArgs(argv) {
   const args = {}
@@ -130,8 +138,19 @@ async function main() {
     const receipt = receipts[i]
     if (!receipt) return check(false, `${name}: deployTx found`, c.deployTx)
     check(Number(receipt.blockNumber) === c.startBlock, `${name}: deployTx mined in startBlock`, `${Number(receipt.blockNumber)} vs ${c.startBlock}`)
-    const touched = [receipt.contractAddress, ...receipt.logs.map((l) => l.address)].filter(Boolean).map(lower)
-    check(touched.includes(lower(c.address)), `${name}: deployTx created the contract or emitted from it`)
+    const created = receipt.contractAddress ? lower(receipt.contractAddress) : null
+    if (c.kind === 'beacon') {
+      const constructed = receipt.logs.some(
+        (l) => lower(l.address) === lower(c.address) && l.topics[0] === OWNERSHIP_TRANSFERRED && l.topics[1] === ZERO_WORD,
+      )
+      check(
+        created === lower(manifest.contracts.PortalPoolFactory.address) && constructed,
+        `${name}: deployTx created the factory, which constructed the beacon in it`,
+        `created ${created}`,
+      )
+    } else {
+      check(created === lower(c.address), `${name}: deployTx created the contract`, `created ${created}`)
+    }
   })
 
   // Wiring between the contracts.
