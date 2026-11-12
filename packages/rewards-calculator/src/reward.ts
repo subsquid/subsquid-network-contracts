@@ -1,7 +1,7 @@
 import { getBlockTimestamp } from './chain';
 import { ClickhouseClient } from './clickhouseClient';
 import { logger } from './logger';
-import { Workers } from './workers';
+import type { Workers } from './workers';
 
 export type Rewards = {
   [key in string]: {
@@ -27,6 +27,7 @@ export async function epochStats(
   if (workers.count() === 0) {
     return workers;
   }
+  workers.selectRule(fromBlock);
   await workers.getNextDistributionStartBlockNumber();
   await workers.clearUnknownWorkers();
   await workers.getStakes();

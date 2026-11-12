@@ -10,19 +10,25 @@ import {
   getLatestDistributionBlock,
   getStakes,
   targetCapacity as getTargetCapacity,
-  MulticallResult,
+  type MulticallResult,
   preloadWorkerIds,
   registeredWorkersCount,
   storagePerWorkerInGb,
 } from './chain';
 import {
-  ClickhouseClient,
+  type ClickhouseClient,
   historicalLiveness,
   livenessFactor,
 } from './clickhouseClient';
 import { config } from './config';
+import {
+  budgetFactor,
+  type FixedBudgetRule,
+  fixedBudgetRule,
+  isFixedBudgetActive,
+} from './fixedBudget';
 import { logger } from './logger';
-import { Rewards } from './reward';
+import type { Rewards } from './reward';
 import {
   bigIntToDecimal,
   decimalSum,
@@ -41,10 +47,13 @@ export class Workers {
   private workers: Record<string, Worker> = {};
   private bond = new Decimal(0);
   private nextDistributionStartBlockNumber = 0n;
+  /** Set when this window is paid under the fixed-budget rule. */
+  private fixedBudget: FixedBudgetRule | undefined;
 
   baseApr = new Decimal(0);
   stakeFactor = new Decimal(0);
   rAPR = new Decimal(0);
+  budgetFactor = new Decimal(1);
   commitmentTxHash = '';
   commitmentError = '';
 
@@ -82,6 +91,16 @@ export class Workers {
 
   public count() {
     return Object.keys(this.workers).length;
+  }
+
+  public selectRule(windowStartBlock: number, rule = fixedBudgetRule()) {
+    this.fixedBudget = isFixedBudgetActive(rule, windowStartBlock)
+      ? rule
+      : undefined;
+  }
+
+  public get rewardRule() {
+    return this.fixedBudget ? 'fixed_budget' : 'soft_cap';
   }
 
   public async getNextDistributionStartBlockNumber() {
@@ -127,6 +146,13 @@ export class Workers {
       'totalStake',
       this.mapMulticallResult(totalStakes, bigIntToDecimal),
     );
+
+    // The fixed-budget rule has no delegation cap: every delegated SQD earns.
+    if (this.fixedBudget) {
+      this.forEach((worker) => {
+        worker.stake = worker.totalStake;
+      });
+    }
   }
 
   public getT() {
@@ -136,6 +162,14 @@ export class Workers {
   }
 
   public getDTrraffic() {
+    // Under the fixed budget, traffic is compared with the bond only, so a
+    // large delegation does not lower the worker's traffic factor.
+    if (this.fixedBudget) {
+      const totalBond = this.totalBond();
+      this.map((worker) => worker.calculateDTraffic(totalBond, worker.bond));
+      return;
+    }
+
     const totalSupply_ = this.totalSupply();
     this.map((worker) => worker.calculateDTraffic(totalSupply_));
   }
@@ -165,10 +199,13 @@ export class Workers {
   }
 
   public async calculateRewards() {
-    const duration = dayjs(this.clickhouseClient.to).diff(
-      dayjs(this.clickhouseClient.from),
-      'second',
-    );
+    const duration = this.duration();
+
+    if (this.fixedBudget) {
+      this.calculateFixedBudgetRewards(this.fixedBudget, duration);
+      return;
+    }
+
     const baseApr = await currentApy(this.nextDistributionStartBlockNumber);
     this.baseApr = bigIntToDecimal(baseApr);
 
@@ -178,6 +215,30 @@ export class Workers {
 
     const rMax = this.rAPR.mul(duration).div(YEAR).div(10_000);
     this.map((worker) => worker.getRewards(rMax));
+  }
+
+  private calculateFixedBudgetRewards(rule: FixedBudgetRule, duration: number) {
+    this.budgetFactor = budgetFactor(
+      rule,
+      this.totalBond(),
+      this.totalStakeSum(),
+    );
+
+    const operatorApr = rule.operatorApr.mul(this.budgetFactor);
+    const delegatorApr = rule.delegatorApr.mul(this.budgetFactor);
+    const windowShare = new Decimal(duration).div(YEAR);
+
+    // Reported in basis points, like the on-chain APR of the soft-cap rule.
+    this.baseApr = operatorApr.mul(10_000);
+    this.stakeFactor = new Decimal(1);
+    this.rAPR = this.baseApr;
+
+    this.map((worker) =>
+      worker.getFixedBudgetRewards(
+        operatorApr.mul(windowShare),
+        delegatorApr.mul(windowShare),
+      ),
+    );
   }
 
   public noteSuccessfulCommit(txHash: string) {
@@ -236,6 +297,8 @@ export class Workers {
         base_apr: this.baseApr.toFixed(),
         stake_factor: this.stakeFactor.toFixed(),
         r_apr: this.rAPR.toFixed(),
+        reward_rule: this.rewardRule,
+        budget_factor: this.budgetFactor.toFixed(),
         total_reward: total_reward.toFixed(),
         total_chunks_read: this.totalChunksRead(),
         total_bytes_sent: this.totalBytesSent(),
@@ -302,16 +365,31 @@ export class Workers {
   }
 
   private totalSupply() {
-    return this.bond
-      .mul(this.count())
-      .add(decimalSum(this.map(({ stake }) => stake)));
+    return this.bond.mul(this.count()).add(this.totalStakeSum());
   }
 
-  private async rUnlocked() {
-    const duration = dayjs(this.clickhouseClient.to).diff(
+  private totalBond() {
+    return decimalSum(this.map(({ bond }) => bond));
+  }
+
+  private totalStakeSum() {
+    return decimalSum(this.map(({ stake }) => stake));
+  }
+
+  private duration() {
+    return dayjs(this.clickhouseClient.to).diff(
       dayjs(this.clickhouseClient.from),
       'second',
     );
+  }
+
+  private async rUnlocked() {
+    const duration = this.duration();
+
+    if (this.fixedBudget) {
+      return this.fixedBudget.budgetPerYear.mul(duration).div(YEAR);
+    }
+
     return this.baseApr
       .mul(this.totalSupply())
       .mul(duration)
