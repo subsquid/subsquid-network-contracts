@@ -116,11 +116,14 @@ jobs:
             exit 1
           fi
 
-      # The last release is the highest portal-contracts-v* tag.
+      # The last release is the highest portal-contracts-v* tag. The listing is a statement of
+      # its own so that a failed request fails the step: an empty answer must mean "no tag
+      # yet", never "could not ask", or the storage comparison below would be skipped.
       - name: Find the last release
         id: release
         run: |
-          tag=$(git ls-remote --tags --refs origin 'refs/tags/portal-contracts-v*' | sed 's#.*refs/tags/##' | sort -V | tail -n 1)
+          refs=$(git ls-remote --tags --refs origin 'refs/tags/portal-contracts-v*')
+          tag=$(printf '%s\n' "$refs" | sed 's#.*refs/tags/##' | sort -V | tail -n 1)
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
 
       - name: Check out the last release

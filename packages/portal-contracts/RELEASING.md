@@ -25,7 +25,7 @@ Things to know when reading `deployments/<chainId>.json`:
 - Pools are not listed. The factory creates each pool as a beacon proxy and emits `PoolCreated`; a pool's ABI is `PortalPoolImplementation`, and its receipt token's ABI is `LiquidPortalToken`.
 - A contract marked `"retired": true` is no longer used by the factory, but it emitted events while it was.
 - `"version": null` means the chain runs builds that were never released. `deployments/421614.json` (Arbitrum Sepolia) is in that state: the ABIs here may lack functions the testnet contracts have, and implementation addresses are not listed.
-- An indexer needs every event the contracts have ever emitted. When a release removes or changes an event, keep the older ABI as well.
+- An indexer needs every event the contracts have ever emitted. `abi/` here only holds the current ABIs, so when a release removes or changes an event, keep the copy from the older tag in your project as well.
 
 ## Tools
 

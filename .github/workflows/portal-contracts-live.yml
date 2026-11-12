@@ -58,7 +58,9 @@ jobs:
         run: |
           version=$(node -p "require('./deployments/42161.json').version")
           tag="portal-contracts-v$version"
-          if [ -n "$(git ls-remote --tags --refs origin "refs/tags/$tag")" ]; then
+          # A statement of its own, so that a failed request fails the step.
+          refs=$(git ls-remote --tags --refs origin "refs/tags/$tag")
+          if [ -n "$refs" ]; then
             echo "tag=$tag" >> "$GITHUB_OUTPUT"
           else
             echo "::warning::Tag $tag does not exist. Comparing the chain with a build of this commit."
