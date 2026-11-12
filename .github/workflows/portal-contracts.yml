@@ -1,0 +1,109 @@
+name: portal-contracts
+
+# CI for packages/portal-contracts only. Foundry is pinned to the version in
+# packages/portal-contracts/.foundry-version, the one that reproduces the deployed bytecode.
+# The package's solhint run stays in test.yml (the `lint` task).
+
+on:
+  pull_request:
+    paths:
+      - "packages/portal-contracts/**"
+      - ".gitmodules"
+      - ".github/workflows/portal-contracts.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "packages/portal-contracts/**"
+      - ".gitmodules"
+      - ".github/workflows/portal-contracts.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: portal-contracts-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: packages/portal-contracts
+
+jobs:
+  # Separate jobs on purpose, as in test.yml: a formatting failure should not hide
+  # whether the tests pass.
+  test:
+    name: Build and test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: recursive
+
+      - name: Read the pinned Foundry version
+        id: foundry
+        run: echo "version=$(cat .foundry-version)" >> "$GITHUB_OUTPUT"
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@dba66c27052e63476d886f22216e119ba7e615bf # v1.9.2
+        with:
+          version: ${{ steps.foundry.outputs.version }}
+
+      - name: Show Forge version
+        run: forge --version
+
+      # --sizes fails the build when a contract is over the 24,576-byte limit.
+      - name: Build
+        run: forge build --sizes
+
+      - name: Test
+        run: forge test --no-match-path 'test/fork/**'
+
+  format:
+    name: Format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Read the pinned Foundry version
+        id: foundry
+        run: echo "version=$(cat .foundry-version)" >> "$GITHUB_OUTPUT"
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@dba66c27052e63476d886f22216e119ba7e615bf # v1.9.2
+        with:
+          version: ${{ steps.foundry.outputs.version }}
+
+      - name: Check formatting
+        run: forge fmt --check
+
+  # Tests under test/fork run against live Arbitrum One state at the latest block, so a
+  # failure here can come from the chain or the RPC and not from the diff.
+  fork:
+    name: Fork tests (live Arbitrum One state)
+    runs-on: ubuntu-latest
+    env:
+      # The public RPC is enough. Set the ARBITRUM_RPC_URL repository secret for a steadier one.
+      ARBITRUM_RPC_URL: ${{ secrets.ARBITRUM_RPC_URL || 'https://arb1.arbitrum.io/rpc' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: recursive
+
+      - name: Read the pinned Foundry version
+        id: foundry
+        run: echo "version=$(cat .foundry-version)" >> "$GITHUB_OUTPUT"
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@dba66c27052e63476d886f22216e119ba7e615bf # v1.9.2
+        with:
+          version: ${{ steps.foundry.outputs.version }}
+
+      - name: Run fork tests
+        run: |
+          if [ -d test/fork ]; then
+            forge test --match-path 'test/fork/**' -vv
+          else
+            echo "No fork tests on this commit."
+          fi
