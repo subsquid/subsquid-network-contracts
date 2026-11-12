@@ -16,6 +16,32 @@ The network rewards are paid out to workers and delegators for each epoch. The R
 
 The rewards are allocated from the rewards pool. Each epoch, the rewards pool unlocks `APY_D * S * EPOCH_LENGTH` in rewards, where `EPOCH_LENGTH` is the length of the epoch in days, `S` is the total (bonded + delegated) amount of staked `SQD` during the epoch and `APY_D` is the (variable) base reward rate calculated for the epoch.
 
+### Fixed-budget rule
+
+From the window that starts at `FIXED_BUDGET_FROM_BLOCK`, the bot uses a fixed budget instead of the rules below. It is off while the variable is unset.
+
+```
+cost  = OPERATOR_TARGET_APR * total_bond + DELEGATOR_TARGET_APR * total_delegated
+f     = min(1, 12 * FIXED_BUDGET_SQD_PER_MONTH / cost)
+q[i]  = liveness[i] * tenure[i] * traffic[i]
+
+worker_reward[i] = q[i] * f * OPERATOR_TARGET_APR  * bond[i]      * window / year
+staker_reward[i] = q[i] * f * DELEGATOR_TARGET_APR * delegated[i] * window / year
+```
+
+- `delegated[i]` is the full delegation to the worker. There is no soft cap and no split.
+- The traffic factor compares the traffic share with the bond share only, so delegation does not lower it.
+- What the quality factor `q[i]` removes is not paid.
+
+| Variable | Default |
+|---|---|
+| `FIXED_BUDGET_FROM_BLOCK` | unset (rule off) |
+| `FIXED_BUDGET_SQD_PER_MONTH` | `3000000` |
+| `OPERATOR_TARGET_APR` | `0.20` |
+| `DELEGATOR_TARGET_APR` | `0.05` |
+
+All distributors must use the same values, or their commitments differ.
+
 ### Rewards pool
 
 The `SQD` supply is fixed for the initial, and the rewards are distributed are from a pool, to which `10%` of the supply is allocated at TGE. The reward pool has a protective mechanism, called health factor, which halves the effective rewards rate if the reward pool supply drops below 6-month average reward.
