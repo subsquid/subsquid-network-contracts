@@ -1,0 +1,173 @@
+{
+  "contract": "PortalRegistry",
+  "storage": [
+    {
+      "slot": 0,
+      "offset": 0,
+      "label": "SQD",
+      "type": "contract IERC20",
+      "numberOfBytes": 20,
+      "contract": "PortalRegistry"
+    },
+    {
+      "slot": 1,
+      "offset": 0,
+      "label": "_clusters",
+      "type": "mapping(bytes32 => struct IPortalRegistry.Cluster)",
+      "numberOfBytes": 32,
+      "contract": "PortalRegistry"
+    },
+    {
+      "slot": 2,
+      "offset": 0,
+      "label": "ownerClusters",
+      "type": "mapping(address => bytes32[])",
+      "numberOfBytes": 32,
+      "contract": "PortalRegistry"
+    },
+    {
+      "slot": 3,
+      "offset": 0,
+      "label": "addressToClusterId",
+      "type": "mapping(address => bytes32)",
+      "numberOfBytes": 32,
+      "contract": "PortalRegistry"
+    },
+    {
+      "slot": 4,
+      "offset": 0,
+      "label": "peerIdToCluster",
+      "type": "mapping(bytes32 => bytes32)",
+      "numberOfBytes": 32,
+      "contract": "PortalRegistry"
+    },
+    {
+      "slot": 5,
+      "offset": 0,
+      "label": "_isCluster",
+      "type": "mapping(address => bool)",
+      "numberOfBytes": 32,
+      "contract": "PortalRegistry"
+    },
+    {
+      "slot": 6,
+      "offset": 0,
+      "label": "minStake",
+      "type": "uint256",
+      "numberOfBytes": 32,
+      "contract": "PortalRegistry"
+    },
+    {
+      "slot": 7,
+      "offset": 0,
+      "label": "mana",
+      "type": "uint256",
+      "numberOfBytes": 32,
+      "contract": "PortalRegistry"
+    },
+    {
+      "slot": 8,
+      "offset": 0,
+      "label": "factory",
+      "type": "address",
+      "numberOfBytes": 20,
+      "contract": "PortalRegistry"
+    },
+    {
+      "slot": 9,
+      "offset": 0,
+      "label": "allClusterIds",
+      "type": "mapping(uint256 => bytes32)",
+      "numberOfBytes": 32,
+      "contract": "PortalRegistry"
+    },
+    {
+      "slot": 10,
+      "offset": 0,
+      "label": "clusterCount",
+      "type": "uint256",
+      "numberOfBytes": 32,
+      "contract": "PortalRegistry"
+    },
+    {
+      "slot": 11,
+      "offset": 0,
+      "label": "__gap",
+      "type": "uint256[50]",
+      "numberOfBytes": 1600,
+      "contract": "PortalRegistry"
+    }
+  ],
+  "structs": {
+    "struct IPortalRegistry.Cluster": {
+      "numberOfBytes": 224,
+      "members": [
+        {
+          "slot": 0,
+          "offset": 0,
+          "label": "clusterAddress",
+          "type": "address"
+        },
+        {
+          "slot": 1,
+          "offset": 0,
+          "label": "operator",
+          "type": "address"
+        },
+        {
+          "slot": 2,
+          "offset": 0,
+          "label": "totalStaked",
+          "type": "uint256"
+        },
+        {
+          "slot": 3,
+          "offset": 0,
+          "label": "registeredAt",
+          "type": "uint256"
+        },
+        {
+          "slot": 4,
+          "offset": 0,
+          "label": "active",
+          "type": "bool"
+        },
+        {
+          "slot": 5,
+          "offset": 0,
+          "label": "metadata",
+          "type": "string"
+        },
+        {
+          "slot": 6,
+          "offset": 0,
+          "label": "portals",
+          "type": "struct IPortalRegistry.Portal[]"
+        }
+      ]
+    },
+    "struct IPortalRegistry.Portal": {
+      "numberOfBytes": 96,
+      "members": [
+        {
+          "slot": 0,
+          "offset": 0,
+          "label": "peerId",
+          "type": "bytes"
+        },
+        {
+          "slot": 1,
+          "offset": 0,
+          "label": "metadata",
+          "type": "string"
+        },
+        {
+          "slot": 2,
+          "offset": 0,
+          "label": "addedAt",
+          "type": "uint64"
+        }
+      ]
+    }
+  }
+}

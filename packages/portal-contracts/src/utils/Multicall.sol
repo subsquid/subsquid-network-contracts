@@ -9,6 +9,7 @@ abstract contract Multicall {
     /// @notice Execute multiple calls atomically - reverts if any call fails
     /// @param data Array of encoded function calls
     /// @return results Array of return data from each call
+    /// @custom:oz-upgrades-unsafe-allow delegatecall
     function multicall(bytes[] calldata data) external returns (bytes[] memory results) {
         results = new bytes[](data.length);
         for (uint256 i = 0; i < data.length;) {
@@ -30,6 +31,7 @@ abstract contract Multicall {
     /// @param data Array of encoded function calls
     /// @return successes Array of success flags for each call
     /// @return results Array of return data from each call
+    /// @custom:oz-upgrades-unsafe-allow delegatecall
     function tryMulticall(bytes[] calldata data) external returns (bool[] memory successes, bytes[] memory results) {
         successes = new bool[](data.length);
         results = new bytes[](data.length);

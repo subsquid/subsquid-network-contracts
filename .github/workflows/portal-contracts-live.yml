@@ -1,0 +1,106 @@
+name: portal-contracts-live
+
+# Checks packages/portal-contracts/deployments against the chain: addresses, wiring,
+# implementation pointers, and that the deployed code equals a build of the release the
+# manifest names. Read-only. See packages/portal-contracts/RELEASING.md.
+
+on:
+  schedule:
+    - cron: "23 5 * * *"
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "packages/portal-contracts/deployments/**"
+      - "packages/portal-contracts/tools/check-live.mjs"
+      - ".github/workflows/portal-contracts-live.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: portal-contracts-live-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: packages/portal-contracts
+
+jobs:
+  live:
+    name: Deployments match the chain
+    runs-on: ubuntu-latest
+    env:
+      # The public RPC is enough. Set the ARBITRUM_RPC_URL repository secret for a steadier one.
+      ARBITRUM_RPC_URL: ${{ secrets.ARBITRUM_RPC_URL || 'https://arb1.arbitrum.io/rpc' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: recursive
+
+      - name: Read the pinned Foundry version
+        id: foundry
+        run: echo "version=$(cat .foundry-version)" >> "$GITHUB_OUTPUT"
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@dba66c27052e63476d886f22216e119ba7e615bf # v1.9.2
+        with:
+          version: ${{ steps.foundry.outputs.version }}
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+
+      # main can hold contract changes that are not deployed yet, so the chain is compared
+      # with a build of the release tag. The tag is missing only between a release's pull
+      # request and its tagging; then this commit is what was deployed.
+      - name: Find the release the manifest names
+        id: release
+        run: |
+          version=$(node -p "require('./deployments/42161.json').version")
+          tag="portal-contracts-v$version"
+          if [ -n "$(git ls-remote --tags --refs origin "refs/tags/$tag")" ]; then
+            echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::Tag $tag does not exist. Comparing the chain with a build of this commit."
+          fi
+
+      - name: Check out the release
+        if: steps.release.outputs.tag != ''
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ steps.release.outputs.tag }}
+          path: release
+          submodules: recursive
+
+      - name: Build
+        id: build
+        env:
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          if [ -n "$RELEASE_TAG" ]; then
+            dir="$GITHUB_WORKSPACE/release/packages/portal-contracts"
+          else
+            dir="$PWD"
+          fi
+          (cd "$dir" && forge build --skip test --skip script)
+          echo "out=$dir/out" >> "$GITHUB_OUTPUT"
+
+      - name: Check Arbitrum One
+        env:
+          FORGE_OUT: ${{ steps.build.outputs.out }}
+        run: node tools/check-live.mjs --chain 42161 --rpc "$ARBITRUM_RPC_URL" --out "$FORGE_OUT"
+
+      - name: Check Arbitrum Sepolia
+        if: steps.build.outcome == 'success' && (success() || failure())
+        env:
+          FORGE_OUT: ${{ steps.build.outputs.out }}
+        run: node tools/check-live.mjs --chain 421614 --out "$FORGE_OUT"
+
+      - name: Note contract changes that are not released
+        if: steps.release.outputs.tag != ''
+        env:
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          if ! diff -rq "$GITHUB_WORKSPACE/release/packages/portal-contracts/src" src >/dev/null; then
+            echo "::notice::src/ on this commit differs from $RELEASE_TAG: there are contract changes that are not released."
+          fi

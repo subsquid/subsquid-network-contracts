@@ -1,0 +1,198 @@
+{
+  "contract": "PortalPoolFactory",
+  "storage": [
+    {
+      "slot": 0,
+      "offset": 0,
+      "label": "beacon",
+      "type": "contract PortalPoolBeacon",
+      "numberOfBytes": 20,
+      "contract": "PortalPoolFactory"
+    },
+    {
+      "slot": 1,
+      "offset": 0,
+      "label": "portalRegistry",
+      "type": "address",
+      "numberOfBytes": 20,
+      "contract": "PortalPoolFactory"
+    },
+    {
+      "slot": 2,
+      "offset": 0,
+      "label": "feeRouter",
+      "type": "address",
+      "numberOfBytes": 20,
+      "contract": "PortalPoolFactory"
+    },
+    {
+      "slot": 3,
+      "offset": 0,
+      "label": "sqd",
+      "type": "address",
+      "numberOfBytes": 20,
+      "contract": "PortalPoolFactory"
+    },
+    {
+      "slot": 4,
+      "offset": 0,
+      "label": "minStakeThreshold",
+      "type": "uint256",
+      "numberOfBytes": 32,
+      "contract": "PortalPoolFactory"
+    },
+    {
+      "slot": 5,
+      "offset": 0,
+      "label": "workerEpochLength",
+      "type": "uint256",
+      "numberOfBytes": 32,
+      "contract": "PortalPoolFactory"
+    },
+    {
+      "slot": 6,
+      "offset": 0,
+      "label": "allPortals",
+      "type": "mapping(uint256 => address)",
+      "numberOfBytes": 32,
+      "contract": "PortalPoolFactory"
+    },
+    {
+      "slot": 7,
+      "offset": 0,
+      "label": "portalCount",
+      "type": "uint256",
+      "numberOfBytes": 32,
+      "contract": "PortalPoolFactory"
+    },
+    {
+      "slot": 8,
+      "offset": 0,
+      "label": "operatorPortalPools",
+      "type": "mapping(address => mapping(uint256 => address))",
+      "numberOfBytes": 32,
+      "contract": "PortalPoolFactory"
+    },
+    {
+      "slot": 9,
+      "offset": 0,
+      "label": "operatorPortalCount",
+      "type": "mapping(address => uint256)",
+      "numberOfBytes": 32,
+      "contract": "PortalPoolFactory"
+    },
+    {
+      "slot": 10,
+      "offset": 0,
+      "label": "isPortal",
+      "type": "mapping(address => bool)",
+      "numberOfBytes": 32,
+      "contract": "PortalPoolFactory"
+    },
+    {
+      "slot": 11,
+      "offset": 0,
+      "label": "isAllowedPaymentToken",
+      "type": "mapping(address => bool)",
+      "numberOfBytes": 32,
+      "contract": "PortalPoolFactory"
+    },
+    {
+      "slot": 12,
+      "offset": 0,
+      "label": "paymentTokensList",
+      "type": "address[]",
+      "numberOfBytes": 32,
+      "contract": "PortalPoolFactory"
+    },
+    {
+      "slot": 13,
+      "offset": 0,
+      "label": "defaultMaxStakePerWallet",
+      "type": "uint256",
+      "numberOfBytes": 32,
+      "contract": "PortalPoolFactory"
+    },
+    {
+      "slot": 14,
+      "offset": 0,
+      "label": "maxPaymentTokens",
+      "type": "uint256",
+      "numberOfBytes": 32,
+      "contract": "PortalPoolFactory"
+    },
+    {
+      "slot": 15,
+      "offset": 0,
+      "label": "exitUnlockRatePerSecond",
+      "type": "uint256",
+      "numberOfBytes": 32,
+      "contract": "PortalPoolFactory"
+    },
+    {
+      "slot": 16,
+      "offset": 0,
+      "label": "collectionDeadlineSeconds",
+      "type": "uint256",
+      "numberOfBytes": 32,
+      "contract": "PortalPoolFactory"
+    },
+    {
+      "slot": 17,
+      "offset": 0,
+      "label": "maxDistributionRatePerSecond",
+      "type": "uint256",
+      "numberOfBytes": 32,
+      "contract": "PortalPoolFactory"
+    },
+    {
+      "slot": 18,
+      "offset": 0,
+      "label": "minDistributionRatePerSecond",
+      "type": "uint256",
+      "numberOfBytes": 32,
+      "contract": "PortalPoolFactory"
+    },
+    {
+      "slot": 19,
+      "offset": 0,
+      "label": "whitelistFeatureEnabled",
+      "type": "bool",
+      "numberOfBytes": 1,
+      "contract": "PortalPoolFactory"
+    },
+    {
+      "slot": 19,
+      "offset": 1,
+      "label": "defaultWhitelistEnabled",
+      "type": "bool",
+      "numberOfBytes": 1,
+      "contract": "PortalPoolFactory"
+    },
+    {
+      "slot": 19,
+      "offset": 2,
+      "label": "poolDeploymentOpen",
+      "type": "bool",
+      "numberOfBytes": 1,
+      "contract": "PortalPoolFactory"
+    },
+    {
+      "slot": 20,
+      "offset": 0,
+      "label": "operatorPortalPoolIndex",
+      "type": "mapping(address => uint256)",
+      "numberOfBytes": 32,
+      "contract": "PortalPoolFactory"
+    },
+    {
+      "slot": 21,
+      "offset": 0,
+      "label": "__gap",
+      "type": "uint256[49]",
+      "numberOfBytes": 1568,
+      "contract": "PortalPoolFactory"
+    }
+  ],
+  "structs": {}
+}

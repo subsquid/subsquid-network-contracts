@@ -1,0 +1,44 @@
+{
+  "chainId": 421614,
+  "network": "arbitrum-sepolia",
+  "version": null,
+  "contracts": {
+    "PortalRegistry": {
+      "kind": "uups-proxy",
+      "abi": "PortalRegistry",
+      "address": "0xff09F8eC63946bA2bFa5400F4dc1D09eeA21BcCD",
+      "startBlock": 235256206,
+      "deployTx": "0xc93c7ca3034723fe716c3cea97cbd3f2c04c7652c8a56d90e1bbd1689606d96b"
+    },
+    "PortalPoolFactory": {
+      "kind": "uups-proxy",
+      "abi": "PortalPoolFactory",
+      "address": "0xa3f66B4649cf1C70776CfE32352cb9b5006528bC",
+      "startBlock": 235256250,
+      "deployTx": "0x668ff82b08ea2d3d7c7c7cd52826d139e4d5b6a5e6e92fa51e5a653ddfbc7d74"
+    },
+    "PortalPoolBeacon": {
+      "kind": "beacon",
+      "abi": "PortalPoolBeacon",
+      "address": "0xf19E8d0A6B38D0bAF7beA997Da92C47F6Ce630C8",
+      "implementationAbi": "PortalPoolImplementation",
+      "startBlock": 235256250,
+      "deployTx": "0x668ff82b08ea2d3d7c7c7cd52826d139e4d5b6a5e6e92fa51e5a653ddfbc7d74"
+    },
+    "FeeRouterModuleV2": {
+      "kind": "immutable",
+      "abi": "FeeRouterModuleV2",
+      "address": "0xb8D5266dB9197f721b7A3f1370E5C0F9e1e8f947",
+      "startBlock": 255711345,
+      "deployTx": "0x77dad51b83695ea02a5e2c153ed0c5dad1db1fbee17f544c0c5c3064bec1f616"
+    },
+    "FeeRouterModule": {
+      "kind": "immutable",
+      "abi": "FeeRouterModule",
+      "address": "0x36E687D8Be1DF5Cd3067b91107e5b7D190a5BeD1",
+      "startBlock": 235256217,
+      "deployTx": "0xdca74e08f98674d358660ab756d5c0a71fe9a88c5bbd7daa2c75ac5ac3978c59",
+      "retired": true
+    }
+  }
+}

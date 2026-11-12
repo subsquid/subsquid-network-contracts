@@ -1,6 +1,6 @@
 {
   "name": "sqd-portal-contracts",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "SQD Portal Pool contracts",
   "main": "index.js",
   "directories": {
@@ -10,7 +10,10 @@
   "scripts": {
     "forge:test": "forge test",
     "lint": "solhint 'src/**/*.sol'",
-    "lint:fix": "solhint 'src/**/*.sol' --fix"
+    "lint:fix": "solhint 'src/**/*.sol' --fix",
+    "artifacts": "forge build --skip test --skip script && node tools/export-artifacts.mjs",
+    "check:live": "node tools/check-live.mjs --chain 42161",
+    "check:upgrade-safety": "tools/check-upgrade-safety.sh"
   },
   "repository": {
     "type": "git",
