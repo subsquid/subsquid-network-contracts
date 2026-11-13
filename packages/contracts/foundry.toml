@@ -4,9 +4,6 @@ out = "artifacts"
 # The compiler settings are spelled out so the build does not depend on forge's defaults or
 # on which solc versions happen to be installed. Foundry 1.0 turned the optimizer off by
 # default; the contracts deployed before that were built with it on, at 200 runs.
-# One exception is live: the NetworkController at 0xd365C790cEF04492F3fC0811a998271f2f55D69b
-# (deployed 2026-11-12) was built with the optimizer off. To reproduce or verify it, run
-# forge with FOUNDRY_OPTIMIZER=false.
 solc = "0.8.20"
 evm_version = "shanghai"
 optimizer = true
