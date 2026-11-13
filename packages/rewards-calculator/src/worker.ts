@@ -2,7 +2,7 @@ import Decimal from 'decimal.js';
 import { getWorkerId } from './chain';
 import type { NetworkStatsEntry } from './clickhouseClient';
 import { config } from './config';
-import { QueryLog, validateSignatures } from './signatureVerification';
+import { type QueryLog, validateSignatures } from './signatureVerification';
 
 Decimal.set({ precision: 28 });
 
@@ -59,8 +59,12 @@ export class Worker {
     this.trafficWeight = Decimal.sqrt(bytesSent.mul(chunksRead));
   }
 
-  public async calculateDTraffic(totalSupply: Decimal) {
-    const supplyRatio = this.stake.add(this.bond).div(totalSupply);
+  /** `ownSupply` is this worker's part of `totalSupply`: bond + stake by default. */
+  public async calculateDTraffic(
+    totalSupply: Decimal,
+    ownSupply = this.stake.add(this.bond),
+  ) {
+    const supplyRatio = ownSupply.div(totalSupply);
     this.dTraffic = Decimal.min(
       new Decimal(1),
       this.trafficWeight.div(supplyRatio).pow(config.dTrafficAlpha),
@@ -102,6 +106,17 @@ export class Worker {
     this.workerReward = this.actualYield.mul(this.bond.add(this.stake.div(2)));
 
     this.stakerReward = this.actualYield.mul(this.stake).div(2);
+  }
+
+  /** Rates are for the whole window, with the budget factor already applied. */
+  public getFixedBudgetRewards(operatorRate: Decimal, delegatorRate: Decimal) {
+    const quality = this.livenessCoefficient
+      .mul(this.dTraffic)
+      .mul(this.dTenure);
+
+    this.actualYield = operatorRate.mul(quality);
+    this.workerReward = this.actualYield.mul(this.bond);
+    this.stakerReward = delegatorRate.mul(quality).mul(this.stake);
   }
 
   public stakeWeight(stakeSum: Decimal) {

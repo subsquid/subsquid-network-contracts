@@ -1,4 +1,4 @@
-import { Address, createPublicClient, getContract, http } from 'viem';
+import { type Address, createPublicClient, getContract, http } from 'viem';
 import { arbitrum, arbitrumSepolia, mainnet, sepolia } from 'viem/chains';
 import rewardsDistributionAbi from '../../contracts/artifacts/DistributedRewardDistribution.sol/DistributedRewardsDistribution.json' with {
   type: 'json',
@@ -52,6 +52,13 @@ export const config = {
   maxEpochsPerCommit: Number(env('MAX_EPOCHS_PER_COMMIT', 1)),
   skipSignatureValidation:
     env<string>('SKIP_SIGNATURE_VALIDATION', 'false') === 'true',
+  fixedBudget: {
+    // Unset keeps the soft-cap rule. All distributors must use the same values.
+    fromBlock: Number(env('FIXED_BUDGET_FROM_BLOCK', 'Infinity')),
+    budgetSqdPerMonth: env('FIXED_BUDGET_SQD_PER_MONTH', '3000000'),
+    operatorApr: env('OPERATOR_TARGET_APR', '0.20'),
+    delegatorApr: env('DELEGATOR_TARGET_APR', '0.05'),
+  },
   clickhouse: {
     username: env('CLICKHOUSE_USERNAME', 'sqd_read'),
     password: env('CLICKHOUSE_PASSWORD'),
