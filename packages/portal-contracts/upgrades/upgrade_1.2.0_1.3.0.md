@@ -31,7 +31,7 @@ Not touched: factory, pool implementation and beacon, FeeRouter modules, LiquidP
 
 1. `addPortal(bytes32,bytes,string)` is callable only by the new `PORTAL_MANAGER_ROLE` (`keccak256("PORTAL_MANAGER_ROLE")` = `0x47ce7f42ed0dcf5a065179619cbdec6b114f043d529ee4d28ca1dfc72e825cef`, role admin `DEFAULT_ADMIN_ROLE`). Cluster operators get `AccessControlUnauthorizedAccount`. Same signature; still `whenNotPaused`. SQD checks peer-ID ownership off-chain before calling it. The role goes to the admin vault, so each later `addPortal` and `forceRemovePortal` is also a contract call signed from that vault.
 2. `forceRemovePortal(bytes peerId)`, `PORTAL_MANAGER_ROLE` only: removes the peer ID from whichever cluster holds it, releases `peerIdToCluster`, and emits the existing `PortalRemoved(clusterId, peerId)`. It reads no pool state, so it works for clusters of CLOSED and FAILED pools. It is not `whenNotPaused` (see below). Operators keep `removePortal` for their own cluster.
-3. Length caps, enforced on `registerCluster`, `addPortal`, `setPortalMetadata`, `setClusterMetadata` and `setClusterMetadataByPool`: metadata at most `MAX_METADATA_LENGTH = 1024` bytes (`MetadataTooLong`), peer ID at most `MAX_PEER_ID_LENGTH = 128` bytes (`PeerIdTooLong`). Live peer IDs are 38 bytes; live cluster metadata is 102 and 145 bytes.
+3. Length caps, enforced on `registerCluster`, `addPortal`, `setPortalMetadata`, `setClusterMetadata` and `setClusterMetadataByPool`: metadata at most `MAX_METADATA_LENGTH = 1024` bytes (`MetadataTooLong`), peer ID at most `MAX_PEER_ID_LENGTH = 128` bytes (`PeerIdTooLong`). Peer IDs in use are 38-byte Ed25519 identity multihashes, and cluster metadata in use is a short JSON object, well under the cap.
 
 ### Why admin removal works while paused
 
@@ -70,39 +70,47 @@ Release tooling agrees:
 - `pnpm artifacts` leaves `layout/PortalRegistry.json` unchanged. Only `abi/PortalRegistry.json` changes: it gains `PORTAL_MANAGER_ROLE`, `MAX_METADATA_LENGTH`, `MAX_PEER_ID_LENGTH`, `forceRemovePortal` and the three new errors. Nothing is removed.
 - `pnpm check:upgrade-safety <checkout of portal-contracts-v1.2.0>` (OpenZeppelin's validator) passes for PortalRegistry, PortalPoolFactory and PortalPoolImplementation: "3 contracts pass; 3 of them compared with the baseline and safe to upgrade from it".
 
-## Live State Verified (2026-11-12, Arbitrum block ~523,535,874)
+## Identities (read 2026-11-12)
 
-- Registry implementation slot: `0xC3725B2584ad46c52F9EFA6f27d0291e3DBC3045`. Its runtime bytecode equals `forge inspect PortalRegistry deployedBytecode` at `b379b86` once the UUPS `__self` immutable (two occurrences) is masked.
+These are the only fixed on-chain facts this plan relies on. Each one is read again before it is used: the script requires the admin to hold `DEFAULT_ADMIN_ROLE` and reads the current implementation from the ERC-1967 slot, and the fork rehearsal skips if the admin changed. No amount, CU or `mana` value is fixed here, because those move.
+
+- Registry implementation: `0xC3725B2584ad46c52F9EFA6f27d0291e3DBC3045`, the rollback target. Its runtime bytecode equals `forge inspect PortalRegistry deployedBytecode` at `b379b86` once the UUPS `__self` immutable (two occurrences) is masked.
 - `DEFAULT_ADMIN_ROLE`: only `0x5800eEB867D6c490051321239E15C3ac90e801C1`, the admin vault (an MPC wallet, no contract code on-chain). Checked by replaying every `RoleGranted`/`RoleRevoked` since deployment (block 423,409,277) and with `hasRole` for every past holder.
-- `PAUSER_ROLE`: only `0x9FC9Fc4cFD0993630cd0f37f00647d301EdCD2a9`, which is also the operator of both live pools.
-- `paused() = false`, `mana = 1000`, `minStake = 1,000,000 SQD`, `clusterCount = 2`, `factory = 0x18184740eBE24881355E33cec620C44E575F2C70`.
-- `SQD.balanceOf(registry) = 10,163,992.07 SQD`, equal to the sum of both clusters' `totalStaked`.
-
-| Cluster | Pool | totalStaked | capacity | active | portals | CUs (mana 1000) |
-|---|---|---|---|---|---|---|
-| SQD Revenue Pool | `0x438c2a47e82cD445524Ce5651AE7E6c1Dd386D09` | 5,053,992.07 | 5,000,000 | true | 0 | 500,000 |
-| Lambda x SQD | `0x89cA93e09ec7355A1d6bd410Fe0bB4C9B24542DB` | 5,110,000 | 5,000,000 | true | 0 | 500,000 |
+- Clusters: SQD Revenue Pool `0x438c2a47e82cD445524Ce5651AE7E6c1Dd386D09` and Lambda x SQD `0x89cA93e09ec7355A1d6bd410Fe0bB4C9B24542DB`, both registered through the factory `0x18184740eBE24881355E33cec620C44E575F2C70`.
 
 ## Fork Rehearsal
 
-`test/fork/PortalRegistryUpgradeFork.t.sol`, run against the latest Arbitrum One block (timestamp `1794479459`):
+`test/fork/PortalRegistryUpgradeFork.t.sol` runs against the latest Arbitrum One block. CI's "Upgrade safety" job runs it on every pull request.
 
 ```
 ARBITRUM_RPC_URL=https://arb1.arbitrum.io/rpc forge test --match-contract PortalRegistryUpgradeFork -vv
 ```
 
-Result: pass. Rerun on 2026-11-13 after rebasing onto the release tooling (timestamp `1794576782`): pass, same numbers. CI's "Upgrade safety" job runs it on every pull request. Steps and what each one checks:
+Live state moves, so every check compares with values read earlier in the same run or states a relationship. The test skips, with the reason, when `ARBITRUM_RPC_URL` is unset, when the registry already answers `PORTAL_MANAGER_ROLE()` (the new code is live), or when the admin no longer holds `DEFAULT_ADMIN_ROLE`. What it checks:
 
-1. Read the old implementation from the ERC-1967 slot (`0xC3725B…3045`).
-2. Deploy the new implementation; `upgradeToAndCall(new, 0x)` pranked as `0x5800…01C1`. Both clusters (whole `Cluster` struct), registry slots 0–10, SQD balance, `minStake`, `clusterCount` and `factory` are unchanged.
-3. `setMana(80)`: CUs go from 500,000 to 40,000 per cluster, which is `min(totalStaked, capacity) × 80 / 1e4` in whole SQD. Cluster state is otherwise unchanged.
-4. Staker flow on the SQD Revenue Pool with a fresh address: operator top-up of 1,000 USDT (fee routing and buyback ran), deposit 10,000 SQD (registry stake and SQD balance +10,000), `requestExit` after 6 h, 10,000 s exit queue, `withdrawExit` (SQD back, registry stake and balance restored), `claimRewards` paid 19,994 USDT units (0.019994 USDT).
-5. `grantRole(PORTAL_MANAGER_ROLE, manager)`; the manager binds a fresh 38-byte peer ID to the SQD Revenue Pool cluster. `getClusterIdByPeerId` returns that cluster, `getComputationUnits` returns 40,000, and `getActiveClusters(0, 5)` returns the portal.
+1. It reads the implementation slot, `mana`, both clusters, registry slots 0–10, the registry's SQD balance, `minStake`, `clusterCount` and `factory`. Each cluster's CUs equal `min(totalStaked, capacity) × mana / 1e22` for active clusters, and 0 for inactive ones.
+2. It deploys the new implementation and calls `upgradeToAndCall(new, 0x)` as the admin. Everything read in step 1 is unchanged, `mana` included, and the CU relationship still holds.
+3. `setMana(80)`: `mana` is 80, and each cluster's CUs equal `min(totalStaked, capacity) × 80 / 1e22` from current fork state. Nothing else changes.
+4. A staker round trip on the live pool with the most free capacity. The amount is the smallest of 10,000 SQD, that free capacity and the wallet cap; if no pool has room, the round trips are not run.
+   - The pool's operator tops up rewards first, if the pool distributes and the top-up's buyback goes through.
+   - The deposit raises the cluster's `totalStaked` and the registry's SQD balance by exactly the amount. `requestExit`, waiting until the ticket's unlock time and `withdrawExit` bring both back.
+   - `claimRewards` pays exactly what `getClaimableRewards` reported, and more than 0 after a top-up.
+5. `grantRole(PORTAL_MANAGER_ROLE, manager)`. The manager binds a fresh 38-byte peer ID to that pool's cluster:
+   - `getClusterIdByPeerId` returns the cluster;
+   - the portal count rises by one;
+   - `getComputationUnits` through the peer lookup matches the step-3 relationship;
+   - `getActiveClusters` lists the cluster, with the new portal, exactly when the cluster is active.
 6. The operator's `addPortal` reverts with `AccessControlUnauthorizedAccount(operator, PORTAL_MANAGER_ROLE)`.
-7. `forceRemovePortal(peerId)` releases the peer ID; cluster state is back to the snapshot.
-8. Rollback: `upgradeToAndCall(0xC3725B…3045, 0x)`. Cluster state and slots match the snapshot; `mana` stays 80 and the role grant stays (both are storage). A second staker round trip (deposit, exit, withdraw) works on the old code. The old code lets the operator `addPortal` again.
+7. `forceRemovePortal(peerId)` releases the peer ID, and the state matches step 1 again.
+8. Rollback: `upgradeToAndCall(<implementation read in step 1>, 0x)`.
+   - The state matches step 1.
+   - `mana` stays 80 and the role grant stays, because both are storage.
+   - A second staker round trip works on the old code.
+   - The old code lets the operator call `addPortal` again.
 
-`script/UpgradePortalRegistry.s.sol` was also dry-run against Arbitrum One (no key, no `--broadcast`), with `PORTAL_MANAGER` unset so the role goes to the vault. It prints each admin call as a contract call for the admin vault, simulates the printed calldata as the vault (upgrade, `setMana(80)`, `grantRole` to the vault, then `hasRole` is checked) and ends with `simulation ok; cluster 0 CUs before/after: 500000 40000`.
+Results: passed against the live chain on 2026-11-12 and 2026-11-13. To check the skip, an anvil fork of Arbitrum One was given the upgrade and `setMana(80)` as the impersonated admin. Against that fork, the test reported `SKIP: the registry already runs the new code; the deploy is recorded in upgrades/` and did not fail.
+
+`script/UpgradePortalRegistry.s.sol` was also dry-run against Arbitrum One (no key, no `--broadcast`), with `PORTAL_MANAGER` unset so the role goes to the vault. It prints each admin call as a contract call for the admin vault. It then simulates the printed calldata as the vault: the upgrade, `setMana(80)`, and `grantRole` to the vault, after which it checks `mana` and `hasRole`. It ends with `simulation ok; cluster 0 CUs before/after: <before> <after>`: the first cluster's CUs read before the simulated upgrade and after the simulated `setMana(80)`.
 
 ## Steps
 
@@ -110,10 +118,12 @@ Pausing is not needed: there is no storage migration and the upgrade is a single
 
 Every admin call (steps 2–4 and the rollback) is signed from the admin vault `0x5800eEB867D6c490051321239E15C3ac90e801C1` as a contract call on Arbitrum One: to the registry proxy `0x29edE9EB0ad3C02B6A98B0E41bF99Cd709812850`, value 0, with the calldata the script prints for that step. Sign them one at a time, in order, and let each one confirm before the next.
 
-0. Pre-checks, all from a fresh read:
-   - `cast storage 0x29edE9EB0ad3C02B6A98B0E41bF99Cd709812850 0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc` is `0xC3725B…3045`.
-   - `hasRole(0x00…00, 0x5800…01C1)` is true.
-   - Run the fork rehearsal again on the latest block.
+0. Pre-checks. Run the fork rehearsal on the latest block: it must pass, not skip. Then, just before step 2, read and record these values. The post-upgrade checks compare against them.
+   - the implementation slot: `cast storage 0x29edE9EB0ad3C02B6A98B0E41bF99Cd709812850 0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc`. It must still be `0xC3725B…3045`, the rollback target;
+   - `hasRole(0x00…00, 0x5800…01C1)`, which must be true;
+   - `mana()`;
+   - for each cluster (`getClusterIdByAddress(pool)`, then `getCluster(id)`): `totalStaked`, `active`, `operator`, `metadata` and the portal count; and the pool's `getPoolInfo().capacity`;
+   - `SQD.balanceOf(registry)`, with SQD at `0x1337420dED5ADb9980CFc35f8f2B054ea86f8aB1`.
 1. Deploy the implementation and print the admin calls. This is the only step that is not an admin call: the deploy needs no role, so it is broadcast from a deployer account.
    ```
    forge script script/UpgradePortalRegistry.s.sol \
@@ -126,13 +136,16 @@ Every admin call (steps 2–4 and the rollback) is signed from the admin vault `
 
 ## Post-Upgrade Checks
 
-- implementation slot = new implementation
-- `PORTAL_MANAGER_ROLE()` = `0x47ce7f42…5cef`, `hasRole(PORTAL_MANAGER_ROLE, 0x5800…01C1)` = true
-- `MAX_METADATA_LENGTH()` = 1024, `MAX_PEER_ID_LENGTH()` = 128
-- `mana()` = 80; `getComputationUnits` = 40,000 for both clusters
-- `getCluster` for both clusters: same `totalStaked`, `active`, `operator`, `metadata` and 0 portals as above
-- `SQD.balanceOf(registry)` unchanged
-- `eth_estimateGas` of `addPortal` from the operator reverts; from the vault it succeeds
+All checks are relative: each one compares with the pre-check record or states a relationship, read at check time.
+
+- The implementation slot is the new implementation address.
+- `PORTAL_MANAGER_ROLE()` = `0x47ce7f42…5cef`, and `hasRole(PORTAL_MANAGER_ROLE, 0x5800…01C1)` is true.
+- `MAX_METADATA_LENGTH()` = 1024 and `MAX_PEER_ID_LENGTH()` = 128.
+- `mana()` = 80.
+- For each active cluster, `getComputationUnits` = `min(totalStaked, capacity) × 80 / 1e22`, using `totalStaked` and `capacity` read at check time. An inactive cluster reports 0.
+- Each cluster's `active`, `operator`, `metadata` and portal count equal the pre-check record. `totalStaked` may have moved through deposits and exits in between, and `active` follows it across `minStake`.
+- `SQD.balanceOf(registry)` equals the sum of both clusters' `totalStaked`.
+- `eth_estimateGas` of `addPortal` from a cluster's operator reverts; from the admin vault it succeeds.
 
 ## Release (after the upgrade is deployed)
 
@@ -143,9 +156,12 @@ Per `RELEASING.md`, the release is a separate pull request, opened only after st
    - set `version` to `1.3.0` in `packages/portal-contracts/package.json` and in `deployments/42161.json`;
    - in `deployments/42161.json`, set `contracts.PortalRegistry.implementation` to the new implementation address. The proxy address, `startBlock` and `deployTx` stay the same;
    - in the root `Readme.md` table "Portal Pool system (Arbitrum One)", replace the "↳ Registry implementation" address `0xC3725B…3045` and its Arbiscan link with the new implementation;
-   - run `pnpm artifacts` only if the sources changed after this pull request generated `abi/` and `layout/`.
+   - run `pnpm artifacts` only if the sources changed after this pull request generated `abi/` and `layout/`;
+   - delete `test/fork/PortalRegistryUpgradeFork.t.sol` (see the cleanup note below).
 3. The live check on that pull request ("Deployments match the chain", `.github/workflows/portal-contracts-live.yml`, the same as `pnpm check:live`) must pass. It builds the pull request's sources and compares them with the chain, the new registry implementation included.
 4. Merge, then tag the merge commit and push the tag: `git tag portal-contracts-v1.3.0 <merge commit> && git push origin portal-contracts-v1.3.0`. From then on, the daily live check builds that tag and the upgrade-safety check compares pull requests with it.
+
+Cleanup in the same release pull request: delete `test/fork/PortalRegistryUpgradeFork.t.sol`. Once the upgrade is live the rehearsal has no target (it only skips), and the deploy is recorded in `upgrades/`.
 
 ## Rollback
 
@@ -153,6 +169,6 @@ Both calls are signed from the admin vault, to the registry proxy, value 0, in t
 
 1. `upgradeToAndCall(0xC3725B2584ad46c52F9EFA6f27d0291e3DBC3045, 0x)`, calldata `0x4f1ef286000000000000000000000000c3725b2584ad46c52f9efa6f27d0291e3dbc304500000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000000`. Rehearsed: state, stake and exits work after it.
 2. `revokeRole(PORTAL_MANAGER_ROLE, 0x5800eEB867D6c490051321239E15C3ac90e801C1)`, calldata `0xd547741f47ce7f42ed0dcf5a065179619cbdec6b114f043d529ee4d28ca1dfc72e825cef0000000000000000000000005800eeb867d6c490051321239e15c3ac90e801c1`. The vault drops its own manager role and keeps `DEFAULT_ADMIN_ROLE`, so it can grant the role again after a fixed upgrade. The grant survives a code rollback because it is storage; the old code does not use it, but it should not stay behind.
-3. `mana` stays at 80 after a code rollback. Sign `setMana(1000)` from the vault only if the mana change itself must be undone.
+3. `mana` stays at 80 after a code rollback. Sign `setMana(<mana from the pre-check record>)` from the vault only if the mana change itself must be undone.
 
 After a rollback, operators can call `addPortal` again, so binding peer IDs is no longer limited to the manager; the length caps are gone, and portals the manager registered stay registered. Do not run a third-party pool on the rolled-back code.
