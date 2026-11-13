@@ -47,7 +47,7 @@ pnpm install
 |---|---|
 | **SQD** | [`0x1337420dED5ADb9980CFc35f8f2B054ea86f8aB1`](https://arbiscan.io/token/0x1337420dED5ADb9980CFc35f8f2B054ea86f8aB1) |
 | **Router** | [`0x67F56D27dab93eEb07f6372274aCa277F49dA941`](https://arbiscan.io/address/0x67F56D27dab93eEb07f6372274aCa277F49dA941) |
-| **NetworkController** | [`0xf5462EF65Ca8a9Cca789c912Bc8ada80b582d68d`](https://arbiscan.io/address/0xf5462EF65Ca8a9Cca789c912Bc8ada80b582d68d) |
+| **NetworkController** | [`0x39cdA15BaEA013D21dB5Dcb40f2D0BC8498bf496`](https://arbiscan.io/address/0x39cdA15BaEA013D21dB5Dcb40f2D0BC8498bf496) |
 | **Staking** | [`0xb31a0d39d2c69ed4b28d96e12cbf52c5f9ac9a51`](https://arbiscan.io/address/0xb31a0d39d2c69ed4b28d96e12cbf52c5f9ac9a51) |
 | **WorkerRegistration** | [`0x36e2b147db67e76ab67a4d07c293670ebefcae4e`](https://arbiscan.io/address/0x36e2b147db67e76ab67a4d07c293670ebefcae4e) |
 | **RewardTreasury** | [`0x237abf43bc51fd5c50d0d598a1a4c26e56a8a2a0`](https://arbiscan.io/address/0x237abf43bc51fd5c50d0d598a1a4c26e56a8a2a0) |
