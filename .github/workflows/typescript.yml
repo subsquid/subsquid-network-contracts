@@ -1,4 +1,4 @@
-name: test
+name: typescript
 
 # CI for the TypeScript packages. The two contract packages have their own workflows
 # (network-contracts.yml, portal-contracts.yml) and are left out of the test and lint runs

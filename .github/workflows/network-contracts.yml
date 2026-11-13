@@ -2,7 +2,7 @@ name: network-contracts
 
 # CI for packages/contracts. Foundry is pinned to the version in
 # packages/contracts/.foundry-version. The TypeScript packages that consume this package's
-# build output are checked by test.yml, which also runs when this package changes.
+# build output are checked by typescript.yml, which also runs when this package changes.
 # packages/portal-contracts has the same three jobs in portal-contracts.yml.
 
 on:
