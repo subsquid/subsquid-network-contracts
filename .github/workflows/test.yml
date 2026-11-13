@@ -1,10 +1,27 @@
 name: test
 
+# CI for the TypeScript packages. The two contract packages have their own workflows
+# (network-contracts.yml, portal-contracts.yml) and are left out of the test and lint runs
+# here. This one still runs when packages/contracts changes, because the TypeScript packages
+# are built and tested against its ABIs. Nothing here depends on packages/portal-contracts.
+
 on:
   push:
     branches:
       - main
+    paths-ignore:
+      - "packages/portal-contracts/**"
+      - ".github/workflows/portal-contracts.yml"
+      - ".github/workflows/portal-contracts-live.yml"
+      - ".github/workflows/network-contracts.yml"
+      - "tools/upgrade-safety/**"
   pull_request:
+    paths-ignore:
+      - "packages/portal-contracts/**"
+      - ".github/workflows/portal-contracts.yml"
+      - ".github/workflows/portal-contracts-live.yml"
+      - ".github/workflows/network-contracts.yml"
+      - "tools/upgrade-safety/**"
 
 env:
   FOUNDRY_PROFILE: ci
@@ -28,7 +45,7 @@ jobs:
       - name: Install deps
         run: pnpm i
 
-      # Only packages/contracts builds with forge here; packages/portal-contracts has its own workflow.
+      # forge is needed to build packages/contracts, whose ABIs the other packages import.
       - name: Read the pinned Foundry version
         id: foundry
         run: echo "version=$(cat packages/contracts/.foundry-version)" >> "$GITHUB_OUTPUT"
@@ -47,7 +64,7 @@ jobs:
         uses: oven-sh/setup-bun@v2
 
       - name: Run tests
-        run: pnpm test
+        run: pnpm exec turbo test --filter='!@subsquid-network/contracts' --filter='!sqd-portal-contracts'
         id: test
 
   lint:
@@ -55,8 +72,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-        with:
-          submodules: recursive
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v2.0.1
@@ -66,15 +81,6 @@ jobs:
       - name: Install deps
         run: pnpm i
 
-      - name: Read the pinned Foundry version
-        id: foundry
-        run: echo "version=$(cat packages/contracts/.foundry-version)" >> "$GITHUB_OUTPUT"
-
-      - name: Install Foundry
-        uses: foundry-rs/foundry-toolchain@v1
-        with:
-          version: ${{ steps.foundry.outputs.version }}
-
       - name: Run Lint
-        run: pnpm lint
+        run: pnpm exec turbo lint --filter='!@subsquid-network/contracts' --filter='!sqd-portal-contracts'
         id: lint
