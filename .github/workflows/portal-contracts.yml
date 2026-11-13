@@ -1,13 +1,14 @@
 name: portal-contracts
 
-# CI for packages/portal-contracts only. Foundry is pinned to the version in
+# CI for packages/portal-contracts. Foundry is pinned to the version in
 # packages/portal-contracts/.foundry-version, the one that reproduces the deployed bytecode.
-# The package's solhint run stays in test.yml (the `lint` task).
+# packages/contracts has the same three jobs in network-contracts.yml.
 
 on:
   pull_request:
     paths:
       - "packages/portal-contracts/**"
+      - "tools/upgrade-safety/**"
       - ".gitmodules"
       - ".github/workflows/portal-contracts.yml"
   push:
@@ -15,6 +16,7 @@ on:
       - main
     paths:
       - "packages/portal-contracts/**"
+      - "tools/upgrade-safety/**"
       - ".gitmodules"
       - ".github/workflows/portal-contracts.yml"
   workflow_dispatch:
@@ -31,10 +33,8 @@ defaults:
     working-directory: packages/portal-contracts
 
 jobs:
-  # Separate jobs on purpose, as in test.yml: a formatting failure should not hide
-  # whether the tests pass.
   test:
-    name: Build and test
+    name: Test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -60,8 +60,8 @@ jobs:
       - name: Test
         run: forge test --no-match-path 'test/fork/**'
 
-  format:
-    name: Format
+  lint:
+    name: Lint
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -78,11 +78,25 @@ jobs:
       - name: Check formatting
         run: forge fmt --check
 
-  # abi/ and layout/ are generated from the build. Regenerating them here and failing on a
-  # difference means an ABI or storage change always shows up in the pull request's diff.
-  # The upgrade-safety check then compares storage with the last release.
-  artifacts:
-    name: ABIs, storage layouts and upgrade safety
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+        with:
+          version: 9.0.3
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+
+      - name: Install solhint
+        run: pnpm install --frozen-lockfile --filter sqd-portal-contracts
+
+      - name: Run solhint
+        run: pnpm lint
+
+  # Everything that compares the change with what is deployed: the generated ABIs and storage
+  # layouts are current, the contracts behind a proxy or the beacon (upgrade-safety.conf) are
+  # safe upgrades of the last release, and the fork tests pass against live Arbitrum One state.
+  upgrade-safety:
+    name: Upgrade safety
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -102,6 +116,8 @@ jobs:
         with:
           node-version: 22
 
+      # abi/ and layout/ are generated from the build. Regenerating them here and failing on
+      # a difference means an ABI or storage change always shows up in the pull request's diff.
       - name: Regenerate ABIs and storage layouts
         run: |
           forge build --skip test --skip script
@@ -135,43 +151,27 @@ jobs:
           submodules: recursive
 
       - name: Install the upgrade validator
-        working-directory: packages/portal-contracts/tools
+        working-directory: tools/upgrade-safety
         run: npm ci --ignore-scripts
 
-      - name: Check upgrade safety
+      - name: Check the upgradeable contracts
         env:
           RELEASE_TAG: ${{ steps.release.outputs.tag }}
         run: |
           if [ -n "$RELEASE_TAG" ]; then
-            tools/check-upgrade-safety.sh "$GITHUB_WORKSPACE/baseline/packages/portal-contracts"
+            "$GITHUB_WORKSPACE/tools/upgrade-safety/check.sh" . "$GITHUB_WORKSPACE/baseline/packages/portal-contracts"
           else
             echo "::warning::No portal-contracts-v* tag exists yet, so storage is not compared with a release."
-            tools/check-upgrade-safety.sh
+            "$GITHUB_WORKSPACE/tools/upgrade-safety/check.sh" .
           fi
 
-  # Tests under test/fork run against live Arbitrum One state at the latest block, so a
-  # failure here can come from the chain or the RPC and not from the diff.
-  fork:
-    name: Fork tests (live Arbitrum One state)
-    runs-on: ubuntu-latest
-    env:
-      # The public RPC is enough. Set the ARBITRUM_RPC_URL repository secret for a steadier one.
-      ARBITRUM_RPC_URL: ${{ secrets.ARBITRUM_RPC_URL || 'https://arb1.arbitrum.io/rpc' }}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          submodules: recursive
-
-      - name: Read the pinned Foundry version
-        id: foundry
-        run: echo "version=$(cat .foundry-version)" >> "$GITHUB_OUTPUT"
-
-      - name: Install Foundry
-        uses: foundry-rs/foundry-toolchain@dba66c27052e63476d886f22216e119ba7e615bf # v1.9.2
-        with:
-          version: ${{ steps.foundry.outputs.version }}
-
+      # These run against the latest block, so a failure here can come from the chain or the
+      # RPC and not from the diff. The public RPC is enough; set the ARBITRUM_RPC_URL repository
+      # secret for a steadier one. It is given to this step only, so the validator and its
+      # dependencies above never see it.
       - name: Run fork tests
+        env:
+          ARBITRUM_RPC_URL: ${{ secrets.ARBITRUM_RPC_URL || 'https://arb1.arbitrum.io/rpc' }}
         run: |
           if [ -d test/fork ]; then
             forge test --match-path 'test/fork/**' -vv

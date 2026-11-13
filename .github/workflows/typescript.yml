@@ -1,0 +1,86 @@
+name: typescript
+
+# CI for the TypeScript packages. The two contract packages have their own workflows
+# (network-contracts.yml, portal-contracts.yml) and are left out of the test and lint runs
+# here. This one still runs when packages/contracts changes, because the TypeScript packages
+# are built and tested against its ABIs. Nothing here depends on packages/portal-contracts.
+
+on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - "packages/portal-contracts/**"
+      - ".github/workflows/portal-contracts.yml"
+      - ".github/workflows/portal-contracts-live.yml"
+      - ".github/workflows/network-contracts.yml"
+      - "tools/upgrade-safety/**"
+  pull_request:
+    paths-ignore:
+      - "packages/portal-contracts/**"
+      - ".github/workflows/portal-contracts.yml"
+      - ".github/workflows/portal-contracts-live.yml"
+      - ".github/workflows/network-contracts.yml"
+      - "tools/upgrade-safety/**"
+
+env:
+  FOUNDRY_PROFILE: ci
+
+jobs:
+  # Tests and lint are separate jobs on purpose: a formatting failure should not
+  # hide whether the test suites pass. They report as independent checks.
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: recursive
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+        with:
+          version: 9.0.3
+
+      - name: Install deps
+        run: pnpm i
+
+      # forge is needed to build packages/contracts, whose ABIs the other packages import.
+      - name: Read the pinned Foundry version
+        id: foundry
+        run: echo "version=$(cat packages/contracts/.foundry-version)" >> "$GITHUB_OUTPUT"
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@dba66c27052e63476d886f22216e119ba7e615bf # v1.9.2
+        with:
+          version: ${{ steps.foundry.outputs.version }}
+
+      - name: Run Forge build
+        run: pnpm build
+        id: build
+
+      # packages/testnet-rewards runs its unit tests with bun test.
+      - name: Install Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+
+      - name: Run tests
+        run: pnpm exec turbo test --filter='!@subsquid-network/contracts' --filter='!sqd-portal-contracts'
+        id: test
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+        with:
+          version: 9.0.3
+
+      - name: Install deps
+        run: pnpm i
+
+      - name: Run Lint
+        run: pnpm exec turbo lint --filter='!@subsquid-network/contracts' --filter='!sqd-portal-contracts'
+        id: lint

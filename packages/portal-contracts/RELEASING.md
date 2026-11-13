@@ -35,7 +35,7 @@ Run these in `packages/portal-contracts`. Foundry must be the version in `.found
 |---|---|
 | `pnpm artifacts` | Builds and rewrites `abi/` and `layout/` |
 | `pnpm check:live` | Checks `deployments/42161.json` against Arbitrum One: addresses, wiring, implementation pointers, and that the deployed code equals the local build |
-| `pnpm check:upgrade-safety [<baseline dir>]` | Runs OpenZeppelin's upgrade validator. With a checkout of the last release as `<baseline dir>`, it also checks that storage only grew at the end. Needs `(cd tools && npm ci --ignore-scripts)` once |
+| `pnpm check:upgrade-safety [<baseline dir>]` | Runs OpenZeppelin's upgrade validator on the contracts listed in `upgrade-safety.conf`. With a checkout of the last release as `<baseline dir>`, it also checks that storage only grew at the end. The script is shared with `packages/contracts` and lives in `tools/upgrade-safety` at the repository root; it needs `npm ci --ignore-scripts` run there once |
 
 CI runs all three: the first and third on every pull request that touches the package (`.github/workflows/portal-contracts.yml`), the second once a day and on changes to `deployments/` (`.github/workflows/portal-contracts-live.yml`).
 

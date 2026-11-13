@@ -1,0 +1,142 @@
+name: network-contracts
+
+# CI for packages/contracts. Foundry is pinned to the version in
+# packages/contracts/.foundry-version. The TypeScript packages that consume this package's
+# build output are checked by typescript.yml, which also runs when this package changes.
+# packages/portal-contracts has the same three jobs in portal-contracts.yml.
+
+on:
+  pull_request:
+    paths:
+      - "packages/contracts/**"
+      - "tools/upgrade-safety/**"
+      - ".gitmodules"
+      - ".github/workflows/network-contracts.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "packages/contracts/**"
+      - "tools/upgrade-safety/**"
+      - ".gitmodules"
+      - ".github/workflows/network-contracts.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: network-contracts-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: packages/contracts
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: recursive
+
+      - name: Read the pinned Foundry version
+        id: foundry
+        run: echo "version=$(cat .foundry-version)" >> "$GITHUB_OUTPUT"
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@dba66c27052e63476d886f22216e119ba7e615bf # v1.9.2
+        with:
+          version: ${{ steps.foundry.outputs.version }}
+
+      - name: Show Forge version
+        run: forge --version
+
+      # --sizes fails the build when a contract is over the 24,576-byte limit.
+      - name: Build
+        run: forge build --sizes
+
+      - name: Test
+        run: forge test --no-match-path 'test/fork/**'
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Read the pinned Foundry version
+        id: foundry
+        run: echo "version=$(cat .foundry-version)" >> "$GITHUB_OUTPUT"
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@dba66c27052e63476d886f22216e119ba7e615bf # v1.9.2
+        with:
+          version: ${{ steps.foundry.outputs.version }}
+
+      - name: Check formatting
+        run: forge fmt --check
+
+  # Everything that compares the change with what is deployed. Most contracts here are
+  # replaced by deploying a new one, which the fork tests rehearse against live Arbitrum One
+  # state. The contracts behind a proxy (upgrade-safety.conf) are also checked for storage
+  # compatibility with the base of the pull request.
+  upgrade-safety:
+    name: Upgrade safety
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: recursive
+
+      - name: Read the pinned Foundry version
+        id: foundry
+        run: echo "version=$(cat .foundry-version)" >> "$GITHUB_OUTPUT"
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@dba66c27052e63476d886f22216e119ba7e615bf # v1.9.2
+        with:
+          version: ${{ steps.foundry.outputs.version }}
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+
+      - name: Check out the base of the pull request
+        if: github.event_name == 'pull_request'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: baseline
+          submodules: recursive
+
+      - name: Install the upgrade validator
+        working-directory: tools/upgrade-safety
+        run: npm ci --ignore-scripts
+
+      - name: Check the proxied contracts
+        env:
+          IS_PULL_REQUEST: ${{ github.event_name == 'pull_request' }}
+        run: |
+          if [ "$IS_PULL_REQUEST" = "true" ]; then
+            "$GITHUB_WORKSPACE/tools/upgrade-safety/check.sh" . "$GITHUB_WORKSPACE/baseline/packages/contracts"
+          else
+            echo "::notice::Not a pull request, so there is no base to compare storage with."
+            "$GITHUB_WORKSPACE/tools/upgrade-safety/check.sh" .
+          fi
+
+      # These run against the latest block, so a failure here can come from the chain or the
+      # RPC and not from the diff. The public RPC is enough; set the ARBITRUM_RPC_URL repository
+      # secret for a steadier one. It is given to this step only, so the validator and its
+      # dependencies above never see it.
+      - name: Run fork tests
+        env:
+          ARBITRUM_RPC_URL: ${{ secrets.ARBITRUM_RPC_URL || 'https://arb1.arbitrum.io/rpc' }}
+        run: |
+          if [ -d test/fork ]; then
+            forge test --match-path 'test/fork/**' -vv
+          else
+            echo "No fork tests on this commit."
+          fi

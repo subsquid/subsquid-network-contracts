@@ -1,0 +1,8 @@
+{
+  "name": "upgrade-safety",
+  "private": true,
+  "description": "Pins the OpenZeppelin upgrade validator that check.sh runs for packages/contracts and packages/portal-contracts. It is installed with `npm ci --ignore-scripts` from the lockfile next to this file and is not part of the pnpm workspace, so the monorepo lockfile stays as it is.",
+  "dependencies": {
+    "@openzeppelin/upgrades-core": "1.48.0"
+  }
+}
