@@ -98,9 +98,6 @@ jobs:
   upgrade-safety:
     name: Upgrade safety
     runs-on: ubuntu-latest
-    env:
-      # The public RPC is enough. Set the ARBITRUM_RPC_URL repository secret for a steadier one.
-      ARBITRUM_RPC_URL: ${{ secrets.ARBITRUM_RPC_URL || 'https://arb1.arbitrum.io/rpc' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -169,8 +166,12 @@ jobs:
           fi
 
       # These run against the latest block, so a failure here can come from the chain or the
-      # RPC and not from the diff.
+      # RPC and not from the diff. The public RPC is enough; set the ARBITRUM_RPC_URL repository
+      # secret for a steadier one. It is given to this step only, so the validator and its
+      # dependencies above never see it.
       - name: Run fork tests
+        env:
+          ARBITRUM_RPC_URL: ${{ secrets.ARBITRUM_RPC_URL || 'https://arb1.arbitrum.io/rpc' }}
         run: |
           if [ -d test/fork ]; then
             forge test --match-path 'test/fork/**' -vv
