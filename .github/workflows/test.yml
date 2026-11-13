@@ -28,10 +28,15 @@ jobs:
       - name: Install deps
         run: pnpm i
 
+      # Only packages/contracts builds with forge here; packages/portal-contracts has its own workflow.
+      - name: Read the pinned Foundry version
+        id: foundry
+        run: echo "version=$(cat packages/contracts/.foundry-version)" >> "$GITHUB_OUTPUT"
+
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
         with:
-          version: nightly
+          version: ${{ steps.foundry.outputs.version }}
 
       - name: Run Forge build
         run: pnpm build
@@ -61,10 +66,14 @@ jobs:
       - name: Install deps
         run: pnpm i
 
+      - name: Read the pinned Foundry version
+        id: foundry
+        run: echo "version=$(cat packages/contracts/.foundry-version)" >> "$GITHUB_OUTPUT"
+
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
         with:
-          version: nightly
+          version: ${{ steps.foundry.outputs.version }}
 
       - name: Run Lint
         run: pnpm lint
