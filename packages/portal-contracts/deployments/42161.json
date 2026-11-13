@@ -1,0 +1,47 @@
+{
+  "chainId": 42161,
+  "network": "arbitrum-one",
+  "version": "1.2.0",
+  "contracts": {
+    "PortalRegistry": {
+      "kind": "uups-proxy",
+      "abi": "PortalRegistry",
+      "address": "0x29edE9EB0ad3C02B6A98B0E41bF99Cd709812850",
+      "implementation": "0xC3725B2584ad46c52F9EFA6f27d0291e3DBC3045",
+      "startBlock": 423409277,
+      "deployTx": "0xe5825fef120ff4d4c7e76f20bcbf7b8322d1f1f46c20269de6f6a0718cafdc1f"
+    },
+    "PortalPoolFactory": {
+      "kind": "uups-proxy",
+      "abi": "PortalPoolFactory",
+      "address": "0x18184740eBE24881355E33cec620C44E575F2C70",
+      "implementation": "0xcE5D796769Ba065Bf61a8Efc892a8a835FAe0351",
+      "startBlock": 423409325,
+      "deployTx": "0xf2ecf6f200b99890bdd8a8489e6dddc384afba2597f6f7c55effe949ca3869c1"
+    },
+    "PortalPoolBeacon": {
+      "kind": "beacon",
+      "abi": "PortalPoolBeacon",
+      "address": "0x16983f5a5816d4B04c92Ab43Fed3B2F212D4e568",
+      "implementation": "0x2981E64342fc76d531168Cf6754F81422138b3C4",
+      "implementationAbi": "PortalPoolImplementation",
+      "startBlock": 423409325,
+      "deployTx": "0xf2ecf6f200b99890bdd8a8489e6dddc384afba2597f6f7c55effe949ca3869c1"
+    },
+    "FeeRouterModuleV2": {
+      "kind": "immutable",
+      "abi": "FeeRouterModuleV2",
+      "address": "0x763a0A80a815650281926b3174180d2f17cCBE6C",
+      "startBlock": 454447117,
+      "deployTx": "0x08bb2e0e709a1ab80976d4548f52d9d89258a4ede7c135bf27b073112ea4dbe3"
+    },
+    "FeeRouterModule": {
+      "kind": "immutable",
+      "abi": "FeeRouterModule",
+      "address": "0x59c074ee3dd85125620B4A5b452C008Bc792a787",
+      "startBlock": 423409289,
+      "deployTx": "0xc5f079903a5107c04d48a2d0d630e4e8212ee75872fcd236f51ac39ef74cca9c",
+      "retired": true
+    }
+  }
+}

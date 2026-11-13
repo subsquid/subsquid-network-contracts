@@ -65,6 +65,8 @@ pnpm install
 
 Factory and registry are UUPS proxies; pools are beacon proxies (one shared implementation, upgradable in one shot via the beacon).
 
+The same addresses, with start blocks, are in [`packages/portal-contracts/deployments/42161.json`](./packages/portal-contracts/deployments/42161.json), which CI checks against the chain every day.
+
 | Contract | Address |
 |---|---|
 | **PortalPoolFactory** (UUPS proxy) | [`0x18184740eBE24881355E33cec620C44E575F2C70`](https://arbiscan.io/address/0x18184740eBE24881355E33cec620C44E575F2C70) |
@@ -73,7 +75,8 @@ Factory and registry are UUPS proxies; pools are beacon proxies (one shared impl
 | ↳ Registry implementation | [`0xC3725B2584Ad46c52f9eFA6F27d0291E3dbC3045`](https://arbiscan.io/address/0xC3725B2584Ad46c52f9eFA6F27d0291E3dbC3045) |
 | **PortalPoolBeacon** | [`0x16983f5a5816d4B04c92Ab43Fed3B2F212D4e568`](https://arbiscan.io/address/0x16983f5a5816d4B04c92Ab43Fed3B2F212D4e568) |
 | ↳ PortalPoolImplementation (current) | [`0x2981E64342fc76d531168Cf6754F81422138b3C4`](https://arbiscan.io/address/0x2981E64342fc76d531168Cf6754F81422138b3C4) |
-| **FeeRouterModule** | [`0x59c074ee3dd85125620B4A5b452C008Bc792a787`](https://arbiscan.io/address/0x59c074ee3dd85125620B4A5b452C008Bc792a787) |
+| **FeeRouterModuleV2** (the factory's fee router since 2026-04-28) | [`0x763a0A80a815650281926b3174180d2f17cCBE6C`](https://arbiscan.io/address/0x763a0A80a815650281926b3174180d2f17cCBE6C) |
+| FeeRouterModule (retired) | [`0x59c074ee3dd85125620B4A5b452C008Bc792a787`](https://arbiscan.io/address/0x59c074ee3dd85125620B4A5b452C008Bc792a787) |
 
 ##### Live pools
 

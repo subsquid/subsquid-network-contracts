@@ -1,0 +1,368 @@
+{
+  "contract": "PortalPoolImplementation",
+  "storage": [
+    {
+      "slot": 0,
+      "offset": 0,
+      "label": "_poolInfo",
+      "type": "struct IPortalPool.PoolInfo",
+      "numberOfBytes": 128,
+      "contract": "PortalPoolImplementation"
+    },
+    {
+      "slot": 4,
+      "offset": 0,
+      "label": "_stakes",
+      "type": "mapping(address => uint256)",
+      "numberOfBytes": 32,
+      "contract": "PortalPoolImplementation"
+    },
+    {
+      "slot": 5,
+      "offset": 0,
+      "label": "_exitAmounts",
+      "type": "mapping(address => uint256)",
+      "numberOfBytes": 32,
+      "contract": "PortalPoolImplementation"
+    },
+    {
+      "slot": 6,
+      "offset": 0,
+      "label": "_totalExitAmounts",
+      "type": "uint256",
+      "numberOfBytes": 32,
+      "contract": "PortalPoolImplementation"
+    },
+    {
+      "slot": 7,
+      "offset": 0,
+      "label": "_sqd",
+      "type": "contract IERC20",
+      "numberOfBytes": 20,
+      "contract": "PortalPoolImplementation"
+    },
+    {
+      "slot": 8,
+      "offset": 0,
+      "label": "_portalRegistry",
+      "type": "contract IPortalRegistry",
+      "numberOfBytes": 20,
+      "contract": "PortalPoolImplementation"
+    },
+    {
+      "slot": 9,
+      "offset": 0,
+      "label": "_feeRouter",
+      "type": "contract IFeeRouter",
+      "numberOfBytes": 20,
+      "contract": "PortalPoolImplementation"
+    },
+    {
+      "slot": 10,
+      "offset": 0,
+      "label": "_factory",
+      "type": "contract IPortalFactory",
+      "numberOfBytes": 20,
+      "contract": "PortalPoolImplementation"
+    },
+    {
+      "slot": 11,
+      "offset": 0,
+      "label": "_rewardToken",
+      "type": "contract IERC20",
+      "numberOfBytes": 20,
+      "contract": "PortalPoolImplementation"
+    },
+    {
+      "slot": 12,
+      "offset": 0,
+      "label": "credit",
+      "type": "uint256",
+      "numberOfBytes": 32,
+      "contract": "PortalPoolImplementation"
+    },
+    {
+      "slot": 13,
+      "offset": 0,
+      "label": "debt",
+      "type": "uint256",
+      "numberOfBytes": 32,
+      "contract": "PortalPoolImplementation"
+    },
+    {
+      "slot": 14,
+      "offset": 0,
+      "label": "balanceTs",
+      "type": "uint64",
+      "numberOfBytes": 8,
+      "contract": "PortalPoolImplementation"
+    },
+    {
+      "slot": 15,
+      "offset": 0,
+      "label": "rewardPerStakeStored",
+      "type": "uint256",
+      "numberOfBytes": 32,
+      "contract": "PortalPoolImplementation"
+    },
+    {
+      "slot": 16,
+      "offset": 0,
+      "label": "lastEffectiveRewardTs",
+      "type": "uint64",
+      "numberOfBytes": 8,
+      "contract": "PortalPoolImplementation"
+    },
+    {
+      "slot": 17,
+      "offset": 0,
+      "label": "totalDistributionRatePerSec",
+      "type": "uint256",
+      "numberOfBytes": 32,
+      "contract": "PortalPoolImplementation"
+    },
+    {
+      "slot": 18,
+      "offset": 0,
+      "label": "providerRatePerSec",
+      "type": "uint256",
+      "numberOfBytes": 32,
+      "contract": "PortalPoolImplementation"
+    },
+    {
+      "slot": 19,
+      "offset": 0,
+      "label": "treasuryRatePerSec",
+      "type": "uint256",
+      "numberOfBytes": 32,
+      "contract": "PortalPoolImplementation"
+    },
+    {
+      "slot": 20,
+      "offset": 0,
+      "label": "perStakeRateWad",
+      "type": "uint256",
+      "numberOfBytes": 32,
+      "contract": "PortalPoolImplementation"
+    },
+    {
+      "slot": 21,
+      "offset": 0,
+      "label": "treasuryAccumulated",
+      "type": "uint256",
+      "numberOfBytes": 32,
+      "contract": "PortalPoolImplementation"
+    },
+    {
+      "slot": 22,
+      "offset": 0,
+      "label": "_rewardCheckpoint",
+      "type": "mapping(address => uint256)",
+      "numberOfBytes": 32,
+      "contract": "PortalPoolImplementation"
+    },
+    {
+      "slot": 23,
+      "offset": 0,
+      "label": "_unclaimedRewards",
+      "type": "mapping(address => uint256)",
+      "numberOfBytes": 32,
+      "contract": "PortalPoolImplementation"
+    },
+    {
+      "slot": 24,
+      "offset": 0,
+      "label": "_exitQueue",
+      "type": "struct ExitQueueLib.Queue",
+      "numberOfBytes": 128,
+      "contract": "PortalPoolImplementation"
+    },
+    {
+      "slot": 28,
+      "offset": 0,
+      "label": "_exitTickets",
+      "type": "mapping(address => mapping(uint256 => struct ExitQueueLib.Ticket))",
+      "numberOfBytes": 32,
+      "contract": "PortalPoolImplementation"
+    },
+    {
+      "slot": 29,
+      "offset": 0,
+      "label": "_nextTicketId",
+      "type": "mapping(address => uint256)",
+      "numberOfBytes": 32,
+      "contract": "PortalPoolImplementation"
+    },
+    {
+      "slot": 30,
+      "offset": 0,
+      "label": "lptToken",
+      "type": "contract LiquidPortalToken",
+      "numberOfBytes": 20,
+      "contract": "PortalPoolImplementation"
+    },
+    {
+      "slot": 31,
+      "offset": 0,
+      "label": "workerPoolAddress",
+      "type": "address",
+      "numberOfBytes": 20,
+      "contract": "PortalPoolImplementation"
+    },
+    {
+      "slot": 32,
+      "offset": 0,
+      "label": "burnAddress",
+      "type": "address",
+      "numberOfBytes": 20,
+      "contract": "PortalPoolImplementation"
+    },
+    {
+      "slot": 32,
+      "offset": 20,
+      "label": "whitelistEnabled",
+      "type": "bool",
+      "numberOfBytes": 1,
+      "contract": "PortalPoolImplementation"
+    },
+    {
+      "slot": 33,
+      "offset": 0,
+      "label": "whitelist",
+      "type": "mapping(address => bool)",
+      "numberOfBytes": 32,
+      "contract": "PortalPoolImplementation"
+    },
+    {
+      "slot": 34,
+      "offset": 0,
+      "label": "_rewardTokenDecimalScale",
+      "type": "uint256",
+      "numberOfBytes": 32,
+      "contract": "PortalPoolImplementation"
+    },
+    {
+      "slot": 35,
+      "offset": 0,
+      "label": "totalRewardsPaid",
+      "type": "uint256",
+      "numberOfBytes": 32,
+      "contract": "PortalPoolImplementation"
+    },
+    {
+      "slot": 36,
+      "offset": 0,
+      "label": "__gap",
+      "type": "uint256[49]",
+      "numberOfBytes": 1568,
+      "contract": "PortalPoolImplementation"
+    }
+  ],
+  "structs": {
+    "struct ExitQueueLib.Queue": {
+      "numberOfBytes": 128,
+      "members": [
+        {
+          "slot": 0,
+          "offset": 0,
+          "label": "totalRequested",
+          "type": "uint256"
+        },
+        {
+          "slot": 1,
+          "offset": 0,
+          "label": "processedAmount",
+          "type": "uint256"
+        },
+        {
+          "slot": 2,
+          "offset": 0,
+          "label": "lastUpdate",
+          "type": "uint256"
+        },
+        {
+          "slot": 3,
+          "offset": 0,
+          "label": "lastKnownRate",
+          "type": "uint256"
+        }
+      ]
+    },
+    "struct ExitQueueLib.Ticket": {
+      "numberOfBytes": 96,
+      "members": [
+        {
+          "slot": 0,
+          "offset": 0,
+          "label": "endPosition",
+          "type": "uint256"
+        },
+        {
+          "slot": 1,
+          "offset": 0,
+          "label": "amount",
+          "type": "uint256"
+        },
+        {
+          "slot": 2,
+          "offset": 0,
+          "label": "withdrawn",
+          "type": "bool"
+        }
+      ]
+    },
+    "struct IPortalPool.PoolInfo": {
+      "numberOfBytes": 128,
+      "members": [
+        {
+          "slot": 0,
+          "offset": 0,
+          "label": "operator",
+          "type": "address"
+        },
+        {
+          "slot": 1,
+          "offset": 0,
+          "label": "capacity",
+          "type": "uint256"
+        },
+        {
+          "slot": 2,
+          "offset": 0,
+          "label": "totalStaked",
+          "type": "uint256"
+        },
+        {
+          "slot": 3,
+          "offset": 0,
+          "label": "depositDeadline",
+          "type": "uint64"
+        },
+        {
+          "slot": 3,
+          "offset": 8,
+          "label": "activationTime",
+          "type": "uint64"
+        },
+        {
+          "slot": 3,
+          "offset": 16,
+          "label": "state",
+          "type": "enum IPortalPool.PoolState"
+        },
+        {
+          "slot": 3,
+          "offset": 17,
+          "label": "paused",
+          "type": "bool"
+        },
+        {
+          "slot": 3,
+          "offset": 18,
+          "label": "firstActivated",
+          "type": "bool"
+        }
+      ]
+    }
+  }
+}

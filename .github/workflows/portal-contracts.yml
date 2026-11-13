@@ -78,6 +78,77 @@ jobs:
       - name: Check formatting
         run: forge fmt --check
 
+  # abi/ and layout/ are generated from the build. Regenerating them here and failing on a
+  # difference means an ABI or storage change always shows up in the pull request's diff.
+  # The upgrade-safety check then compares storage with the last release.
+  artifacts:
+    name: ABIs, storage layouts and upgrade safety
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: recursive
+
+      - name: Read the pinned Foundry version
+        id: foundry
+        run: echo "version=$(cat .foundry-version)" >> "$GITHUB_OUTPUT"
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@dba66c27052e63476d886f22216e119ba7e615bf # v1.9.2
+        with:
+          version: ${{ steps.foundry.outputs.version }}
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+
+      - name: Regenerate ABIs and storage layouts
+        run: |
+          forge build --skip test --skip script
+          node tools/export-artifacts.mjs
+
+      - name: Check the committed ABIs and storage layouts are current
+        run: |
+          if [ -n "$(git status --porcelain -- abi layout)" ]; then
+            git status --short -- abi layout
+            git diff -- abi layout | head -n 200
+            echo "::error::abi/ or layout/ is out of date. Run 'pnpm artifacts' in packages/portal-contracts and commit the result."
+            exit 1
+          fi
+
+      # The last release is the highest portal-contracts-v* tag. The listing is a statement of
+      # its own so that a failed request fails the step: an empty answer must mean "no tag
+      # yet", never "could not ask", or the storage comparison below would be skipped.
+      - name: Find the last release
+        id: release
+        run: |
+          refs=$(git ls-remote --tags --refs origin 'refs/tags/portal-contracts-v*')
+          tag=$(printf '%s\n' "$refs" | sed 's#.*refs/tags/##' | sort -V | tail -n 1)
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+      - name: Check out the last release
+        if: steps.release.outputs.tag != ''
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ steps.release.outputs.tag }}
+          path: baseline
+          submodules: recursive
+
+      - name: Install the upgrade validator
+        working-directory: packages/portal-contracts/tools
+        run: npm ci --ignore-scripts
+
+      - name: Check upgrade safety
+        env:
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          if [ -n "$RELEASE_TAG" ]; then
+            tools/check-upgrade-safety.sh "$GITHUB_WORKSPACE/baseline/packages/portal-contracts"
+          else
+            echo "::warning::No portal-contracts-v* tag exists yet, so storage is not compared with a release."
+            tools/check-upgrade-safety.sh
+          fi
+
   # Tests under test/fork run against live Arbitrum One state at the latest block, so a
   # failure here can come from the chain or the RPC and not from the diff.
   fork:
