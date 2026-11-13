@@ -43,9 +43,14 @@ interface IPortalRegistry {
         external
         returns (bytes32 clusterId);
 
+    /// @notice Binds `peerId` to a cluster. Only PORTAL_MANAGER_ROLE; SQD checks peer-ID ownership off-chain.
     function addPortal(bytes32 clusterId, bytes calldata peerId, string calldata metadata) external;
 
+    /// @notice Removes a portal from the caller's own cluster. Only the cluster operator.
     function removePortal(bytes32 clusterId, uint256 portalIndex) external;
+
+    /// @notice Removes `peerId` from whichever cluster holds it and releases it. Only PORTAL_MANAGER_ROLE.
+    function forceRemovePortal(bytes calldata peerId) external;
 
     function setPortalMetadata(bytes32 clusterId, uint256 portalIndex, string calldata metadata) external;
 

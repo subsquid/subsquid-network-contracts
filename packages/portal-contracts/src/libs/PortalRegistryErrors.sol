@@ -16,4 +16,7 @@ library PortalRegistryErrors {
     error OnlyFactory();
     error NotClusterOperator();
     error InsufficientAllocation();
+    error PeerIdTooLong();
+    error MetadataTooLong();
+    error PeerIdNotRegistered();
 }
