@@ -155,7 +155,7 @@ contract PortalRegistryTest is BaseTest {
         address clusterAddress = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "TestCluster");
         bytes32 clusterId = registry.getClusterIdByAddress(clusterAddress);
 
-        vm.prank(operator);
+        vm.prank(portalManager);
         registry.addPortal(clusterId, TEST_PEER_ID, "metadata");
 
         IPortalRegistry.Portal[] memory portals = registry.getClusterPortals(clusterId);
@@ -167,7 +167,7 @@ contract PortalRegistryTest is BaseTest {
         address clusterAddress = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "TestCluster");
         bytes32 clusterId = registry.getClusterIdByAddress(clusterAddress);
 
-        vm.prank(operator);
+        vm.prank(portalManager);
         vm.expectRevert(PortalRegistryErrors.InvalidPeerId.selector);
         registry.addPortal(clusterId, "", "metadata");
     }
@@ -176,20 +176,21 @@ contract PortalRegistryTest is BaseTest {
         address clusterAddress = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "TestCluster");
         bytes32 clusterId = registry.getClusterIdByAddress(clusterAddress);
 
-        vm.prank(operator);
+        vm.prank(portalManager);
         registry.addPortal(clusterId, TEST_PEER_ID, "metadata");
 
-        vm.prank(operator);
+        vm.prank(portalManager);
         vm.expectRevert(PortalRegistryErrors.PeerIdInUse.selector);
         registry.addPortal(clusterId, TEST_PEER_ID, "metadata2");
     }
 
-    function test_AddPortal_RevertOnNotOperator() public {
+    function test_AddPortal_RevertOnNotPortalManager() public {
         address clusterAddress = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "TestCluster");
         bytes32 clusterId = registry.getClusterIdByAddress(clusterAddress);
 
+        bytes32 role = registry.PORTAL_MANAGER_ROLE();
         vm.prank(user1);
-        vm.expectRevert(PortalRegistryErrors.NotClusterOperator.selector);
+        vm.expectRevert(_unauthorized(user1, role));
         registry.addPortal(clusterId, TEST_PEER_ID, "metadata");
     }
 
@@ -197,7 +198,7 @@ contract PortalRegistryTest is BaseTest {
         address clusterAddress = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "TestCluster");
         bytes32 clusterId = registry.getClusterIdByAddress(clusterAddress);
 
-        vm.prank(operator);
+        vm.prank(portalManager);
         registry.addPortal(clusterId, TEST_PEER_ID, "metadata");
 
         vm.prank(operator);
@@ -334,7 +335,7 @@ contract PortalRegistryTest is BaseTest {
         address clusterAddress = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "TestCluster");
         bytes32 clusterId = registry.getClusterIdByAddress(clusterAddress);
 
-        vm.prank(operator);
+        vm.prank(portalManager);
         registry.addPortal(clusterId, TEST_PEER_ID, "metadata");
 
         bytes32 foundClusterId = registry.getClusterIdByPeerId(TEST_PEER_ID);
@@ -353,7 +354,7 @@ contract PortalRegistryTest is BaseTest {
         address clusterAddress = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "MetadataCluster");
         bytes32 clusterId = registry.getClusterIdByAddress(clusterAddress);
 
-        vm.prank(operator);
+        vm.prank(portalManager);
         registry.addPortal(clusterId, TEST_PEER_ID, "initial metadata");
 
         string memory newMetadata = "updated metadata";
@@ -380,7 +381,7 @@ contract PortalRegistryTest is BaseTest {
         address clusterAddress = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "OpTest");
         bytes32 clusterId = registry.getClusterIdByAddress(clusterAddress);
 
-        vm.prank(operator);
+        vm.prank(portalManager);
         registry.addPortal(clusterId, TEST_PEER_ID, "metadata");
 
         vm.prank(user1);
@@ -392,7 +393,7 @@ contract PortalRegistryTest is BaseTest {
         address clusterAddress = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "IndexTest");
         bytes32 clusterId = registry.getClusterIdByAddress(clusterAddress);
 
-        vm.prank(operator);
+        vm.prank(portalManager);
         registry.addPortal(clusterId, TEST_PEER_ID, "metadata");
 
         vm.prank(operator);
@@ -411,7 +412,7 @@ contract PortalRegistryTest is BaseTest {
         address clusterAddress = _createAndActivatePortal(operator, MIN_STAKE_THRESHOLD, "CountTest2");
         bytes32 clusterId = registry.getClusterIdByAddress(clusterAddress);
 
-        vm.startPrank(operator);
+        vm.startPrank(portalManager);
         registry.addPortal(clusterId, "peer-1", "metadata1");
         assertEq(registry.getPortalCount(clusterId), 1);
 
@@ -433,7 +434,7 @@ contract PortalRegistryTest is BaseTest {
         bytes32 clusterId = registry.getClusterIdByAddress(clusterAddress);
 
         // Add MAX_PORTALS_PER_CLUSTER (10) portals
-        vm.startPrank(operator);
+        vm.startPrank(portalManager);
         for (uint256 i = 0; i < 10; i++) {
             bytes memory peerId = abi.encodePacked("peer-", i);
             registry.addPortal(clusterId, peerId, "metadata");
@@ -443,7 +444,7 @@ contract PortalRegistryTest is BaseTest {
         assertEq(registry.getPortalCount(clusterId), 10);
 
         // 11th portal should fail
-        vm.prank(operator);
+        vm.prank(portalManager);
         vm.expectRevert(PortalRegistryErrors.MaxPortalsReached.selector);
         registry.addPortal(clusterId, "peer-overflow", "metadata");
     }
@@ -460,7 +461,7 @@ contract PortalRegistryTest is BaseTest {
         bytes32 clusterId = registry.getClusterIdByAddress(clusterAddress);
 
         // Add a portal
-        vm.prank(operator);
+        vm.prank(portalManager);
         registry.addPortal(clusterId, "peer-remove", "metadata");
 
         // Non-operator tries to remove
@@ -474,7 +475,7 @@ contract PortalRegistryTest is BaseTest {
         bytes32 clusterId = registry.getClusterIdByAddress(clusterAddress);
 
         // Add 3 portals
-        vm.startPrank(operator);
+        vm.startPrank(portalManager);
         registry.addPortal(clusterId, "peer-0", "meta0");
         registry.addPortal(clusterId, "peer-1", "meta1");
         registry.addPortal(clusterId, "peer-2", "meta2");
