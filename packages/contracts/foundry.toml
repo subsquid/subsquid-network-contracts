@@ -15,9 +15,8 @@ int_types = "long"
 tab_width = 2
 
 [rpc_endpoints]
-arbitrum-goerli = "https://goerli-rollup.arbitrum.io/rpc"
 arbitrum-sepolia = "https://sepolia-rollup.arbitrum.io/rpc"
-arbitrum = "https://arbitrum-mainnet.infura.io/v3/aa959c8b01204689b1cceaf56c4d4297"
+arbitrum = "https://arb1.arbitrum.io/rpc"
 
 [etherscan]
 # One Etherscan V2 key covers every chain. Put ETHERSCAN_API_KEY in packages/contracts/.env (gitignored); forge loads it.
