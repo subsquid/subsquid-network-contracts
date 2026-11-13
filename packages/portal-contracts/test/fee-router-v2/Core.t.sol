@@ -513,9 +513,10 @@ contract FeeRouterModuleV2Test is Test {
     }
 
     function _newRouter() internal returns (FeeRouterModuleV2) {
-        return new FeeRouterModuleV2(
-            address(pancakeRouter), address(pancakeFactory), address(sqdToken), address(wethToken)
-        );
+        return
+            new FeeRouterModuleV2(
+                address(pancakeRouter), address(pancakeFactory), address(sqdToken), address(wethToken)
+            );
     }
 
     function _setupTwap() internal returns (MockPancakePool pool1, MockPancakePool pool2) {
