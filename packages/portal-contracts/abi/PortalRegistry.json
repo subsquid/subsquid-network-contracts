@@ -119,6 +119,11 @@
   },
   {
     "type": "error",
+    "name": "MetadataTooLong",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "NotClusterOperator",
     "inputs": []
   },
@@ -135,6 +140,16 @@
   {
     "type": "error",
     "name": "PeerIdInUse",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "PeerIdNotRegistered",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "PeerIdTooLong",
     "inputs": []
   },
   {
@@ -578,6 +593,32 @@
   },
   {
     "type": "function",
+    "name": "MAX_METADATA_LENGTH",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "MAX_PEER_ID_LENGTH",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "MAX_PORTALS_PER_CLUSTER",
     "inputs": [],
     "outputs": [
@@ -592,6 +633,19 @@
   {
     "type": "function",
     "name": "PAUSER_ROLE",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "PORTAL_MANAGER_ROLE",
     "inputs": [],
     "outputs": [
       {
@@ -714,6 +768,19 @@
       }
     ],
     "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "forceRemovePortal",
+    "inputs": [
+      {
+        "name": "peerId",
+        "type": "bytes",
+        "internalType": "bytes"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
   },
   {
     "type": "function",

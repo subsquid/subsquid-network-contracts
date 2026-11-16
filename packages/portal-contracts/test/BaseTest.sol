@@ -12,6 +12,7 @@ import {IPortalFactory} from "../src/interfaces/IPortalFactory.sol";
 import {IPortalRegistry} from "../src/interfaces/IPortalRegistry.sol";
 import {MockERC20} from "./mocks/MockERC20.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import {IAccessControl} from "@openzeppelin/contracts/access/IAccessControl.sol";
 
 abstract contract BaseTest is Test {
     PortalPoolFactory public factory;
@@ -29,6 +30,8 @@ abstract contract BaseTest is Test {
     address public user2 = address(0x3);
     address public user3 = address(0x4);
     address public workerRewardPool = address(0x5);
+    /// @dev SQD's PORTAL_MANAGER_ROLE holder: the only account that binds peer IDs to clusters
+    address public portalManager = address(0x6);
 
     uint256 public constant WORKER_EPOCH_LENGTH = 7200;
     uint256 public constant MIN_STAKE_THRESHOLD = 100_000 ether;
@@ -73,6 +76,7 @@ abstract contract BaseTest is Test {
         factory = PortalPoolFactory(address(factoryProxy));
 
         registry.setFactory(address(factory));
+        registry.grantRole(registry.PORTAL_MANAGER_ROLE(), portalManager);
 
         factory.addPaymentToken(address(usdc));
         factory.addPaymentToken(address(dai));
@@ -94,6 +98,7 @@ abstract contract BaseTest is Test {
         vm.label(address(usdc), "USDC");
         vm.label(address(dai), "DAI");
         vm.label(operator, "Operator");
+        vm.label(portalManager, "PortalManager");
         vm.label(user1, "User1");
         vm.label(user2, "User2");
         vm.label(user3, "User3");
@@ -155,6 +160,10 @@ abstract contract BaseTest is Test {
         sqd.approve(portal, amount);
         IPortalPool(portal).deposit(amount);
         vm.stopPrank();
+    }
+
+    function _unauthorized(address account, bytes32 role) internal pure returns (bytes memory) {
+        return abi.encodeWithSelector(IAccessControl.AccessControlUnauthorizedAccount.selector, account, role);
     }
 
     function _warpToAfterDeadline(address portal) internal {

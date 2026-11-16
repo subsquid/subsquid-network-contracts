@@ -18,6 +18,8 @@ import {Multicall} from "../src/utils/Multicall.sol";
  * @notice Core registry for all clusters in the Subsquid network
  * @dev UUPS upgradeable. Cluster contains Portal[] (up to 10 peerIds).
  *      Only factory-created pools can register and interact with this registry.
+ *      Portals (peer IDs) are bound to clusters only by PORTAL_MANAGER_ROLE, which checks
+ *      peer-ID ownership off-chain. Cluster operators can remove their own portals and edit metadata.
  */
 contract PortalRegistry is
     IPortalRegistry,
@@ -30,8 +32,15 @@ contract PortalRegistry is
     using SafeERC20 for IERC20;
 
     bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
+    /// @notice Binds peer IDs to clusters (addPortal) and removes any portal (forceRemovePortal).
+    /// @dev Its admin is DEFAULT_ADMIN_ROLE (the AccessControl default), so no initializer is needed.
+    bytes32 public constant PORTAL_MANAGER_ROLE = keccak256("PORTAL_MANAGER_ROLE");
     uint8 public constant MAX_PORTALS_PER_CLUSTER = 10;
     uint256 public constant MAX_CLUSTERS_PER_OWNER = 100;
+    /// @notice Maximum length in bytes of cluster and portal metadata, enforced on every write
+    uint256 public constant MAX_METADATA_LENGTH = 1024;
+    /// @notice Maximum length in bytes of a portal peer ID
+    uint256 public constant MAX_PEER_ID_LENGTH = 128;
 
     // solhint-disable-next-line var-name-mixedcase
     IERC20 public SQD;
@@ -90,6 +99,7 @@ contract PortalRegistry is
         if (ownerClusters[operator].length >= MAX_CLUSTERS_PER_OWNER) {
             revert PortalRegistryErrors.MaxClustersReached();
         }
+        _checkMetadataLength(metadata);
 
         clusterId = _generateClusterId(clusterAddress);
 
@@ -112,17 +122,22 @@ contract PortalRegistry is
     }
 
     /// @inheritdoc IPortalRegistry
-    function addPortal(bytes32 clusterId, bytes calldata peerId, string calldata metadata) external whenNotPaused {
+    function addPortal(bytes32 clusterId, bytes calldata peerId, string calldata metadata)
+        external
+        onlyRole(PORTAL_MANAGER_ROLE)
+        whenNotPaused
+    {
         Cluster storage cluster = _clusters[clusterId];
         if (cluster.clusterAddress == address(0)) {
             revert PortalRegistryErrors.ClusterNotRegistered();
         }
-        if (msg.sender != _getClusterOperator(cluster.clusterAddress)) {
-            revert PortalRegistryErrors.NotClusterOperator();
-        }
         if (peerId.length == 0) {
             revert PortalRegistryErrors.InvalidPeerId();
         }
+        if (peerId.length > MAX_PEER_ID_LENGTH) {
+            revert PortalRegistryErrors.PeerIdTooLong();
+        }
+        _checkMetadataLength(metadata);
         if (cluster.portals.length >= MAX_PORTALS_PER_CLUSTER) {
             revert PortalRegistryErrors.MaxPortalsReached();
         }
@@ -152,18 +167,33 @@ contract PortalRegistry is
             revert PortalRegistryErrors.InvalidPortalIndex();
         }
 
-        bytes memory peerId = cluster.portals[portalIndex].peerId;
+        _removePortalAt(clusterId, cluster, portalIndex);
+    }
+
+    /// @inheritdoc IPortalRegistry
+    /// @dev Deliberately not `whenNotPaused`: like the other role-gated admin setters, it must stay usable
+    ///      during a pause so a wrong binding can be undone without re-enabling stake/unstake.
+    ///      It reads no pool state, so it works for clusters of CLOSED and FAILED pools.
+    function forceRemovePortal(bytes calldata peerId) external onlyRole(PORTAL_MANAGER_ROLE) {
         bytes32 peerIdHash = keccak256(peerId);
-
-        delete peerIdToCluster[peerIdHash];
-
-        uint256 lastIndex = cluster.portals.length - 1;
-        if (portalIndex != lastIndex) {
-            cluster.portals[portalIndex] = cluster.portals[lastIndex];
+        bytes32 clusterId = peerIdToCluster[peerIdHash];
+        if (clusterId == bytes32(0)) {
+            revert PortalRegistryErrors.PeerIdNotRegistered();
         }
-        cluster.portals.pop();
 
-        emit PortalRemoved(clusterId, peerId);
+        Cluster storage cluster = _clusters[clusterId];
+        uint256 portalCount = cluster.portals.length;
+        for (uint256 i = 0; i < portalCount;) {
+            if (keccak256(cluster.portals[i].peerId) == peerIdHash) {
+                _removePortalAt(clusterId, cluster, i);
+                return;
+            }
+            unchecked {
+                ++i;
+            }
+        }
+        // Unreachable while peerIdToCluster and the portals arrays stay in sync (they are only written together).
+        revert PortalRegistryErrors.PeerIdNotRegistered();
     }
 
     /// @inheritdoc IPortalRegistry
@@ -178,6 +208,7 @@ contract PortalRegistry is
         if (portalIndex >= cluster.portals.length) {
             revert PortalRegistryErrors.InvalidPortalIndex();
         }
+        _checkMetadataLength(metadata);
 
         cluster.portals[portalIndex].metadata = metadata;
 
@@ -193,6 +224,7 @@ contract PortalRegistry is
         if (msg.sender != _getClusterOperator(cluster.clusterAddress)) {
             revert PortalRegistryErrors.NotClusterOperator();
         }
+        _checkMetadataLength(metadata);
 
         cluster.metadata = metadata;
 
@@ -206,6 +238,7 @@ contract PortalRegistry is
         if (cluster.clusterAddress == address(0)) {
             revert PortalRegistryErrors.ClusterNotRegistered();
         }
+        _checkMetadataLength(metadata);
 
         cluster.metadata = metadata;
 
@@ -457,6 +490,28 @@ contract PortalRegistry is
         address oldFactory = factory;
         factory = _factory;
         emit FactoryUpdated(oldFactory, _factory);
+    }
+
+    /// @dev Removes the portal at `portalIndex` (swap-and-pop) and releases its peer ID
+    function _removePortalAt(bytes32 clusterId, Cluster storage cluster, uint256 portalIndex) internal {
+        bytes memory peerId = cluster.portals[portalIndex].peerId;
+        bytes32 peerIdHash = keccak256(peerId);
+
+        delete peerIdToCluster[peerIdHash];
+
+        uint256 lastIndex = cluster.portals.length - 1;
+        if (portalIndex != lastIndex) {
+            cluster.portals[portalIndex] = cluster.portals[lastIndex];
+        }
+        cluster.portals.pop();
+
+        emit PortalRemoved(clusterId, peerId);
+    }
+
+    function _checkMetadataLength(string calldata metadata) internal pure {
+        if (bytes(metadata).length > MAX_METADATA_LENGTH) {
+            revert PortalRegistryErrors.MetadataTooLong();
+        }
     }
 
     function _generateClusterId(address clusterAddress) internal view returns (bytes32) {

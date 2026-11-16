@@ -32,7 +32,7 @@ The runway tells you when rewards will stop at the current rate. While there's c
 
 ### Depositing and Earning
 
-Users deposit SQD into a pool and receive plSQD tokens as a receipt. These liquid tokens represent their share of the pool and can be transferred to other wallets. Rewards accumulate automatically based on each user's share - claim them whenever you want.
+Users deposit SQD into a pool and receive plSQD tokens as a receipt. These liquid tokens represent their share of the pool and can be transferred to other wallets, unless the operator has turned on the pool's whitelist: then plSQD can only be sent to whitelisted addresses (see [Whitelist](#whitelist)). Rewards accumulate automatically based on each user's share - claim them whenever you want.
 
 The pool tracks credit and runway internally. When there's credit available, rewards distribute at the set rate. When credit hits zero, no new rewards accumulate but existing unclaimed rewards stay safe. `getDebt()` and the `currentDebt` field in `getRewardStatus()` are kept for compatibility and return zero.
 
@@ -49,7 +49,24 @@ This mechanism ensures fair exits regardless of timing. Early exiters don't get 
 
 ### Whitelist
 
-Operators can enable a whitelist to restrict who can deposit. When enabled, only addresses the operator has approved can participate. This is useful for private pools, team allocations, or any situation where you want to control membership.
+Operators can turn on a whitelist for their pool, if the factory's whitelist feature is enabled. While it is on:
+
+- only whitelisted addresses can deposit;
+- plSQD can only be transferred to whitelisted addresses (the sender does not need to be on the list).
+
+The whitelist never blocks exits (`requestExit`, `withdrawExit`, and withdrawals from failed or closed pools) or reward claims.
+
+The operator can turn the whitelist on or off and add or remove addresses at any time, including after people have deposited. A pool whose plSQD moves freely today can restrict transfers later. Pools created while the factory's `defaultWhitelistEnabled` is set start with the whitelist on and the operator on the list.
+
+This is useful for private pools, team allocations, or any situation where you want to control membership.
+
+### Registering Portals
+
+Each pool has a cluster in PortalRegistry that lists the portals (libp2p peer IDs) using the pool's stake, up to 10 per cluster. SQD registers them: `addPortal` can only be called by `PORTAL_MANAGER_ROLE`, and SQD checks that the operator controls a peer ID before binding it. To add a portal, an operator sends its peer ID to SQD.
+
+Operators can still remove portals from their own cluster (`removePortal`) and edit portal and cluster metadata. `PORTAL_MANAGER_ROLE` can remove any portal with `forceRemovePortal(peerId)`, which releases the peer ID. That works for pools in any state and while the registry is paused.
+
+Cluster and portal metadata is capped at 1024 bytes and peer IDs at 128 bytes, on every write.
 
 
 ## Architecture

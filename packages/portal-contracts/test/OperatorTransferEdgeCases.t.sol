@@ -144,8 +144,12 @@ contract OperatorTransferEdgeCasesTest is BaseTest {
         vm.prank(operator);
         PortalPoolImplementation(portal).transferOperator(newOperator);
 
-        vm.prank(newOperator);
+        // Peer IDs are bound by SQD's portal manager; the operator manages them afterwards
+        vm.prank(portalManager);
         registry.addPortal(clusterId, "peer123", "metadata");
+
+        vm.prank(newOperator);
+        registry.setPortalMetadata(clusterId, 0, "new portal metadata");
 
         vm.prank(newOperator);
         registry.setClusterMetadata(clusterId, "new metadata");
@@ -157,12 +161,19 @@ contract OperatorTransferEdgeCasesTest is BaseTest {
     function test_transferOperator_registryFunctionsRevertForOldOperator() public {
         bytes32 clusterId = registry.getClusterIdByAddress(portal);
 
+        vm.prank(portalManager);
+        registry.addPortal(clusterId, "peer123", "metadata");
+
         vm.prank(operator);
         PortalPoolImplementation(portal).transferOperator(newOperator);
 
         vm.prank(operator);
         vm.expectRevert(PortalRegistryErrors.NotClusterOperator.selector);
-        registry.addPortal(clusterId, "peer123", "metadata");
+        registry.removePortal(clusterId, 0);
+
+        vm.prank(operator);
+        vm.expectRevert(PortalRegistryErrors.NotClusterOperator.selector);
+        registry.setPortalMetadata(clusterId, 0, "should fail");
 
         vm.prank(operator);
         vm.expectRevert(PortalRegistryErrors.NotClusterOperator.selector);
@@ -291,17 +302,17 @@ contract OperatorTransferEdgeCasesTest is BaseTest {
         bytes32 clusterId = registry.getClusterIdByAddress(portal);
 
         vm.prank(operator);
-        registry.addPortal(clusterId, "peer1", "meta1");
+        registry.setClusterMetadata(clusterId, "meta1");
 
         vm.prank(operator);
         PortalPoolImplementation(portal).transferOperator(newOperator);
 
         vm.prank(operator);
         vm.expectRevert(PortalRegistryErrors.NotClusterOperator.selector);
-        registry.addPortal(clusterId, "peer2", "meta2");
+        registry.setClusterMetadata(clusterId, "meta2");
 
         vm.prank(newOperator);
-        registry.addPortal(clusterId, "peer2", "meta2");
+        registry.setClusterMetadata(clusterId, "meta2");
     }
 }
 
