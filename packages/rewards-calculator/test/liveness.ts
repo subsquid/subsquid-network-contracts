@@ -136,31 +136,29 @@ describe('livenessFactor (ping gap accounting)', () => {
     expect(stats[PEER].livenessFactor).to.equal(1);
   });
 
-  it('counts the WHOLE gap as downtime, not just the excess over 65s', async () => {
-    // This is the harsh part of the accounting and the reason a worker that is
-    // genuinely up can still be scored as offline: one 120s gap costs 120s of
-    // downtime, not the 55s by which it exceeded the threshold.
+  it('counts only the time past the 65s threshold as downtime', async () => {
+    // One 120s gap costs the 55s by which it exceeded the threshold, so a late
+    // ping costs its lateness and not the whole interval.
     const stats = await livenessFactor(clientStub(seriesWithSingleGap(120)));
-    expect(stats[PEER].totalTimeOffline).to.equal(120);
+    expect(stats[PEER].totalTimeOffline).to.equal(55);
     expect(stats[PEER].livenessFactor).to.be.closeTo(
-      1 - 120 / WINDOW_SECONDS,
+      1 - 55 / WINDOW_SECONDS,
       1e-12,
     );
   });
 
-  it('treats a gap of exactly 65s as online and 66s as fully offline', async () => {
+  it('treats a gap of exactly 65s as online and charges 66s for one second', async () => {
     const at65 = await livenessFactor(clientStub(seriesWithSingleGap(65)));
     expect(at65[PEER].totalTimeOffline, '65s should not count').to.equal(0);
 
     const at66 = await livenessFactor(clientStub(seriesWithSingleGap(66)));
-    expect(at66[PEER].totalTimeOffline, '66s should count in full').to.equal(
-      66,
-    );
+    expect(at66[PEER].totalTimeOffline, '66s should count for 1s').to.equal(1);
   });
 
   it('counts silence at the start and end of the window', async () => {
     // The window bounds bracket the series, so a worker that starts pinging late
-    // or stops early is charged for the surrounding silence.
+    // or stops early is charged for the surrounding silence, less the threshold
+    // for each of the two gaps.
     const lateStart = [
       WINDOW_START,
       WINDOW_START + 600,
@@ -168,7 +166,9 @@ describe('livenessFactor (ping gap accounting)', () => {
       WINDOW_END,
     ];
     const stats = await livenessFactor(clientStub(lateStart));
-    expect(stats[PEER].totalTimeOffline).to.equal(600 + (WINDOW_SECONDS - 610));
+    expect(stats[PEER].totalTimeOffline).to.equal(
+      600 - 65 + (WINDOW_SECONDS - 610 - 65),
+    );
   });
 
   it('drops a worker below the 0.8 payout cliff after enough dropped pings', async () => {

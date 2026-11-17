@@ -150,8 +150,11 @@ function secondDiffs(dates: number[]) {
     .slice(1);
 }
 
+// A gap between two pings counts as downtime only for the time past the threshold.
 function totalOfflineSeconds(diffs: number[]) {
-  return sum(diffs.filter((diff) => diff > config.workerOfflineThreshold));
+  return sum(
+    diffs.map((diff) => Math.max(0, diff - config.workerOfflineThreshold)),
+  );
 }
 
 export async function livenessFactor(clickhouseClient: ClickhouseClient) {
