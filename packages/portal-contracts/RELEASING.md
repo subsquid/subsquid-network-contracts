@@ -37,7 +37,7 @@ Run these in `packages/portal-contracts`. Foundry must be the version in `.found
 | `pnpm check:live` | Checks `deployments/42161.json` against Arbitrum One: addresses, wiring, implementation pointers, and that the deployed code equals the local build |
 | `pnpm check:upgrade-safety [<baseline dir>]` | Runs OpenZeppelin's upgrade validator on the contracts listed in `upgrade-safety.conf`. With a checkout of the last release as `<baseline dir>`, it also checks that storage only grew at the end. The script is shared with `packages/contracts` and lives in `tools/upgrade-safety` at the repository root; it needs `npm ci --ignore-scripts` run there once |
 
-CI runs all three: the first and third on every pull request that touches the package (`.github/workflows/portal-contracts.yml`), the second once a day and on changes to `deployments/` (`.github/workflows/portal-contracts-live.yml`).
+CI runs all three: the first and third on every pull request that touches the package (`.github/workflows/portal-contracts.yml`), the second on pull requests that change `deployments/` (`.github/workflows/portal-contracts-live.yml`). Run the live check by hand from the Actions tab (workflow_dispatch) to compare `main` with the chain at any time.
 
 ## Making a release
 
@@ -52,6 +52,6 @@ Contracts are deployed by hand, so a release records a deployment that has alrea
 3. The live check on that pull request builds the pull request's own sources and compares them with the chain. It must pass.
 4. Merge, then tag the merge commit: `git tag portal-contracts-v<version> <commit> && git push origin portal-contracts-v<version>`.
 
-From then on the daily check builds the tag and compares it with the chain, and the upgrade-safety check compares every pull request with that tag.
+From then on the live check builds the tag and compares it with the chain, and the upgrade-safety check compares every pull request with that tag.
 
 Do not use pre-release suffixes (`-rc1`) in these tags. CI picks the last release by sorting the tag names as versions.
