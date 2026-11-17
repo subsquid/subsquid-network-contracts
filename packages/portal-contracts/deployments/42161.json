@@ -1,13 +1,13 @@
 {
   "chainId": 42161,
   "network": "arbitrum-one",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "contracts": {
     "PortalRegistry": {
       "kind": "uups-proxy",
       "abi": "PortalRegistry",
       "address": "0x29edE9EB0ad3C02B6A98B0E41bF99Cd709812850",
-      "implementation": "0xC3725B2584ad46c52F9EFA6f27d0291e3DBC3045",
+      "implementation": "0x34127b218438eAbbD289717547AE79e17D2cef8D",
       "startBlock": 423409277,
       "deployTx": "0xe5825fef120ff4d4c7e76f20bcbf7b8322d1f1f46c20269de6f6a0718cafdc1f"
     },

@@ -72,7 +72,7 @@ The same addresses, with start blocks, are in [`packages/portal-contracts/deploy
 | **PortalPoolFactory** (UUPS proxy) | [`0x18184740eBE24881355E33cec620C44E575F2C70`](https://arbiscan.io/address/0x18184740eBE24881355E33cec620C44E575F2C70) |
 | ↳ Factory implementation | [`0xCe5D796769Ba065Bf61a8eFC892A8a835FAe0351`](https://arbiscan.io/address/0xCe5D796769Ba065Bf61a8eFC892A8a835FAe0351) |
 | **PortalRegistry** (UUPS proxy) | [`0x29edE9EB0ad3C02B6A98B0E41bF99Cd709812850`](https://arbiscan.io/address/0x29edE9EB0ad3C02B6A98B0E41bF99Cd709812850) |
-| ↳ Registry implementation | [`0xC3725B2584Ad46c52f9eFA6F27d0291E3dbC3045`](https://arbiscan.io/address/0xC3725B2584Ad46c52f9eFA6F27d0291E3dbC3045) |
+| ↳ Registry implementation | [`0x34127b218438eAbbD289717547AE79e17D2cef8D`](https://arbiscan.io/address/0x34127b218438eAbbD289717547AE79e17D2cef8D) |
 | **PortalPoolBeacon** | [`0x16983f5a5816d4B04c92Ab43Fed3B2F212D4e568`](https://arbiscan.io/address/0x16983f5a5816d4B04c92Ab43Fed3B2F212D4e568) |
 | ↳ PortalPoolImplementation (current) | [`0x2981E64342fc76d531168Cf6754F81422138b3C4`](https://arbiscan.io/address/0x2981E64342fc76d531168Cf6754F81422138b3C4) |
 | **FeeRouterModuleV2** (the factory's fee router since 2026-04-28) | [`0x763a0A80a815650281926b3174180d2f17cCBE6C`](https://arbiscan.io/address/0x763a0A80a815650281926b3174180d2f17cCBE6C) |
