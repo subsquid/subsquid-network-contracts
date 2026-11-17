@@ -1,10 +1,36 @@
-# 1.2.0 -> 1.3.0 Pre-Deploy Plan (PortalRegistry only)
+# 1.2.0 -> 1.3.0 Upgrade (PortalRegistry only)
 
-Date: 2026-11-12
+Planned: 2026-11-12. Executed: 2026-11-16 (implementation) and 2026-11-17 (admin calls).
 
 ## Status
 
-Not executed. This is the plan and the fork rehearsal for upgrading PortalRegistry so that third parties can run portal pools. There is no external audit of this change.
+Executed. PortalRegistry 1.3.0 is live on Arbitrum One and every post-upgrade check passed. This file is the plan, the fork rehearsal and the record of the deployment for upgrading PortalRegistry so that third parties can run portal pools. There is no external audit of this change.
+
+## Deployment
+
+- new registry implementation: `0x34127b218438eAbbD289717547AE79e17D2cef8D`, built from `fbcb38b`. Its runtime bytecode equals `forge inspect PortalRegistry deployedBytecode` at that commit once the UUPS `__self` immutable (two occurrences) is masked. Verified on Arbiscan.
+- deploy implementation (from `0xf3E59A5b101D0604Db9Cd3e8D0d156D62a522031`, block 524,787,027):
+  - `0xc07cd2beae9b653cebd1f9fd23e3419e2a462217e77e925d268621b876ccaae3`
+- step 2, `upgradeToAndCall(0x34127b…ef8D, 0x)` from the admin vault (block 524,977,970):
+  - `0xf15cd510a15d1b3c4c99281e915592918e897716fba01fd495085b2532415383`
+- step 3, `setMana(80)` from the admin vault:
+  - `0xae8865403394edad33adc1a82f72ccc8fb3fad72834f2c12b242f84685da719f`
+- step 4, `grantRole(PORTAL_MANAGER_ROLE, 0x5800…01C1)` from the admin vault:
+  - `0x65f5db9bcfcf3a689a025a449d019e12d4763417de63e8dadb3c36af772ce1d1`
+
+Each admin transaction's input equals the calldata in Steps below.
+
+Pre-checks were recorded at block 524,787,405: implementation `0xC3725B…3045`, `mana` 1000, both clusters active with no portals, and the registry's SQD balance equal to the sum of both clusters' `totalStaked`.
+
+Post-upgrade checks, at block 524,978,909, all passed:
+
+- The implementation slot holds `0x34127b…ef8D`.
+- `PORTAL_MANAGER_ROLE()` answers `0x47ce7f42…5cef`, and the admin vault holds it and still holds `DEFAULT_ADMIN_ROLE`.
+- `MAX_METADATA_LENGTH()` = 1024, `MAX_PEER_ID_LENGTH()` = 128, `mana()` = 80, `minStake` unchanged.
+- SQD Revenue Pool: 39,858 CUs (498,226 just before `setMana`); Lambda x SQD: 40,000 CUs (500,000 before). Each equals `min(totalStaked, capacity) × 80 / 1e22` at check time.
+- Both clusters' operator, metadata, portal count and `active` equal the pre-check record. Deposits between the two reads raised their `totalStaked` by 4,682 and 4,032 SQD.
+- The registry's SQD balance, 10,027,981.12 SQD, equals the sum of both clusters' `totalStaked`.
+- `eth_estimateGas` of `addPortal` reverts from the clusters' operator with `AccessControlUnauthorizedAccount` and succeeds from the admin vault.
 
 ## Network
 
@@ -80,7 +106,7 @@ These are the only fixed on-chain facts this plan relies on. Each one is read ag
 
 ## Fork Rehearsal
 
-`test/fork/PortalRegistryUpgradeFork.t.sol` runs against the latest Arbitrum One block. CI's "Upgrade safety" job runs it on every pull request.
+`test/fork/PortalRegistryUpgradeFork.t.sol` ran against the latest Arbitrum One block, and CI's "Upgrade safety" job ran it on every pull request. The 1.3.0 release deleted it once the upgrade was live; it is in the history at `fbcb38b`.
 
 ```
 ARBITRUM_RPC_URL=https://arb1.arbitrum.io/rpc forge test --match-contract PortalRegistryUpgradeFork -vv
@@ -108,7 +134,7 @@ Live state moves, so every check compares with values read earlier in the same r
    - A second staker round trip works on the old code.
    - The old code lets the operator call `addPortal` again.
 
-Results: passed against the live chain on 2026-11-12 and 2026-11-13. To check the skip, an anvil fork of Arbitrum One was given the upgrade and `setMana(80)` as the impersonated admin. Against that fork, the test reported `SKIP: the registry already runs the new code; the deploy is recorded in upgrades/` and did not fail.
+Results: passed against the live chain on 2026-11-12, 2026-11-13 and 2026-11-16, the last just before the implementation was deployed. To check the skip, an anvil fork of Arbitrum One was given the upgrade and `setMana(80)` as the impersonated admin. Against that fork, the test reported `SKIP: the registry already runs the new code; the deploy is recorded in upgrades/` and did not fail.
 
 `script/UpgradePortalRegistry.s.sol` was also dry-run against Arbitrum One (no key, no `--broadcast`), with `PORTAL_MANAGER` unset so the role goes to the vault. It prints each admin call as a contract call for the admin vault. It then simulates the printed calldata as the vault: the upgrade, `setMana(80)`, and `grantRole` to the vault, after which it checks `mana` and `hasRole`. It ends with `simulation ok; cluster 0 CUs before/after: <before> <after>`: the first cluster's CUs read before the simulated upgrade and after the simulated `setMana(80)`.
 
