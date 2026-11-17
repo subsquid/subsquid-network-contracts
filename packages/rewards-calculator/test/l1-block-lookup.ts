@@ -90,6 +90,20 @@ describe('getFirstBlockForL1Block', () => {
     );
   });
 
+  it('searches Arbitrum One from its first Nitro L2 block', async () => {
+    chain.id = 42161;
+    chain.head = 22207826n;
+    chain.l1BlockOf = (l2Block) => {
+      if (l2Block < 22207817n) {
+        throw new Error(`pre-Nitro L2 block ${l2Block} requested`);
+      }
+      return 15447158n + (l2Block - 22207817n);
+    };
+    const { getFirstBlockForL1Block } = await loadChain();
+
+    expect(await getFirstBlockForL1Block(15447160n)).toBe(22207819n);
+  });
+
   it('resolves an L1 block that Arbitrum One skipped', async () => {
     // Mainnet: L2 510611453 reports L1 26096420, L2 510611454 reports L1 26096422.
     chain.id = 42161;
